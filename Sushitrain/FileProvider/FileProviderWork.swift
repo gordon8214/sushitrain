@@ -86,9 +86,11 @@
 			}
 		}
 
-		/// The extension renamed a file in an on-demand folder by linking the new name. Select the new name, remove the
-		/// old one while it is still selected (so that Syncthing sends the removal), then stop selecting the old name.
-		/// Every step can be repeated, so a failed attempt can simply be retried.
+		/// The extension renamed a file in an on-demand folder by linking the new name. Select the new name, then remove
+		/// the old one and have both scanned, so that Syncthing sends the removal (or recognizes the rename). The old name
+		/// stays selected: Syncthing marks the entries of paths that become ignored as invalid, which other devices
+		/// disregard, so deselecting it would keep the removal from reaching them. Every step can be repeated, so a failed
+		/// attempt can simply be retried.
 		private func finishRename(_ item: WorkItem, in folder: SushitrainFolder) throws {
 			guard let newPath = item.extra else {
 				return
@@ -99,7 +101,6 @@
 				throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
 			}
 			try folder.scanPaths(SushitrainListOfStrings.from([item.path, newPath]))
-			try folder.setLocalFileExplicitlySelected(item.path, toggle: false)
 		}
 	}
 #endif
