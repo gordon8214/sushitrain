@@ -51,6 +51,9 @@ struct SushitrainApp: App {
 		let enableLoggingToFile = UserDefaults.standard.bool(forKey: "loggingEnabled")
 		registerPhotoFilesystem()
 		SushitrainRegisterTrashHandler(SystemTrash())
+		#if os(iOS)
+			FileProviderStorage.configureManagedFolderBase()
+		#endif
 		let client = SushitrainNewClient(configPath, documentsPath, enableLoggingToFile)!
 
 		// Optionally clear v1 and/or v2 index

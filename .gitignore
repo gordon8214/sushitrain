@@ -7,3 +7,5 @@
 /SushitrainCore/gobind
 /SushitrainCore/gomobile
 /.build
+/SynctrainFileProviderKit/.build
+/SynctrainFileProviderKit/.swiftpm

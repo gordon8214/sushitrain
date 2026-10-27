@@ -1064,6 +1064,10 @@ private struct BandwidthSettingsView: View {
 							Text("Background synchronization").badge(
 								userSettings.longBackgroundSyncEnabled || userSettings.shortBackgroundSyncEnabled ? "On" : "Off")
 						}
+
+						NavigationLink(destination: FileProviderSettingsView()) {
+							Text("Files app").badge(FileProviderCoordinator.shared.isDomainEnabled == true ? "On" : "Off")
+						}
 					#endif
 
 					NavigationLink(destination: PhotoBackupSettingsView(photoBackup: appState.photoBackup)) {

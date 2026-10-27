@@ -773,6 +773,15 @@ extension Set {
 @MainActor
 func openURLInSystemFilesApp(url: URL) {
 	#if os(iOS)
+		// Folders in the shared container are only visible in the Files app through the File Provider
+		if FileProviderStorage.contains(url) {
+			Task {
+				if let visibleURL = await FileProviderStorage.userVisibleURL(for: url) {
+					openURLInSystemFilesApp(url: visibleURL)
+				}
+			}
+			return
+		}
 		let sharedURL = url.absoluteString.replacingOccurrences(of: "file://", with: "shareddocuments://")
 		let furl: URL = URL(string: sharedURL)!
 		UIApplication.shared.open(furl, options: [:], completionHandler: nil)

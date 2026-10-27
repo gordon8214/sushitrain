@@ -80,6 +80,9 @@
 		65F825EC2CAF1E0900564F57 /* AddressesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65F825EB2CAF1E0600564F57 /* AddressesView.swift */; };
 		F10000000000000000000001 /* FileImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* FileImport.swift */; };
 		F20000000000000000000003 /* SynctrainShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F20000000000000000000004 /* SynctrainShare.appex */; platformFilters = (macos, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F30000000000000000000001 /* SynctrainFileProvider.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F30000000000000000000004 /* SynctrainFileProvider.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F30000000000000000000002 /* SynctrainFileProviderKit in Frameworks */ = {isa = PBXBuildFile; platformFilter = ios; productRef = F30000000000000000000012 /* SynctrainFileProviderKit */; };
+		F30000000000000000000003 /* SynctrainFileProviderKit in Frameworks */ = {isa = PBXBuildFile; productRef = F30000000000000000000013 /* SynctrainFileProviderKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -97,6 +100,13 @@
 			remoteGlobalIDString = F20000000000000000000006;
 			remoteInfo = SynctrainShare;
 		};
+		F30000000000000000000005 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 65AE11F12C39EE0E00E721D4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F30000000000000000000006;
+			remoteInfo = SynctrainFileProvider;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -107,6 +117,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				F20000000000000000000003 /* SynctrainShare.appex in Embed Foundation Extensions */,
+				F30000000000000000000001 /* SynctrainFileProvider.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -191,7 +202,34 @@
 		65F825EB2CAF1E0600564F57 /* AddressesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddressesView.swift; sourceTree = "<group>"; };
 		F10000000000000000000002 /* FileImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileImport.swift; sourceTree = "<group>"; };
 		F20000000000000000000004 /* SynctrainShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = SynctrainShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F30000000000000000000004 /* SynctrainFileProvider.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SynctrainFileProvider.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F3000000000000000000000B /* Exceptions for "SushitrainFileProvider" folder in "SynctrainFileProvider" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = F30000000000000000000006 /* SynctrainFileProvider */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		F3000000000000000000000C /* SushitrainFileProvider */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F3000000000000000000000B /* Exceptions for "SushitrainFileProvider" folder in "SynctrainFileProvider" target */,
+			);
+			path = SushitrainFileProvider;
+			sourceTree = "<group>";
+		};
+		F3000000000000000000000D /* FileProvider */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FileProvider;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		65AE11F62C39EE0E00E721D4 /* Frameworks */ = {
@@ -201,6 +239,15 @@
 				65CE6B443016236C00CD87BD /* libresolv.tbd in Frameworks */,
 				65F15BFD2CA03DCE00E13DDD /* SushitrainCore.xcframework in Frameworks */,
 				658A29F02CA821950061D1D5 /* AVKit.framework in Frameworks */,
+				F30000000000000000000002 /* SynctrainFileProviderKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F3000000000000000000000F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F30000000000000000000003 /* SynctrainFileProviderKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -213,6 +260,7 @@
 				6506158A2C3C4EA9002B6EE6 /* Localizable.xcstrings */,
 				65EAD89B30712B5D0042B3CD /* SushitrainShared */,
 				65EAD89830712B520042B3CD /* SushitrainShareExtension */,
+				F3000000000000000000000C /* SushitrainFileProvider */,
 				65AE11FB2C39EE0E00E721D4 /* Sushitrain */,
 				658155A42E76D1B60040332B /* SushitrainGlass.icon */,
 				65AE12132C39F0CD00E721D4 /* Frameworks */,
@@ -225,6 +273,7 @@
 			children = (
 				65AE11F92C39EE0E00E721D4 /* Synctrain.app */,
 				F20000000000000000000004 /* SynctrainShare.appex */,
+				F30000000000000000000004 /* SynctrainFileProvider.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -233,6 +282,7 @@
 			isa = PBXGroup;
 			children = (
 				65EAD895307129E70042B3CD /* View */,
+				F3000000000000000000000D /* FileProvider */,
 				65AE11FC2C39EE0E00E721D4 /* App.swift */,
 				65AE12722C3B163000E721D4 /* AppState.swift */,
 				65AE12002C39EE0F00E721D4 /* Assets.xcassets */,
@@ -380,8 +430,15 @@
 			dependencies = (
 				65AE12522C3A7ED400E721D4 /* PBXTargetDependency */,
 				F20000000000000000000008 /* PBXTargetDependency */,
+				F30000000000000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				F3000000000000000000000D /* FileProvider */,
 			);
 			name = Synctrain;
+			packageProductDependencies = (
+				F30000000000000000000012 /* SynctrainFileProviderKit */,
+			);
 			productName = Sushitrain;
 			productReference = 65AE11F92C39EE0E00E721D4 /* Synctrain.app */;
 			productType = "com.apple.product-type.application";
@@ -401,6 +458,29 @@
 			productReference = F20000000000000000000004 /* SynctrainShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		F30000000000000000000006 /* SynctrainFileProvider */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F30000000000000000000007 /* Build configuration list for PBXNativeTarget "SynctrainFileProvider" */;
+			buildPhases = (
+				F3000000000000000000000E /* Sources */,
+				F3000000000000000000000F /* Frameworks */,
+				F30000000000000000000010 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F3000000000000000000000C /* SushitrainFileProvider */,
+			);
+			name = SynctrainFileProvider;
+			packageProductDependencies = (
+				F30000000000000000000013 /* SynctrainFileProviderKit */,
+			);
+			productName = SynctrainFileProvider;
+			productReference = F30000000000000000000004 /* SynctrainFileProvider.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -417,6 +497,9 @@
 					65AE124B2C3A7E7700E721D4 = {
 						CreatedOnToolsVersion = 15.4;
 					};
+					F30000000000000000000006 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 				};
 			};
 			buildConfigurationList = 65AE11F42C39EE0E00E721D4 /* Build configuration list for PBXProject "Sushitrain" */;
@@ -432,6 +515,9 @@
 				ja,
 			);
 			mainGroup = 65AE11F02C39EE0E00E721D4;
+			packageReferences = (
+				F30000000000000000000011 /* XCLocalSwiftPackageReference "SynctrainFileProviderKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 65AE11FA2C39EE0E00E721D4 /* Products */;
 			projectDirPath = "";
@@ -440,6 +526,7 @@
 				65AE11F82C39EE0E00E721D4 /* Synctrain */,
 				65AE124B2C3A7E7700E721D4 /* SushitrainCore */,
 				F20000000000000000000006 /* SynctrainShare */,
+				F30000000000000000000006 /* SynctrainFileProvider */,
 			);
 		};
 /* End PBXProject section */
@@ -456,6 +543,13 @@
 				653359C92D8EAF3A005CCA43 /* Settings.bundle in Resources */,
 				65AE12012C39EE0F00E721D4 /* Assets.xcassets in Resources */,
 				658155A52E76D1B60040332B /* SushitrainGlass.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F30000000000000000000010 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -538,6 +632,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F3000000000000000000000E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -554,6 +655,12 @@
 			);
 			target = F20000000000000000000006 /* SynctrainShare */;
 			targetProxy = 65EAD89330711C020042B3CD /* PBXContainerItemProxy */;
+		};
+		F30000000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = F30000000000000000000006 /* SynctrainFileProvider */;
+			targetProxy = F30000000000000000000005 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -922,6 +1029,70 @@
 			};
 			name = Release;
 		};
+		F30000000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SushitrainFileProvider/SynctrainFileProvider.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 85;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 2N89DJPQ2P;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SushitrainFileProvider/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Synctrain;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.8;
+				PRODUCT_BUNDLE_IDENTIFIER = "nl.t-shaped.Sushitrain.FileProvider";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				SYNCTRAIN_APP_GROUP = group.nl.t-shaped.sushitrain.sync;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F3000000000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SushitrainFileProvider/SynctrainFileProvider.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 85;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 2N89DJPQ2P;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SushitrainFileProvider/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Synctrain;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.8;
+				PRODUCT_BUNDLE_IDENTIFIER = "nl.t-shaped.Sushitrain.FileProvider";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				SYNCTRAIN_APP_GROUP = group.nl.t-shaped.sushitrain.sync;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -961,7 +1132,34 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		F30000000000000000000007 /* Build configuration list for PBXNativeTarget "SynctrainFileProvider" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F30000000000000000000009 /* Debug */,
+				F3000000000000000000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		F30000000000000000000011 /* XCLocalSwiftPackageReference "SynctrainFileProviderKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = SynctrainFileProviderKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F30000000000000000000012 /* SynctrainFileProviderKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SynctrainFileProviderKit;
+		};
+		F30000000000000000000013 /* SynctrainFileProviderKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SynctrainFileProviderKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 65AE11F12C39EE0E00E721D4 /* Project object */;
 }

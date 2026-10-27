@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"path"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -646,8 +645,7 @@ func (fld *Folder) IsExternal() (bool, error) {
 		return false, errors.New("cannot obtain folder configuration")
 	}
 
-	defaultPath := path.Join(fld.client.filesPath, fld.FolderID)
-	return defaultPath != fc.Path, nil
+	return !fld.client.isInternalFolderPath(fld.FolderID, fc.Path), nil
 }
 
 func (fld *Folder) Path() string {
@@ -1265,6 +1263,9 @@ func (fld *Folder) SetSelectiveGlobalIgnorePatterns(patterns *ListOfStrings) err
 }
 
 func (fld *Folder) changeSelection(block func(sel *selection) error) (*ignore.Matcher, error) {
+	unlock := lockSelection(fld.FolderID)
+	defer unlock()
+
 	// Load ignores from file
 	ignores, err := fld.loadIgnores()
 	if err != nil {

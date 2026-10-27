@@ -761,6 +761,10 @@ func loadOrDefaultConfig(devID protocol.DeviceID, ctx context.Context, logger ev
 						}
 					}
 				}
+
+				if reanchorToManagedBase(&folderConfig) {
+					conf.SetFolder(folderConfig)
+				}
 			}
 
 			// The app currently doesn't do anything with scan progress update events, and enabling progress reports apparently
@@ -974,7 +978,7 @@ func (clt *Client) AddFolder(folderID string, folderPath string, createAsOnDeman
 	folderConfig.ID = folderID
 	folderConfig.Label = folderID
 	if len(folderPath) == 0 {
-		folderConfig.Path = path.Join(clt.filesPath, folderID)
+		folderConfig.Path = clt.defaultFolderPath(folderID)
 	} else {
 		folderConfig.Path = folderPath
 	}

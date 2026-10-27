@@ -357,6 +357,12 @@ struct SyncState: Equatable {
 				// Resolve bookmarks
 				self.resolveBookmarks()
 
+				#if os(iOS)
+					await Task.detached(priority: .userInitiated) {
+						FileProviderStorage.moveFoldersToSharedContainer(client: client)
+					}.value
+				#endif
+
 				await self.updateDeviceSuspension()
 
 				let folderIDs = client.folders()?.asArray() ?? []
@@ -437,6 +443,9 @@ struct SyncState: Equatable {
 			}
 			self.protectFiles()
 			self.startNetworkMonitor()
+			#if os(iOS)
+				FileProviderCoordinator.shared.start(client: client)
+			#endif
 
 			#if os(macOS)
 				// Add observers for device sleep/wake
@@ -1002,6 +1011,11 @@ struct SyncState: Equatable {
 	}
 
 	func isInsideDocumentsFolder(_ url: URL) -> Bool {
+		#if os(iOS)
+			if FileProviderStorage.contains(url) {
+				return true
+			}
+		#endif
 		return url.resolvingSymlinksInPath().path(percentEncoded: false)
 			.hasPrefix(documentsDirectory.resolvingSymlinksInPath().path(percentEncoded: false))
 	}
