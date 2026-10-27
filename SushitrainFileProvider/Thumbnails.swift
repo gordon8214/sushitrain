@@ -8,10 +8,13 @@ import ImageIO
 import SynctrainFileProviderKit
 import UniformTypeIdentifiers
 
-/// Thumbnails for images on this device, made from the file in the folder, so the system does not need to download
-/// them into its own copy first. Other items get none (the system shows an icon for them).
+/// Thumbnails for images, made from the file in the folder when it is on this device, so the system does not need to
+/// download it into its own copy first. Images that are only on other devices are fetched through the app while it is
+/// awake (up to a size). Other items get none (the system shows an icon for them).
 extension FileProviderExtension: NSFileProviderThumbnailing {
 	private static let defaultThumbnailSize: CGFloat = 256
+	/// Larger images that are only on other devices get no thumbnail (fetching them would take too long)
+	private static let maximumRemoteImageSize: Int64 = 16 * 1_048_576
 
 	func fetchThumbnails(
 		for itemIdentifiers: [NSFileProviderItemIdentifier], requestedSize size: CGSize,
@@ -26,15 +29,28 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 		let maximumPixels = max(size.width, size.height) > 0 ? max(size.width, size.height) : Self.defaultThumbnailSize
 		let perThumbnail = Completion(call: perThumbnailCompletionHandler)
 		let completion = Completion(call: completionHandler)
+		let fetcher = self.fetcher
 
 		// One at a time: the extension has little memory to spare
 		Task.detached(priority: .utility) {
+			var remote: RemoteImages? = nil
 			for identifier in itemIdentifiers {
 				if progress.isCancelled {
 					break
 				}
-				let data = autoreleasepool {
-					Self.thumbnail(for: identifier, context: context, maximumPixels: maximumPixels)
+				var data: Data? = nil
+				if let id = identifier.itemID, let item = try? context.store.item(id: id), item.kind == .file,
+					UTType(filenameExtension: (item.name as NSString).pathExtension)?.conforms(to: .image) == true
+				{
+					if context.isOnDevice(item) {
+						data = autoreleasepool { Self.thumbnail(of: context.localURL(for: item), maximumPixels: maximumPixels) }
+					}
+					else if item.size <= Self.maximumRemoteImageSize, let fetcher {
+						if remote == nil {
+							remote = await RemoteImages(fetcher: fetcher)
+						}
+						data = await remote?.thumbnail(of: item, maximumPixels: maximumPixels)
+					}
 				}
 				perThumbnail.call(identifier, data, nil)
 				progress.completedUnitCount += 1
@@ -44,16 +60,38 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 		return progress
 	}
 
-	private static func thumbnail(
-		for identifier: NSFileProviderItemIdentifier, context: ExtensionContext, maximumPixels: CGFloat
-	) -> Data? {
-		guard let id = identifier.itemID, let item = try? context.store.item(id: id), item.kind == .file,
-			UTType(filenameExtension: (item.name as NSString).pathExtension)?.conforms(to: .image) == true,
-			context.isOnDevice(item)
-		else {
-			return nil
+	/// Fetches images that are only on other devices through the app, when it is awake
+	private struct RemoteImages {
+		let fetcher: ContentFetcher
+		let heartbeat: Heartbeat?
+
+		init(fetcher: ContentFetcher) async {
+			self.fetcher = fetcher
+			if let heartbeat = fetcher.awakeApp(), await fetcher.ping(heartbeat) {
+				self.heartbeat = heartbeat
+			}
+			else {
+				self.heartbeat = nil
+			}
 		}
-		let url = context.localURL(for: item)
+
+		func thumbnail(of item: IndexItem, maximumPixels: CGFloat) async -> Data? {
+			guard let heartbeat else {
+				return nil
+			}
+			let temporary = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+			defer { try? FileManager.default.removeItem(at: temporary) }
+			do {
+				try await fetcher.download(item, from: heartbeat, to: temporary, progress: Progress())
+			}
+			catch {
+				return nil
+			}
+			return autoreleasepool { FileProviderExtension.thumbnail(of: temporary, maximumPixels: maximumPixels) }
+		}
+	}
+
+	fileprivate static func thumbnail(of url: URL, maximumPixels: CGFloat) -> Data? {
 		guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary)
 		else {
 			return nil

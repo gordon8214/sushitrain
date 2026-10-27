@@ -28,6 +28,9 @@ What works depends on whether Synctrain is running, because only the app runs Sy
 Saving a file that is only on other devices first downloads it (Files shows the save as waiting until Synctrain has the
 file); the edit is then an ordinary change of that version, not a second, conflicting one.
 
+Items kept on this device in on-demand folders have a checkmark badge, and conflict copies a warning badge. Images get
+thumbnails: from the file on this device, or (while Synctrain runs, up to 16 MB) fetched from another device.
+
 Deleting removes the item on all devices. Only items kept on this device can be renamed, moved or deleted; in on-demand
 folders, a directory can only be renamed or moved when it is kept on this device as a whole. Items can also be moved to
 another folder, which other devices see as a removal from one folder and an addition to the other.
@@ -35,7 +38,7 @@ another folder, which other devices see as a removal from one folder and an addi
 ### Limitations
 
 - Receive-only folders are read-only. Symbolic links are not shown.
-- Thumbnails are only available for images on this device.
+- Thumbnails are made for images only (not for videos or documents that are not on this device).
 - There is no macOS version yet.
 
 ## How it works

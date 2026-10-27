@@ -30,6 +30,29 @@
 				<string>fileproviderItems.@count &gt; 0 AND SUBQUERY(fileproviderItems, $fileproviderItem, $fileproviderItem.userInfo.selective == YES AND $fileproviderItem.userInfo.selected == YES AND $fileproviderItem.userInfo.folderRoot == NO).@count == fileproviderItems.@count</string>
 			</dict>
 		</array>
+		<key>NSFileProviderDecorations</key>
+		<array>
+			<dict>
+				<key>Identifier</key>
+				<string>$(PRODUCT_BUNDLE_IDENTIFIER).kept</string>
+				<key>BadgeImageType</key>
+				<string>com.apple.icon-decoration.badge.checkmark</string>
+				<key>Category</key>
+				<string>Badge</string>
+				<key>Label</key>
+				<string>Kept on This Device</string>
+			</dict>
+			<dict>
+				<key>Identifier</key>
+				<string>$(PRODUCT_BUNDLE_IDENTIFIER).conflict</string>
+				<key>BadgeImageType</key>
+				<string>com.apple.icon-decoration.badge.warning</string>
+				<key>Category</key>
+				<string>Badge</string>
+				<key>Label</key>
+				<string>Conflict Copy</string>
+			</dict>
+		</array>
 		<key>NSExtensionFileProviderDocumentGroup</key>
 		<string>$(SYNCTRAIN_APP_GROUP)</string>
 		<key>NSExtensionFileProviderSupportsEnumeration</key>

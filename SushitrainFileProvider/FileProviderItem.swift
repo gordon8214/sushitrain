@@ -30,7 +30,7 @@ final class RootItem: NSObject, NSFileProviderItem {
 }
 
 /// An item from the shared index
-final class FileProviderItem: NSObject, NSFileProviderItem {
+final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDecorating {
 	let item: IndexItem
 	let folder: IndexFolder?
 	/// Whether the current version is on this device (so it can be opened while Synctrain is not running)
@@ -148,6 +148,22 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 			"onDevice": isOnDevice,
 			"folderRoot": item.kind == .folderRoot,
 		]
+	}
+
+	/// Badges declared in the extension's Info.plist (NSFileProviderDecorations)
+	var decorations: [NSFileProviderItemDecorationIdentifier]? {
+		var decorations: [NSFileProviderItemDecorationIdentifier] = []
+		if item.kind != .folderRoot, folder?.isSelective == true, item.isSelected {
+			decorations.append(Self.decoration("kept"))
+		}
+		if item.kind == .file, FileNames.isConflictCopy(item.name) {
+			decorations.append(Self.decoration("conflict"))
+		}
+		return decorations
+	}
+
+	private static func decoration(_ name: String) -> NSFileProviderItemDecorationIdentifier {
+		NSFileProviderItemDecorationIdentifier(rawValue: (Bundle.main.bundleIdentifier ?? "") + "." + name)
 	}
 
 	@available(iOS 27.0, *)

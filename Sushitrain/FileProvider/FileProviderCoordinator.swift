@@ -49,7 +49,7 @@
 		/// Set (e.g. from the Settings app) to rebuild the File Provider domain on the next launch
 		private static let resetDomainKey = "resetFileProviderDomain"
 		/// Increase when items are presented differently (e.g. other capabilities), so the system reads them again
-		private static let itemFormat = 4
+		private static let itemFormat = 5
 		private static let itemFormatKey = "fileProviderItemFormat"
 
 		nonisolated static var domain: NSFileProviderDomain {

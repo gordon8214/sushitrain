@@ -2702,6 +2702,52 @@
         }
       }
     },
+    "A folder cannot be moved into itself." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Ordner kann nicht in sich selbst verschoben werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una carpeta no se puede mover dentro de sí misma."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una cartella non può essere spostata in se stessa."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダをそれ自体の中に移動することはできません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een map kan niet naar zichzelf worden verplaatst."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папку не можна перемістити в саму себе."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹不能移动到其自身中。"
+          }
+        }
+      }
+    },
     "A legacy database is still present. If the app is functioning correctly, it is safe to manually delete this database. In order to do this, the app needs to be restarted." : {
       "localizations" : {
         "de" : {
@@ -5114,6 +5160,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在其他设备上可用的所有文件"
+          }
+        }
+      }
+    },
+    "All folders stored in the app appear in the Synctrain location in the Files app. Files that are only on your other devices can be downloaded while Synctrain is open." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle in der App gespeicherten Ordner erscheinen am Speicherort „Synctrain“ in der Dateien-App. Dateien, die nur auf Ihren anderen Geräten vorhanden sind, können heruntergeladen werden, solange Synctrain geöffnet ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todas las carpetas guardadas en la app aparecen en la ubicación Synctrain de la app Archivos. Los archivos que solo están en tus otros dispositivos se pueden descargar mientras Synctrain está abierta."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tutte le cartelle archiviate nell'app compaiono nella posizione Synctrain dell'app File. I file che si trovano solo sugli altri tuoi dispositivi possono essere scaricati mentre Synctrain è aperta."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリに保存されているすべてのフォルダは、ファイルアプリの「Synctrain」の場所に表示されます。ほかのデバイスにのみあるファイルは、Synctrainを開いている間にダウンロードできます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle mappen die in de app zijn opgeslagen, verschijnen op de locatie Synctrain in de Bestanden-app. Bestanden die alleen op je andere apparaten staan, kun je downloaden zolang Synctrain open is."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Усі папки, що зберігаються в додатку, з’являються в розташуванні Synctrain у додатку Файли. Файли, які є лише на інших ваших пристроях, можна завантажити, поки Synctrain відкрито."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存储在应用中的所有文件夹都会显示在文件应用的“Synctrain”位置中。仅存在于你其他设备上的文件可在 Synctrain 打开时下载。"
           }
         }
       }
@@ -16120,6 +16212,52 @@
         }
       }
     },
+    "Files app" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dateien-App"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App Archivos"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App File"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルアプリ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestanden-app"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Додаток Файли"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件应用"
+          }
+        }
+      }
+    },
     "Files in '%@' kept on this device" : {
       "localizations" : {
         "de" : {
@@ -18054,6 +18192,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件夹"
+          }
+        }
+      }
+    },
+    "Folders shared with Syncthing cannot be renamed here." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Syncthing geteilte Ordner können hier nicht umbenannt werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las carpetas compartidas con Syncthing no se pueden renombrar aquí."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le cartelle condivise con Syncthing non possono essere rinominate qui."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingで共有されているフォルダはここでは名前を変更できません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappen die met Syncthing worden gedeeld, kunnen hier niet worden hernoemd."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папки, спільні через Syncthing, не можна перейменувати тут."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过 Syncthing 共享的文件夹无法在此重命名。"
           }
         }
       }
@@ -21704,6 +21888,98 @@
         }
       }
     },
+    "Items can only be added inside a folder." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objekte können nur innerhalb eines Ordners hinzugefügt werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los elementos solo se pueden añadir dentro de una carpeta."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli elementi possono essere aggiunti solo all'interno di una cartella."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "項目はフォルダの中にのみ追加できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderdelen kunnen alleen in een map worden toegevoegd."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Елементи можна додавати лише всередину папки."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "项目只能添加到文件夹内。"
+          }
+        }
+      }
+    },
+    "Items can only be moved into a folder." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objekte können nur in einen Ordner verschoben werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los elementos solo se pueden mover a una carpeta."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli elementi possono essere spostati solo in una cartella."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "項目はフォルダの中にのみ移動できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderdelen kunnen alleen naar een map worden verplaatst."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Елементи можна переміщувати лише в папку."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "项目只能移动到文件夹中。"
+          }
+        }
+      }
+    },
     "Keep %lld files" : {
       "localizations" : {
         "de" : {
@@ -21994,6 +22270,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保留文件"
+          }
+        }
+      }
+    },
+    "Keep the whole folder on this device to rename or move it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behalten Sie den gesamten Ordner auf diesem Gerät, um ihn umzubenennen oder zu verschieben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva toda la carpeta en este dispositivo para renombrarla o moverla."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantieni l'intera cartella su questo dispositivo per rinominarla o spostarla."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名前を変更したり移動したりするには、フォルダ全体をこのデバイスに保持してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewaar de hele map op dit apparaat om hem te hernoemen of te verplaatsen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щоб перейменувати або перемістити папку, зберігайте її цілком на цьому пристрої."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要重命名或移动此文件夹，请将整个文件夹保留在此设备上。"
+          }
+        }
+      }
+    },
+    "Keep this item on this device to change it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behalten Sie dieses Objekt auf diesem Gerät, um es zu ändern."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva este elemento en este dispositivo para cambiarlo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantieni questo elemento su questo dispositivo per modificarlo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "変更するには、この項目をこのデバイスに保持してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewaar dit onderdeel op dit apparaat om het te wijzigen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щоб змінити цей елемент, зберігайте його на цьому пристрої."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要更改此项目，请将其保留在此设备上。"
           }
         }
       }
@@ -24810,6 +25178,52 @@
         }
       }
     },
+    "No other connected device has all of it, so it is kept on this device." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein anderes verbundenes Gerät hat es vollständig, daher bleibt es auf diesem Gerät."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ningún otro dispositivo conectado lo tiene completo, así que se conserva en este dispositivo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun altro dispositivo connesso lo ha per intero, quindi viene mantenuto su questo dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ほかに接続しているデバイスで全体を持っているものがないため、このデバイスに保持されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen ander verbonden apparaat heeft het volledig, dus het blijft op dit apparaat."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Жоден інший підключений пристрій не має його повністю, тому його збережено на цьому пристрої."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有其他已连接的设备拥有其完整副本，因此会保留在此设备上。"
+          }
+        }
+      }
+    },
     "None" : {
       "localizations" : {
         "de" : {
@@ -24852,6 +25266,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无"
+          }
+        }
+      }
+    },
+    "None of the devices that have this file are connected." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keines der Geräte, die diese Datei haben, ist verbunden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguno de los dispositivos que tienen este archivo está conectado."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuno dei dispositivi che hanno questo file è connesso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このファイルを持っているデバイスはどれも接続されていません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen van de apparaten die dit bestand hebben, is verbonden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Жоден із пристроїв, на яких є цей файл, не підключено."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拥有此文件的设备均未连接。"
           }
         }
       }
@@ -25730,6 +26190,52 @@
         }
       }
     },
+    "Only files can be written." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur Dateien können geschrieben werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo se pueden escribir archivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo i file possono essere scritti."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "書き込めるのはファイルのみです。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alleen bestanden kunnen worden geschreven."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записувати можна лише файли."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只能写入文件。"
+          }
+        }
+      }
+    },
     "Only files on this device" : {
       "localizations" : {
         "de" : {
@@ -26370,6 +26876,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开源组件"
+          }
+        }
+      }
+    },
+    "Open Synctrain to download this file from your other devices." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnen Sie Synctrain, um diese Datei von Ihren anderen Geräten herunterzuladen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Synctrain para descargar este archivo de tus otros dispositivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri Synctrain per scaricare questo file dagli altri tuoi dispositivi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ほかのデバイスからこのファイルをダウンロードするには、Synctrainを開いてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Synctrain om dit bestand van je andere apparaten te downloaden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відкрийте Synctrain, щоб завантажити цей файл з інших ваших пристроїв."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 Synctrain 以从你的其他设备下载此文件。"
+          }
+        }
+      }
+    },
+    "Open Synctrain to finish the previous rename before moving this to another folder." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnen Sie Synctrain, um die vorherige Umbenennung abzuschließen, bevor Sie dies in einen anderen Ordner verschieben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Synctrain para terminar el cambio de nombre anterior antes de moverlo a otra carpeta."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri Synctrain per completare la rinomina precedente prima di spostarlo in un'altra cartella."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "別のフォルダに移動する前に、Synctrainを開いて前回の名前変更を完了してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Synctrain om de vorige hernoeming af te ronden voordat je dit naar een andere map verplaatst."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відкрийте Synctrain, щоб завершити попереднє перейменування, перш ніж переміщувати це в іншу папку."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在将其移动到其他文件夹之前，请打开 Synctrain 以完成上一次重命名。"
           }
         }
       }
@@ -28398,6 +28996,144 @@
         }
       }
     },
+    "Rebuild" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neu aufbauen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconstruir"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricrea"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再構築"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opnieuw opbouwen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перебудувати"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重建"
+          }
+        }
+      }
+    },
+    "Rebuild Synctrain location" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicherort „Synctrain“ neu aufbauen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconstruir la ubicación Synctrain"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricrea la posizione Synctrain"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「Synctrain」の場所を再構築"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locatie Synctrain opnieuw opbouwen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перебудувати розташування Synctrain"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重建“Synctrain”位置"
+          }
+        }
+      }
+    },
+    "Rebuild the Synctrain location?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicherort „Synctrain“ neu aufbauen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Reconstruir la ubicación Synctrain?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricreare la posizione Synctrain?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「Synctrain」の場所を再構築しますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locatie Synctrain opnieuw opbouwen?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перебудувати розташування Synctrain?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要重建“Synctrain”位置吗？"
+          }
+        }
+      }
+    },
     "Receive encrypted" : {
       "localizations" : {
         "de" : {
@@ -30100,6 +30836,52 @@
         }
       }
     },
+    "Removes the Synctrain location from the Files app and sets it up again. Your files are not affected, but you will need to turn the location on again in the Files app." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entfernt den Speicherort „Synctrain“ aus der Dateien-App und richtet ihn neu ein. Ihre Dateien sind davon nicht betroffen, aber Sie müssen den Speicherort in der Dateien-App wieder aktivieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quita la ubicación Synctrain de la app Archivos y la vuelve a configurar. Tus archivos no se ven afectados, pero tendrás que volver a activar la ubicación en la app Archivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuove la posizione Synctrain dall'app File e la configura di nuovo. I tuoi file non vengono modificati, ma dovrai riattivare la posizione nell'app File."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルアプリから「Synctrain」の場所を削除して、もう一度設定します。ファイルには影響しませんが、ファイルアプリでこの場所をもう一度オンにする必要があります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijdert de locatie Synctrain uit de Bestanden-app en stelt deze opnieuw in. Je bestanden blijven ongewijzigd, maar je moet de locatie in de Bestanden-app opnieuw inschakelen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видаляє розташування Synctrain з додатку Файли та налаштовує його знову. Ваші файли не зміняться, але вам потрібно буде знову ввімкнути це розташування в додатку Файли."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从文件应用中移除“Synctrain”位置并重新设置。你的文件不受影响，但你需要在文件应用中重新打开此位置。"
+          }
+        }
+      }
+    },
     "Removing originals" : {
       "localizations" : {
         "de" : {
@@ -30188,6 +30970,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "替换现有文件"
+          }
+        }
+      }
+    },
+    "Requested downloads" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angeforderte Downloads"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargas solicitadas"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download richiesti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要求されたダウンロード"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aangevraagde downloads"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запитані завантаження"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已请求的下载"
           }
         }
       }
@@ -34374,6 +35202,52 @@
         }
       }
     },
+    "Show in Files" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Dateien zeigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar en Archivos"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra in File"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルで表示"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toon in Bestanden"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показати у Файлах"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在文件中显示"
+          }
+        }
+      }
+    },
     "Show in Finder" : {
       "localizations" : {
         "de" : {
@@ -35520,6 +36394,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "状态"
+          }
+        }
+      }
+    },
+    "Still on this device" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch auf diesem Gerät"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún en este dispositivo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ancora su questo dispositivo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "まだこのデバイスにあります"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nog op dit apparaat"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Досі на цьому пристрої"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍在此设备上"
           }
         }
       }
@@ -37180,6 +38100,52 @@
         }
       }
     },
+    "Synctrain could not provide this file (error %lld)." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain konnte diese Datei nicht bereitstellen (Fehler %lld)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no pudo proporcionar este archivo (error %lld)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non ha potuto fornire questo file (errore %lld)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainはこのファイルを提供できませんでした（エラー %lld）。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kon dit bestand niet leveren (fout %lld)."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не вдалося надати цей файл (помилка %lld)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法提供此文件（错误 %lld）。"
+          }
+        }
+      }
+    },
     "Synctrain is © 2024-2026, Tommy van der Vorst" : {
       "localizations" : {
         "de" : {
@@ -37268,6 +38234,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synctrain 基于 Syncthing。如果您对 Syncthing 本身有任何疑问，或在运行其他版本 Syncthing 的设备上遇到问题，您可以在 Syncthing 论坛上找到有用的答案和讨论。"
+          }
+        }
+      }
+    },
+    "Synctrain location" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicherort „Synctrain“"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ubicación Synctrain"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posizione Synctrain"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「Synctrain」の場所"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locatie Synctrain"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Розташування Synctrain"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Synctrain”位置"
           }
         }
       }
@@ -37406,6 +38418,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synctrain 将被远程更改替换或删除的文件移动到版本文件夹，然后随着时间的推移保留较少的版本。"
+          }
+        }
+      }
+    },
+    "Synctrain saves this change once the file has been downloaded to this device. Open Synctrain to download it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain speichert diese Änderung, sobald die Datei auf dieses Gerät heruntergeladen wurde. Öffnen Sie Synctrain, um sie herunterzuladen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain guarda este cambio en cuanto el archivo se haya descargado en este dispositivo. Abre Synctrain para descargarlo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain salva questa modifica non appena il file è stato scaricato su questo dispositivo. Apri Synctrain per scaricarlo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルがこのデバイスにダウンロードされると、Synctrainはこの変更を保存します。ダウンロードするにはSynctrainを開いてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain bewaart deze wijziging zodra het bestand naar dit apparaat is gedownload. Open Synctrain om het te downloaden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain збереже цю зміну, щойно файл буде завантажено на цей пристрій. Відкрийте Synctrain, щоб завантажити його."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件下载到此设备后，Synctrain 会保存此更改。打开 Synctrain 以下载该文件。"
           }
         }
       }
@@ -41700,6 +42758,52 @@
         }
       }
     },
+    "This folder only receives changes from other devices." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Ordner empfängt nur Änderungen von anderen Geräten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta carpeta solo recibe cambios de otros dispositivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa cartella riceve solo modifiche dagli altri dispositivi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このフォルダはほかのデバイスからの変更を受信するだけです。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze map ontvangt alleen wijzigingen van andere apparaten."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ця папка лише отримує зміни з інших пристроїв."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件夹只接收来自其他设备的更改。"
+          }
+        }
+      }
+    },
     "This folder was deleted." : {
       "localizations" : {
         "de" : {
@@ -41926,6 +43030,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此位置已添加到您的书签中。可以从起始页快速访问书签位置。"
+          }
+        }
+      }
+    },
+    "This name is reserved for Syncthing." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Name ist für Syncthing reserviert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este nombre está reservado para Syncthing."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo nome è riservato a Syncthing."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この名前はSyncthing用に予約されています。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze naam is gereserveerd voor Syncthing."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цю назву зарезервовано для Syncthing."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此名称为 Syncthing 保留。"
           }
         }
       }
@@ -42708,6 +43858,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "为了让其他人协助您进行故障排除，您可以向他们发送一个支持包。此包包含有关应用程序的技术信息。**注意：虽然应用程序会在包中编辑用户名、IP地址和设备ID，但可能仍包含个人身份信息，如文件夹名称。在将包发送给他人之前，请确保检查包的内容。**"
+          }
+        }
+      }
+    },
+    "To browse your folders in the Files app, open Files, tap Browse, then tap Synctrain under Locations and turn it on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Um Ihre Ordner in der Dateien-App zu durchsuchen, öffnen Sie „Dateien“, tippen Sie auf „Durchsuchen“, dann unter „Orte“ auf „Synctrain“ und aktivieren Sie es."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para explorar tus carpetas en la app Archivos, abre Archivos, toca Explorar, luego toca Synctrain en Ubicaciones y actívala."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per sfogliare le tue cartelle nell'app File, apri File, tocca Sfoglia, poi tocca Synctrain in Posizioni e attivala."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルアプリでフォルダをブラウズするには、「ファイル」を開いて「ブラウズ」をタップし、「場所」の下にある「Synctrain」をタップしてオンにします。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Om je mappen in de Bestanden-app te bekijken, open je Bestanden, tik je op 'Blader', tik je onder 'Locaties' op Synctrain en schakel je het in."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щоб переглядати свої папки в додатку Файли, відкрийте Файли, торкніться «Огляд», потім торкніться Synctrain у розділі «Місця» та ввімкніть його."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要在文件应用中浏览你的文件夹，请打开“文件”，轻点“浏览”，然后轻点“位置”下的“Synctrain”并将其打开。"
           }
         }
       }
@@ -47864,6 +49060,52 @@
         }
       }
     },
+    "You asked to stop keeping these items on this device in the Files app." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie haben in der Dateien-App angefordert, diese Objekte nicht mehr auf diesem Gerät zu behalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pediste en la app Archivos dejar de conservar estos elementos en este dispositivo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai chiesto nell'app File di non mantenere più questi elementi su questo dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルアプリで、これらの項目をこのデバイスに保持しないように指定しました。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je hebt in de Bestanden-app gevraagd deze onderdelen niet meer op dit apparaat te bewaren."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ви попросили в додатку Файли більше не зберігати ці елементи на цьому пристрої."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你在文件应用中要求停止在此设备上保留这些项目。"
+          }
+        }
+      }
+    },
     "You can export the current configuration to the application directory. When a configuration file exists in the application directory (config.xml) when the app starts, it will be used instead of the internal configuration." : {
       "localizations" : {
         "de" : {
@@ -47998,6 +49240,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "您已选择一个子目录进行同步。此子目录中包含的所有文件都将被同步，包括新文件。如果您从此子目录中删除文件，删除操作将传播到其他设备。"
+          }
+        }
+      }
+    },
+    "You tried to open these files in the Files app while Synctrain was not running. Show a file in Files now to download it from your other devices." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie haben versucht, diese Dateien in der Dateien-App zu öffnen, während Synctrain nicht lief. Zeigen Sie eine Datei jetzt in Dateien an, um sie von Ihren anderen Geräten herunterzuladen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intentaste abrir estos archivos en la app Archivos mientras Synctrain no estaba en ejecución. Muestra ahora un archivo en Archivos para descargarlo de tus otros dispositivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai provato ad aprire questi file nell'app File mentre Synctrain non era in esecuzione. Mostra ora un file in File per scaricarlo dagli altri tuoi dispositivi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainが実行されていない間に、ファイルアプリでこれらのファイルを開こうとしました。ほかのデバイスからダウンロードするには、今すぐファイルで表示してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je probeerde deze bestanden in de Bestanden-app te openen terwijl Synctrain niet actief was. Toon nu een bestand in Bestanden om het van je andere apparaten te downloaden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ви намагалися відкрити ці файли в додатку Файли, коли Synctrain не працював. Покажіть файл у Файлах зараз, щоб завантажити його з інших ваших пристроїв."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你曾在 Synctrain 未运行时尝试在文件应用中打开这些文件。现在在“文件”中显示某个文件即可从你的其他设备下载它。"
           }
         }
       }

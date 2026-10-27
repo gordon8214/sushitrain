@@ -58,7 +58,7 @@ struct Completion<T>: @unchecked Sendable {
 final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 	let domain: NSFileProviderDomain
 	let context: ExtensionContext?
-	private let fetcher: ContentFetcher?
+	let fetcher: ContentFetcher?
 	private let writer: LocalWriter?
 
 	required init(domain: NSFileProviderDomain) {
