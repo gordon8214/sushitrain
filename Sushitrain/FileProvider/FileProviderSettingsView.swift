@@ -52,6 +52,18 @@
 					}
 				}
 
+				if !coordinator.keepNotices.isEmpty {
+					Section {
+						ForEach(coordinator.keepNotices, id: \.self) { notice in
+							Text(notice)
+						}
+					} header: {
+						Text("Still on this device")
+					} footer: {
+						Text("You asked to stop keeping these items on this device in the Files app.")
+					}
+				}
+
 				if let error = coordinator.lastError {
 					Section("Error") {
 						Text(error).foregroundStyle(.red)

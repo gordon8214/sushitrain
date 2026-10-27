@@ -41,7 +41,7 @@ struct Completion<T>: @unchecked Sendable {
 /// run Syncthing: files on this device are cloned directly, other files are fetched through the app while it runs.
 final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 	let domain: NSFileProviderDomain
-	private let context: ExtensionContext?
+	let context: ExtensionContext?
 	private let fetcher: ContentFetcher?
 	private let writer: LocalWriter?
 
@@ -323,5 +323,58 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		}
 		return NSError(
 			domain: NSCocoaErrorDomain, code: NSXPCConnectionReplyInvalid, userInfo: [NSUnderlyingErrorKey: nsError])
+	}
+}
+
+// MARK: - Actions
+
+/// "Keep on This Device" and "Stop Keeping on This Device" for items in on-demand folders. Only the app can change what
+/// Syncthing keeps, so the extension queues the change; the app carries it out when it runs (stopping only once
+/// another device has the whole item, so nothing is lost).
+extension FileProviderExtension: NSFileProviderCustomAction {
+	private static let actionPrefix = (Bundle.main.bundleIdentifier ?? "") + "."
+
+	func performAction(
+		identifier actionIdentifier: NSFileProviderExtensionActionIdentifier,
+		onItemsWithIdentifiers itemIdentifiers: [NSFileProviderItemIdentifier],
+		completionHandler: @escaping ((any Error)?) -> Void
+	) -> Progress {
+		guard let context else {
+			completionHandler(unavailableError)
+			return Progress()
+		}
+		let kind: WorkKind
+		switch actionIdentifier.rawValue {
+		case Self.actionPrefix + "keep":
+			kind = .select
+		case Self.actionPrefix + "stopKeeping":
+			kind = .deselectSafely
+		default:
+			completionHandler(CocoaError(.featureUnsupported))
+			return Progress()
+		}
+
+		do {
+			var items: [IndexItem] = []
+			for identifier in itemIdentifiers {
+				if let id = identifier.itemID, let item = try context.store.item(id: id) {
+					items.append(item)
+				}
+			}
+			try context.store.recordLocalChanges { recorder throws(IndexError) in
+				for item in items where item.kind != .folderRoot {
+					// The latest choice wins
+					try recorder.dequeue(kind == .select ? .deselectSafely : .select, folderID: item.folderID, path: item.path)
+					try recorder.enqueue(kind, folderID: item.folderID, path: item.path)
+				}
+			}
+			trace("action \(actionIdentifier.rawValue) on \(items.map(\.id))")
+			SharedNotification.workQueued.post()
+			completionHandler(nil)
+		}
+		catch {
+			completionHandler(Self.reportable(error))
+		}
+		return Progress()
 	}
 }

@@ -19,8 +19,22 @@
 		/// How often work is tried before it is given up (a folder that never becomes idle should not block the queue)
 		static let maximumAttempts = 20
 
-		/// Performs the work (other than fetches). Returns whether some of it failed and should be tried again later.
-		func run(_ work: [WorkItem]) -> Bool {
+		/// How often to check whether another device has an item before refusing to stop keeping it (with work retried
+		/// every 15 seconds, devices have about two minutes to connect)
+		static let deselectAttempts = 8
+
+		struct Outcome: Sendable {
+			/// Some work failed and should be tried again later
+			var shouldRetry = false
+			/// Items that are no longer kept on this device (the system's copy of them can be removed as well)
+			var deselected: [WorkItem] = []
+			/// Why items the user wanted to stop keeping on this device were kept
+			var refusals: [String] = []
+		}
+
+		/// Performs the work (other than fetches)
+		func run(_ work: [WorkItem]) -> Outcome {
+			var outcome = Outcome()
 			var failed = false
 
 			// Paths are selected before they are scanned: Syncthing skips what it ignores
@@ -46,7 +60,30 @@
 				}
 				failed = failed || !succeeded
 			}
-			return failed
+
+			// Asked for by the user, so a refusal is reported rather than retried. Only connected devices count as
+			// having a copy, so right after the app starts that is retried for a while before it counts as a refusal.
+			for item in work where item.kind == .deselectSafely {
+				if let folder = client.folder(withID: item.folderID) {
+					do {
+						if try deselectSafely(item, in: folder) {
+							outcome.deselected.append(item)
+						}
+					}
+					catch FileProviderWorkError.onlyCopy where item.attempts + 1 < Self.deselectAttempts {
+						try? store.failWork(id: item.id, error: FileProviderWorkError.onlyCopy.localizedDescription)
+						failed = true
+						continue
+					}
+					catch {
+						outcome.refusals.append("\(FileNames.lastComponent(item.path)): \(error.localizedDescription)")
+					}
+				}
+				complete([item])
+			}
+
+			outcome.shouldRetry = failed
+			return outcome
 		}
 
 		/// Runs the block for the folder the items belong to and records the outcome. Returns false on failure.
@@ -101,6 +138,36 @@
 				throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
 			}
 			try folder.scanPaths(SushitrainListOfStrings.from([item.path, newPath]))
+		}
+
+		/// Stops keeping a path on this device, but only when another device has the whole of its current version.
+		/// Returns whether it was deselected.
+		private func deselectSafely(_ item: WorkItem, in folder: SushitrainFolder) throws -> Bool {
+			guard try folder.checkedIsSelective() else {
+				return false
+			}
+			// Changes made on this device must be known before checking that other devices have this version
+			try folder.scanPaths(SushitrainListOfStrings.from([item.path]))
+			let entry = try folder.getFileInformation(item.path)
+			if entry.isDeleted() {
+				return false
+			}
+			guard try entry.peersWithFullCopy().count() > 0 else {
+				throw FileProviderWorkError.onlyCopy
+			}
+			try entry.setExplicitlySelected(false)
+			return true
+		}
+	}
+
+	enum FileProviderWorkError: LocalizedError {
+		case onlyCopy
+
+		var errorDescription: String? {
+			switch self {
+			case .onlyCopy:
+				return String(localized: "No other connected device has all of it, so it is kept on this device.")
+			}
 		}
 	}
 #endif

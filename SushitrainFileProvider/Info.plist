@@ -11,6 +11,25 @@
 	</dict>
 	<key>NSExtension</key>
 	<dict>
+		<key>NSExtensionFileProviderActions</key>
+		<array>
+			<dict>
+				<key>NSExtensionFileProviderActionIdentifier</key>
+				<string>$(PRODUCT_BUNDLE_IDENTIFIER).keep</string>
+				<key>NSExtensionFileProviderActionName</key>
+				<string>Keep on This Device</string>
+				<key>NSExtensionFileProviderActionActivationRule</key>
+				<string>fileproviderItems.@count &gt; 0 AND SUBQUERY(fileproviderItems, $fileproviderItem, $fileproviderItem.userInfo.selective == YES AND $fileproviderItem.userInfo.selected == NO AND $fileproviderItem.userInfo.folderRoot == NO).@count == fileproviderItems.@count</string>
+			</dict>
+			<dict>
+				<key>NSExtensionFileProviderActionIdentifier</key>
+				<string>$(PRODUCT_BUNDLE_IDENTIFIER).stopKeeping</string>
+				<key>NSExtensionFileProviderActionName</key>
+				<string>Stop Keeping on This Device</string>
+				<key>NSExtensionFileProviderActionActivationRule</key>
+				<string>fileproviderItems.@count &gt; 0 AND SUBQUERY(fileproviderItems, $fileproviderItem, $fileproviderItem.userInfo.selective == YES AND $fileproviderItem.userInfo.selected == YES AND $fileproviderItem.userInfo.folderRoot == NO).@count == fileproviderItems.@count</string>
+			</dict>
+		</array>
 		<key>NSExtensionFileProviderDocumentGroup</key>
 		<string>$(SYNCTRAIN_APP_GROUP)</string>
 		<key>NSExtensionFileProviderSupportsEnumeration</key>

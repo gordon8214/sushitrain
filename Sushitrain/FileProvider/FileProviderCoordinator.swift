@@ -19,6 +19,8 @@
 		private(set) var lastError: String? = nil
 		/// Files the user tried to open in the Files app while the app was not running (newest first)
 		private(set) var requestedDownloads: [RequestedDownload] = []
+		/// Why items the user wanted to stop keeping on this device were kept (newest first)
+		private(set) var keepNotices: [String] = []
 
 		@ObservationIgnored private var client: SushitrainClient? = nil
 		@ObservationIgnored private var store: IndexStore? = nil
@@ -34,17 +36,20 @@
 		@ObservationIgnored private var isProcessingWork = false
 		@ObservationIgnored private var hasMoreWork = false
 		@ObservationIgnored private var retryTask: Task<Void, Never>? = nil
+		@ObservationIgnored private var retryRejectedTask: Task<Void, Never>? = nil
 
 		static let heartbeatInterval: TimeInterval = 2
 		static let heartbeatValidity: TimeInterval = 6
 		private static let workRetryInterval: TimeInterval = 15
 		private static let requestedDownloadLifetime: TimeInterval = 24 * 3600
+		private static let evictionAttempts = 6
+		private static let evictionRetryInterval: TimeInterval = 30
 		private static let fullPassInterval: TimeInterval = 6 * 3600
 		private static let lastFullPassKey = "fileProviderLastFullPass"
 		/// Set (e.g. from the Settings app) to rebuild the File Provider domain on the next launch
 		private static let resetDomainKey = "resetFileProviderDomain"
 		/// Increase when items are presented differently (e.g. other capabilities), so the system reads them again
-		private static let itemFormat = 3
+		private static let itemFormat = 4
 		private static let itemFormatKey = "fileProviderItemFormat"
 
 		nonisolated static var domain: NSFileProviderDomain {
@@ -198,6 +203,28 @@
 
 		fileprivate func folderIndexChanged(folderID: String, fullPass: Bool) {
 			indexer?.schedule(folderID: folderID, fullPass: fullPass)
+			// A file may have been downloaded that a rejected change was waiting for
+			retryRejectedChanges()
+		}
+
+		/// Has the system retry changes the extension rejected because they were not possible yet (such as saving a file
+		/// that was still being downloaded), after a short delay to coalesce events
+		private func retryRejectedChanges() {
+			retryRejectedTask?.cancel()
+			retryRejectedTask = Task {
+				try? await Task.sleep(for: .seconds(1))
+				if !Task.isCancelled {
+					signalResolved(.cannotSynchronize)
+				}
+			}
+		}
+
+		private func signalResolved(_ code: NSFileProviderError.Code) {
+			manager?.signalErrorResolved(NSFileProviderError(code)) { error in
+				if let error {
+					Log.warn("Could not signal the File Provider that an error was resolved: \(error.localizedDescription)")
+				}
+			}
 		}
 
 		fileprivate func folderConfigurationChanged() {
@@ -237,15 +264,9 @@
 			}
 			heartbeat()
 
-			// Files requested while the app was not running made the system pause the location; it can resume now. Changes
-			// that were rejected may be possible now too (e.g. after a selection changed), so let the system retry them.
-			for code in [NSFileProviderError.Code.serverUnreachable, .cannotSynchronize] {
-				manager?.signalErrorResolved(NSFileProviderError(code)) { error in
-					if let error {
-						Log.warn("Could not resume the File Provider: \(error.localizedDescription)")
-					}
-				}
-			}
+			// Files requested while the app was not running can be fetched now, and rejected changes may be possible now
+			signalResolved(.serverUnreachable)
+			signalResolved(.cannotSynchronize)
 		}
 
 		/// Tells the extension the app can serve files for a few more seconds. While the app is suspended this does not
@@ -305,7 +326,12 @@
 					let work = try store.pendingWork(limit: 500)
 					let changes = work.filter { $0.kind != .fetch }
 					if !changes.isEmpty {
-						failed = await Task.detached(priority: .utility) { runner.run(changes) }.value
+						let outcome = await Task.detached(priority: .utility) { runner.run(changes) }.value
+						failed = outcome.shouldRetry
+						await evict(outcome.deselected, store: store)
+						if !outcome.refusals.isEmpty {
+							keepNotices = Array((outcome.refusals + keepNotices).prefix(10))
+						}
 					}
 					try updateRequestedDownloads(work.filter { $0.kind == .fetch }, store: store)
 				}
@@ -314,6 +340,7 @@
 				}
 				UIApplication.shared.endBackgroundTask(backgroundTask)
 				isProcessingWork = false
+				retryRejectedChanges()
 
 				if hasMoreWork {
 					processWork()
@@ -326,6 +353,35 @@
 							processWork()
 						}
 					}
+				}
+			}
+		}
+
+		/// Items that are no longer kept on this device do not need to take up space in the system's copy either. A file
+		/// that was open recently (e.g. in Quick Look) stays in use for a while, so that is tried again later.
+		private func evict(_ items: [WorkItem], store: IndexStore, attempt: Int = 1) async {
+			guard let manager else {
+				return
+			}
+			var busy: [WorkItem] = []
+			for work in items {
+				guard let item = try? store.item(folderID: work.folderID, path: work.path) else {
+					continue
+				}
+				do {
+					try await manager.evictItem(identifier: NSFileProviderItemIdentifier(ItemIdentifiers.string(for: item.id)))
+				}
+				catch let error as NSError where error.domain == NSPOSIXErrorDomain && error.code == Int(EBUSY) {
+					busy.append(work)
+				}
+				catch {
+					Log.warn("Could not evict \(work.path) from the File Provider: \(error.localizedDescription)")
+				}
+			}
+			if !busy.isEmpty && attempt < Self.evictionAttempts {
+				Task {
+					try? await Task.sleep(for: .seconds(Self.evictionRetryInterval))
+					await evict(busy, store: store, attempt: attempt + 1)
 				}
 			}
 		}

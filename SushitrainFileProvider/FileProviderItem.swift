@@ -79,8 +79,9 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 
 	/// Items can be changed in folders that send changes. Renaming, moving and deleting is limited to what is kept on
 	/// this device (deleting removes the item on all devices); directories in on-demand folders cannot be renamed yet.
-	/// This depends on the index only, because the system refreshes capabilities only when the item's version changes;
-	/// the extension checks the disk when it makes the change.
+	/// The system's copy of files and directories can always be removed (their contents are in the folder or on other
+	/// devices). This depends on the index only, because the system refreshes capabilities only when the item's version
+	/// changes; the extension checks the disk when it makes the change.
 	var capabilities: NSFileProviderItemCapabilities {
 		let isWritable = folder?.acceptsLocalChanges == true
 		let isSelective = folder?.isSelective == true
@@ -91,7 +92,7 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 				? [.allowsReading, .allowsContentEnumerating, .allowsAddingSubItems]
 				: [.allowsReading, .allowsContentEnumerating]
 		case .directory:
-			var capabilities: NSFileProviderItemCapabilities = [.allowsReading, .allowsContentEnumerating]
+			var capabilities: NSFileProviderItemCapabilities = [.allowsReading, .allowsContentEnumerating, .allowsEvicting]
 			guard isWritable else {
 				return capabilities
 			}
@@ -105,12 +106,12 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 			return capabilities
 		case .file, .symlink:
 			guard isWritable else {
-				return [.allowsReading]
+				return [.allowsReading, .allowsEvicting]
 			}
-			// Saving a file that is only on other devices keeps the new version on this device
+			// Saving a file that is only on other devices downloads it first and then keeps it on this device
 			return isKept
-				? [.allowsReading, .allowsWriting, .allowsRenaming, .allowsReparenting, .allowsDeleting]
-				: [.allowsReading, .allowsWriting]
+				? [.allowsReading, .allowsWriting, .allowsRenaming, .allowsReparenting, .allowsDeleting, .allowsEvicting]
+				: [.allowsReading, .allowsWriting, .allowsEvicting]
 		}
 	}
 

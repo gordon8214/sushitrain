@@ -24,6 +24,14 @@ enum Rejection {
 	static var notOnDevice: Error {
 		cannotSynchronize(String(localized: "Keep this item on this device to change it."))
 	}
+
+	static var waitingForDownload: Error {
+		cannotSynchronize(
+			String(
+				localized:
+					"Synctrain saves this change once the file has been downloaded to this device. Open Synctrain to download it."
+			))
+	}
 }
 
 /// Applies changes made in the Files app to the folders on disk and records them in the index. Syncthing picks them up
@@ -267,22 +275,26 @@ struct LocalWriter: Sendable {
 		let diskHasIndexedVersion =
 			onDisk?.matches(size: item.size, modifiedNanoseconds: item.modifiedNanoseconds) == true
 
-		if isBasedOnCurrentVersion && (onDisk == nil || diskHasIndexedVersion) {
+		if isBasedOnCurrentVersion && onDisk == nil {
+			// The file is only on other devices. Written as is, Syncthing would see a second version next to theirs
+			// (and keep one of them as a conflict copy). Have it downloaded first; the app tells the system to try
+			// again once it is here, and then this is an ordinary change of that version.
+			unlink(staged.fileSystemPath)
+			if folder.isSelective && !item.isSelected {
+				try store.recordLocalChanges { recorder throws(IndexError) in
+					try recorder.enqueue(.select, folderID: item.folderID, path: item.path)
+				}
+				SharedNotification.workQueued.post()
+			}
+			throw Rejection.waitingForDownload
+		}
+
+		if isBasedOnCurrentVersion && diskHasIndexedVersion {
 			do {
-				if onDisk == nil {
-					// A file that was only on other devices: it is kept on this device from now on
-					try materialize(parentOf: item)
-					try place(staged, at: destination)
-				}
-				else {
-					try replace(destination, with: staged, expecting: item)
-				}
+				try replace(destination, with: staged, expecting: item)
 				let updated = try store.recordLocalChanges { recorder throws(IndexError) in
 					let updated = try recorder.recordContentChange(
 						item, size: written.size, modifiedNanoseconds: written.modifiedNanoseconds)
-					if folder.isSelective && onDisk == nil {
-						try recorder.enqueue(.select, folderID: item.folderID, path: item.path)
-					}
 					try recorder.enqueue(.rescan, folderID: item.folderID, path: item.path)
 					return updated
 				}
@@ -446,12 +458,6 @@ struct LocalWriter: Sendable {
 		}
 		if let date = directory.modificationDate {
 			try? setModificationDate(target, date)
-		}
-	}
-
-	private func materialize(parentOf item: IndexItem) throws {
-		if let parentID = item.parentID, let parent = try store.item(id: parentID) {
-			try materialize(parent)
 		}
 	}
 

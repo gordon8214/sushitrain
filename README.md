@@ -18,6 +18,7 @@ sleeve:
 - **Selective file synchronization**: only keep specific files or subdirectories from a larger folder on your device.
 - **On-demand access to files**: download or stream files that are not available locally from another peer through the Syncthing protocol. This allows access to your files, from your own devices, without setting up a VPN.
 - [**Remote thumbnails**](./Docs/thumbnails.md): the app can generate thumbnails for files on other devices (images or videos). You can even synchronize thumbnails between devices, so previews can be generated on a device that has all the files for use on other devices.
+- [**Files app integration**](./Docs/file-provider.md) (iOS and iPadOS): browse, open, edit and add files in your folders from the Files app, including files that are only on your other devices.
 - **Photo back-up** (automatically export photos from the system album to a folder) as well as [**photo folders**](./Docs/photo-fs.md) (directly synchronize a system photo album as a send-only folder, without exporting).
 - **Tight iOS/macOS integration** to enable background synchronization (to the extent possible), as well as Shortcuts integration and Continuity support.
 
