@@ -205,6 +205,9 @@ public enum WorkKind: String, Sendable, Codable, CaseIterable {
 	case finishRename
 	/// The user tried to open a file that is not on this device while the app was not running
 	case fetch
+	/// Remove the system's copy of an item that is no longer kept on this device (queued by the app itself, and tried
+	/// again while the file is in use)
+	case evict
 }
 
 public struct WorkItem: Sendable, Hashable {

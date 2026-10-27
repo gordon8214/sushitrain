@@ -119,6 +119,20 @@ final class ContentFetcher: Sendable {
 		return request
 	}
 
+	/// The URL of a file on the app's server, for clients that cannot set headers (the token is in the query instead)
+	func streamingURL(for item: IndexItem, from heartbeat: Heartbeat) -> URL {
+		var components = URLComponents()
+		components.scheme = "http"
+		components.host = "127.0.0.1"
+		components.port = heartbeat.port
+		components.path = "/file"
+		components.queryItems = [
+			URLQueryItem(name: "folder", value: item.folderID), URLQueryItem(name: "path", value: item.path),
+			URLQueryItem(name: "token", value: heartbeat.token),
+		]
+		return components.url!
+	}
+
 	/// Whether the app answers. A suspended app still accepts connections but never responds, hence the short timeout.
 	func ping(_ heartbeat: Heartbeat) async -> Bool {
 		var request = request(heartbeat, path: "/ping")

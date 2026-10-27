@@ -129,13 +129,18 @@ func (s *FileProviderServer) Shutdown() {
 	}
 }
 
+// The token is presented as a bearer token, or as the "token" query parameter for clients that cannot set headers
+// (such as AVFoundation streaming a video to make a thumbnail)
 func (s *FileProviderServer) authorized(r *http.Request) bool {
 	s.mutex.Lock()
 	token := s.token
 	s.mutex.Unlock()
 
 	presented, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !found || token == "" {
+	if !found {
+		presented = r.URL.Query().Get("token")
+	}
+	if presented == "" || token == "" {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(presented), []byte(token)) == 1

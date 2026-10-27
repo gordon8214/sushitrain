@@ -42,8 +42,7 @@
 		static let heartbeatValidity: TimeInterval = 6
 		private static let workRetryInterval: TimeInterval = 15
 		private static let requestedDownloadLifetime: TimeInterval = 24 * 3600
-		private static let evictionAttempts = 6
-		private static let evictionRetryInterval: TimeInterval = 30
+		private static let evictionLifetime: TimeInterval = 24 * 3600
 		private static let fullPassInterval: TimeInterval = 6 * 3600
 		private static let lastFullPassKey = "fileProviderLastFullPass"
 		/// Set (e.g. from the Settings app) to rebuild the File Provider domain on the next launch
@@ -339,14 +338,20 @@
 				var failed = false
 				do {
 					let work = try store.pendingWork(limit: 500)
-					let changes = work.filter { $0.kind != .fetch }
+					let changes = work.filter { $0.kind != .fetch && $0.kind != .evict }
 					if !changes.isEmpty {
 						let outcome = await Task.detached(priority: .utility) { runner.run(changes) }.value
 						failed = outcome.shouldRetry
-						await evict(outcome.deselected, store: store)
+						for item in outcome.deselected {
+							try store.enqueue(.evict, folderID: item.folderID, path: item.path)
+						}
 						if !outcome.refusals.isEmpty {
 							keepNotices = Array((outcome.refusals + keepNotices).prefix(10))
 						}
+					}
+					let evictions = try store.pendingWork(limit: 500).filter { $0.kind == .evict }
+					if await !evict(evictions, store: store) {
+						failed = true
 					}
 					try updateRequestedDownloads(work.filter { $0.kind == .fetch }, store: store)
 				}
@@ -373,32 +378,37 @@
 		}
 
 		/// Items that are no longer kept on this device do not need to take up space in the system's copy either. A file
-		/// that was open recently (e.g. in Quick Look) stays in use for a while, so that is tried again later.
-		private func evict(_ items: [WorkItem], store: IndexStore, attempt: Int = 1) async {
+		/// that was open recently (or is shown in Files) stays in use for a while; that is tried again on later passes,
+		/// for a day. Returns false when some evictions have to be tried again.
+		private func evict(_ evictions: [WorkItem], store: IndexStore) async -> Bool {
 			guard let manager else {
-				return
+				return true
 			}
-			var busy: [WorkItem] = []
-			for work in items {
+			var done = true
+			for work in evictions {
 				guard let item = try? store.item(folderID: work.folderID, path: work.path) else {
+					try? store.completeWork(id: work.id)
 					continue
 				}
 				do {
 					try await manager.evictItem(identifier: NSFileProviderItemIdentifier(ItemIdentifiers.string(for: item.id)))
+					try? store.completeWork(id: work.id)
 				}
 				catch let error as NSError where error.domain == NSPOSIXErrorDomain && error.code == Int(EBUSY) {
-					busy.append(work)
+					if Date().timeIntervalSince(work.createdAt) > Self.evictionLifetime {
+						try? store.completeWork(id: work.id)
+					}
+					else {
+						try? store.failWork(id: work.id, error: error.localizedDescription)
+						done = false
+					}
 				}
 				catch {
 					Log.warn("Could not evict \(work.path) from the File Provider: \(error.localizedDescription)")
+					try? store.completeWork(id: work.id)
 				}
 			}
-			if !busy.isEmpty && attempt < Self.evictionAttempts {
-				Task {
-					try? await Task.sleep(for: .seconds(Self.evictionRetryInterval))
-					await evict(busy, store: store, attempt: attempt + 1)
-				}
-			}
+			return done
 		}
 
 		/// Lists the files that were requested while the app was not running, so the user can open them in Files now.

@@ -22,14 +22,16 @@ What works depends on whether Synctrain is running, because only the app runs Sy
   not running, Files says so and Synctrain lists it under **Requested downloads**, with a button to show it in Files.
 - **Keep on This Device** and **Stop Keeping on This Device** (in on-demand folders) are carried out when Synctrain
   runs. Stopping only happens when another connected device has all of the item; otherwise Synctrain keeps it and says
-  why on the Files app page. Files' own downloaded copy is removed as well, unless it is still in use (then **Remove
-  Download** in Files removes it).
+  why on the Files app page. Files' own downloaded copy is removed as well; while it is still in use (for instance
+  shown in Files), Synctrain tries again for a day, and **Remove Download** in Files removes it right away.
 
 Saving a file that is only on other devices first downloads it (Files shows the save as waiting until Synctrain has the
 file); the edit is then an ordinary change of that version, not a second, conflicting one.
 
-Items kept on this device in on-demand folders have a checkmark badge, and conflict copies a warning badge. Images get
-thumbnails: from the file on this device, or (while Synctrain runs, up to 16 MB) fetched from another device.
+Items kept on this device in on-demand folders have a checkmark badge, and conflict copies a warning badge. Files get
+thumbnails (images, videos, PDFs and other documents the system can preview) from the file on this device. While
+Synctrain runs, files that are only on other devices get them too: videos are streamed (only the parts needed for the
+first frame are fetched), other files are fetched up to 16 MB.
 
 Deleting removes the item on all devices. Only items kept on this device can be renamed, moved or deleted; in on-demand
 folders, a directory can only be renamed or moved when it is kept on this device as a whole. Items can also be moved to
@@ -38,7 +40,10 @@ another folder, which other devices see as a removal from one folder and an addi
 ### Limitations
 
 - Receive-only folders are read-only. Symbolic links are not shown.
-- Thumbnails are made for images only (not for videos or documents that are not on this device).
+- Files that are only on other devices get no thumbnail while Synctrain is not running, nor when they are larger than
+  16 MB (except videos).
+- Work left by the Files app while Synctrain is not running (scans, selections, keeping and stopping) is carried out
+  when Synctrain next runs, which includes its background refreshes.
 - There is no macOS version yet.
 
 ## How it works
@@ -91,7 +96,9 @@ and the new folder selects (if on-demand) and scans it.
 
 Files on this device are cloned into the system's copy (`fclonefileat`, so they take no extra space). Other files are
 fetched through the app's loopback server (`127.0.0.1`, protected by a token that changes on every start), which reads
-them from the local copy if it is current and otherwise from connected devices, block by block.
+them from the local copy if it is current and otherwise from connected devices, block by block. The server supports
+range requests, so video thumbnails only fetch the blocks AVFoundation reads; as AVFoundation cannot set the
+authorization header, the token may also be passed as a `token` query parameter.
 
 Synctrain does not hand requested files to the system as background downloads: the system runs those later, usually
 while the app is suspended again, and while they wait or fail Files shows the location as paused.

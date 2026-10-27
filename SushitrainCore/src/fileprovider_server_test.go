@@ -150,6 +150,18 @@ func TestFileProviderServerAuthorization(t *testing.T) {
 		t.Fatalf("ping failed: %d %q", res.StatusCode, body)
 	}
 
+	// The token can also be passed as a query parameter
+	for token, status := range map[string]int{"wrong": http.StatusUnauthorized, "": http.StatusUnauthorized, server.Token(): http.StatusOK} {
+		res, err := http.Get(url + "?token=" + token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != status {
+			t.Fatalf("token parameter %q: status %d, expected %d", token, res.StatusCode, status)
+		}
+	}
+
 	// Listening again rotates the token
 	oldToken := server.Token()
 	if err := server.Listen(); err != nil {
