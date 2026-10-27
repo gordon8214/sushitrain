@@ -33,9 +33,7 @@ struct ExtensionContext: Sendable {
 		case .symlink:
 			return false
 		case .file:
-			if item.pending == .create || item.pending == .modify {
-				return true
-			}
+			// Changes made through the File Provider are recorded with what they wrote, so this holds for them as well
 			guard let fingerprint = FileFingerprint(path: localURL(for: item).path(percentEncoded: false)) else {
 				return false
 			}

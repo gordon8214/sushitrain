@@ -17,8 +17,8 @@
 		/// Whether the user enabled the Synctrain location in the Files app (nil while unknown)
 		private(set) var isDomainEnabled: Bool? = nil
 		private(set) var lastError: String? = nil
-		/// Number of downloads requested in the Files app while the app was not running
-		private(set) var pendingFetchCount = 0
+		/// Files the user tried to open in the Files app while the app was not running (newest first)
+		private(set) var requestedDownloads: [RequestedDownload] = []
 
 		@ObservationIgnored private var client: SushitrainClient? = nil
 		@ObservationIgnored private var store: IndexStore? = nil
@@ -32,13 +32,20 @@
 		@ObservationIgnored private var signalTask: Task<Void, Never>? = nil
 		@ObservationIgnored private var observers: [any NSObjectProtocol] = []
 		@ObservationIgnored private var isProcessingWork = false
+		@ObservationIgnored private var hasMoreWork = false
+		@ObservationIgnored private var retryTask: Task<Void, Never>? = nil
 
 		static let heartbeatInterval: TimeInterval = 2
 		static let heartbeatValidity: TimeInterval = 6
+		private static let workRetryInterval: TimeInterval = 15
+		private static let requestedDownloadLifetime: TimeInterval = 24 * 3600
 		private static let fullPassInterval: TimeInterval = 6 * 3600
 		private static let lastFullPassKey = "fileProviderLastFullPass"
 		/// Set (e.g. from the Settings app) to rebuild the File Provider domain on the next launch
 		private static let resetDomainKey = "resetFileProviderDomain"
+		/// Increase when items are presented differently (e.g. other capabilities), so the system reads them again
+		private static let itemFormat = 3
+		private static let itemFormatKey = "fileProviderItemFormat"
 
 		nonisolated static var domain: NSFileProviderDomain {
 			let domain = NSFileProviderDomain(
@@ -126,6 +133,7 @@
 			do {
 				try await NSFileProviderManager.add(Self.domain)
 				lastError = nil
+				await refreshItemsIfFormatChanged()
 			}
 			catch {
 				Log.warn("Could not register the File Provider domain: \(error.localizedDescription)")
@@ -145,6 +153,25 @@
 			}
 		}
 
+		/// The system keeps what it knows about items (such as what can be done with them) until their version changes.
+		/// When a new version of the extension describes items differently, report all items as changed.
+		private func refreshItemsIfFormatChanged() async {
+			guard UserDefaults.standard.integer(forKey: Self.itemFormatKey) < Self.itemFormat, let store else {
+				return
+			}
+			do {
+				try await Task.detached(priority: .utility) {
+					try store.write { writer throws(IndexError) in try writer.touchAllItems() }
+				}.value
+				UserDefaults.standard.set(Self.itemFormat, forKey: Self.itemFormatKey)
+				Log.info("Reported all File Provider items as changed (item format \(Self.itemFormat))")
+				signalWorkingSet()
+			}
+			catch {
+				Log.warn("Could not refresh File Provider items: \(error.localizedDescription)")
+			}
+		}
+
 		/// Removes the Synctrain location (and the system's copy of its files) and sets it up again from a new index.
 		/// Nothing is lost: all files are in the Syncthing folders. The user has to enable the location again in Files.
 		func rebuild() async {
@@ -156,6 +183,7 @@
 				try await NSFileProviderManager.remove(Self.domain)
 				try store.reset()
 				try await NSFileProviderManager.add(Self.domain)
+				UserDefaults.standard.set(Self.itemFormat, forKey: Self.itemFormatKey)
 				lastError = nil
 				indexer?.scheduleFolderReconciliation(fullPass: true)
 			}
@@ -208,6 +236,16 @@
 				Log.warn("Could not start the File Provider server: \(error.localizedDescription)")
 			}
 			heartbeat()
+
+			// Files requested while the app was not running made the system pause the location; it can resume now. Changes
+			// that were rejected may be possible now too (e.g. after a selection changed), so let the system retry them.
+			for code in [NSFileProviderError.Code.serverUnreachable, .cannotSynchronize] {
+				manager?.signalErrorResolved(NSFileProviderError(code)) { error in
+					if let error {
+						Log.warn("Could not resume the File Provider: \(error.localizedDescription)")
+					}
+				}
+			}
 		}
 
 		/// Tells the extension the app can serve files for a few more seconds. While the app is suspended this does not
@@ -245,51 +283,94 @@
 
 		// MARK: - Work queued by the extension
 
+		/// Completes changes made in the Files app (selecting, finishing renames, scanning) and retries downloads that
+		/// were requested while the app was not running
 		func processWork() {
-			guard let store, !isProcessingWork else {
+			guard let store, let client, let container else {
+				return
+			}
+			guard !isProcessingWork else {
+				hasMoreWork = true
 				return
 			}
 			isProcessingWork = true
+			hasMoreWork = false
+			retryTask?.cancel()
+			let runner = FileProviderWorkRunner(client: client, store: store, container: container)
+			let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Applying changes from Files")
+
 			Task {
-				defer { isProcessingWork = false }
+				var failed = false
 				do {
-					let work = try store.pendingWork()
-					pendingFetchCount = work.filter { $0.kind == .fetch }.count
-					for item in work {
-						await perform(item, store: store)
+					let work = try store.pendingWork(limit: 500)
+					let changes = work.filter { $0.kind != .fetch }
+					if !changes.isEmpty {
+						failed = await Task.detached(priority: .utility) { runner.run(changes) }.value
 					}
-					pendingFetchCount = try store.pendingWork().filter { $0.kind == .fetch }.count
+					try updateRequestedDownloads(work.filter { $0.kind == .fetch }, store: store)
 				}
 				catch {
 					Log.warn("Could not process File Provider work: \(error)")
 				}
+				UIApplication.shared.endBackgroundTask(backgroundTask)
+				isProcessingWork = false
+
+				if hasMoreWork {
+					processWork()
+				}
+				else if failed {
+					// Selections are refused while a folder is busy (e.g. scanning); try again in a while
+					retryTask = Task {
+						try? await Task.sleep(for: .seconds(Self.workRetryInterval))
+						if !Task.isCancelled {
+							processWork()
+						}
+					}
+				}
 			}
 		}
 
-		private func perform(_ item: WorkItem, store: IndexStore) async {
-			switch item.kind {
-			case .fetch:
-				// The user opened a file in the Files app while we were not running; now that we are, have the
-				// system ask the extension again (which will fetch through us)
-				guard UIApplication.shared.applicationState != .background, let manager, let extra = item.extra else {
-					return
+		/// Lists the files that were requested while the app was not running, so the user can open them in Files now.
+		/// They are not handed to the system to download (`requestDownloadForItem`): it schedules such downloads for
+		/// later, usually when the app is suspended again, and while they wait or fail Files shows the location as
+		/// paused. Requests that were not followed up on expire.
+		private func updateRequestedDownloads(_ fetches: [WorkItem], store: IndexStore) throws {
+			var current: [RequestedDownload] = []
+			for work in fetches {
+				if Date().timeIntervalSince(work.createdAt) > Self.requestedDownloadLifetime {
+					try store.completeWork(id: work.id)
 				}
-				do {
-					try await manager.requestDownloadForItem(withIdentifier: NSFileProviderItemIdentifier(extra))
-					try store.completeWork(id: item.id)
+				else {
+					current.append(RequestedDownload(work: work))
 				}
-				catch {
-					Log.warn("Could not request download of item \(extra): \(error.localizedDescription)")
-					try? store.failWork(id: item.id, error: error.localizedDescription)
-					if item.attempts >= 3 {
-						try? store.completeWork(id: item.id)
-					}
-				}
-
-			case .select, .deselectSafely, .rescan, .finishRename:
-				// Handled once the File Provider supports making changes
-				break
 			}
+			requestedDownloads = current.sorted { $0.requestedAt > $1.requestedAt }
+		}
+
+		/// Opens a requested file in the Files app; the app stays awake long enough for the system to download it
+		func showInFiles(_ download: RequestedDownload) {
+			guard let container else {
+				return
+			}
+			openURLInSystemFilesApp(url: container.fileURL(folderID: download.folderID, path: download.path))
+		}
+	}
+
+	struct RequestedDownload: Identifiable, Hashable {
+		let id: Int64
+		let folderID: String
+		let path: String
+		let requestedAt: Date
+
+		init(work: WorkItem) {
+			id = work.id
+			folderID = work.folderID
+			path = work.path
+			requestedAt = work.createdAt
+		}
+
+		var name: String {
+			FileNames.lastComponent(path)
 		}
 	}
 

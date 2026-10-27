@@ -250,10 +250,12 @@ extension IndexStore {
 		try store.applying([file("doc.txt", seq: 1, hash: "v1", size: 1, modNs: 1)])
 		let item = try #require(try store.item(folderID: "f1", path: "doc.txt"))
 		try store.setRaw(
-			"pending = \(PendingChange.modify.rawValue), pending_size = 2, pending_mod_ns = 20, size = 2, mod_ns = 20",
-			id: item.id)
+			"""
+			pending = \(PendingChange.modify.rawValue), pending_size = 2, pending_mod_ns = 20, size = 2, mod_ns = 20,
+				pending_after = 3
+			""", id: item.id)
 
-		// An older version arriving (e.g. from before our write was scanned) does not override the pending change
+		// Records from before the change (e.g. in a full pass before our write was scanned) do not override it
 		try store.applying([file("doc.txt", seq: 2, hash: "remote", size: 1, modNs: 1)])
 		#expect(try store.item(id: item.id)?.pending == .modify)
 		try store.applying([deletion("doc.txt", seq: 3)])
@@ -268,15 +270,20 @@ extension IndexStore {
 		#expect(adopted.contentRevision == item.contentRevision)
 	}
 
-	@Test func pendingDeleteIsConfirmedByTombstone() throws {
+	@Test func pendingChangeYieldsToNewerRecord() throws {
 		let store = try makeStore()
-		try store.applying([file("x.txt", seq: 1)])
-		let item = try #require(try store.item(folderID: "f1", path: "x.txt"))
-		try store.setRaw("pending = \(PendingChange.delete.rawValue)", id: item.id)
-		try store.applying([file("x.txt", seq: 1)])
-		#expect(try store.item(id: item.id)?.pending == .delete)
-		try store.applying([deletion("x.txt", seq: 2)])
-		#expect(try store.item(id: item.id) == nil)
+		try store.write { writer throws(IndexError) in try writer.setLocalShortDeviceID("SELF123") }
+		try store.applying([file("doc.txt", seq: 1, hash: "v1")])
+		let item = try #require(try store.item(folderID: "f1", path: "doc.txt"))
+		try store.setRaw(
+			"pending = \(PendingChange.modify.rawValue), pending_size = 2, pending_mod_ns = 20, pending_after = 1",
+			id: item.id)
+
+		// Syncthing indexed another version after our change (e.g. it resolved a conflict): that is what is there now
+		try store.applying([file("doc.txt", seq: 2, hash: "remote", size: 3, modNs: 30)])
+		let resolved = try #require(try store.item(id: item.id))
+		#expect(resolved.pending == .none && resolved.blocksHash == "remote" && resolved.size == 3)
+		#expect(resolved.contentRevision > item.contentRevision)
 	}
 
 	@Test func paging() throws {

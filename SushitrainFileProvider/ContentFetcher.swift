@@ -24,11 +24,19 @@ enum FetchError: LocalizedError {
 		}
 	}
 
-	/// The error to report to the File Provider framework, carrying our explanation
-	var fileProviderError: Error {
-		NSError(
-			domain: NSFileProviderErrorDomain, code: NSFileProviderError.serverUnreachable.rawValue,
-			userInfo: [NSLocalizedDescriptionKey: errorDescription ?? "", NSUnderlyingErrorKey: self as NSError])
+	/// The error to report to the File Provider framework, carrying our explanation. Reporting the server as unreachable
+	/// makes the system show the whole location as paused until the app signals that this is resolved, so that is
+	/// only done when the user asked for a file and the app has to be opened to get it.
+	func fileProviderError(isSystemRequest: Bool) -> Error {
+		let userInfo: [String: Any] = [
+			NSLocalizedDescriptionKey: errorDescription ?? "", NSUnderlyingErrorKey: self as NSError,
+		]
+		if case .appNotRunning = self, !isSystemRequest {
+			return NSError(
+				domain: NSFileProviderErrorDomain, code: NSFileProviderError.serverUnreachable.rawValue,
+				userInfo: userInfo)
+		}
+		return NSError(domain: NSCocoaErrorDomain, code: NSFileReadUnknownError, userInfo: userInfo)
 	}
 }
 

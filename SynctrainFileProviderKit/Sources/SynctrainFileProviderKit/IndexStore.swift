@@ -10,7 +10,7 @@ import Foundation
 public struct IndexStore: Sendable {
 	public let url: URL
 
-	static let schemaVersion = 1
+	static let schemaVersion = 2
 
 	static let itemColumns = """
 		id, folder_id, path, parent_id, name, kind, size, mod_ns, blocks_hash, modified_by, content_rev, meta_rev, \
@@ -52,67 +52,81 @@ public struct IndexStore: Sendable {
 			if version >= schemaVersion {
 				return
 			}
-			try connection.execute(
-				"""
-				CREATE TABLE IF NOT EXISTS items (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					folder_id TEXT NOT NULL,
-					path TEXT NOT NULL,
-					parent_id INTEGER,
-					name TEXT NOT NULL,
-					name_key TEXT NOT NULL,
-					kind INTEGER NOT NULL,
-					size INTEGER NOT NULL DEFAULT 0,
-					mod_ns INTEGER NOT NULL DEFAULT 0,
-					blocks_hash TEXT,
-					modified_by TEXT,
-					st_seq INTEGER NOT NULL DEFAULT 0,
-					content_rev INTEGER NOT NULL DEFAULT 1,
-					meta_rev INTEGER NOT NULL DEFAULT 1,
-					changed_seq INTEGER NOT NULL,
-					selected INTEGER NOT NULL DEFAULT 0,
-					implied INTEGER NOT NULL DEFAULT 0,
-					pending INTEGER NOT NULL DEFAULT 0,
-					pending_size INTEGER,
-					pending_mod_ns INTEGER,
-					deleted INTEGER NOT NULL DEFAULT 0,
-					deleted_at REAL,
-					sweep_mark INTEGER NOT NULL DEFAULT 0
-				);
-				CREATE UNIQUE INDEX IF NOT EXISTS items_live_path ON items(folder_id, path) WHERE deleted = 0;
-				CREATE INDEX IF NOT EXISTS items_tombstone_path ON items(folder_id, path) WHERE deleted = 1;
-				CREATE INDEX IF NOT EXISTS items_children ON items(parent_id, deleted, id);
-				CREATE INDEX IF NOT EXISTS items_changed ON items(changed_seq);
-				CREATE INDEX IF NOT EXISTS items_name_key ON items(folder_id, parent_id, name_key) WHERE deleted = 0;
-				CREATE TABLE IF NOT EXISTS folders (
-					folder_id TEXT PRIMARY KEY,
-					root_id INTEGER NOT NULL,
-					label TEXT NOT NULL,
-					folder_type TEXT NOT NULL,
-					selective INTEGER NOT NULL,
-					cursor INTEGER NOT NULL DEFAULT 0
-				);
-				CREATE TABLE IF NOT EXISTS work (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					kind TEXT NOT NULL,
-					folder_id TEXT NOT NULL,
-					path TEXT NOT NULL,
-					extra TEXT,
-					attempts INTEGER NOT NULL DEFAULT 0,
-					last_error TEXT,
-					created_at REAL NOT NULL
-				);
-				CREATE TABLE IF NOT EXISTS meta (
-					key TEXT PRIMARY KEY,
-					value TEXT NOT NULL
-				);
-				""")
-			try connection.run(
-				"INSERT OR IGNORE INTO meta (key, value) VALUES ('generation', ?)", [UUID().uuidString])
-			try connection.run("INSERT OR IGNORE INTO meta (key, value) VALUES ('next_seq', '1')")
-			try connection.run("INSERT OR IGNORE INTO meta (key, value) VALUES ('pruned_below', '0')")
+			if version < 1 {
+				try createInitialSchema(connection)
+			}
+			if version < 2 {
+				// For changes made through the File Provider: where a renamed item was before, and the Syncthing
+				// sequence the folder's index was at (records up to it predate the change)
+				try connection.execute(
+					"""
+					ALTER TABLE items ADD COLUMN pending_path TEXT;
+					ALTER TABLE items ADD COLUMN pending_after INTEGER NOT NULL DEFAULT 0;
+					""")
+			}
 			try connection.setUserVersion(schemaVersion)
 		}
+	}
+
+	private static func createInitialSchema(_ connection: SQLiteConnection) throws(IndexError) {
+		try connection.execute(
+			"""
+			CREATE TABLE IF NOT EXISTS items (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				folder_id TEXT NOT NULL,
+				path TEXT NOT NULL,
+				parent_id INTEGER,
+				name TEXT NOT NULL,
+				name_key TEXT NOT NULL,
+				kind INTEGER NOT NULL,
+				size INTEGER NOT NULL DEFAULT 0,
+				mod_ns INTEGER NOT NULL DEFAULT 0,
+				blocks_hash TEXT,
+				modified_by TEXT,
+				st_seq INTEGER NOT NULL DEFAULT 0,
+				content_rev INTEGER NOT NULL DEFAULT 1,
+				meta_rev INTEGER NOT NULL DEFAULT 1,
+				changed_seq INTEGER NOT NULL,
+				selected INTEGER NOT NULL DEFAULT 0,
+				implied INTEGER NOT NULL DEFAULT 0,
+				pending INTEGER NOT NULL DEFAULT 0,
+				pending_size INTEGER,
+				pending_mod_ns INTEGER,
+				deleted INTEGER NOT NULL DEFAULT 0,
+				deleted_at REAL,
+				sweep_mark INTEGER NOT NULL DEFAULT 0
+			);
+			CREATE UNIQUE INDEX IF NOT EXISTS items_live_path ON items(folder_id, path) WHERE deleted = 0;
+			CREATE INDEX IF NOT EXISTS items_tombstone_path ON items(folder_id, path) WHERE deleted = 1;
+			CREATE INDEX IF NOT EXISTS items_children ON items(parent_id, deleted, id);
+			CREATE INDEX IF NOT EXISTS items_changed ON items(changed_seq);
+			CREATE INDEX IF NOT EXISTS items_name_key ON items(folder_id, parent_id, name_key) WHERE deleted = 0;
+			CREATE TABLE IF NOT EXISTS folders (
+				folder_id TEXT PRIMARY KEY,
+				root_id INTEGER NOT NULL,
+				label TEXT NOT NULL,
+				folder_type TEXT NOT NULL,
+				selective INTEGER NOT NULL,
+				cursor INTEGER NOT NULL DEFAULT 0
+			);
+			CREATE TABLE IF NOT EXISTS work (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				kind TEXT NOT NULL,
+				folder_id TEXT NOT NULL,
+				path TEXT NOT NULL,
+				extra TEXT,
+				attempts INTEGER NOT NULL DEFAULT 0,
+				last_error TEXT,
+				created_at REAL NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS meta (
+				key TEXT PRIMARY KEY,
+				value TEXT NOT NULL
+			);
+			""")
+		try connection.run("INSERT OR IGNORE INTO meta (key, value) VALUES ('generation', ?)", [UUID().uuidString])
+		try connection.run("INSERT OR IGNORE INTO meta (key, value) VALUES ('next_seq', '1')")
+		try connection.run("INSERT OR IGNORE INTO meta (key, value) VALUES ('pruned_below', '0')")
 	}
 
 	static func item(from row: SQLiteStatement) -> IndexItem {
@@ -256,6 +270,18 @@ public struct IndexStore: Sendable {
 		}
 	}
 
+	/// The live item in the container whose name cannot coexist with the given name
+	public func child(of parentID: Int64, named name: String) throws(IndexError) -> IndexItem? {
+		try withConnection { connection throws(IndexError) in
+			try LocalChangeRecorder.child(connection, of: parentID, named: name)
+		}
+	}
+
+	/// All live items below a directory
+	public func descendants(of item: IndexItem) throws(IndexError) -> [IndexItem] {
+		try withConnection { connection throws(IndexError) in try LocalChangeRecorder.descendants(connection, of: item) }
+	}
+
 	/// The short device ID of this device, as recorded by the app
 	public func localShortDeviceID() throws(IndexError) -> String? {
 		try withConnection { connection throws(IndexError) in try Self.meta(connection, "local_short_id") }
@@ -289,15 +315,21 @@ public struct IndexStore: Sendable {
 	/// Queues work for the app. Identical work that is already queued is not queued again.
 	public func enqueue(_ kind: WorkKind, folderID: String, path: String, extra: String? = nil) throws(IndexError) {
 		try transaction { connection throws(IndexError) in
-			let existing = try connection.queryOne(
-				"SELECT id FROM work WHERE kind = ? AND folder_id = ? AND path = ? AND extra IS ?",
-				[kind.rawValue, folderID, path, extra]
-			) { $0.int64(0) }
-			if existing == nil {
-				try connection.run(
-					"INSERT INTO work (kind, folder_id, path, extra, created_at) VALUES (?, ?, ?, ?, ?)",
-					[kind.rawValue, folderID, path, extra, Date().timeIntervalSince1970])
-			}
+			try Self.enqueue(connection, kind, folderID: folderID, path: path, extra: extra)
+		}
+	}
+
+	static func enqueue(_ connection: SQLiteConnection, _ kind: WorkKind, folderID: String, path: String, extra: String?)
+		throws(IndexError)
+	{
+		let existing = try connection.queryOne(
+			"SELECT id FROM work WHERE kind = ? AND folder_id = ? AND path = ? AND extra IS ?",
+			[kind.rawValue, folderID, path, extra]
+		) { $0.int64(0) }
+		if existing == nil {
+			try connection.run(
+				"INSERT INTO work (kind, folder_id, path, extra, created_at) VALUES (?, ?, ?, ?, ?)",
+				[kind.rawValue, folderID, path, extra, Date().timeIntervalSince1970])
 		}
 	}
 
@@ -305,19 +337,38 @@ public struct IndexStore: Sendable {
 		try withConnection { connection throws(IndexError) in
 			try connection.query(
 				"SELECT id, kind, folder_id, path, extra, attempts, last_error, created_at FROM work ORDER BY id LIMIT ?",
-				[limit]
-			) { row in
-				WorkItem(
-					id: row.int64(0), kind: WorkKind(rawValue: row.text(1)) ?? .rescan, folderID: row.text(2),
-					path: row.text(3), extra: row.optionalText(4), attempts: Int(row.int64(5)),
-					lastError: row.optionalText(6), createdAt: Date(timeIntervalSince1970: row.double(7)))
-			}
+				[limit], Self.workItem)
+		}
+	}
+
+	static func workItem(from row: SQLiteStatement) -> WorkItem {
+		WorkItem(
+			id: row.int64(0), kind: WorkKind(rawValue: row.text(1)) ?? .rescan, folderID: row.text(2),
+			path: row.text(3), extra: row.optionalText(4), attempts: Int(row.int64(5)), lastError: row.optionalText(6),
+			createdAt: Date(timeIntervalSince1970: row.double(7)))
+	}
+
+	/// Queued work of the kind with the given extra parameter (e.g. the rename that has this destination)
+	public func queuedWork(_ kind: WorkKind, folderID: String, extra: String) throws(IndexError) -> WorkItem? {
+		try withConnection { connection throws(IndexError) in
+			try connection.queryOne(
+				"""
+				SELECT id, kind, folder_id, path, extra, attempts, last_error, created_at FROM work
+				WHERE kind = ? AND folder_id = ? AND extra = ? LIMIT 1
+				""", [kind.rawValue, folderID, extra], Self.workItem)
 		}
 	}
 
 	public func completeWork(id: Int64) throws(IndexError) {
 		try withConnection { connection throws(IndexError) in
 			try connection.run("DELETE FROM work WHERE id = ?", [id])
+		}
+	}
+
+	/// Removes queued work of the kind with the given extra parameter (e.g. a fetch of an item that has been fetched)
+	public func completeWork(_ kind: WorkKind, extra: String) throws(IndexError) {
+		try withConnection { connection throws(IndexError) in
+			try connection.run("DELETE FROM work WHERE kind = ? AND extra = ?", [kind.rawValue, extra])
 		}
 	}
 

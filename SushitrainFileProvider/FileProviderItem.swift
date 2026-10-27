@@ -77,11 +77,41 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 		}
 	}
 
+	/// Items can be changed in folders that send changes. Renaming, moving and deleting is limited to what is kept on
+	/// this device (deleting removes the item on all devices); directories in on-demand folders cannot be renamed yet.
+	/// This depends on the index only, because the system refreshes capabilities only when the item's version changes;
+	/// the extension checks the disk when it makes the change.
 	var capabilities: NSFileProviderItemCapabilities {
-		if item.kind.isContainer {
-			return [.allowsReading, .allowsContentEnumerating]
+		let isWritable = folder?.acceptsLocalChanges == true
+		let isSelective = folder?.isSelective == true
+		let isKept = !isSelective || item.isSelected || item.pending == .create
+		switch item.kind {
+		case .folderRoot:
+			return isWritable
+				? [.allowsReading, .allowsContentEnumerating, .allowsAddingSubItems]
+				: [.allowsReading, .allowsContentEnumerating]
+		case .directory:
+			var capabilities: NSFileProviderItemCapabilities = [.allowsReading, .allowsContentEnumerating]
+			guard isWritable else {
+				return capabilities
+			}
+			capabilities.insert(.allowsAddingSubItems)
+			if isKept || isOnDevice {
+				capabilities.insert(.allowsDeleting)
+			}
+			if !isSelective || item.pending == .create {
+				capabilities.formUnion([.allowsRenaming, .allowsReparenting])
+			}
+			return capabilities
+		case .file, .symlink:
+			guard isWritable else {
+				return [.allowsReading]
+			}
+			// Saving a file that is only on other devices keeps the new version on this device
+			return isKept
+				? [.allowsReading, .allowsWriting, .allowsRenaming, .allowsReparenting, .allowsDeleting]
+				: [.allowsReading, .allowsWriting]
 		}
-		return [.allowsReading]
 	}
 
 	var documentSize: NSNumber? {

@@ -12,6 +12,17 @@ public enum FileNames {
 		name.precomposedStringWithCanonicalMapping.folding(options: [.caseInsensitive], locale: nil)
 	}
 
+	/// The form in which names are written to disk (canonically composed, as Syncthing normalizes them on Apple file
+	/// systems)
+	public static func normalized(_ name: String) -> String {
+		name.precomposedStringWithCanonicalMapping
+	}
+
+	/// Whether the name can be used for a file or directory
+	public static func isValid(_ name: String) -> Bool {
+		!name.isEmpty && name != "." && name != ".." && !name.contains("/") && !name.contains("\0")
+	}
+
 	/// Names of files that belong to Syncthing itself and must never be exposed or created
 	public static func isReserved(_ name: String, markerName: String = ".stfolder") -> Bool {
 		name == markerName || name == ".stignore" || name == ".stversions" || name.hasPrefix(".syncthing.")

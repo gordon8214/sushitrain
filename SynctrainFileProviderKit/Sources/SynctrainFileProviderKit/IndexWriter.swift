@@ -35,6 +35,7 @@ public final class IndexWriter {
 	private let startSequence: Int64
 	private var rootIDs: [String: Int64] = [:]
 	private var touchedFolders: Set<String> = []
+	private var renameOriginsByFolder: [String: [(path: String, after: Int64)]] = [:]
 	private let now = Date().timeIntervalSince1970
 
 	/// The short device ID of this device, used to recognize records of our own writes
@@ -167,13 +168,14 @@ public final class IndexWriter {
 		var pending: PendingChange
 		var pendingSize: Int64?
 		var pendingModNs: Int64?
+		var pendingAfter: Int64
 	}
 
 	private func liveRow(folderID: String, path: String) throws(IndexError) -> LiveRow? {
 		try connection.queryOne(
 			"""
 			SELECT id, parent_id, name, kind, size, mod_ns, blocks_hash, modified_by, st_seq, selected, implied,
-				pending, pending_size, pending_mod_ns
+				pending, pending_size, pending_mod_ns, pending_after
 			FROM items WHERE folder_id = ? AND path = ? AND deleted = 0
 			""", [folderID, path]
 		) { row in
@@ -183,7 +185,7 @@ public final class IndexWriter {
 				blocksHash: row.optionalText(6), modifiedBy: row.optionalText(7), stSeq: row.int64(8),
 				selected: row.bool(9), implied: row.bool(10),
 				pending: PendingChange(rawValue: Int(row.int64(11))) ?? .none, pendingSize: row.optionalInt64(12),
-				pendingModNs: row.optionalInt64(13))
+				pendingModNs: row.optionalInt64(13), pendingAfter: row.int64(14))
 		}
 	}
 
@@ -258,31 +260,57 @@ public final class IndexWriter {
 	private func apply(_ record: SyncthingRecord, folderID: String, sweepToken: Int64?, result: inout ApplyResult)
 		throws(IndexError)
 	{
-		let live = try liveRow(folderID: folderID, path: record.path)
+		var live = try liveRow(folderID: folderID, path: record.path)
+
+		// A change made through the File Provider that Syncthing may not have indexed yet. Records from before the
+		// change must not undo it; a record from after it shows what Syncthing made of it.
+		if let pendingRow = live, pendingRow.pending != .none {
+			if record.seq <= pendingRow.pendingAfter {
+				try markSeen(pendingRow.id, sweepToken: sweepToken)
+				return
+			}
+			if !record.isGone, record.full, matchesPendingChange(pendingRow, record) {
+				try adopt(record, into: pendingRow, sweepToken: sweepToken)
+				result.changed += 1
+				return
+			}
+			if !record.full {
+				result.needsFullRecords.append(record.path)
+				try markSeen(pendingRow.id, sweepToken: sweepToken)
+				return
+			}
+			// Syncthing indexed something else since (a newer version, or the outcome of a conflict)
+			try clearPending(pendingRow.id)
+			live?.pending = .none
+		}
+
+		if live == nil {
+			if record.isGone {
+				// Syncthing has indexed a deletion made through the File Provider
+				try connection.run(
+					"UPDATE items SET pending = 0 WHERE folder_id = ? AND path = ? AND deleted = 1 AND pending = ?",
+					[folderID, record.path, PendingChange.delete.rawValue])
+				return
+			}
+			if try predatesLocalChange(record, folderID: folderID) {
+				return
+			}
+		}
 
 		if record.isGone {
 			guard let live else {
 				return
 			}
-			switch live.pending {
-			case .create, .modify, .rename:
-				// The extension's change is newer than what Syncthing knows; it will be picked up by a scan
+			if live.kind.isContainer, try hasLiveChildren(live.id) {
+				// Entries below remain (e.g. because they have not been processed yet), keep it as implied
+				if !live.implied {
+					try connection.run("UPDATE items SET implied = 1 WHERE id = ?", [live.id])
+				}
 				try markSeen(live.id, sweepToken: sweepToken)
-			case .delete:
+			}
+			else {
 				try tombstone(id: live.id)
 				result.changed += 1
-			case .none:
-				if live.kind.isContainer, try hasLiveChildren(live.id) {
-					// Entries below remain (e.g. because they have not been processed yet), keep it as implied
-					if !live.implied {
-						try connection.run("UPDATE items SET implied = 1 WHERE id = ?", [live.id])
-					}
-					try markSeen(live.id, sweepToken: sweepToken)
-				}
-				else {
-					try tombstone(id: live.id)
-					result.changed += 1
-				}
 			}
 			return
 		}
@@ -315,45 +343,10 @@ public final class IndexWriter {
 
 		if let live {
 			if live.kind != kind {
-				if live.pending != .none {
-					try markSeen(live.id, sweepToken: sweepToken)
-					return
-				}
 				try tombstone(id: live.id)
 				try insertOrRevive(record, folderID: folderID, parentID: parentID, sweepToken: sweepToken)
 				result.changed += 1
 				return
-			}
-
-			switch live.pending {
-			case .create, .modify:
-				// Syncthing indexed the file we wrote: adopt its blocks hash without treating it as a new version
-				let isOurWrite =
-					live.pendingSize == record.size && live.pendingModNs == record.modNs
-					&& (localShortDeviceID == nil || record.modifiedBy == localShortDeviceID)
-				if isOurWrite {
-					try connection.run(
-						"""
-						UPDATE items SET blocks_hash = ?, modified_by = ?, st_seq = ?, size = ?, mod_ns = ?,
-							selected = ?, pending = 0, pending_size = NULL, pending_mod_ns = NULL,
-							meta_rev = meta_rev + 1, changed_seq = ?, sweep_mark = COALESCE(?, sweep_mark)
-						WHERE id = ?
-						""",
-						[
-							record.blocksHash, record.modifiedBy, record.seq, size, record.modNs, record.selected,
-							allocateSequence(), sweepToken, live.id,
-						])
-					result.changed += 1
-				}
-				else {
-					try markSeen(live.id, sweepToken: sweepToken)
-				}
-				return
-			case .delete, .rename:
-				try markSeen(live.id, sweepToken: sweepToken)
-				return
-			case .none:
-				break
 			}
 
 			let contentChanged = kind == .file && (live.blocksHash != record.blocksHash || live.size != size)
@@ -397,6 +390,73 @@ public final class IndexWriter {
 
 		try insertOrRevive(record, folderID: folderID, parentID: parentID, sweepToken: sweepToken)
 		result.changed += 1
+	}
+
+	/// Whether the record is Syncthing's index entry for the change made through the File Provider
+	private func matchesPendingChange(_ row: LiveRow, _ record: SyncthingRecord) -> Bool {
+		guard row.kind == record.kind else {
+			return false
+		}
+		// A directory's modification time changes with its contents, so only its existence can be compared
+		if row.kind.isContainer {
+			return true
+		}
+		return row.pendingSize == record.size && row.pendingModNs == record.modNs
+			&& (localShortDeviceID == nil || record.modifiedBy == localShortDeviceID)
+	}
+
+	/// Takes Syncthing's entry for a change made through the File Provider, without treating it as a new version
+	private func adopt(_ record: SyncthingRecord, into row: LiveRow, sweepToken: Int64?) throws(IndexError) {
+		try connection.run(
+			"""
+			UPDATE items SET blocks_hash = ?, modified_by = ?, st_seq = ?, size = ?, mod_ns = ?, selected = ?,
+				pending = 0, pending_size = NULL, pending_mod_ns = NULL, pending_path = NULL,
+				meta_rev = meta_rev + 1, changed_seq = ?, sweep_mark = COALESCE(?, sweep_mark)
+			WHERE id = ?
+			""",
+			[
+				record.blocksHash, record.modifiedBy, record.seq, row.kind == .file ? record.size : 0, record.modNs,
+				record.selected, allocateSequence(), sweepToken, row.id,
+			])
+	}
+
+	private func clearPending(_ id: Int64) throws(IndexError) {
+		try connection.run(
+			"""
+			UPDATE items SET pending = 0, pending_size = NULL, pending_mod_ns = NULL, pending_path = NULL WHERE id = ?
+			""", [id])
+	}
+
+	/// Whether a record for a path without a live item is from before a deletion or rename made through the File
+	/// Provider (so it would bring back what was just deleted or moved away)
+	private func predatesLocalChange(_ record: SyncthingRecord, folderID: String) throws(IndexError) -> Bool {
+		if let deletedAfter = try connection.queryOne(
+			"""
+			SELECT pending_after FROM items WHERE folder_id = ? AND path = ? AND deleted = 1 AND pending = ?
+			ORDER BY changed_seq DESC LIMIT 1
+			""", [folderID, record.path, PendingChange.delete.rawValue], { $0.int64(0) }),
+			record.seq <= deletedAfter
+		{
+			return true
+		}
+		return try renameOrigins(folderID: folderID).contains { origin in
+			record.seq <= origin.after && FileNames.isSelfOrDescendant(record.path, of: origin.path)
+		}
+	}
+
+	/// Where items renamed through the File Provider were, while Syncthing has not seen the rename (loaded once)
+	private func renameOrigins(folderID: String) throws(IndexError) -> [(path: String, after: Int64)] {
+		if let cached = renameOriginsByFolder[folderID] {
+			return cached
+		}
+		let origins = try connection.query(
+			"""
+			SELECT pending_path, pending_after FROM items
+			WHERE folder_id = ? AND deleted = 0 AND pending = ? AND pending_path IS NOT NULL
+			""", [folderID, PendingChange.rename.rawValue]
+		) { (path: $0.text(0), after: $0.int64(1)) }
+		renameOriginsByFolder[folderID] = origins
+		return origins
 	}
 
 	/// Inserts an item for the record, reusing the identifier of an earlier item of the same kind at the same path, so
@@ -488,6 +548,21 @@ public final class IndexWriter {
 	}
 
 	// MARK: - Maintenance
+
+	/// Marks every item as changed, so that the system reads them all again (for instance because the extension now
+	/// describes items differently). Each item gets its own sequence: the ID is unique, so start + ID is too.
+	public func touchAllItems() throws(IndexError) {
+		guard
+			let highestID = try connection.queryOne("SELECT MAX(id) FROM items", [], { $0.optionalInt64(0) }),
+			let highestID
+		else {
+			return
+		}
+		let start = nextSequence
+		try connection.run(
+			"UPDATE items SET meta_rev = meta_rev + 1, changed_seq = ? + id WHERE deleted = 0", [start])
+		nextSequence = start + highestID + 1
+	}
 
 	/// Permanently removes tombstones older than the date. Anchors from before the removed tombstones expire.
 	public func pruneTombstones(before date: Date) throws(IndexError) {

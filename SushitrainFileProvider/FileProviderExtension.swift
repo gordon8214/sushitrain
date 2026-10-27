@@ -9,6 +9,27 @@ import SynctrainFileProviderKit
 
 let log = Logger(subsystem: "nl.t-shaped.Sushitrain.FileProvider", category: "Extension")
 
+/// Debug builds also append what the extension does to a file in the app group's caches. Unlike the system log, which
+/// needs root to collect from a device, `xcrun devicectl device copy from --domain-type appGroupDataContainer` can read
+/// it.
+func trace(_ message: @autoclosure () -> String) {
+	#if DEBUG
+		guard let container = SharedContainer.appGroup() else {
+			return
+		}
+		let url = container.baseURL.appending(path: "Library/Caches/FileProviderExtension.log")
+		let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) \(message())\n"
+		if let handle = try? FileHandle(forWritingTo: url) {
+			_ = try? handle.seekToEnd()
+			try? handle.write(contentsOf: Data(line.utf8))
+			try? handle.close()
+		}
+		else {
+			try? Data(line.utf8).write(to: url)
+		}
+	#endif
+}
+
 /// Lets non-Sendable completion handlers from the framework cross into tasks. The framework allows calling them from
 /// any thread; each one is called exactly once.
 struct Completion<T>: @unchecked Sendable {
@@ -22,11 +43,13 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 	let domain: NSFileProviderDomain
 	private let context: ExtensionContext?
 	private let fetcher: ContentFetcher?
+	private let writer: LocalWriter?
 
 	required init(domain: NSFileProviderDomain) {
 		self.domain = domain
 		self.context = ExtensionContext()
 		self.fetcher = context.map { ContentFetcher(context: $0) }
+		self.writer = context.map { LocalWriter(context: $0) }
 		super.init()
 		if context == nil {
 			log.error("The app group container is not available")
@@ -155,6 +178,8 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 					throw FetchError.appNotRunning
 				}
 				try await fetcher.download(item, from: heartbeat, to: destination, progress: progress)
+				// If the user asked for it while the app was not running, the app no longer needs to list it
+				try? context.store.completeWork(.fetch, extra: ItemIdentifiers.string(for: item.id))
 				completion.call(destination, try? context.makeItem(item), nil)
 			}
 			catch let error as FetchError {
@@ -165,7 +190,8 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 					SharedNotification.workQueued.post()
 				}
 				log.info("Could not fetch \(item.id): \(error.localizedDescription)")
-				completion.call(nil, nil, error.fileProviderError)
+				trace("fetch \(item.id) failed (system request: \(isSystemRequest)): \(error.localizedDescription)")
+				completion.call(nil, nil, error.fileProviderError(isSystemRequest: isSystemRequest))
 			}
 			catch {
 				log.warning("Could not fetch \(item.id): \(error.localizedDescription)")
@@ -175,18 +201,32 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		return progress
 	}
 
-	// MARK: - Changes (not supported yet)
+	// MARK: - Changes
 
-	private var readOnlyError: Error {
-		NSError(domain: NSCocoaErrorDomain, code: NSFeatureUnsupportedError)
-	}
+	/// Fields only the system keeps; Syncthing does not sync them, so changing them needs no work
+	private static let systemFields: NSFileProviderItemFields = [
+		.lastUsedDate, .tagData, .favoriteRank, .extendedAttributes, .typeAndCreator, .fileSystemFlags, .creationDate,
+	]
 
 	func createItem(
 		basedOn itemTemplate: NSFileProviderItem, fields: NSFileProviderItemFields, contents url: URL?,
 		options: NSFileProviderCreateItemOptions = [], request: NSFileProviderRequest,
 		completionHandler: @escaping (NSFileProviderItem?, NSFileProviderItemFields, Bool, (any Error)?) -> Void
 	) -> Progress {
-		completionHandler(nil, [], false, readOnlyError)
+		guard let context, let writer else {
+			completionHandler(nil, [], false, unavailableError)
+			return Progress()
+		}
+		do {
+			let item = try writer.create(template: itemTemplate, fields: fields, contents: url, options: options)
+			trace("create \(itemTemplate.filename) in \(itemTemplate.parentItemIdentifier.rawValue) -> \(item.id)")
+			completionHandler(try context.makeItem(item), [], false, nil)
+		}
+		catch {
+			trace("create \(itemTemplate.filename) failed: \(error)")
+			log.info("Could not create \(itemTemplate.filename, privacy: .private): \(error.localizedDescription)")
+			completionHandler(nil, [], false, Self.reportable(error))
+		}
 		return Progress()
 	}
 
@@ -196,36 +236,47 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		options: NSFileProviderModifyItemOptions = [], request: NSFileProviderRequest,
 		completionHandler: @escaping (NSFileProviderItem?, NSFileProviderItemFields, Bool, (any Error)?) -> Void
 	) -> Progress {
-		// Opening a file updates its last used date; accept that and other metadata only the system keeps, so items
-		// do not show an upload error. Other changes are not supported yet.
-		guard changedFields.isSubset(of: [.lastUsedDate, .tagData, .favoriteRank]) else {
-			completionHandler(nil, [], false, readOnlyError)
-			return Progress()
-		}
 		if item.itemIdentifier == .rootContainer {
 			completionHandler(RootItem(), [], false, nil)
 			return Progress()
 		}
-		guard let context else {
+		guard let context, let writer else {
 			completionHandler(nil, [], false, unavailableError)
 			return Progress()
 		}
 		do {
-			guard let id = item.itemIdentifier.itemID, let stored = try context.store.item(id: id) else {
-				completionHandler(
-					nil, [], false, NSError.fileProviderErrorForNonExistentItem(withIdentifier: item.itemIdentifier))
-				return Progress()
+			var outcome: LocalWriter.Outcome
+			if changedFields.isSubset(of: Self.systemFields) {
+				// Opening a file updates its last used date, for instance
+				guard let id = item.itemIdentifier.itemID, let stored = try context.store.item(id: id) else {
+					throw NSFileProviderError(.noSuchItem)
+				}
+				outcome = LocalWriter.Outcome(item: stored)
 			}
-			let current = try context.makeItem(stored)
+			else {
+				outcome = try writer.modify(
+					template: item, baseVersion: version, changedFields: changedFields, contents: newContents,
+					options: options)
+			}
+
+			let current = try context.makeItem(outcome.item)
 			if let current = current as? FileProviderItem {
 				current.lastUsedDate = item.lastUsedDate ?? nil
 				current.tagData = item.tagData ?? nil
 				current.favoriteRank = item.favoriteRank ?? nil
 			}
-			completionHandler(current, [], false, nil)
+			trace(
+				"modify \(item.itemIdentifier.rawValue) fields \(changedFields.rawValue) -> \(outcome.item.path) fetch \(outcome.shouldFetchContent)"
+			)
+			completionHandler(current, [], outcome.shouldFetchContent, nil)
+			if outcome.addedItems {
+				signalWorkingSet()
+			}
 		}
 		catch {
-			completionHandler(nil, [], false, error.fileProviderError)
+			trace("modify \(item.itemIdentifier.rawValue) fields \(changedFields.rawValue) failed: \(error)")
+			log.info("Could not modify \(item.itemIdentifier.rawValue): \(error.localizedDescription)")
+			completionHandler(nil, [], false, Self.reportable(error))
 		}
 		return Progress()
 	}
@@ -235,7 +286,42 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		options: NSFileProviderDeleteItemOptions = [], request: NSFileProviderRequest,
 		completionHandler: @escaping ((any Error)?) -> Void
 	) -> Progress {
-		completionHandler(readOnlyError)
+		guard let writer else {
+			completionHandler(unavailableError)
+			return Progress()
+		}
+		do {
+			try writer.delete(identifier: identifier, baseVersion: version, options: options)
+			trace("delete \(identifier.rawValue)")
+			completionHandler(nil)
+		}
+		catch {
+			trace("delete \(identifier.rawValue) failed: \(error)")
+			log.info("Could not delete \(identifier.rawValue): \(error.localizedDescription)")
+			completionHandler(Self.reportable(error))
+		}
 		return Progress()
+	}
+
+	/// Tells the system to fetch changes, for items it does not learn about from the call it made
+	private func signalWorkingSet() {
+		NSFileProviderManager(for: domain)?.signalEnumerator(for: .workingSet) { error in
+			if let error {
+				log.warning("Could not signal the working set: \(error.localizedDescription)")
+			}
+		}
+	}
+
+	/// The framework only accepts Cocoa and File Provider errors
+	private static func reportable(_ error: Error) -> Error {
+		if let error = error as? IndexError {
+			return error.fileProviderError
+		}
+		let nsError = error as NSError
+		if nsError.domain == NSFileProviderErrorDomain || nsError.domain == NSCocoaErrorDomain {
+			return error
+		}
+		return NSError(
+			domain: NSCocoaErrorDomain, code: NSXPCConnectionReplyInvalid, userInfo: [NSUnderlyingErrorKey: nsError])
 	}
 }

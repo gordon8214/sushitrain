@@ -34,12 +34,20 @@
 					}
 				}
 
-				if coordinator.pendingFetchCount > 0 {
+				if !coordinator.requestedDownloads.isEmpty {
 					Section {
-						LabeledContent("Requested downloads", value: "\(coordinator.pendingFetchCount)")
+						ForEach(coordinator.requestedDownloads) { download in
+							LabeledContent(download.name) {
+								Button("Show in Files") {
+									coordinator.showInFiles(download)
+								}
+							}
+						}
+					} header: {
+						Text("Requested downloads")
 					} footer: {
 						Text(
-							"These files were opened in the Files app while Synctrain was not running. Keep Synctrain open while they download."
+							"You tried to open these files in the Files app while Synctrain was not running. Show a file in Files now to download it from your other devices."
 						)
 					}
 				}
