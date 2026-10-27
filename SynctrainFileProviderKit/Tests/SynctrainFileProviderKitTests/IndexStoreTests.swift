@@ -199,8 +199,165 @@ extension IndexStore {
 		let result = try store.applying([file("report.TXT", seq: 2), file("Cafe\u{301}.txt", seq: 3)])
 		#expect(result.collisions == 1)
 		#expect(try store.item(folderID: "f1", path: "report.TXT") == nil)
-		// Differently normalized names collide too
-		#expect(try store.applying([file("Caf\u{e9}.txt", seq: 4)]).collisions == 1)
+
+		// Paths are stored decomposed, as Syncthing stores them on Apple platforms: a composed record is the same entry
+		let cafe = try #require(try store.item(folderID: "f1", path: "Cafe\u{301}.txt"))
+		#expect(Array(cafe.path.utf8) == Array("Cafe\u{301}.txt".utf8))
+		let composed = try store.applying([file("Caf\u{e9}.txt", seq: 4, hash: "new")])
+		#expect(composed.collisions == 0 && composed.changed == 1)
+		#expect(try store.item(folderID: "f1", path: "Caf\u{e9}.txt")?.id == cafe.id)
+	}
+
+	/// Implied directories obey the same rule as entries: `docs/b.txt` does not add a `docs` next to `Docs`
+	@Test func impliedDirectoriesDoNotCollide() throws {
+		let store = try makeStore()
+		let result = try store.applying([
+			directory("Docs", seq: 1), file("Docs/a.txt", seq: 2), file("docs/b.txt", seq: 3),
+			file("docs/sub/c.txt", seq: 4), file("Cafe\u{301}/x.txt", seq: 5), file("Caf\u{e9}/y.txt", seq: 6),
+		])
+		#expect(result.collisions == 2)
+		let root = try store.root()
+		let names = try store.children(of: root.id, limit: 10).map(\.name)
+		#expect(names.count == 2 && names.contains("Docs"))
+		let cafe = try #require(try store.item(folderID: "f1", path: "Cafe\u{301}"))
+		#expect(try store.children(of: cafe.id, limit: 10).count == 2)
+	}
+
+	@Test func recordsWithNULAreSkipped() throws {
+		let store = try makeStore()
+		try store.applying([file("a.jpg", seq: 1)])
+		let result = try store.applying([file("a.jpg\0x", seq: 2, hash: "other"), file("..", seq: 3), file("b//c", seq: 4)])
+		#expect(result.changed == 0 && result.collisions == 0)
+		#expect(try store.item(folderID: "f1", path: "a.jpg")?.blocksHash == "h")
+		#expect(try store.liveItems(limit: 10).count == 2)
+	}
+
+	/// A deletion delivered as a partial record (in a full pass) removes a pending item instead of asking for more
+	@Test func partialDeletionOfPendingItem() throws {
+		let store = try makeStore()
+		try store.applying([file("doc.txt", seq: 1)])
+		let item = try #require(try store.item(folderID: "f1", path: "doc.txt"))
+		try store.setRaw(
+			"pending = \(PendingChange.modify.rawValue), pending_size = 1, pending_mod_ns = 1, pending_after = 1", id: item.id)
+		var gone = deletion("doc.txt", seq: 2)
+		gone.full = false
+		let result = try store.applying([gone])
+		#expect(result.needsFullRecords.isEmpty)
+		#expect(try store.item(id: item.id) == nil)
+	}
+
+	/// A file changed through the File Provider where Syncthing has a directory skips the records below it, instead of
+	/// failing the whole batch
+	@Test func pendingFileInPlaceOfDirectory() throws {
+		let store = try makeStore()
+		try store.syncing([file("other.txt", seq: 1)])
+		let root = try store.root()
+		try store.recordLocalChanges { recorder throws(IndexError) in
+			_ = try recorder.recordCreation(
+				folderID: "f1", parentID: root.id, path: "a", kind: .file, size: 1, modifiedNanoseconds: 1,
+				isSelected: true)
+		}
+		let result = try store.applying([file("a/b.txt", seq: 2), file("z.txt", seq: 3)])
+		#expect(result.collisions == 1)
+		#expect(try store.item(folderID: "f1", path: "z.txt") != nil)
+		#expect(try store.item(folderID: "f1", path: "a")?.kind == .file)
+	}
+
+	/// What items allow depends on the type and mode of their folder
+	@Test func folderModeChangeReportsAllItems() throws {
+		let store = try makeStore()
+		try store.applying([file("a", seq: 1), file("d/b", seq: 2)])
+		var anchor = try store.currentAnchor()
+
+		var changed = testFolder
+		changed.label = "Pictures"
+		try store.write { writer throws(IndexError) in try writer.upsertFolder(changed) }
+		let root = try store.root()
+		#expect(try store.changes(since: anchor, limit: 10).updated.map(\.id) == [root.id])
+
+		anchor = try store.currentAnchor()
+		changed.folderType = IndexFolder.typeReceiveOnly
+		try store.write { writer throws(IndexError) in try writer.upsertFolder(changed) }
+		let (types, _) = try store.allChanges(since: anchor)
+		#expect(types.updated.count == 4 && Set(types.updated.map(\.changedSequence)).count == 4)
+
+		anchor = try store.currentAnchor()
+		changed.isSelective = false
+		try store.write { writer throws(IndexError) in try writer.upsertFolder(changed) }
+		let (modes, _) = try store.allChanges(since: anchor)
+		#expect(modes.updated.count == 4)
+	}
+
+	@Test func folderRootsWithTheSameLabel() throws {
+		let store = try makeStore()
+		let folders = [
+			FolderDescription(folderID: "f2", label: "Photos", folderType: "sendrecieve", isSelective: false),
+			FolderDescription(folderID: "f1", label: "Photos", folderType: "sendrecieve", isSelective: false),
+			FolderDescription(folderID: "f3", label: "photos", folderType: "sendrecieve", isSelective: false),
+		]
+		let ids = try store.write { writer throws(IndexError) in
+			try folders.map { f throws(IndexError) in try writer.upsertFolder(f) }
+		}
+		func names() throws -> [String?] { try ids.map { try store.item(id: $0)?.name } }
+		#expect(try names() == ["Photos (f2)", "Photos", "photos (f3)"])
+
+		var renamed = folders[1]
+		renamed.label = "Camera"
+		try store.write { writer throws(IndexError) in try writer.upsertFolder(renamed) }
+		#expect(try names() == ["Photos", "Camera", "photos (f3)"])
+
+		try store.write { writer throws(IndexError) in try writer.removeFolder(folderID: "f2") }
+		#expect(try store.item(id: ids[2])?.name == "photos")
+		#expect(try store.folder(id: "f3")?.label == "photos")
+	}
+
+	@Test func adoptionClearsImplied() throws {
+		let store = try makeStore()
+		try store.syncing([file("a/b.txt", seq: 1)])
+		let a = try #require(try store.item(folderID: "f1", path: "a"))
+		#expect(a.isImplied)
+		let root = try store.root()
+		_ = try store.recordLocalChanges { recorder throws(IndexError) in try recorder.recordMove(a, to: root.id, path: "c") }
+		try store.syncing([
+			deletion("a/b.txt", seq: 2), directory("c", seq: 3), ownFile("c/b.txt", seq: 4, hash: "h", size: 1, modNs: 1),
+		])
+		let c = try #require(try store.item(id: a.id))
+		#expect(c.pending == PendingChange.none && !c.isImplied && c.path == "c")
+		#expect(try store.item(folderID: "f1", path: "c/b.txt")?.pending == PendingChange.none)
+	}
+
+	@Test func revivedItemForgetsPendingState() throws {
+		let store = try makeStore()
+		try store.syncing([file("a.txt", seq: 1, size: 3, modNs: 30)])
+		let item = try #require(try store.item(folderID: "f1", path: "a.txt"))
+		try store.recordLocalChanges { recorder throws(IndexError) in try recorder.recordDeletion(item) }
+		try store.syncing([file("a.txt", seq: 5, hash: "n", size: 9, modNs: 90)])
+		let revived = try #require(try store.item(folderID: "f1", path: "a.txt"))
+		#expect(revived.id == item.id && revived.pending == PendingChange.none)
+		let columns = try store.withConnection { connection throws(IndexError) in
+			try connection.queryOne(
+				"SELECT pending_size IS NULL AND pending_mod_ns IS NULL AND pending_path IS NULL AND pending_after = 0 FROM items WHERE id = ?",
+				[revived.id]
+			) { $0.bool(0) }
+		}
+		#expect(columns == true)
+	}
+
+	/// Unconfirmed deletions made through the File Provider are not pruned: they keep old records from bringing the
+	/// items back
+	@Test func pruningKeepsUnconfirmedDeletions() throws {
+		let store = try makeStore()
+		try store.syncing([file("a.txt", seq: 1), file("b.txt", seq: 2)])
+		let a = try #require(try store.item(folderID: "f1", path: "a.txt"))
+		try store.recordLocalChanges { recorder throws(IndexError) in try recorder.recordDeletion(a) }
+		try store.syncing([deletion("b.txt", seq: 3)])
+		try store.write { writer throws(IndexError) in try writer.pruneTombstones(before: Date().addingTimeInterval(1)) }
+		let remaining = try store.withConnection { connection throws(IndexError) in
+			try connection.query("SELECT id FROM items WHERE deleted = 1") { $0.int64(0) }
+		}
+		#expect(remaining == [a.id])
+		try store.applying([file("a.txt", seq: 1)])
+		#expect(try store.item(folderID: "f1", path: "a.txt") == nil)
 	}
 
 	@Test func partialRecords() throws {
@@ -368,5 +525,29 @@ extension IndexStore {
 
 		try store.completeWork(id: work[0].id)
 		#expect(try store.pendingWork().map(\.kind) == [.fetch])
+	}
+
+	@Test func attributesAreKeptPerItem() throws {
+		let store = try makeStore()
+		try store.applying([file("a.txt", seq: 1), file("b.txt", seq: 2)])
+		let a = try #require(try store.item(folderID: "f1", path: "a.txt"))
+		let b = try #require(try store.item(folderID: "f1", path: "b.txt"))
+		let unranked = Int64(bitPattern: UInt64.max)
+		let tagged = ItemAttributes(
+			tagData: Data([1, 2, 3]), favoriteRank: unranked, lastUsedDate: Date(timeIntervalSince1970: 100))
+		try store.setAttributes(tagged, of: a.id)
+
+		#expect(try store.attributes(of: [a.id, b.id]) == [a.id: tagged])
+		#expect(UInt64(bitPattern: try #require(try store.attributes(of: [a.id])[a.id]?.favoriteRank)) == UInt64.max)
+
+		// Clearing every attribute removes the row
+		try store.setAttributes(ItemAttributes(), of: a.id)
+		#expect(try store.attributes(of: [a.id]).isEmpty)
+
+		// Attributes of items that are gone for good are removed with them
+		try store.setAttributes(tagged, of: b.id)
+		try store.applying([deletion("b.txt", seq: 3)])
+		try store.write { writer throws(IndexError) in try writer.pruneTombstones(before: Date().addingTimeInterval(60)) }
+		#expect(try store.attributes(of: [b.id]).isEmpty)
 	}
 }

@@ -111,6 +111,7 @@ func TestGlobalChangesCursorAndPrivateFiles(t *testing.T) {
 	idx.add(globalFileMeta{name: "dir", sequence: 4, fileType: protocol.FileInfoTypeDirectory})
 	idx.add(globalFileMeta{name: "dir/.syncthing.x.tmp", sequence: 6})
 	idx.add(globalFileMeta{name: "dir/~syncthing~y", sequence: 7})
+	idx.add(globalFileMeta{name: "dir/nul\x00name", sequence: 8})
 	idx.add(globalFileMeta{name: "gone.txt", sequence: 3, deleted: true})
 
 	delegate := &collectingRecordDelegate{}
@@ -122,7 +123,7 @@ func TestGlobalChangesCursorAndPrivateFiles(t *testing.T) {
 	if got := paths(records); !slices.Equal(got, []string{"b.txt", "dir", "gone.txt"}) {
 		t.Fatalf("unexpected records %v", got)
 	}
-	if result.HighestSequence != 7 || result.SequenceReset || result.Count != 3 {
+	if result.HighestSequence != 8 || result.SequenceReset || result.Count != 3 {
 		t.Fatalf("unexpected result %+v", result)
 	}
 	if slices.Contains(idx.infoCalls, "gone.txt") {
@@ -138,6 +139,15 @@ func TestGlobalChangesCursorAndPrivateFiles(t *testing.T) {
 	}
 	if !records[2].Deleted || records[2].Full {
 		t.Fatalf("unexpected deletion record %+v", records[2])
+	}
+
+	// A full pass skips the same entries
+	all := &collectingRecordDelegate{}
+	if _, err := folder.globalChanges(idx, 0, all); err != nil {
+		t.Fatal(err)
+	}
+	if got := paths(all.records()); !slices.Equal(got, []string{"a.txt", "b.txt", "dir", "gone.txt"}) {
+		t.Fatalf("unexpected records in a full pass %q", got)
 	}
 }
 
@@ -209,7 +219,10 @@ func TestGlobalChangesBatchingAndErrors(t *testing.T) {
 }
 
 func TestSelectionClassifier(t *testing.T) {
-	selective := newFeedTestFolder(t, "(?d)*.tmp\n(?d)node_modules\n!/keep\n*\n").selectionClassifier()
+	selective, err := newFeedTestFolder(t, "(?d)*.tmp\n(?d)node_modules\n!/keep\n*\n").selectionClassifier()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name             string
 		selected, hidden bool
@@ -227,7 +240,10 @@ func TestSelectionClassifier(t *testing.T) {
 		}
 	}
 
-	regular := newFeedTestFolder(t, "*.log\n").selectionClassifier()
+	regular, err := newFeedTestFolder(t, "*.log\n").selectionClassifier()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if selected, hidden := regular.classify("a.log"); selected || !hidden {
 		t.Errorf("ignored file in regular folder: selected=%v hidden=%v", selected, hidden)
 	}
@@ -243,6 +259,7 @@ func TestGlobalSnapshotAndRecords(t *testing.T) {
 	idx.add(globalFileMeta{name: "a.txt", sequence: 2, size: 4})
 	idx.add(globalFileMeta{name: "gone.txt", sequence: 3, deleted: true})
 	idx.add(globalFileMeta{name: "invalid.txt", sequence: 4, localFlags: protocol.FlagLocalRemoteInvalid})
+	idx.add(globalFileMeta{name: "nul\x00name", sequence: 5})
 
 	delegate := &collectingRecordDelegate{}
 	result, err := folder.globalSnapshot(idx, delegate)
@@ -250,7 +267,7 @@ func TestGlobalSnapshotAndRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	records := delegate.records()
-	if got := paths(records); !slices.Equal(got, []string{"a.txt", "gone.txt", "invalid.txt"}) || result.HighestSequence != 4 {
+	if got := paths(records); !slices.Equal(got, []string{"a.txt", "gone.txt", "invalid.txt"}) || result.HighestSequence != 5 {
 		t.Fatalf("unexpected snapshot %v, %+v", got, result)
 	}
 	if records[0].Full || records[0].BlocksHash != "" || records[0].Sequence != 2 {
@@ -263,7 +280,7 @@ func TestGlobalSnapshotAndRecords(t *testing.T) {
 		t.Fatal("snapshot requested full information")
 	}
 
-	js, err := folder.globalRecordsJSON(idx, []byte(`["a.txt","missing.txt"]`))
+	js, err := folder.globalRecordsJSON(idx, []byte(`["a.txt","missing.txt",".stignore","nul\u0000name"]`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +288,67 @@ func TestGlobalSnapshotAndRecords(t *testing.T) {
 	if err := json.Unmarshal(js, &full); err != nil {
 		t.Fatal(err)
 	}
-	if len(full) != 2 || !full[0].Full || full[0].BlocksHash == "" || !full[1].Deleted {
+	if len(full) != 4 || !full[0].Full || full[0].BlocksHash == "" || !full[1].Deleted || !full[2].Deleted || !full[3].Deleted {
 		t.Fatalf("unexpected records %+v", full)
+	}
+}
+
+// The delegate must not be called while the iterator (a database cursor) is open
+type cursorTrackingGlobalIndex struct {
+	fakeGlobalIndex
+	open bool
+}
+
+func (c *cursorTrackingGlobalIndex) allGlobalFiles(folderID string, yield func(globalFileMeta) bool) error {
+	c.open = true
+	defer func() { c.open = false }()
+	return c.fakeGlobalIndex.allGlobalFiles(folderID, yield)
+}
+
+type cursorCheckingDelegate struct {
+	collectingRecordDelegate
+	idx             *cursorTrackingGlobalIndex
+	calledWhileOpen bool
+}
+
+func (c *cursorCheckingDelegate) OnRecords(js []byte) error {
+	c.calledWhileOpen = c.calledWhileOpen || c.idx.open
+	return c.collectingRecordDelegate.OnRecords(js)
+}
+
+func TestGlobalSnapshotClosesCursorBeforeDelivering(t *testing.T) {
+	folder := newFeedTestFolder(t, "")
+	idx := &cursorTrackingGlobalIndex{}
+	for i := range 1200 {
+		idx.add(globalFileMeta{name: fmt.Sprintf("f%04d", i), sequence: int64(i + 1)})
+	}
+	delegate := &cursorCheckingDelegate{idx: idx}
+	result, err := folder.globalSnapshot(idx, delegate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delegate.calledWhileOpen || len(delegate.batches) != 3 || result.Count != 1200 {
+		t.Fatalf("records delivered while the cursor was open: %v, %d batches", delegate.calledWhileOpen, len(delegate.batches))
+	}
+}
+
+func TestFeedFailsWithoutIgnores(t *testing.T) {
+	// A dangling include makes the ignore patterns fail to load
+	folder := newFeedTestFolder(t, "#include missing.txt\n")
+	idx := &fakeGlobalIndex{}
+	idx.add(globalFileMeta{name: "a.txt", sequence: 1})
+
+	delegate := &collectingRecordDelegate{}
+	if _, err := folder.globalChanges(idx, 0, delegate); err == nil {
+		t.Fatal("changes reported without ignore patterns")
+	}
+	if _, err := folder.globalSnapshot(idx, delegate); err == nil {
+		t.Fatal("snapshot reported without ignore patterns")
+	}
+	if _, err := folder.globalRecordsJSON(idx, []byte(`["a.txt"]`)); err == nil {
+		t.Fatal("records reported without ignore patterns")
+	}
+	if len(delegate.batches) != 0 {
+		t.Fatalf("records delivered without ignore patterns: %+v", delegate.records())
 	}
 }

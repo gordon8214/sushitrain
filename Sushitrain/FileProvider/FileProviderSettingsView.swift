@@ -9,7 +9,8 @@
 	struct FileProviderSettingsView: View {
 		private var coordinator = FileProviderCoordinator.shared
 		@State private var showRebuildConfirmation = false
-		@State private var isRebuilding = false
+		@State private var pendingItemCount = 0
+		@State private var showPendingItemsConfirmation = false
 
 		var body: some View {
 			Form {
@@ -29,7 +30,7 @@
 					}
 					else {
 						Text(
-							"All folders stored in the app appear in the Synctrain location in the Files app. Files that are only on your other devices can be downloaded while Synctrain is open."
+							"Folders stored in the app appear in the Synctrain location in the Files app, unless they are hidden. Files that are only on your other devices can be downloaded while Synctrain is open."
 						)
 					}
 				}
@@ -54,7 +55,7 @@
 
 				if !coordinator.keepNotices.isEmpty {
 					Section {
-						ForEach(coordinator.keepNotices, id: \.self) { notice in
+						ForEach(Array(coordinator.keepNotices.enumerated()), id: \.offset) { _, notice in
 							Text(notice)
 						}
 					} header: {
@@ -74,7 +75,7 @@
 					Button("Rebuild Synctrain location", role: .destructive) {
 						showRebuildConfirmation = true
 					}
-					.disabled(isRebuilding)
+					.disabled(coordinator.isRebuilding)
 				} footer: {
 					Text(
 						"Removes the Synctrain location from the Files app and sets it up again. Your files are not affected, but you will need to turn the location on again in the Files app."
@@ -89,12 +90,31 @@
 				"Rebuild the Synctrain location?", isPresented: $showRebuildConfirmation, titleVisibility: .visible
 			) {
 				Button("Rebuild", role: .destructive) {
-					isRebuilding = true
 					Task {
-						await coordinator.rebuild()
-						isRebuilding = false
+						// Changes the system has not handed to Synctrain yet would be lost
+						pendingItemCount = await coordinator.pendingItemCount()
+						if pendingItemCount > 0 {
+							showPendingItemsConfirmation = true
+						}
+						else {
+							await coordinator.rebuild()
+						}
 					}
 				}
+			}
+			.confirmationDialog(
+				"Discard changes that were not saved?", isPresented: $showPendingItemsConfirmation,
+				titleVisibility: .visible
+			) {
+				Button("Rebuild Anyway", role: .destructive) {
+					Task {
+						await coordinator.rebuild()
+					}
+				}
+			} message: {
+				Text(
+					"Changes to \(pendingItemCount) items made in the Files app have not reached Synctrain yet. Rebuilding the location discards them."
+				)
 			}
 		}
 	}

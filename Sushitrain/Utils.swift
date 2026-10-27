@@ -778,10 +778,13 @@ extension Set {
 func openURLInSystemFilesApp(url: URL) {
 	#if os(iOS)
 		// Folders in the shared container are only visible in the Files app through the File Provider
-		if FileProviderStorage.contains(url) {
+		if FileProviderStorage.isInSharedContainer(url) {
 			Task {
 				if let visibleURL = await FileProviderStorage.userVisibleURL(for: url) {
 					openURLInSystemFilesApp(url: visibleURL)
+				}
+				else {
+					Log.warn("\(url) is not shown in the Files app (is the Synctrain location turned on?)")
 				}
 			}
 			return

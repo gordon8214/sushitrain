@@ -1065,8 +1065,10 @@ private struct BandwidthSettingsView: View {
 								userSettings.longBackgroundSyncEnabled || userSettings.shortBackgroundSyncEnabled ? "On" : "Off")
 						}
 
-						NavigationLink(destination: FileProviderSettingsView()) {
-							Text("Files app").badge(FileProviderCoordinator.shared.isDomainEnabled == true ? "On" : "Off")
+						if FileProviderStorage.container != nil {
+							NavigationLink(destination: FileProviderSettingsView()) {
+								Text("Files app").badge(FileProviderCoordinator.shared.isDomainEnabled == true ? "On" : "Off")
+							}
 						}
 					#endif
 

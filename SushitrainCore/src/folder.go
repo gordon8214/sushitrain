@@ -975,6 +975,9 @@ func deleteEmptyParentDirectories(ffs fs.Filesystem, path string) {
 }
 
 func (fld *Folder) RemoveSuperfluousSelectionEntries() error {
+	unlock := lockSelection(fld.FolderID)
+	defer unlock()
+
 	fld.cachedIgnore.matcher = nil // Purge our cache
 	state, err := fld.State()
 	if err != nil {
@@ -1265,7 +1268,11 @@ func (fld *Folder) SetSelectiveGlobalIgnorePatterns(patterns *ListOfStrings) err
 func (fld *Folder) changeSelection(block func(sel *selection) error) (*ignore.Matcher, error) {
 	unlock := lockSelection(fld.FolderID)
 	defer unlock()
+	return fld.changeSelectionLocked(block)
+}
 
+// Like changeSelection, for callers that already hold the selection lock
+func (fld *Folder) changeSelectionLocked(block func(sel *selection) error) (*ignore.Matcher, error) {
 	// Load ignores from file
 	ignores, err := fld.loadIgnores()
 	if err != nil {
@@ -1339,7 +1346,11 @@ func (fld *Folder) setExplicitlySelected(paths map[string]bool) error {
 		}
 	}
 
-	ignores, err := fld.changeSelection(func(selection *selection) error {
+	// Deleting below depends on the new selection, which must not change before the deletions are done
+	unlock := lockSelection(fld.FolderID)
+	defer unlock()
+
+	ignores, err := fld.changeSelectionLocked(func(selection *selection) error {
 		if !selection.isSelectiveIgnore() {
 			return errors.New("folder is not a selective folder")
 		}

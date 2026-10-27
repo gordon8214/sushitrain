@@ -25,6 +25,15 @@ enum Rejection {
 		cannotSynchronize(String(localized: "Keep this item on this device to change it."))
 	}
 
+	static var unfinishedRename: Error {
+		cannotSynchronize(
+			String(localized: "Open Synctrain to finish renaming this item (or an item inside it) before changing it again."))
+	}
+
+	static var throughLink: Error {
+		cannotSynchronize(String(localized: "This item is inside a link to another location, which cannot be changed here."))
+	}
+
 	static var waitingForDownload: Error {
 		cannotSynchronize(
 			String(
@@ -51,9 +60,38 @@ struct LocalWriter: Sendable {
 
 	private var store: IndexStore { context.store }
 
+	/// Changes are made one at a time: each checks the index and the disk, then changes both
+	private static let changes = NSLock()
+
+	/// Removes what a terminated extension left behind in the directory
+	static func removeLeftovers(in directory: URL, olderThan age: TimeInterval = 3600) {
+		let fileManager = FileManager.default
+		guard
+			let entries = try? fileManager.contentsOfDirectory(
+				at: directory, includingPropertiesForKeys: [.contentModificationDateKey])
+		else {
+			return
+		}
+		for entry in entries {
+			let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+			if let modified, Date().timeIntervalSince(modified) > age {
+				try? fileManager.removeItem(at: entry)
+			}
+		}
+	}
+
 	// MARK: - Creating
 
 	func create(
+		template: NSFileProviderItem, fields: NSFileProviderItemFields, contents: URL?,
+		options: NSFileProviderCreateItemOptions
+	) throws -> IndexItem {
+		try Self.changes.withLock {
+			try createLocked(template: template, fields: fields, contents: contents, options: options)
+		}
+	}
+
+	private func createLocked(
 		template: NSFileProviderItem, fields: NSFileProviderItemFields, contents: URL?,
 		options: NSFileProviderCreateItemOptions
 	) throws -> IndexItem {
@@ -87,18 +125,28 @@ struct LocalWriter: Sendable {
 			if options.contains(.mayAlreadyExist), existing.kind.isContainer == (kind == .directory) {
 				return existing
 			}
-			throw NSFileProviderError(.filenameCollision)
+			throw collision(with: existing)
 		}
 
 		let path = FileNames.join(parent.path, name)
+		// The old name of an item whose rename the app has not finished is still on disk
+		guard try !isOldName(folderID: folder.folderID, path: path) else {
+			throw Rejection.unfinishedRename
+		}
+		try checkPath(folderID: folder.folderID, path: path)
 		let destination = url(folderID: folder.folderID, path: path)
 		try materialize(parent)
 		let modificationDate = fields.contains(.contentModificationDate) ? (template.contentModificationDate ?? nil) : nil
 
 		let fingerprint: FileFingerprint
+		var madeDirectory = false
 		if kind == .directory {
-			if mkdir(destination.fileSystemPath, 0o777) != 0 {
-				guard errno == EEXIST, FileFingerprint(path: destination.fileSystemPath)?.isRegularFile == false else {
+			if mkdir(destination.fileSystemPath, 0o777) == 0 {
+				madeDirectory = true
+			}
+			else {
+				// Only a directory can be taken as is (not a link to somewhere else, for instance)
+				guard errno == EEXIST, FileFingerprint(path: destination.fileSystemPath)?.isDirectory == true else {
 					throw errno == EEXIST ? NSFileProviderError(.filenameCollision) : Self.posixError()
 				}
 			}
@@ -113,15 +161,28 @@ struct LocalWriter: Sendable {
 			try place(staged, at: destination)
 		}
 
-		let item = try store.recordLocalChanges { recorder throws(IndexError) in
-			let item = try recorder.recordCreation(
-				folderID: folder.folderID, parentID: parent.id, path: path, kind: kind, size: fingerprint.size,
-				modifiedNanoseconds: fingerprint.modifiedNanoseconds, isSelected: true)
-			if folder.isSelective {
-				try recorder.enqueue(.select, folderID: folder.folderID, path: path)
+		let item: IndexItem
+		do {
+			item = try store.recordLocalChanges { recorder throws(IndexError) in
+				let item = try recorder.recordCreation(
+					folderID: folder.folderID, parentID: parent.id, path: path, kind: kind, size: fingerprint.size,
+					modifiedNanoseconds: fingerprint.modifiedNanoseconds, isSelected: true)
+				if folder.isSelective {
+					try recorder.enqueue(.select, folderID: folder.folderID, path: path)
+				}
+				try recorder.enqueue(.rescan, folderID: folder.folderID, path: path)
+				return item
 			}
-			try recorder.enqueue(.rescan, folderID: folder.folderID, path: path)
-			return item
+		}
+		catch {
+			// Undone, so that the system can simply try again
+			if kind == .file, FileFingerprint(path: destination.fileSystemPath)?.inode == fingerprint.inode {
+				unlink(destination.fileSystemPath)
+			}
+			else if madeDirectory {
+				rmdir(destination.fileSystemPath)
+			}
+			throw error
 		}
 		SharedNotification.workQueued.post()
 		return item
@@ -130,6 +191,17 @@ struct LocalWriter: Sendable {
 	// MARK: - Modifying
 
 	func modify(
+		template: NSFileProviderItem, baseVersion: NSFileProviderItemVersion, changedFields: NSFileProviderItemFields,
+		contents: URL?, options: NSFileProviderModifyItemOptions
+	) throws -> Outcome {
+		try Self.changes.withLock {
+			try modifyLocked(
+				template: template, baseVersion: baseVersion, changedFields: changedFields, contents: contents,
+				options: options)
+		}
+	}
+
+	private func modifyLocked(
 		template: NSFileProviderItem, baseVersion: NSFileProviderItemVersion, changedFields: NSFileProviderItemFields,
 		contents: URL?, options: NSFileProviderModifyItemOptions
 	) throws -> Outcome {
@@ -171,9 +243,11 @@ struct LocalWriter: Sendable {
 		guard item.kind != .folderRoot else {
 			throw Rejection.cannotSynchronize(String(localized: "Folders shared with Syncthing cannot be renamed here."))
 		}
-		guard let parentID = parentIdentifier.itemID, let parent = try store.item(id: parentID),
-			parent.kind.isContainer
-		else {
+		guard let parentID = parentIdentifier.itemID, let parent = try store.item(id: parentID) else {
+			// The system creates the parent first
+			throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: parentIdentifier)
+		}
+		guard parent.kind.isContainer else {
 			throw Rejection.cannotSynchronize(String(localized: "Items can only be moved into a folder."))
 		}
 		let name = FileNames.normalized(name)
@@ -189,17 +263,30 @@ struct LocalWriter: Sendable {
 			throw Rejection.cannotSynchronize(String(localized: "A folder cannot be moved into itself."))
 		}
 		if let existing = try store.child(of: parent.id, named: name), existing.id != item.id {
-			throw NSFileProviderError(.filenameCollision)
+			throw collision(with: existing)
 		}
 		guard isOnDevice(item) else {
 			throw Rejection.notOnDevice
 		}
 		// A directory that is only partly on this device would be split: what is only on other devices stays behind
 		if folder.isSelective && item.kind.isContainer && item.pending != .create {
-			guard item.isSelected, try store.descendants(of: item).allSatisfy(\.isSelected) else {
+			guard item.isSelected, try !store.hasDescendants(of: item, unselectedOnly: true) else {
 				throw Rejection.cannotSynchronize(
 					String(localized: "Keep the whole folder on this device to rename or move it."))
 			}
+		}
+		try checkPath(folderID: item.folderID, path: item.path)
+		try checkPath(folderID: parent.folderID, path: path)
+
+		// The old names of renames the app has not finished are still on disk, and the app is about to remove them: the
+		// item, what is inside it and the destination must wait until it has (except for undoing the rename)
+		let unfinishedRenames = try unfinishedRenames(of: item)
+		let undone = unfinishedRenames.first { $0.path == path && $0.extra == item.path }
+		if isSameFolder, let undone, unfinishedRenames.count == 1 {
+			return try renameBack(item, to: parent, path: path, undoing: undone)
+		}
+		guard unfinishedRenames.isEmpty, try !isOldName(folderID: parent.folderID, path: path) else {
+			throw Rejection.unfinishedRename
 		}
 		if !isSameFolder {
 			return try move(item, from: folder, toFolderOf: parent, path: path)
@@ -212,22 +299,7 @@ struct LocalWriter: Sendable {
 		// In an on-demand folder, Syncthing ignores paths until they are selected. Renaming something it knows would make
 		// it look deleted, so the new name gets a link (or, for a directory, a clone) and the app finishes the rename
 		// after selecting it.
-		let isKnownToSyncthing = item.pending != .create && !(folder.isSelective && item.pending == .rename)
-		let keepsOldName = folder.isSelective && isKnownToSyncthing
-		let unfinishedRename =
-			folder.isSelective && item.pending == .rename
-			? try store.queuedWork(.finishRename, folderID: item.folderID, extra: item.path) : nil
-		if let unfinishedRename, unfinishedRename.path == path {
-			// Renamed back before the app finished the rename: the original name is still there
-			try Self.remove(source)
-			let moved = try store.recordLocalChanges { recorder throws(IndexError) in
-				try recorder.dequeue(.finishRename, folderID: item.folderID, path: path)
-				try recorder.enqueue(.rescan, folderID: item.folderID, path: path)
-				return try recorder.recordMove(item, to: parent.id, path: path)
-			}
-			SharedNotification.workQueued.post()
-			return moved
-		}
+		let keepsOldName = folder.isSelective && item.pending != .create
 		if keepsOldName {
 			if item.kind.isContainer {
 				try Self.cloneDirectory(source, to: destination)
@@ -240,24 +312,60 @@ struct LocalWriter: Sendable {
 			try Self.rename(source, destination, flags: RENAME_EXCL)
 		}
 
-		let moved = try store.recordLocalChanges { recorder throws(IndexError) in
-			let moved = try recorder.recordMove(item, to: parent.id, path: path)
+		let moved: IndexItem
+		do {
+			moved = try store.recordLocalChanges { recorder throws(IndexError) in
+				let moved = try recorder.recordMove(item, to: parent.id, path: path)
+				if keepsOldName {
+					try recorder.enqueue(.finishRename, folderID: item.folderID, path: item.path, extra: path)
+				}
+				else {
+					if folder.isSelective {
+						// Selecting a new directory selects everything in it
+						try recorder.dequeue(.select, folderID: item.folderID, path: item.path, includingDescendants: true)
+						try recorder.enqueue(.select, folderID: item.folderID, path: path)
+					}
+					try recorder.enqueue(.rescan, folderID: item.folderID, path: item.path)
+					try recorder.enqueue(.rescan, folderID: item.folderID, path: path)
+				}
+				return moved
+			}
+		}
+		catch {
+			// Undone, so that the system can simply try again
 			if keepsOldName {
-				try recorder.enqueue(.finishRename, folderID: item.folderID, path: item.path, extra: path)
+				try? Self.remove(destination)
 			}
-			else if folder.isSelective && item.pending == .rename {
-				try recorder.retargetQueuedWork(.finishRename, folderID: item.folderID, from: item.path, to: path)
+			else {
+				try? Self.rename(destination, source, flags: RENAME_EXCL)
 			}
-			else if folder.isSelective {
-				// Selecting a new directory selects everything in it
-				try recorder.dequeue(.select, folderID: item.folderID, path: item.path, includingDescendants: true)
-				try recorder.enqueue(.select, folderID: item.folderID, path: path)
-			}
-			if !keepsOldName {
-				try recorder.enqueue(.rescan, folderID: item.folderID, path: item.path)
-				try recorder.enqueue(.rescan, folderID: item.folderID, path: path)
-			}
-			return moved
+			throw error
+		}
+		SharedNotification.workQueued.post()
+		return moved
+	}
+
+	/// Renamed back before the app finished the rename: the original name is still there. When the file at the new
+	/// name is still the same file (not edited since), the new name is simply removed again.
+	private func renameBack(_ item: IndexItem, to parent: IndexItem, path: String, undoing rename: WorkItem) throws
+		-> IndexItem
+	{
+		let current = url(folderID: item.folderID, path: item.path)
+		let original = url(folderID: item.folderID, path: path)
+		guard item.kind == .file, let currentEntry = FileFingerprint(path: current.fileSystemPath),
+			currentEntry.inode == FileFingerprint(path: original.fileSystemPath)?.inode
+		else {
+			throw Rejection.unfinishedRename
+		}
+		guard unlink(current.fileSystemPath) == 0 else {
+			throw Self.posixError()
+		}
+		let moved = try store.recordLocalChanges { recorder throws(IndexError) in
+			try recorder.dequeue(.finishRename, folderID: item.folderID, path: path)
+			// The app may have had the new name scanned already
+			try recorder.enqueue(.rescan, folderID: item.folderID, path: item.path)
+			try recorder.enqueue(.rescan, folderID: item.folderID, path: path)
+			return try recorder.recordMove(item, to: parent.id, path: path)
 		}
 		SharedNotification.workQueued.post()
 		return moved
@@ -268,10 +376,6 @@ struct LocalWriter: Sendable {
 		-> IndexItem
 	{
 		let target = try writableFolder(parent.folderID)
-		if item.pending == .rename {
-			throw Rejection.cannotSynchronize(
-				String(localized: "Open Synctrain to finish the previous rename before moving this to another folder."))
-		}
 		try materialize(parent)
 		try Self.rename(
 			url(folderID: item.folderID, path: item.path), url(folderID: target.folderID, path: path),
@@ -294,15 +398,27 @@ struct LocalWriter: Sendable {
 		}
 		catch IndexError.notAllowed(let reason) {
 			// Put it back: something inside it is still being renamed
-			try? Self.rename(
-				url(folderID: target.folderID, path: path), url(folderID: item.folderID, path: item.path),
-				flags: RENAME_EXCL)
+			putBack(item, from: target, path: path)
 			log.info("Could not move \(item.id) to another folder: \(reason)")
-			throw Rejection.cannotSynchronize(
-				String(localized: "Open Synctrain to finish the previous rename before moving this to another folder."))
+			throw Rejection.unfinishedRename
+		}
+		catch {
+			putBack(item, from: target, path: path)
+			throw error
 		}
 		SharedNotification.workQueued.post()
 		return moved
+	}
+
+	private func putBack(_ item: IndexItem, from target: IndexFolder, path: String) {
+		do {
+			try Self.rename(
+				url(folderID: target.folderID, path: path), url(folderID: item.folderID, path: item.path),
+				flags: RENAME_EXCL)
+		}
+		catch {
+			log.error("Could not move \(item.id) back after a failed move to another folder: \(error.localizedDescription)")
+		}
 	}
 
 	/// Writes new contents for a file. When the file changed on another device since the version the edit is based on,
@@ -314,6 +430,7 @@ struct LocalWriter: Sendable {
 		guard item.kind == .file else {
 			throw Rejection.cannotSynchronize(String(localized: "Only files can be written."))
 		}
+		try checkPath(folderID: item.folderID, path: item.path)
 		let destination = url(folderID: item.folderID, path: item.path)
 		let staged = try stage(contents, modificationDate: modificationDate)
 		let written = try Self.fingerprint(staged)
@@ -343,6 +460,8 @@ struct LocalWriter: Sendable {
 				let updated = try store.recordLocalChanges { recorder throws(IndexError) in
 					let updated = try recorder.recordContentChange(
 						item, size: written.size, modifiedNanoseconds: written.modifiedNanoseconds)
+					// A change is kept on this device: stopping to keep it now would remove it unsynchronized
+					try recorder.dequeue(.deselectSafely, folderID: item.folderID, path: item.path)
 					try recorder.enqueue(.rescan, folderID: item.folderID, path: item.path)
 					return updated
 				}
@@ -369,6 +488,16 @@ struct LocalWriter: Sendable {
 		}
 		let shortID = ((try? store.localShortDeviceID()) ?? nil) ?? "LOCAL"
 		let parentPath = FileNames.parentPath(item.path)
+		if let parent = try store.item(id: parentID) {
+			// In an on-demand folder, the directory may only be in the index
+			do {
+				try materialize(parent)
+			}
+			catch {
+				unlink(staged.fileSystemPath)
+				throw error
+			}
+		}
 		var date = Date()
 		var path = ""
 		for attempt in 0... {
@@ -407,12 +536,14 @@ struct LocalWriter: Sendable {
 		guard isOnDevice(item) else {
 			return item
 		}
+		try checkPath(folderID: item.folderID, path: item.path)
 		let target = url(folderID: item.folderID, path: item.path)
 		try setModificationDate(target, modificationDate)
 		let fingerprint = try Self.fingerprint(target)
 		let updated = try store.recordLocalChanges { recorder throws(IndexError) in
 			let updated = try recorder.recordModificationDate(
 				item, modifiedNanoseconds: fingerprint.modifiedNanoseconds)
+			try recorder.dequeue(.deselectSafely, folderID: item.folderID, path: item.path)
 			try recorder.enqueue(.rescan, folderID: item.folderID, path: item.path)
 			return updated
 		}
@@ -422,20 +553,36 @@ struct LocalWriter: Sendable {
 
 	// MARK: - Deleting
 
+	/// Returns whether items inside the deleted one were deleted as well
 	func delete(
 		identifier: NSFileProviderItemIdentifier, baseVersion: NSFileProviderItemVersion,
 		options: NSFileProviderDeleteItemOptions
-	) throws {
+	) throws -> Bool {
+		try Self.changes.withLock {
+			try deleteLocked(identifier: identifier, baseVersion: baseVersion, options: options)
+		}
+	}
+
+	private func deleteLocked(
+		identifier: NSFileProviderItemIdentifier, baseVersion: NSFileProviderItemVersion,
+		options: NSFileProviderDeleteItemOptions
+	) throws -> Bool {
 		guard let id = identifier.itemID, let item = try store.item(id: id) else {
 			// Already gone
-			return
+			return false
 		}
 		guard item.kind != .folderRoot, let folder = try store.folder(id: item.folderID), folder.acceptsLocalChanges
 		else {
 			throw NSFileProviderError(.deletionRejected)
 		}
+		// The app would keep the old name when the new one is gone (which would bring the item back)
+		guard try unfinishedRenames(of: item).isEmpty else {
+			throw Rejection.unfinishedRename
+		}
+		try checkPath(folderID: item.folderID, path: item.path)
 
 		let target = url(folderID: item.folderID, path: item.path)
+		var hasDescendants = false
 		if item.kind == .file {
 			// Deleting removes the file on all devices, so only the version the user saw may be deleted
 			guard Self.revision(baseVersion.contentVersion) == item.contentRevision, isOnDevice(item) else {
@@ -446,19 +593,19 @@ struct LocalWriter: Sendable {
 			}
 		}
 		else {
-			let descendants = try store.descendants(of: item)
-			if !descendants.isEmpty && !options.contains(.recursive) {
+			hasDescendants = try store.hasDescendants(of: item)
+			if hasDescendants && !options.contains(.recursive) {
 				throw NSFileProviderError(.directoryNotEmpty)
 			}
 			// Files that are only on other devices cannot be deleted from here
-			if descendants.contains(where: { !$0.isSelected }) {
+			if try store.hasDescendants(of: item, unselectedOnly: true) {
 				throw NSFileProviderError(.directoryNotEmpty)
 			}
-			do {
-				try FileManager.default.removeItem(at: target)
-			}
-			catch CocoaError.fileNoSuchFile {
-				// Already gone
+			if FileFingerprint(path: target.fileSystemPath)?.isDirectory == true {
+				let known = hasDescendants ? try store.descendantFiles(of: item) : [:]
+				if !Self.removeTree(target.fileSystemPath, path: item.path, known: known) {
+					log.info("Kept files in \(item.id) that changed on another device since it was listed")
+				}
 			}
 		}
 
@@ -470,6 +617,41 @@ struct LocalWriter: Sendable {
 			try recorder.enqueue(.rescan, folderID: item.folderID, path: item.path)
 		}
 		SharedNotification.workQueued.post()
+		return hasDescendants
+	}
+
+	/// Removes a directory tree, except files that are not the version in the index (such as ones that arrived from
+	/// another device since it was listed): removing those would remove them on all devices. Links are not followed.
+	/// Returns whether everything was removed.
+	private static func removeTree(_ directory: String, path: String, known: [String: FileVersion]) -> Bool {
+		var removedAll = true
+		for name in (try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? [] {
+			let entryPath = directory + "/" + name
+			let relative = FileNames.join(path, name)
+			guard let entry = FileFingerprint(path: entryPath) else {
+				continue
+			}
+			if entry.isDirectory {
+				removedAll = removeTree(entryPath, path: relative, known: known) && removedAll
+			}
+			else if entry.isRegularFile {
+				guard let version = known[relative] ?? known[FileNames.normalized(relative)],
+					entry.matches(size: version.size, modifiedNanoseconds: version.modifiedNanoseconds),
+					unlink(entryPath) == 0
+				else {
+					removedAll = false
+					continue
+				}
+			}
+			else if unlink(entryPath) != 0 {
+				// Symbolic links (not shown in Files) go with the directory they are in
+				removedAll = false
+			}
+		}
+		if rmdir(directory) != 0 && errno != ENOENT {
+			removedAll = false
+		}
+		return removedAll
 	}
 
 	// MARK: - Disk
@@ -492,17 +674,53 @@ struct LocalWriter: Sendable {
 		context.isOnDevice(item)
 	}
 
+	/// Renames the app has not finished of the item or of something inside it
+	private func unfinishedRenames(of item: IndexItem) throws -> [WorkItem] {
+		try store.queuedRenames(folderID: item.folderID, touching: item.path).filter { rename in
+			FileNames.isSelfOrDescendant(rename.path, of: item.path)
+				|| rename.extra.map { FileNames.isSelfOrDescendant($0, of: item.path) } == true
+		}
+	}
+
+	/// Whether the path is, is inside or contains the old name of a rename the app has not finished (which is still on
+	/// disk, and which the app is about to remove)
+	private func isOldName(folderID: String, path: String) throws -> Bool {
+		try store.queuedRenames(folderID: folderID, touching: path).contains { rename in
+			FileNames.isSelfOrDescendant(path, of: rename.path) || FileNames.isSelfOrDescendant(rename.path, of: path)
+		}
+	}
+
+	private func collision(with existing: IndexItem) -> Error {
+		NSError.fileProviderErrorForCollision(with: context.makeItemForContents(existing))
+	}
+
+	/// Refuses paths through a symbolic link (which Syncthing creates from another device's links, and does not show):
+	/// changes must stay inside the folder
+	private func checkPath(folderID: String, path: String) throws {
+		var ancestor = ""
+		for component in path.split(separator: "/").dropLast() {
+			ancestor = FileNames.join(ancestor, String(component))
+			if let entry = FileFingerprint(path: url(folderID: folderID, path: ancestor).fileSystemPath), !entry.isDirectory {
+				throw Rejection.throughLink
+			}
+		}
+	}
+
 	/// Creates the directory on disk (and the ones above it) if it is not there, as Syncthing would when pulling it
 	private func materialize(_ directory: IndexItem) throws {
 		let target = url(folderID: directory.folderID, path: directory.path)
-		if FileFingerprint(path: target.fileSystemPath) != nil {
+		if let existing = FileFingerprint(path: target.fileSystemPath) {
+			guard existing.isDirectory else {
+				throw Rejection.throughLink
+			}
 			return
 		}
 		if directory.kind != .folderRoot, let parentID = directory.parentID, let parent = try store.item(id: parentID) {
 			try materialize(parent)
 		}
-		guard mkdir(target.fileSystemPath, 0o777) == 0 || errno == EEXIST else {
-			throw Self.posixError()
+		guard mkdir(target.fileSystemPath, 0o777) == 0 || FileFingerprint(path: target.fileSystemPath)?.isDirectory == true
+		else {
+			throw errno == EEXIST ? Rejection.throughLink : Self.posixError()
 		}
 		if let date = directory.modificationDate {
 			try? setModificationDate(target, date)
@@ -512,25 +730,31 @@ struct LocalWriter: Sendable {
 	/// Copies the contents into the staging directory (a clone where possible) with the given modification time
 	private func stage(_ contents: URL?, modificationDate: Date?) throws -> URL {
 		let staged = context.container.stagingURL.appending(path: UUID().uuidString, directoryHint: .notDirectory)
-		if let contents {
-			if clonefile(contents.fileSystemPath, staged.fileSystemPath, UInt32(CLONE_NOFOLLOW)) != 0 {
-				guard copyfile(contents.fileSystemPath, staged.fileSystemPath, nil, copyfile_flags_t(COPYFILE_DATA)) == 0
-				else {
-					throw Self.posixError()
+		do {
+			if let contents {
+				if clonefile(contents.fileSystemPath, staged.fileSystemPath, UInt32(CLONE_NOFOLLOW)) != 0 {
+					let flags = copyfile_flags_t(COPYFILE_DATA | COPYFILE_NOFOLLOW_SRC)
+					guard copyfile(contents.fileSystemPath, staged.fileSystemPath, nil, flags) == 0 else {
+						throw Self.posixError()
+					}
 				}
+				Self.removeFileProviderAttributes(staged)
 			}
-			Self.removeFileProviderAttributes(staged)
+			else if !FileManager.default.createFile(atPath: staged.fileSystemPath, contents: nil) {
+				throw CocoaError(.fileWriteUnknown)
+			}
+			try? FileManager.default.setAttributes(
+				[.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+				ofItemAtPath: staged.fileSystemPath)
+			if let modificationDate {
+				try setModificationDate(staged, modificationDate)
+			}
+			return staged
 		}
-		else if !FileManager.default.createFile(atPath: staged.fileSystemPath, contents: nil) {
-			throw CocoaError(.fileWriteUnknown)
+		catch {
+			unlink(staged.fileSystemPath)
+			throw error
 		}
-		try? FileManager.default.setAttributes(
-			[.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-			ofItemAtPath: staged.fileSystemPath)
-		if let modificationDate {
-			try setModificationDate(staged, modificationDate)
-		}
-		return staged
 	}
 
 	/// Moves a staged file to a path where nothing exists yet
@@ -551,7 +775,13 @@ struct LocalWriter: Sendable {
 
 	/// Atomically puts the staged file in place of the existing file, if that is still the indexed version
 	private func replace(_ destination: URL, with staged: URL, expecting item: IndexItem) throws {
-		try Self.rename(staged, destination, flags: RENAME_SWAP)
+		do {
+			try Self.rename(staged, destination, flags: RENAME_SWAP)
+		}
+		catch {
+			unlink(staged.fileSystemPath)
+			throw error
+		}
 		// The staged path now holds what was in place; make sure it was the version the edit was based on
 		let replaced = FileFingerprint(path: staged.fileSystemPath)
 		if replaced?.matches(size: item.size, modifiedNanoseconds: item.modifiedNanoseconds) != true {
@@ -563,9 +793,12 @@ struct LocalWriter: Sendable {
 
 	private func setModificationDate(_ url: URL, _ date: Date) throws {
 		let nanoseconds = Int64((date.timeIntervalSince1970 * 1_000_000_000).rounded())
+		// Floored, so that dates before 1970 get a nanosecond part between 0 and a second, as required
+		let (seconds, remainder) = nanoseconds.quotientAndRemainder(dividingBy: 1_000_000_000)
+		let floored = remainder < 0 ? (seconds - 1, remainder + 1_000_000_000) : (seconds, remainder)
 		var times = [
 			timespec(tv_sec: 0, tv_nsec: Int(UTIME_OMIT)),
-			timespec(tv_sec: Int(nanoseconds / 1_000_000_000), tv_nsec: Int(nanoseconds % 1_000_000_000)),
+			timespec(tv_sec: Int(floored.0), tv_nsec: Int(floored.1)),
 		]
 		guard utimensat(AT_FDCWD, url.fileSystemPath, &times, AT_SYMLINK_NOFOLLOW) == 0 else {
 			throw Self.posixError()
@@ -642,6 +875,10 @@ struct LocalWriter: Sendable {
 			return CocoaError(.fileWriteNoPermission)
 		case ENOENT:
 			return CocoaError(.fileNoSuchFile)
+		case ENAMETOOLONG, EINVAL, ENOTDIR, ELOOP, EISDIR:
+			// Trying again would not help
+			return Rejection.cannotSynchronize(
+				POSIXError(POSIXErrorCode(rawValue: code) ?? .EINVAL).localizedDescription)
 		default:
 			return NSError(
 				domain: NSCocoaErrorDomain, code: NSXPCConnectionReplyInvalid,

@@ -15,11 +15,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/protocol"
 )
 
@@ -33,8 +35,8 @@ type fakeFileProviderBackend struct {
 	fetches int
 }
 
-func (b *fakeFileProviderBackend) folderInfo(folderID string) (string, time.Duration, bool) {
-	return b.localPath, 0, folderID == "folder"
+func (b *fakeFileProviderBackend) folderInfo(folderID string) (fileProviderFolder, bool) {
+	return fileProviderFolder{localPath: b.localPath, markerName: config.DefaultMarkerName}, folderID == "folder"
 }
 
 func (b *fakeFileProviderBackend) globalFileInfo(folderID string, path string) (protocol.FileInfo, bool, error) {
@@ -149,16 +151,35 @@ func TestFileProviderServerAuthorization(t *testing.T) {
 	if res, body := fileProviderRequest(t, server, http.MethodGet, "/ping", nil); res.StatusCode != http.StatusOK || string(body) != "ok" {
 		t.Fatalf("ping failed: %d %q", res.StatusCode, body)
 	}
+	if server.server.IdleTimeout <= 0 {
+		t.Fatal("idle connections are kept forever")
+	}
 
-	// The token can also be passed as a query parameter
-	for token, status := range map[string]int{"wrong": http.StatusUnauthorized, "": http.StatusUnauthorized, server.Token(): http.StatusOK} {
-		res, err := http.Get(url + "?token=" + token)
+	// Files can also be requested with the token as a query parameter, but nothing else can
+	fileURL := fmt.Sprintf("http://127.0.0.1:%d/file?folder=other&path=x", server.Port())
+	for _, tc := range []struct {
+		method, url, token string
+		status             int
+	}{
+		{http.MethodGet, fileURL, "wrong", http.StatusUnauthorized},
+		{http.MethodGet, fileURL, "", http.StatusUnauthorized},
+		{http.MethodGet, fileURL, server.Token(), http.StatusNotFound},
+		{http.MethodHead, fileURL, server.Token(), http.StatusNotFound},
+		{http.MethodPost, fileURL, server.Token(), http.StatusUnauthorized},
+		{http.MethodGet, url + "?", server.Token(), http.StatusUnauthorized},
+	} {
+		req, _ := http.NewRequest(tc.method, tc.url+"&token="+tc.token, nil)
+		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		res.Body.Close()
-		if res.StatusCode != status {
-			t.Fatalf("token parameter %q: status %d, expected %d", token, res.StatusCode, status)
+		if res.StatusCode != tc.status {
+			t.Fatalf("%s %s with token parameter %q: status %d, expected %d", tc.method, tc.url, tc.token, res.StatusCode, tc.status)
+		}
+		// Unauthorized clients do not get to keep the connection
+		if tc.status == http.StatusUnauthorized && !res.Close {
+			t.Fatalf("%s %s: connection kept open after 401", tc.method, tc.url)
 		}
 	}
 
@@ -289,5 +310,159 @@ func TestRemoteBlockReaderFailure(t *testing.T) {
 	_, err := io.ReadAll(reader)
 	if err == nil || !strings.Contains(err.Error(), "no such block") {
 		t.Fatalf("expected failure for missing block, got %v", err)
+	}
+}
+
+// Escapes everything except unreserved characters, as the File Provider extension does
+func strictQueryEscape(value string) string {
+	var b strings.Builder
+	for _, c := range []byte(value) {
+		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || strings.IndexByte("-._~/", c) >= 0 {
+			b.WriteByte(c)
+		} else {
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
+}
+
+func TestFileProviderServerQueryEncoding(t *testing.T) {
+	backend := &fakeFileProviderBackend{available: true}
+	names := []string{"C++ notes.txt", "a;b.txt", "x & y.txt", "#hash.txt", "100% done.txt", "a=b.txt", "dir/Cafe\u0301.txt"}
+	for _, name := range names {
+		backend.addFile(name, []byte(name), time.Now())
+	}
+	server := startTestFileProviderServer(t, backend)
+
+	for _, name := range names {
+		res, body := fileProviderRequest(t, server, http.MethodGet, "/file?folder=folder&path="+strictQueryEscape(name), nil)
+		if res.StatusCode != http.StatusOK || string(body) != name {
+			t.Errorf("%q: %d %q", name, res.StatusCode, body)
+		}
+	}
+
+	// "+" is never a space, and ";" does not end a value, even when sent without escaping
+	for query, name := range map[string]string{
+		"folder=folder&path=C++%20notes.txt": "C++ notes.txt",
+		"path=a;b.txt&folder=folder":         "a;b.txt",
+	} {
+		res, body := fileProviderRequest(t, server, http.MethodGet, "/file?"+query, nil)
+		if res.StatusCode != http.StatusOK || string(body) != name {
+			t.Errorf("%q: %d %q", query, res.StatusCode, body)
+		}
+	}
+
+	for _, query := range []string{"folder=folder&path=%zz", "folder=folder&path=a%2", "folder%=folder&path=a"} {
+		if res, _ := fileProviderRequest(t, server, http.MethodGet, "/file?"+query, nil); res.StatusCode != http.StatusBadRequest {
+			t.Errorf("malformed query %q: status %d", query, res.StatusCode)
+		}
+	}
+}
+
+func TestFileProviderServerPrivatePaths(t *testing.T) {
+	backend := &fakeFileProviderBackend{available: true}
+	names := []string{".stignore", ".stfolder/x", ".stversions/a.txt", "dir/.stversions/a.txt", "dir/.syncthing.a.tmp", "~syncthing~a", "nul\x00name"}
+	for _, name := range names {
+		backend.addFile(name, []byte("secret"), time.Now())
+	}
+	server := startTestFileProviderServer(t, backend)
+
+	for _, name := range names {
+		if res, _ := fileProviderRequest(t, server, http.MethodGet, "/file?folder=folder&path="+strictQueryEscape(name), nil); res.StatusCode != http.StatusNotFound {
+			t.Errorf("%q: expected 404, got %d", name, res.StatusCode)
+		}
+	}
+	if backend.fetches != 0 {
+		t.Fatalf("private files were fetched %d times", backend.fetches)
+	}
+}
+
+func TestFileProviderServerInconsistentBlocks(t *testing.T) {
+	blockSize := protocol.MinBlockSize
+	for name, corrupt := range map[string]func(info *protocol.FileInfo){
+		"no blocks":         func(info *protocol.FileInfo) { info.Blocks = nil },
+		"extra block":       func(info *protocol.FileInfo) { info.Blocks = append(info.Blocks, info.Blocks[2]) },
+		"missing block":     func(info *protocol.FileInfo) { info.Blocks = info.Blocks[:2] },
+		"shifted block":     func(info *protocol.FileInfo) { info.Blocks[1].Offset += 10 },
+		"oversized block":   func(info *protocol.FileInfo) { info.Blocks[0].Size = blockSize + 1 },
+		"empty block":       func(info *protocol.FileInfo) { info.Blocks[1].Size = 0 },
+		"short last block":  func(info *protocol.FileInfo) { info.Blocks[2].Size = 500 },
+		"larger file":       func(info *protocol.FileInfo) { info.Size += 10 },
+		"huge block size":   func(info *protocol.FileInfo) { info.RawBlockSize = protocol.MaxBlockSize * 2 },
+		"smaller blocksize": func(info *protocol.FileInfo) { info.RawBlockSize = int32(blockSize * 2) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			backend := &fakeFileProviderBackend{available: true}
+			backend.addFile("file.bin", testContents(blockSize*2+1000), time.Now())
+			info := backend.files["file.bin"]
+			info.Blocks = slices.Clone(info.Blocks)
+			corrupt(&info)
+			backend.files["file.bin"] = info
+			server := startTestFileProviderServer(t, backend)
+
+			res, _ := fileProviderRequest(t, server, http.MethodGet, "/file?folder=folder&path=file.bin", map[string]string{
+				"Range": "bytes=0-10,200000-200010",
+			})
+			if res.StatusCode != http.StatusBadGateway || backend.fetches != 0 {
+				t.Fatalf("inconsistent file information served: %d, %d fetches", res.StatusCode, backend.fetches)
+			}
+		})
+	}
+}
+
+func TestRemoteBlockReaderInconsistentLayout(t *testing.T) {
+	newReader := func(ctx context.Context, corrupt func(info *protocol.FileInfo)) *remoteBlockReader {
+		backend := &fakeFileProviderBackend{available: true}
+		backend.addFile("file.bin", testContents(protocol.MinBlockSize+1000), time.Now())
+		info := backend.files["file.bin"]
+		info.Blocks = slices.Clone(info.Blocks)
+		corrupt(&info)
+		return &remoteBlockReader{ctx: ctx, backend: backend, folderID: "folder", info: info, blockTimeout: time.Second, blockIndex: -1}
+	}
+
+	// A block that starts after the offset being read
+	reader := newReader(context.Background(), func(info *protocol.FileInfo) { info.Blocks[1].Offset += 10 })
+	if _, err := io.ReadAll(reader); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("expected an unexpected EOF for a shifted block, got %v", err)
+	}
+
+	// A file larger than its blocks must not make reads return nothing forever
+	reader = newReader(context.Background(), func(info *protocol.FileInfo) { info.Size += 10 })
+	done := make(chan error, 1)
+	go func() {
+		_, err := io.ReadAll(reader)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, io.ErrUnexpectedEOF) {
+			t.Fatalf("expected an unexpected EOF for a file larger than its blocks, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reading a file larger than its blocks does not end")
+	}
+
+	// Reads stop when the request is gone
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	reader = newReader(ctx, func(info *protocol.FileInfo) {})
+	if _, err := reader.Read(make([]byte, 10)); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected the context error, got %v", err)
+	}
+}
+
+func TestBlockFetchTimeout(t *testing.T) {
+	cases := []struct {
+		size int
+		want time.Duration
+	}{
+		{128 << 10, fileProviderBlockTimeout},
+		{2 << 20, 64 * time.Second},
+		{16 << 20, 512 * time.Second},
+	}
+	for _, c := range cases {
+		if got := blockFetchTimeout(fileProviderBlockTimeout, c.size); got != c.want {
+			t.Errorf("blockFetchTimeout(%d) = %v, want %v", c.size, got, c.want)
+		}
 	}
 }

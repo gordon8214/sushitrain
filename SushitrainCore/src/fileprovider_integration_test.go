@@ -14,6 +14,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,7 +61,12 @@ func newIntegrationClient(t *testing.T) (*Client, string) {
 	evLogger := events.NewLogger()
 	go evLogger.Serve(ctx)
 	wrapper := config.Wrap(filepath.Join(dir, "config.xml"), cfg, devID, evLogger)
-	go wrapper.Serve(ctx)
+	// The configuration is saved when serving ends, which must happen before the temporary directory is removed
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		_ = wrapper.Serve(ctx)
+	}()
 
 	sdb, err := syncthing.OpenDatabase(filepath.Join(dir, "index"), time.Hour)
 	if err != nil {
@@ -77,6 +83,7 @@ func newIntegrationClient(t *testing.T) (*Client, string) {
 		app.Stop(svcutil.ExitSuccess)
 		app.Wait()
 		cancel()
+		<-served
 	})
 
 	clt := &Client{app: app, config: wrapper, ctx: ctx, cancel: cancel, evLogger: evLogger, filesPath: dir}
@@ -169,5 +176,60 @@ func TestIntegrationGlobalSequences(t *testing.T) {
 	snapshot := delegate.records()
 	if recordFor(snapshot, "a.txt") == nil || recordFor(snapshot, "dir/b.txt") == nil || !recordFor(snapshot, "dir/b.txt").Deleted {
 		t.Fatalf("unexpected snapshot %+v", snapshot)
+	}
+}
+
+func TestIntegrationSelectionChangesWaitForSelectionLock(t *testing.T) {
+	clt, root := newIntegrationClient(t)
+	folder := clt.FolderWithID("test")
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("one"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := clt.app.Internals.SetIgnores("test", []string{"*"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := folder.ScanPaths(List([]string{""})); err != nil {
+		t.Fatal(err)
+	}
+	// Changing the ignore patterns starts another scan
+	for deadline := time.Now().Add(10 * time.Second); ; {
+		if state, err := folder.State(); err == nil && state == "idle" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("folder does not become idle")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Deselecting decides what to delete from the new selection, so it holds the lock until it has deleted
+	unlock := lockSelection("test")
+	done := make(chan error, 1)
+	go func() {
+		for {
+			// The folder may still be scanning after the change of its ignore patterns
+			err := folder.SetLocalFileExplicitlySelected("a.txt", false)
+			if err != nil && strings.Contains(err.Error(), "not idle or syncing") {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			done <- err
+			return
+		}
+	}()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("selection changed while the selection was locked: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	unlock()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("selection lock was not released")
 	}
 }

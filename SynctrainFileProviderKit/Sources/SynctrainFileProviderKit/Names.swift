@@ -12,15 +12,22 @@ public enum FileNames {
 		name.precomposedStringWithCanonicalMapping.folding(options: [.caseInsensitive], locale: nil)
 	}
 
-	/// The form in which names are written to disk (canonically composed, as Syncthing normalizes them on Apple file
-	/// systems)
+	/// The form in which names and paths are stored in the index and written to disk: canonically decomposed (NFD), as
+	/// Syncthing normalizes them on Apple platforms (its scanner on macOS and iOS, and the names it receives from other
+	/// devices). Paths are compared byte by byte, so every path that enters the index must be in this form.
 	public static func normalized(_ name: String) -> String {
-		name.precomposedStringWithCanonicalMapping
+		name.decomposedStringWithCanonicalMapping
 	}
 
 	/// Whether the name can be used for a file or directory
 	public static func isValid(_ name: String) -> Bool {
 		!name.isEmpty && name != "." && name != ".." && !name.contains("/") && !name.contains("\0")
+	}
+
+	/// Whether the path (relative to a folder root) consists of valid names only, so that it cannot point outside the
+	/// folder. The empty path (the folder root itself) is valid.
+	public static func isValidPath(_ path: String) -> Bool {
+		path.isEmpty || path.split(separator: "/", omittingEmptySubsequences: false).allSatisfy { isValid(String($0)) }
 	}
 
 	/// Names of files that belong to Syncthing itself and must never be exposed or created

@@ -57,6 +57,17 @@ public struct IndexItem: Sendable, Hashable {
 	}
 }
 
+/// The version of a file as the index knows it
+public struct FileVersion: Sendable, Equatable {
+	public let size: Int64
+	public let modifiedNanoseconds: Int64
+
+	public init(size: Int64, modifiedNanoseconds: Int64) {
+		self.size = size
+		self.modifiedNanoseconds = modifiedNanoseconds
+	}
+}
+
 public struct IndexFolder: Sendable, Hashable {
 	public var folderID: String
 	public var rootItemID: Int64
@@ -232,5 +243,24 @@ public struct ChangeSet: Sendable {
 
 	public var deletedItemIDs: [Int64] {
 		deleted.map(\.id)
+	}
+}
+
+/// What the system keeps about an item that Syncthing does not synchronize: tags, the favorite rank and when the item was
+/// last used. Kept for this device only.
+public struct ItemAttributes: Sendable, Equatable {
+	public var tagData: Data?
+	/// `NSFileProviderFavoriteRankUnranked` and other ranks above Int64.max are kept as their bit pattern
+	public var favoriteRank: Int64?
+	public var lastUsedDate: Date?
+
+	public init(tagData: Data? = nil, favoriteRank: Int64? = nil, lastUsedDate: Date? = nil) {
+		self.tagData = tagData
+		self.favoriteRank = favoriteRank
+		self.lastUsedDate = lastUsedDate
+	}
+
+	public var isEmpty: Bool {
+		tagData == nil && favoriteRank == nil && lastUsedDate == nil
 	}
 }

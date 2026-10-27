@@ -21,11 +21,14 @@ import (
 
 // Receives (debounced) notifications about changes relevant to a file provider. Unlike ClientDelegate, this delegate
 // is also called while Client.IgnoreEvents is set. Implementations should return quickly and do their work elsewhere.
+// As SetFileProviderDelegate waits for a delivery in progress to finish, they must neither call it nor wait for a thread
+// that does.
 type FileProviderDelegate interface {
 	// The global index of the folder changed. When needsFullPass is set, changes may have happened that cannot be
 	// found by looking for higher sequence numbers (e.g. the folder was resumed or its ignore patterns changed).
 	OnFolderIndexChanged(folderID string, needsFullPass bool)
-	// Folders were added or removed, or their label, type or path changed
+	// Folders were added or removed, or their label, type or path changed. A change of only the label is not
+	// followed by OnFolderIndexChanged.
 	OnFolderConfigurationChanged()
 }
 
@@ -45,13 +48,24 @@ type fileProviderWatcher struct {
 	maximumDelay  time.Duration
 	cancel        context.CancelFunc
 	done          chan struct{}
+	flushDone     chan struct{}
+
+	// Only used by the goroutine that delivers notifications, as computing hashes reads and parses ignore files
+	ignoreHashes map[string]string
 
 	mutex         sync.Mutex
 	dirty         map[string]bool // folder ID => needs full pass
+	checkIgnores  map[string]bool // folder IDs whose ignore patterns may have changed
 	configChanged bool
 	firstDirtyAt  time.Time
-	folderDigests map[string]string
-	ignoreHashes  map[string]string
+	folderDigests map[string]folderDigest
+}
+
+// The folder configuration fields that matter to a file provider
+type folderDigest struct {
+	label string
+	// Everything else, which may change what the folder contains
+	contents string
 }
 
 // Starts delivering file provider notifications to the delegate. Pass nil to stop.
@@ -75,6 +89,7 @@ func (clt *Client) SetFileProviderDelegate(delegate FileProviderDelegate) {
 		return matcher.Hash()
 	})
 	if clt.config != nil {
+		// The watcher also records the ignore patterns of these folders when it starts
 		w.folderDigests = folderConfigurationDigests(clt.config.RawCopy())
 	}
 	fileProviderWatchers.Store(clt, w)
@@ -88,6 +103,7 @@ func newFileProviderWatcher(delegate FileProviderDelegate, ignoreHash func(strin
 		trailingDelay: fileProviderTrailingDelay,
 		maximumDelay:  fileProviderMaximumDelay,
 		dirty:         map[string]bool{},
+		checkIgnores:  map[string]bool{},
 		folderDigests: nil,
 		ignoreHashes:  map[string]string{},
 	}
@@ -97,7 +113,12 @@ func (w *fileProviderWatcher) start(parent context.Context, sub events.Subscript
 	ctx, cancel := context.WithCancel(parent)
 	w.cancel = cancel
 	w.done = make(chan struct{})
+	w.flushDone = make(chan struct{})
 	flushes := make(chan struct{}, 1)
+
+	w.mutex.Lock()
+	seedFolderIDs := KeysOf(w.folderDigests)
+	w.mutex.Unlock()
 
 	// Events are read in one goroutine and delivered in another, so a slow delegate never makes us miss events
 	go func() {
@@ -133,16 +154,26 @@ func (w *fileProviderWatcher) start(parent context.Context, sub events.Subscript
 	}()
 
 	go func() {
+		defer close(w.flushDone)
+		// The first change of the ignore patterns needs a full pass too, so record the hashes they have now
+		for _, folderID := range seedFolderIDs {
+			if ctx.Err() != nil {
+				break
+			}
+			w.ignoreHashes[folderID] = w.ignoreHash(folderID)
+		}
 		for range flushes {
-			w.flush()
+			w.flush(ctx)
 		}
 	}()
 }
 
+// Stops the watcher. When this returns, the delegate is not called anymore.
 func (w *fileProviderWatcher) stop() {
 	if w.cancel != nil {
 		w.cancel()
 		<-w.done
+		<-w.flushDone
 	}
 }
 
@@ -167,13 +198,12 @@ func (w *fileProviderWatcher) handle(evt events.Event, now time.Time) (time.Dura
 		if from != model.FolderScanning.String() || folderID == "" {
 			return 0, false
 		}
-		// Changed ignore patterns change which entries are selected or hidden
-		hash := w.ignoreHash(folderID)
+		// Changed ignore patterns change which entries are selected or hidden. Changes to the index itself are
+		// reported by index events. Whether the patterns changed is checked when changes are delivered.
 		w.mutex.Lock()
-		previous, known := w.ignoreHashes[folderID]
-		w.ignoreHashes[folderID] = hash
-		w.mutex.Unlock()
-		return w.markDirty(folderID, known && previous != hash, false, now)
+		defer w.mutex.Unlock()
+		w.checkIgnores[folderID] = true
+		return w.scheduleLocked(now), true
 
 	case events.FolderPaused, events.FolderResumed:
 		data, ok := evt.Data.(map[string]string)
@@ -199,8 +229,12 @@ func (w *fileProviderWatcher) handle(evt events.Event, now time.Time) (time.Dura
 		var delay time.Duration
 		var changed bool
 		for folderID, digest := range digests {
-			if previous[folderID] != digest {
+			before, existed := previous[folderID]
+			if !existed || before.contents != digest.contents {
 				delay, changed = w.markDirty(folderID, true, true, now)
+			} else if before.label != digest.label {
+				// Renaming a folder only renames its root
+				delay, changed = w.markDirty("", false, true, now)
 			}
 		}
 		for folderID := range previous {
@@ -220,49 +254,75 @@ func (w *fileProviderWatcher) markDirty(folderID string, fullPass bool, configCh
 	if folderID == "" && !configChanged {
 		return 0, false
 	}
-	if len(w.dirty) == 0 && !w.configChanged {
-		w.firstDirtyAt = now
-	}
+	delay := w.scheduleLocked(now)
 	if folderID != "" {
 		w.dirty[folderID] = w.dirty[folderID] || fullPass
 	}
 	w.configChanged = w.configChanged || configChanged
+	return delay, true
+}
+
+// Returns the delay after which pending changes should be delivered, when a change is about to be recorded
+func (w *fileProviderWatcher) scheduleLocked(now time.Time) time.Duration {
+	if len(w.dirty) == 0 && len(w.checkIgnores) == 0 && !w.configChanged {
+		w.firstDirtyAt = now
+	}
 
 	// Deliver after a quiet period, but never later than the maximum delay after the first change
 	delay := min(w.trailingDelay, w.firstDirtyAt.Add(w.maximumDelay).Sub(now))
-	return max(delay, 0), true
+	return max(delay, 0)
 }
 
-func (w *fileProviderWatcher) flush() {
+func (w *fileProviderWatcher) flush(ctx context.Context) {
 	w.mutex.Lock()
 	dirty := w.dirty
+	checkIgnores := w.checkIgnores
 	configChanged := w.configChanged
 	w.dirty = map[string]bool{}
+	w.checkIgnores = map[string]bool{}
 	w.configChanged = false
 	w.mutex.Unlock()
 
-	if configChanged {
+	for folderID := range checkIgnores {
+		if ctx.Err() != nil {
+			return
+		}
+		hash := w.ignoreHash(folderID)
+		previous, known := w.ignoreHashes[folderID]
+		w.ignoreHashes[folderID] = hash
+		if known && previous != hash {
+			dirty[folderID] = true
+		}
+	}
+
+	if configChanged && ctx.Err() == nil {
 		w.delegate.OnFolderConfigurationChanged()
 	}
 	folderIDs := KeysOf(dirty)
 	slices.Sort(folderIDs)
 	for _, folderID := range folderIDs {
+		if ctx.Err() != nil {
+			return
+		}
 		slog.Debug("file provider index changed", "folderID", folderID, "fullPass", dirty[folderID])
 		w.delegate.OnFolderIndexChanged(folderID, dirty[folderID])
 	}
 }
 
-// A digest of the folder configuration fields that matter to a file provider
-func folderConfigurationDigests(cfg config.Configuration) map[string]string {
-	digests := make(map[string]string, len(cfg.Folders))
+// Digests of the folder configuration fields that matter to a file provider
+func folderConfigurationDigests(cfg config.Configuration) map[string]folderDigest {
+	digests := make(map[string]folderDigest, len(cfg.Folders))
 	for _, fc := range cfg.Folders {
 		devices := make([]string, 0, len(fc.Devices))
 		for _, dev := range fc.Devices {
 			devices = append(devices, dev.DeviceID.String())
 		}
 		slices.Sort(devices)
-		digests[fc.ID] = fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%v\x00%s", fc.Label, fc.Path, fc.Type.String(),
-			fc.FilesystemType.String(), fc.Paused, strings.Join(devices, ","))
+		digests[fc.ID] = folderDigest{
+			label: fc.Label,
+			contents: fmt.Sprintf("%s\x00%s\x00%s\x00%v\x00%s", fc.Path, fc.Type.String(), fc.FilesystemType.String(),
+				fc.Paused, strings.Join(devices, ",")),
+		}
 	}
 	return digests
 }

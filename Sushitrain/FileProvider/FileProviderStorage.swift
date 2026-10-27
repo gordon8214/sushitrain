@@ -34,38 +34,49 @@
 		private static let locationPath = OSAllocatedUnfairLock<String?>(initialState: nil)
 
 		static func setLocationURL(_ url: URL?) {
-			let path = url?.resolvingSymlinksInPath().path(percentEncoded: false)
+			let path = url.map(standardizedPath)
 			locationPath.withLock { $0 = path }
 		}
 
 		/// Whether the URL lies inside the shared container or the Synctrain location. Folders there cannot be added as
 		/// external folders: Syncthing would then synchronize its own files a second time.
 		static func contains(_ url: URL) -> Bool {
-			let path = url.resolvingSymlinksInPath().path(percentEncoded: false)
-			if let location = locationPath.withLock({ $0 }), path.hasPrefix(location) {
+			if let location = locationPath.withLock({ $0 }), isPath(standardizedPath(url), inside: location) {
 				return true
 			}
+			return isInSharedContainer(url)
+		}
+
+		/// Whether the URL lies inside the shared container (where the app keeps internal folders)
+		static func isInSharedContainer(_ url: URL) -> Bool {
 			guard let container else {
 				return false
 			}
-			return path.hasPrefix(container.baseURL.resolvingSymlinksInPath().path(percentEncoded: false))
+			return isPath(standardizedPath(url), inside: standardizedPath(container.baseURL))
 		}
 
 		/// Where a file in a shared folder appears in the Files app (inside the Synctrain location), if it does
 		static func userVisibleURL(for localURL: URL) async -> URL? {
-			guard let container, let manager = NSFileProviderManager(for: FileProviderCoordinator.domain) else {
+			guard let container else {
 				return nil
 			}
-			let foldersPath = container.foldersURL.resolvingSymlinksInPath().path(percentEncoded: false)
-			let localPath = localURL.resolvingSymlinksInPath().path(percentEncoded: false)
-			guard localPath.hasPrefix(foldersPath) else {
+			let foldersPath = standardizedPath(container.foldersURL)
+			let localPath = standardizedPath(localURL)
+			guard isPath(localPath, inside: foldersPath) else {
 				return nil
 			}
 			let components = localPath.dropFirst(foldersPath.count).split(separator: "/").map(String.init)
 			guard let folderID = components.first else {
 				return nil
 			}
-			let path = components.dropFirst().joined(separator: "/")
+			return await userVisibleURL(folderID: folderID, path: components.dropFirst().joined(separator: "/"))
+		}
+
+		/// Where an item of the index appears in the Files app, if it does
+		static func userVisibleURL(folderID: String, path: String) async -> URL? {
+			guard let container, let manager = NSFileProviderManager(for: FileProviderCoordinator.domain) else {
+				return nil
+			}
 			do {
 				guard let item = try IndexStore(container: container).item(folderID: folderID, path: path) else {
 					return nil
@@ -76,6 +87,21 @@
 				Log.warn("Could not find \(folderID):\(path) in the Files app: \(error.localizedDescription)")
 				return nil
 			}
+		}
+
+		/// The path of a URL in one form, for comparisons. Resolving symbolic links only removes the `/private` prefix of
+		/// paths that exist, so it is removed here for all paths.
+		private static func standardizedPath(_ url: URL) -> String {
+			let path = url.resolvingSymlinksInPath().path(percentEncoded: false)
+			for prefix in ["/private/var/", "/private/tmp/"] where path.hasPrefix(prefix) {
+				return String(path.dropFirst("/private".count))
+			}
+			return path
+		}
+
+		private static func isPath(_ path: String, inside base: String) -> Bool {
+			let base = base.hasSuffix("/") ? String(base.dropLast()) : base
+			return path == base || path.hasPrefix(base + "/")
 		}
 
 		/// Moves internal folders from the documents directory into the shared container, so that the File Provider

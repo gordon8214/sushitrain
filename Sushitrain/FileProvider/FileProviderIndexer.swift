@@ -17,7 +17,12 @@
 		private let onChanged: @MainActor () -> Void
 		private var dirtyFolders: [String: Bool] = [:]
 		private var foldersChanged = false
+		private var fullPassRequested = false
 		private var isDraining = false
+		private static let retryInterval: TimeInterval = 30
+
+		/// Called when a full pass over all folders has completed
+		var onFullPassCompleted: (@MainActor () -> Void)? = nil
 
 		init(client: SushitrainClient, store: IndexStore, onChanged: @escaping @MainActor () -> Void) {
 			self.worker = FileProviderIndexWorker(client: client, store: store)
@@ -34,11 +39,18 @@
 		func scheduleFolderReconciliation(fullPass: Bool = false) {
 			foldersChanged = true
 			if fullPass {
+				fullPassRequested = true
 				for folderID in worker.exposedFolderIDs() {
 					dirtyFolders[folderID] = true
 				}
 			}
 			drain()
+		}
+
+		/// Empties the index (after the pass in progress, if any) and fills it again
+		func reset() async throws {
+			try await worker.reset()
+			scheduleFolderReconciliation(fullPass: true)
 		}
 
 		private func drain() {
@@ -48,23 +60,45 @@
 			isDraining = true
 			let folders = dirtyFolders
 			let reconcile = foldersChanged
+			let fullPass = fullPassRequested
 			dirtyFolders = [:]
 			foldersChanged = false
+			fullPassRequested = false
 
-			// Never leave a write transaction open when the app is suspended, or iOS terminates it (0xdead10cc)
+			// Never leave a write transaction open when the app is suspended, or iOS terminates it (0xdead10cc): when
+			// the time is up, the pass stops after the current batch
 			let worker = self.worker
 			worker.isCancelled = false
-			let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Updating Files index") {
+			let activity = BackgroundActivity(name: "Updating Files index") {
 				worker.isCancelled = true
 			}
 
 			Task {
-				let changed = await worker.run(folders: folders, reconcileFolders: reconcile)
-				UIApplication.shared.endBackgroundTask(backgroundTask)
+				let outcome = await worker.run(folders: folders, reconcileFolders: reconcile)
+				activity.end()
 				isDraining = false
-				if changed {
+				if outcome.changed {
 					onChanged()
 				}
+				let isComplete = outcome.unfinished.isEmpty && outcome.reconciled
+				if fullPass && isComplete {
+					onFullPassCompleted?()
+				}
+				drain()
+				if !isComplete {
+					scheduleRetry(outcome.unfinished, reconcile: !outcome.reconciled)
+				}
+			}
+		}
+
+		/// Passes that failed or were cut short are tried again after a while
+		private func scheduleRetry(_ folders: [String: Bool], reconcile: Bool) {
+			Task {
+				try? await Task.sleep(for: .seconds(Self.retryInterval))
+				for (folderID, fullPass) in folders {
+					dirtyFolders[folderID] = (dirtyFolders[folderID] ?? false) || fullPass
+				}
+				foldersChanged = foldersChanged || reconcile
 				drain()
 			}
 		}
@@ -89,18 +123,65 @@
 			self.store = store
 		}
 
-		/// Returns true when the index changed
-		func run(folders: [String: Bool], reconcileFolders: Bool) async -> Bool {
+		struct Outcome: Sendable {
+			/// Whether the index changed
+			var changed = false
+			/// Whether the folder list was brought up to date (if asked)
+			var reconciled = true
+			/// Folders whose pass failed or was cut short (with whether it was a full pass)
+			var unfinished: [String: Bool] = [:]
+		}
+
+		func run(folders: [String: Bool], reconcileFolders: Bool) async -> Outcome {
 			await withCheckedContinuation { continuation in
 				queue.async {
-					var changed = false
+					var outcome = Outcome()
+					var folders = folders
 					if reconcileFolders {
-						changed = self.reconcileFolderList() || changed
+						do {
+							let (changed, added) = try self.reconcileFolderList()
+							outcome.changed = changed
+							// Newly exposed folders still need to be populated
+							for folderID in added {
+								folders[folderID] = true
+							}
+						}
+						catch {
+							Log.warn("Could not reconcile folders in the Files index: \(error)")
+							outcome.reconciled = false
+						}
 					}
-					for (folderID, fullPass) in folders.sorted(by: { $0.key < $1.key }) where !self.isCancelled {
-						changed = self.sync(folderID: folderID, fullPass: fullPass) || changed
+					for (folderID, fullPass) in folders.sorted(by: { $0.key < $1.key }) {
+						if self.isCancelled {
+							outcome.unfinished[folderID] = fullPass
+							continue
+						}
+						do {
+							outcome.changed = try self.sync(folderID: folderID, fullPass: fullPass) || outcome.changed
+						}
+						catch {
+							if !self.isCancelled {
+								Log.warn("Could not update the Files index for folder \(folderID): \(error)")
+							}
+							outcome.unfinished[folderID] = fullPass
+						}
 					}
-					continuation.resume(returning: changed)
+					continuation.resume(returning: outcome)
+				}
+			}
+		}
+
+		/// Empties the index, after the pass in progress
+		func reset() async throws {
+			try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+				queue.async {
+					do {
+						try self.store.reset()
+						continuation.resume()
+					}
+					catch {
+						continuation.resume(throwing: error)
+					}
 				}
 			}
 		}
@@ -124,75 +205,72 @@
 			}
 		}
 
-		private func reconcileFolderList() -> Bool {
-			do {
-				let exposed = exposedFolders()
-				let exposedIDs = Set(exposed.map(\.folderID))
-				let indexedIDs = Set(try store.folders().map(\.folderID))
-				let shortID = client.shortDeviceID()
-
-				try store.write { writer throws(IndexError) in
-					if writer.localShortDeviceID != shortID {
-						try writer.setLocalShortDeviceID(shortID)
-					}
-					for folderID in indexedIDs.subtracting(exposedIDs) {
-						Log.info("Removing folder \(folderID) from the Files index")
-						try writer.removeFolder(folderID: folderID)
-					}
-					for folder in exposed {
-						try writer.upsertFolder(folder)
-					}
-					try writer.pruneTombstones(before: Date().addingTimeInterval(-Self.tombstoneRetention))
-				}
-
-				// Newly exposed folders still need to be populated
-				var changed = indexedIDs != exposedIDs
-				for folderID in exposedIDs.subtracting(indexedIDs) where !isCancelled {
-					changed = sync(folderID: folderID, fullPass: true) || changed
-				}
-				return changed
+		/// Adds and removes folders. Returns whether the index changed, and the folders that were added (which still need
+		/// to be populated).
+		private func reconcileFolderList() throws -> (Bool, Set<String>) {
+			let exposed = exposedFolders()
+			let exposedIDs = Set(exposed.map(\.folderID))
+			let indexed = Dictionary(uniqueKeysWithValues: try store.folders().map { ($0.folderID, $0) })
+			let indexedIDs = Set(indexed.keys)
+			let shortID = client.shortDeviceID()
+			// Renamed folders, and ones whose type or mode changed (which changes what can be done with their items)
+			let changedFolders = exposed.contains { folder in
+				indexed[folder.folderID].map {
+					$0.label != folder.label || $0.folderType != folder.folderType || $0.isSelective != folder.isSelective
+				} ?? false
 			}
-			catch {
-				Log.warn("Could not reconcile folders in the Files index: \(error)")
-				return false
+
+			try store.write { writer throws(IndexError) in
+				if writer.localShortDeviceID != shortID {
+					try writer.setLocalShortDeviceID(shortID)
+				}
+				for folderID in indexedIDs.subtracting(exposedIDs) {
+					Log.info("Removing folder \(folderID) from the Files index")
+					try writer.removeFolder(folderID: folderID)
+				}
+				for folder in exposed {
+					try writer.upsertFolder(folder)
+				}
+				try writer.pruneTombstones(before: Date().addingTimeInterval(-Self.tombstoneRetention))
 			}
+			return (indexedIDs != exposedIDs || changedFolders, exposedIDs.subtracting(indexedIDs))
 		}
 
-		private func sync(folderID: String, fullPass: Bool) -> Bool {
+		private func sync(folderID: String, fullPass: Bool) throws -> Bool {
 			guard let folder = client.folder(withID: folderID),
 				let description = exposedFolders().first(where: { $0.folderID == folderID })
 			else {
 				// The folder is no longer exposed
-				return (try? removeIfIndexed(folderID: folderID)) ?? false
+				return try removeIfIndexed(folderID: folderID)
 			}
 
-			do {
-				let cursor = try store.write { writer throws(IndexError) in
-					try writer.upsertFolder(description)
-					return try writer.cursor(folderID: folderID)
-				}
-
-				if cursor == 0 {
-					return try populate(folder: folder)
-				}
-				if fullPass {
-					return try sweep(folder: folder)
-				}
-
-				let applier = FileProviderRecordApplier(store: store, folderID: folderID, sweepToken: nil)
-				let result = try folder.globalChanges(cursor, delegate: applier)
-				if result.sequenceReset {
-					Log.info("Syncthing index of folder \(folderID) was rebuilt, performing a full pass")
-					return try sweep(folder: folder)
-				}
-				try store.write { writer throws(IndexError) in
-					try writer.setCursor(result.highestSequence, folderID: folderID)
-				}
-				return applier.changed > 0
+			let cursor = try store.write { writer throws(IndexError) in
+				try writer.upsertFolder(description)
+				return try writer.cursor(folderID: folderID)
 			}
-			catch {
-				Log.warn("Could not update the Files index for folder \(folderID): \(error)")
-				return false
+
+			if cursor == 0 {
+				return try populate(folder: folder)
+			}
+			if fullPass {
+				return try sweep(folder: folder)
+			}
+
+			let applier = makeApplier(folderID: folderID, sweepToken: nil)
+			let result = try folder.globalChanges(cursor, delegate: applier)
+			if result.sequenceReset {
+				Log.info("Syncthing index of folder \(folderID) was rebuilt, performing a full pass")
+				return try sweep(folder: folder)
+			}
+			try store.write { writer throws(IndexError) in
+				try writer.setCursor(result.highestSequence, folderID: folderID)
+			}
+			return applier.changed > 0
+		}
+
+		private func makeApplier(folderID: String, sweepToken: Int64?) -> FileProviderRecordApplier {
+			FileProviderRecordApplier(store: store, folderID: folderID, sweepToken: sweepToken) { [weak self] in
+				self?.isCancelled ?? true
 			}
 		}
 
@@ -209,7 +287,7 @@
 			let folderID = folder.folderID
 			Log.info("Populating the Files index for folder \(folderID)")
 			let token = try store.write { writer throws(IndexError) in try writer.beginSweep(folderID: folderID) }
-			let applier = FileProviderRecordApplier(store: store, folderID: folderID, sweepToken: token)
+			let applier = makeApplier(folderID: folderID, sweepToken: token)
 			let result = try folder.globalChanges(0, delegate: applier)
 			try store.write { writer throws(IndexError) in
 				try writer.finishSweep(folderID: folderID, token: token)
@@ -223,12 +301,15 @@
 		private func sweep(folder: SushitrainFolder) throws -> Bool {
 			let folderID = folder.folderID
 			let token = try store.write { writer throws(IndexError) in try writer.beginSweep(folderID: folderID) }
-			let applier = FileProviderRecordApplier(store: store, folderID: folderID, sweepToken: token)
+			let applier = makeApplier(folderID: folderID, sweepToken: token)
 			let result = try folder.globalSnapshot(applier)
 
 			// Entries that changed without a new sequence number we know of need their full information
 			let needsFull = applier.needsFullRecords
-			for start in stride(from: 0, to: needsFull.count, by: Self.fullRecordBatchSize) where !isCancelled {
+			for start in stride(from: 0, to: needsFull.count, by: Self.fullRecordBatchSize) {
+				if isCancelled {
+					throw CancellationError()
+				}
 				let paths = Array(needsFull[start..<min(start + Self.fullRecordBatchSize, needsFull.count)])
 				let json = try folder.globalRecordsJSON(try JSONEncoder().encode(paths))
 				var records = try SyncthingRecord.decodeBatch(json)
@@ -236,9 +317,6 @@
 					records[i].seq = applier.sequences[records[i].path] ?? 0
 				}
 				try applier.apply(records)
-			}
-			if isCancelled {
-				return applier.changed > 0
 			}
 
 			try store.write { writer throws(IndexError) in
@@ -254,29 +332,40 @@
 		private let store: IndexStore
 		private let folderID: String
 		private let sweepToken: Int64?
+		private let isCancelled: @Sendable () -> Bool
 		private(set) var changed = 0
 		private(set) var needsFullRecords: [String] = []
-		/// Sequences of partial records, which full records (that lack them) inherit
+		/// Sequences of the partial records that need full records (which lack them and inherit these)
 		private(set) var sequences: [String: Int64] = [:]
 
-		init(store: IndexStore, folderID: String, sweepToken: Int64?) {
+		init(store: IndexStore, folderID: String, sweepToken: Int64?, isCancelled: @escaping @Sendable () -> Bool) {
 			self.store = store
 			self.folderID = folderID
 			self.sweepToken = sweepToken
+			self.isCancelled = isCancelled
 		}
 
+		/// Throwing stops the pass in the core
 		func onRecords(_ batchJSON: Data?) throws {
+			if isCancelled() {
+				throw CancellationError()
+			}
 			guard let batchJSON else {
 				return
 			}
 			let records = try SyncthingRecord.decodeBatch(batchJSON)
-			for record in records where !record.full {
-				sequences[record.path] = record.seq
+			let needed = try apply(records)
+			if !needed.isEmpty {
+				let partial = Dictionary(
+					records.lazy.filter { !$0.full }.map { ($0.path, $0.seq) }, uniquingKeysWith: { _, last in last })
+				for path in needed {
+					sequences[path] = partial[path]
+				}
 			}
-			try apply(records)
 		}
 
-		func apply(_ records: [SyncthingRecord]) throws {
+		/// Applies the records; returns the paths that need full records
+		@discardableResult func apply(_ records: [SyncthingRecord]) throws -> [String] {
 			let folderID = self.folderID
 			let sweepToken = self.sweepToken
 			let result = try store.write { writer throws(IndexError) in
@@ -287,6 +376,7 @@
 			if result.collisions > 0 {
 				Log.warn("Skipped \(result.collisions) entries in folder \(folderID) whose names collide with others")
 			}
+			return result.needsFullRecords
 		}
 	}
 #endif

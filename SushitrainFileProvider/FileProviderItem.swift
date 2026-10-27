@@ -38,19 +38,25 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	/// Used when the index has no modification time (folder roots and implied directories)
 	let fallbackDate: Date?
 
-	/// User metadata that only the system keeps (Syncthing does not sync it); echoed back after the system changes it
-	var lastUsedDate: Date?
-	var tagData: Data?
-	var favoriteRank: NSNumber?
+	/// What only the system keeps about the item (Syncthing does not synchronize it), stored for it in the index
+	let attributes: ItemAttributes
+
+	var lastUsedDate: Date? { attributes.lastUsedDate }
+	var tagData: Data? { attributes.tagData }
+	var favoriteRank: NSNumber? { attributes.favoriteRank.map { NSNumber(value: UInt64(bitPattern: $0)) } }
 
 	/// Items need a date: the system fails to create items in its replica without one
 	static let referenceDate = Date(timeIntervalSince1970: 946_684_800)  // 2000-01-01
 
-	init(item: IndexItem, folder: IndexFolder?, isOnDevice: Bool, fallbackDate: Date? = nil) {
+	init(
+		item: IndexItem, folder: IndexFolder?, isOnDevice: Bool, fallbackDate: Date? = nil,
+		attributes: ItemAttributes = ItemAttributes()
+	) {
 		self.item = item
 		self.folder = folder
 		self.isOnDevice = isOnDevice
 		self.fallbackDate = fallbackDate
+		self.attributes = attributes
 	}
 
 	var itemIdentifier: NSFileProviderItemIdentifier {

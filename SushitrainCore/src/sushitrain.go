@@ -746,7 +746,7 @@ func loadOrDefaultConfig(devID protocol.DeviceID, ctx context.Context, logger ev
 		for _, folderConfig := range conf.Folders {
 			if isNativeFilesystem(folderConfig.FilesystemType) {
 				standardPath := path.Join(filesPath, folderConfig.ID)
-				if folderConfig.Path != standardPath {
+				if folderConfig.Path != standardPath && folderConfig.Path != managedFolderPath(folderConfig.ID) {
 					slog.Warn("configured folder path differs from expected path", "configured", folderConfig.Path, "expected", standardPath)
 
 					oldMarkerPath := path.Join(folderConfig.Path, folderConfig.MarkerName)
@@ -762,7 +762,7 @@ func loadOrDefaultConfig(devID protocol.DeviceID, ctx context.Context, logger ev
 					}
 				}
 
-				if reanchorToManagedBase(&folderConfig) {
+				if recoverManagedFolder(&folderConfig, filesPath) {
 					conf.SetFolder(folderConfig)
 				}
 			}
@@ -978,7 +978,11 @@ func (clt *Client) AddFolder(folderID string, folderPath string, createAsOnDeman
 	folderConfig.ID = folderID
 	folderConfig.Label = folderID
 	if len(folderPath) == 0 {
-		folderConfig.Path = clt.defaultFolderPath(folderID)
+		defaultPath, err := clt.defaultFolderPath(folderID)
+		if err != nil {
+			return err
+		}
+		folderConfig.Path = defaultPath
 	} else {
 		folderConfig.Path = folderPath
 	}

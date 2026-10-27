@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,12 +36,28 @@ const (
 	fileProviderHeaderModifiedBy = "X-Synctrain-Modified-By"
 	fileProviderRetryAfter       = "30"
 	fileProviderBlockTimeout     = 60 * time.Second
+	fileProviderIdleTimeout      = 60 * time.Second
+	// The slowest transfer rate (bytes per second) a block fetch is given time for: large blocks over a slow relay
+	// get longer than fileProviderBlockTimeout
+	fileProviderMinimumBlockRate = 32 * 1024
 )
+
+// blockFetchTimeout is how long fetching a block of the given size may take: at least the minimum, and long enough for
+// the block at the slowest rate allowed for
+func blockFetchTimeout(minimum time.Duration, size int) time.Duration {
+	return max(minimum, time.Duration(size)*time.Second/fileProviderMinimumBlockRate)
+}
+
+type fileProviderFolder struct {
+	// The native path of the folder (empty when it has no local files)
+	localPath     string
+	markerName    string
+	modTimeWindow time.Duration
+}
 
 // What the file provider server needs from the client, so it can be tested without a running Syncthing instance
 type fileProviderBackend interface {
-	// The native path of the folder (empty when it has no local files) and the modification time window
-	folderInfo(folderID string) (localPath string, modTimeWindow time.Duration, ok bool)
+	folderInfo(folderID string) (fileProviderFolder, bool)
 	globalFileInfo(folderID string, path string) (protocol.FileInfo, bool, error)
 	// Whether a connected device can provide the given block
 	isAvailable(folderID string, file protocol.FileInfo, blockIndex int) (bool, error)
@@ -84,6 +101,7 @@ func (s *FileProviderServer) Listen() error {
 	server := &http.Server{
 		Handler:           s.handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       fileProviderIdleTimeout,
 	}
 
 	s.mutex.Lock()
@@ -129,16 +147,19 @@ func (s *FileProviderServer) Shutdown() {
 	}
 }
 
-// The token is presented as a bearer token, or as the "token" query parameter for clients that cannot set headers
-// (such as AVFoundation streaming a video to make a thumbnail)
-func (s *FileProviderServer) authorized(r *http.Request) bool {
+// The token is presented as a bearer token. Files can also be requested with the "token" query parameter, for clients
+// that cannot set headers (such as AVFoundation streaming a video to make a thumbnail).
+func (s *FileProviderServer) authorized(r *http.Request, query map[string]string) bool {
 	s.mutex.Lock()
 	token := s.token
 	s.mutex.Unlock()
 
 	presented, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !found {
-		presented = r.URL.Query().Get("token")
+		presented = ""
+		if r.URL.Path == "/file" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+			presented = query["token"]
+		}
 	}
 	if presented == "" || token == "" {
 		return false
@@ -155,12 +176,44 @@ func (s *FileProviderServer) handler() http.Handler {
 	mux.HandleFunc("/file", s.serveFile)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.authorized(r) {
+		// Clients that are not authorized do not get to keep the connection
+		query, err := parseFileProviderQuery(r.URL.RawQuery)
+		if err != nil {
+			w.Header().Set("Connection", "close")
+			http.Error(w, "malformed query", http.StatusBadRequest)
+			return
+		}
+		if !s.authorized(r, query) {
+			w.Header().Set("Connection", "close")
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+// Parses a query string strictly by percent-encoding. Unlike url.ParseQuery, "+" is not a space and ";" does not make a
+// pair invalid, as both can appear in file names. When a key appears more than once, its first value is used.
+func parseFileProviderQuery(rawQuery string) (map[string]string, error) {
+	values := map[string]string{}
+	for pair := range strings.SplitSeq(rawQuery, "&") {
+		if pair == "" {
+			continue
+		}
+		rawKey, rawValue, _ := strings.Cut(pair, "=")
+		key, err := url.PathUnescape(rawKey)
+		if err != nil {
+			return nil, err
+		}
+		value, err := url.PathUnescape(rawValue)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := values[key]; !exists {
+			values[key] = value
+		}
+	}
+	return values, nil
 }
 
 func (s *FileProviderServer) serveFile(w http.ResponseWriter, r *http.Request) {
@@ -169,10 +222,15 @@ func (s *FileProviderServer) serveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	folderID := r.URL.Query().Get("folder")
-	name := strings.TrimPrefix(r.URL.Query().Get("path"), "/")
-	localPath, modTimeWindow, ok := s.backend.folderInfo(folderID)
-	if !ok || name == "" {
+	query, err := parseFileProviderQuery(r.URL.RawQuery)
+	if err != nil {
+		http.Error(w, "malformed query", http.StatusBadRequest)
+		return
+	}
+	folderID := query["folder"]
+	name := strings.TrimPrefix(query["path"], "/")
+	folder, ok := s.backend.folderInfo(folderID)
+	if !ok || name == "" || isExcludedFromFileProvider(name, folder.markerName) {
 		http.NotFound(w, r)
 		return
 	}
@@ -205,12 +263,19 @@ func (s *FileProviderServer) serveFile(w http.ResponseWriter, r *http.Request) {
 
 	// Serve from disk only when the local copy is the global version. The opened file stays the same even when the
 	// puller replaces it (which it always does by renaming), so checking the opened file is free of races.
-	if localPath != "" {
-		if file := openMatchingLocalFile(localPath, info, modTimeWindow); file != nil {
+	if folder.localPath != "" {
+		if file := openMatchingLocalFile(folder.localPath, info, folder.modTimeWindow); file != nil {
 			defer file.Close()
 			http.ServeContent(w, r, "", info.ModTime(), file)
 			return
 		}
+	}
+
+	// Other devices describe the blocks, so their layout is checked before blocks are requested and read
+	if err := checkBlockLayout(info); err != nil {
+		slog.Warn("file provider server refuses inconsistent file information", "folderID", folderID, "cause", err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
 	}
 
 	available, err := s.backend.isAvailable(folderID, info, 0)
@@ -253,7 +318,33 @@ func openMatchingLocalFile(localPath string, info protocol.FileInfo, modTimeWind
 	return file
 }
 
-// Reads a file from other devices block by block. Seeking is supported so that range requests can be served.
+// Checks that the blocks of a non-empty file are laid out as Syncthing lays them out: each block is as large as the
+// block size and starts where the previous one ended, except for the last block, which ends at the end of the file
+func checkBlockLayout(info protocol.FileInfo) error {
+	blockSize := int64(info.BlockSize())
+	if blockSize <= 0 || blockSize > protocol.MaxBlockSize {
+		return fmt.Errorf("invalid block size %d", blockSize)
+	}
+	if info.Size <= 0 {
+		return fmt.Errorf("invalid size %d", info.Size)
+	}
+	expectedCount := (info.Size + blockSize - 1) / blockSize
+	if int64(len(info.Blocks)) != expectedCount {
+		return fmt.Errorf("file of size %d has %d blocks, expected %d", info.Size, len(info.Blocks), expectedCount)
+	}
+	for index, block := range info.Blocks {
+		offset := int64(index) * blockSize
+		expectedSize := min(blockSize, info.Size-offset)
+		if block.Offset != offset || int64(block.Size) != expectedSize {
+			return fmt.Errorf("block %d at offset %d with size %d, expected offset %d and size %d", index, block.Offset,
+				block.Size, offset, expectedSize)
+		}
+	}
+	return nil
+}
+
+// Reads a file from other devices block by block. Seeking is supported so that range requests can be served. The
+// block layout must have been checked with checkBlockLayout.
 type remoteBlockReader struct {
 	ctx          context.Context
 	backend      fileProviderBackend
@@ -290,6 +381,9 @@ func (rd *remoteBlockReader) Read(p []byte) (int, error) {
 	if rd.offset >= rd.info.Size {
 		return 0, io.EOF
 	}
+	if err := rd.ctx.Err(); err != nil {
+		return 0, err
+	}
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -301,7 +395,7 @@ func (rd *remoteBlockReader) Read(p []byte) (int, error) {
 	}
 
 	if index != rd.blockIndex {
-		ctx, cancel := context.WithTimeout(rd.ctx, rd.blockTimeout)
+		ctx, cancel := context.WithTimeout(rd.ctx, blockFetchTimeout(rd.blockTimeout, int(rd.info.Blocks[index].Size)))
 		block, err := rd.backend.fetchBlock(ctx, rd.folderID, rd.info, index)
 		cancel()
 		if err != nil {
@@ -314,8 +408,14 @@ func (rd *remoteBlockReader) Read(p []byte) (int, error) {
 		rd.block = block
 	}
 
+	// Never trust the layout to cover the offset, as a panic here can take down the app (http.ServeContent reads in
+	// another goroutine for multiple ranges)
 	start := rd.offset - rd.info.Blocks[index].Offset
-	n := copy(p, rd.block[start:])
+	if start < 0 || start >= int64(len(rd.block)) {
+		return 0, io.ErrUnexpectedEOF
+	}
+	end := min(int64(len(rd.block)), start+(rd.info.Size-rd.offset))
+	n := copy(p, rd.block[start:end])
 	rd.offset += int64(n)
 	return n, nil
 }
@@ -324,26 +424,26 @@ type clientFileProviderBackend struct {
 	client *Client
 }
 
-func (b *clientFileProviderBackend) folderInfo(folderID string) (string, time.Duration, bool) {
+func (b *clientFileProviderBackend) folderInfo(folderID string) (fileProviderFolder, bool) {
 	// Measurements are only available once the client has started
 	if b.client.app == nil || b.client.app.Internals == nil || b.client.Measurements == nil {
-		return "", 0, false
+		return fileProviderFolder{}, false
 	}
 	folder := b.client.FolderWithID(folderID)
 	if folder == nil {
-		return "", 0, false
+		return fileProviderFolder{}, false
 	}
 	fc := folder.folderConfiguration()
 	if fc == nil || fc.Type == config.FolderTypeReceiveEncrypted {
-		return "", 0, false
+		return fileProviderFolder{}, false
 	}
-	localPath := ""
+	info := fileProviderFolder{markerName: fc.MarkerName, modTimeWindow: fc.ModTimeWindow()}
 	if isNativeFilesystem(fc.FilesystemType) {
 		if p, err := folder.LocalNativePath(); err == nil {
-			localPath = p
+			info.localPath = p
 		}
 	}
-	return localPath, fc.ModTimeWindow(), true
+	return info, true
 }
 
 func (b *clientFileProviderBackend) globalFileInfo(folderID string, path string) (protocol.FileInfo, bool, error) {

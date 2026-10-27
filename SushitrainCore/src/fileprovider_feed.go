@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path"
 	"strings"
 
@@ -105,6 +106,12 @@ func (fld *Folder) globalIndex() (globalIndex, error) {
 	return internalsGlobalIndex{client: fld.client}, nil
 }
 
+// Whether an entry must never be exposed to the file provider: Syncthing's private files, and names containing NUL,
+// which no file name on Apple platforms can contain (and which C strings, such as those SQLite takes, truncate)
+func isExcludedFromFileProvider(name string, markerName string) bool {
+	return strings.ContainsRune(name, 0) || isSyncthingPrivatePath(name, markerName)
+}
+
 // Whether a path refers to one of Syncthing's private files, which should never be exposed
 func isSyncthingPrivatePath(name string, markerName string) bool {
 	for component := range strings.SplitSeq(name, "/") {
@@ -136,11 +143,12 @@ type selectionClassifier struct {
 	globalGlobs []glob.Glob
 }
 
-func (fld *Folder) selectionClassifier() *selectionClassifier {
+// Fails when the ignore patterns cannot be loaded: without them, selection cannot be told, and a pass should be tried
+// again later rather than report everything as not selected
+func (fld *Folder) selectionClassifier() (*selectionClassifier, error) {
 	matcher, err := fld.loadIgnores()
 	if err != nil {
-		// Without ignores we cannot tell; expose everything as not selected
-		return &selectionClassifier{}
+		return nil, fmt.Errorf("could not load ignore patterns: %w", err)
 	}
 
 	classifier := &selectionClassifier{matcher: matcher}
@@ -151,7 +159,7 @@ func (fld *Folder) selectionClassifier() *selectionClassifier {
 			classifier.globalGlobs = globs
 		}
 	}
-	return classifier
+	return classifier, nil
 }
 
 func (sc *selectionClassifier) classify(name string) (selected bool, hidden bool) {
@@ -274,7 +282,7 @@ func (fld *Folder) globalChanges(idx globalIndex, cursor int64, delegate FilePro
 	var candidates []globalFileMeta
 	err := idx.allGlobalFiles(fld.FolderID, func(meta globalFileMeta) bool {
 		result.HighestSequence = max(result.HighestSequence, meta.sequence)
-		if meta.sequence > cursor && !isSyncthingPrivatePath(meta.name, fc.MarkerName) {
+		if meta.sequence > cursor && !isExcludedFromFileProvider(meta.name, fc.MarkerName) {
 			candidates = append(candidates, meta)
 		}
 		return true
@@ -288,7 +296,10 @@ func (fld *Folder) globalChanges(idx globalIndex, cursor int64, delegate FilePro
 		return result, nil
 	}
 
-	sc := fld.selectionClassifier()
+	sc, err := fld.selectionClassifier()
+	if err != nil {
+		return nil, err
+	}
 	batcher := &recordBatcher{delegate: delegate, size: fileProviderDefaultBatchSize}
 	for _, meta := range candidates {
 		rec := partialRecord(meta, sc)
@@ -333,25 +344,31 @@ func (fld *Folder) globalSnapshot(idx globalIndex, delegate FileProviderRecordDe
 		return nil, errFolderConfigNotFound
 	}
 
+	sc, err := fld.selectionClassifier()
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect entries first, so that the iterator (which holds a database cursor) is closed before records are
+	// delivered to the delegate, which may take a while
 	result := &FileProviderPassResult{}
-	sc := fld.selectionClassifier()
-	batcher := &recordBatcher{delegate: delegate, size: fileProviderDefaultBatchSize}
-	var delegateErr error
-	err := idx.allGlobalFiles(fld.FolderID, func(meta globalFileMeta) bool {
+	var metas []globalFileMeta
+	err = idx.allGlobalFiles(fld.FolderID, func(meta globalFileMeta) bool {
 		result.HighestSequence = max(result.HighestSequence, meta.sequence)
-		if isSyncthingPrivatePath(meta.name, fc.MarkerName) {
-			return true
-		}
-		if delegateErr = batcher.add(partialRecord(meta, sc)); delegateErr != nil {
-			return false
+		if !isExcludedFromFileProvider(meta.name, fc.MarkerName) {
+			metas = append(metas, meta)
 		}
 		return true
 	})
 	if err != nil {
 		return nil, err
 	}
-	if delegateErr != nil {
-		return nil, delegateErr
+
+	batcher := &recordBatcher{delegate: delegate, size: fileProviderDefaultBatchSize}
+	for _, meta := range metas {
+		if err := batcher.add(partialRecord(meta, sc)); err != nil {
+			return nil, err
+		}
 	}
 	if err := batcher.flush(); err != nil {
 		return nil, err
@@ -360,8 +377,8 @@ func (fld *Folder) globalSnapshot(idx globalIndex, delegate FileProviderRecordDe
 	return result, nil
 }
 
-// Returns full records (as a JSON array) for the paths in the given JSON array. Paths that are not in the global index
-// are returned as deleted records.
+// Returns full records (as a JSON array) for the paths in the given JSON array. Paths that are not in the global index,
+// or are never exposed, are returned as deleted records.
 func (fld *Folder) GlobalRecordsJSON(pathsJSON []byte) ([]byte, error) {
 	idx, err := fld.globalIndex()
 	if err != nil {
@@ -376,11 +393,22 @@ func (fld *Folder) globalRecordsJSON(idx globalIndex, pathsJSON []byte) ([]byte,
 		return nil, err
 	}
 
-	sc := fld.selectionClassifier()
+	fc := fld.folderConfiguration()
+	if fc == nil {
+		return nil, errFolderConfigNotFound
+	}
+	sc, err := fld.selectionClassifier()
+	if err != nil {
+		return nil, err
+	}
 	records := make([]fileProviderRecord, 0, len(paths))
 	for _, name := range paths {
 		if name == "" {
 			return nil, errors.New("empty path")
+		}
+		if isExcludedFromFileProvider(name, fc.MarkerName) {
+			records = append(records, fileProviderRecord{Path: name, Deleted: true, Type: fileProviderRecordTypeFile, Full: true})
+			continue
 		}
 		info, ok, err := idx.globalFileInfo(fld.FolderID, name)
 		if err != nil {

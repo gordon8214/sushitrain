@@ -29,7 +29,7 @@ struct ExtensionContext: Sendable {
 	func isOnDevice(_ item: IndexItem) -> Bool {
 		switch item.kind {
 		case .folderRoot, .directory:
-			return FileFingerprint(path: localURL(for: item).path(percentEncoded: false)) != nil
+			return FileFingerprint(path: localURL(for: item).path(percentEncoded: false))?.isDirectory == true
 		case .symlink:
 			return false
 		case .file:
@@ -43,17 +43,46 @@ struct ExtensionContext: Sendable {
 
 	func makeItems(_ items: [IndexItem]) throws(IndexError) -> [NSFileProviderItem] {
 		let folders = Dictionary(uniqueKeysWithValues: try store.folders().map { ($0.folderID, $0) })
-		return items.map { makeItem($0, folder: folders[$0.folderID]) }
+		let attributes = try store.attributes(of: items.map(\.id))
+		return items.map { makeItem($0, folder: folders[$0.folderID], attributes: attributes[$0.id]) }
 	}
 
 	func makeItem(_ item: IndexItem) throws(IndexError) -> NSFileProviderItem {
-		makeItem(item, folder: try store.folder(id: item.folderID))
+		makeItem(
+			item, folder: try store.folder(id: item.folderID), attributes: try store.attributes(of: [item.id])[item.id])
 	}
 
-	private func makeItem(_ item: IndexItem, folder: IndexFolder?) -> NSFileProviderItem {
+	/// The item to return with its contents, which must not be missing (without the folder's details if they cannot be
+	/// read)
+	func makeItemForContents(_ item: IndexItem) -> NSFileProviderItem {
+		(try? makeItem(item)) ?? makeItem(item, folder: nil, attributes: nil)
+	}
+
+	private func makeItem(_ item: IndexItem, folder: IndexFolder?, attributes: ItemAttributes?) -> NSFileProviderItem {
 		FileProviderItem(
 			item: item, folder: folder, isOnDevice: isOnDevice(item),
-			fallbackDate: item.modificationDate == nil ? localModificationDate(item) : nil)
+			fallbackDate: item.modificationDate == nil ? localModificationDate(item) : nil,
+			attributes: attributes ?? ItemAttributes())
+	}
+
+	/// Stores the attributes only the system keeps (tags, favorite rank, last used date) that are among the fields
+	func saveAttributes(of template: NSFileProviderItem, fields: NSFileProviderItemFields, itemID: Int64)
+		throws(IndexError)
+	{
+		guard !fields.isDisjoint(with: [.tagData, .favoriteRank, .lastUsedDate]) else {
+			return
+		}
+		var attributes = try store.attributes(of: [itemID])[itemID] ?? ItemAttributes()
+		if fields.contains(.tagData) {
+			attributes.tagData = template.tagData ?? nil
+		}
+		if fields.contains(.favoriteRank) {
+			attributes.favoriteRank = (template.favoriteRank ?? nil).map { Int64(bitPattern: $0.uint64Value) }
+		}
+		if fields.contains(.lastUsedDate) {
+			attributes.lastUsedDate = template.lastUsedDate ?? nil
+		}
+		try store.setAttributes(attributes, of: itemID)
 	}
 
 	/// The modification time of the item on this device
@@ -79,7 +108,16 @@ extension IndexError {
 			return NSFileProviderError(.noSuchItem)
 		case .nameCollision:
 			return NSFileProviderError(.filenameCollision)
-		case .unavailable, .sqlite, .unsupportedSchema, .notAllowed:
+		case .notAllowed(let reason):
+			return NSError(
+				domain: NSFileProviderErrorDomain, code: NSFileProviderError.cannotSynchronize.rawValue,
+				userInfo: [NSLocalizedDescriptionKey: reason])
+		case .sqlite:
+			// Usually the app holding the index for a moment. Any error other than a few File Provider errors makes the
+			// system try again; reporting the server as unreachable would pause the location until the app says so.
+			return NSError(
+				domain: NSCocoaErrorDomain, code: NSXPCConnectionReplyInvalid, userInfo: [NSUnderlyingErrorKey: self as NSError])
+		case .unavailable, .unsupportedSchema:
 			return NSFileProviderError(.serverUnreachable)
 		}
 	}

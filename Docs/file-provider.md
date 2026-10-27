@@ -1,7 +1,7 @@
 # Files app integration
 
 On iOS and iPadOS, Synctrain adds a **Synctrain** location to the Files app. Every folder stored in the app appears in
-it as a directory, including the files that are only on other devices. Files can be opened, edited, added, renamed, moved
+it as a directory (unless **Hide folder** is on in its settings), including the files that are only on other devices. Files can be opened, edited, added, renamed, moved
 and deleted there (and from any app that opens documents through Files), and the changes are synchronized like any
 other change.
 
@@ -17,8 +17,8 @@ What works depends on whether Synctrain is running, because only the app runs Sy
 - **Always**: browsing, opening files that are on this device, and adding, editing, renaming, moving and deleting them.
   Changes are written to the folder right away; Syncthing picks them up the next time Synctrain runs (it scans the
   changed paths, and selects new items in on-demand folders).
-- **While Synctrain runs** (on the screen, or for about half a minute after leaving it): opening files that are only
-  on other devices. These are fetched from another device through the app. When a file is opened while Synctrain is
+- **While Synctrain runs** (on the screen, or for about half a minute after leaving it when **Briefly after leaving
+  app** is on): opening files that are only on other devices. These are fetched from another device through the app. When a file is opened while Synctrain is
   not running, Files says so and Synctrain lists it under **Requested downloads**, with a button to show it in Files.
 - **Keep on This Device** and **Stop Keeping on This Device** (in on-demand folders) are carried out when Synctrain
   runs. Stopping only happens when another connected device has all of the item; otherwise Synctrain keeps it and says
@@ -40,6 +40,7 @@ another folder, which other devices see as a removal from one folder and an addi
 ### Limitations
 
 - Receive-only folders are read-only. Symbolic links are not shown.
+- Tags, favorites and the order in Recents are kept on this device only; Syncthing does not synchronize them.
 - Files that are only on other devices get no thumbnail while Synctrain is not running, nor when they are larger than
   16 MB (except videos).
 - Work left by the Files app while Synctrain is not running (scans, selections, keeping and stopping) is carried out
@@ -55,7 +56,9 @@ use about 20 MB of memory and only run while the system needs them, and the app 
 
 Internal folders are stored in the app group container (`Synctrain/Folders/<folder ID>`), so both the app and the
 extension can reach them. Folders in the app's documents directory are moved there once (a rename on the same volume;
-nothing is downloaded again). The container also holds:
+nothing is downloaded again), whether or not the location is turned on; they are then no longer under On My iPhone ›
+Synctrain or in Finder's file sharing. Folders whose ID is not a plain name (such as one containing `/`) are not moved.
+The container also holds:
 
 - `FileProvider/index.sqlite`: a mirror of Syncthing's global index for the exposed folders, which the extension serves
   items from, and a queue of work the extension leaves for the app.
@@ -84,9 +87,12 @@ way Syncthing names them (or rejected when the system asks for that, from iOS 26
 
 In an on-demand folder, Syncthing ignores a path until it is selected, and would treat a plain rename as a deletion. A
 rename there links the new name instead (a directory is cloned, which takes no extra space); the app selects it, removes
-the old name and has both scanned. Anything that arrived in an old directory in the meantime is moved over first. The
-old name stays selected, because Syncthing marks the entries of newly ignored paths as invalid, and other devices
-disregard those.
+the old name and has both scanned. What arrived at the old name from another device in the meantime (created after the
+rename) is moved over first: it replaces an unchanged file at the new name, and is kept as a conflict copy next to one
+that was changed too. The old name stays selected, because Syncthing marks the entries of newly ignored paths as
+invalid, and other devices disregard those. Until the app has finished a rename, the item (and anything inside it or at
+its old name) cannot be renamed, moved or deleted again; Files tries again once Synctrain has run. Renaming a file back
+to its old name is the exception: that just removes the new name, as long as it was not edited in the meantime.
 
 Moving an item to another folder is a rename on disk (both folders are on the same volume). The item keeps its
 identifier; the index leaves tombstones in the old folder so that its records from before the move do not bring it back,
@@ -114,4 +120,5 @@ xcrun devicectl device copy from --device <device> --domain-type appGroupDataCon
 ```
 
 **Rebuild Synctrain location** on the Files app page removes the location and sets it up again from a new index. Files
-on the device are not affected.
+in the folders are not affected, but changes made in Files that have not reached Synctrain yet (such as a save that waits
+for a download) are discarded; Synctrain asks before doing that.

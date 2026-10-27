@@ -67,7 +67,14 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		self.fetcher = context.map { ContentFetcher(context: $0) }
 		self.writer = context.map { LocalWriter(context: $0) }
 		super.init()
-		if context == nil {
+		if let context {
+			// Left behind when an earlier instance was terminated in the middle of a change or a download
+			LocalWriter.removeLeftovers(in: context.container.stagingURL)
+			if let temporary = try? NSFileProviderManager(for: domain)?.temporaryDirectoryURL() {
+				LocalWriter.removeLeftovers(in: temporary)
+			}
+		}
+		else {
 			log.error("The app group container is not available")
 		}
 	}
@@ -124,11 +131,18 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		case .rootContainer:
 			return ContainerEnumerator(context: context, parentID: nil)
 		case .trashContainer:
-			throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: containerItemIdentifier)
+			// There is no trash: deleting removes items on all devices
+			throw CocoaError(.featureUnsupported)
 		default:
-			guard let id = containerItemIdentifier.itemID, let item = try? context.store.item(id: id),
-				item.kind.isContainer
-			else {
+			let found: IndexItem?
+			do {
+				found = try containerItemIdentifier.itemID.map { try context.store.item(id: $0) } ?? nil
+			}
+			catch let error as IndexError {
+				// Not knowing is not the same as not existing: the system would delete the item
+				throw error.fileProviderError
+			}
+			guard let item = found, item.kind.isContainer else {
 				throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: containerItemIdentifier)
 			}
 			return ContainerEnumerator(context: context, parentID: item.id)
@@ -171,13 +185,13 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
 		// The version on this device, if it is current: no download, no extra space (the clone shares its blocks)
 		if fetcher.cloneLocal(item, to: destination) {
-			completionHandler(destination, try? context.makeItem(item), nil)
+			completionHandler(destination, context.makeItemForContents(item), nil)
 			return Progress()
 		}
 
 		if item.size == 0 {
 			if FileManager.default.createFile(atPath: destination.path(percentEncoded: false), contents: nil) {
-				completionHandler(destination, try? context.makeItem(item), nil)
+				completionHandler(destination, context.makeItemForContents(item), nil)
 			}
 			else {
 				completionHandler(nil, nil, NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError))
@@ -193,10 +207,18 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 				guard let heartbeat = fetcher.awakeApp(), await fetcher.ping(heartbeat) else {
 					throw FetchError.appNotRunning
 				}
-				try await fetcher.download(item, from: heartbeat, to: destination, progress: progress)
+				var fetched = item
+				if let served = try await fetcher.download(item, from: heartbeat, to: destination, progress: progress) {
+					// The contents must match the item returned with them; the index may have caught up meanwhile
+					guard let current = try? context.store.item(id: item.id), served.isVersion(of: current) else {
+						try? FileManager.default.removeItem(at: destination)
+						throw FetchError.versionChanged
+					}
+					fetched = current
+				}
 				// If the user asked for it while the app was not running, the app no longer needs to list it
 				try? context.store.completeWork(.fetch, extra: ItemIdentifiers.string(for: item.id))
-				completion.call(destination, try? context.makeItem(item), nil)
+				completion.call(destination, context.makeItemForContents(fetched), nil)
 			}
 			catch let error as FetchError {
 				if case .appNotRunning = error, !isSystemRequest {
@@ -211,7 +233,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 			}
 			catch {
 				log.warning("Could not fetch \(item.id): \(error.localizedDescription)")
-				completion.call(nil, nil, progress.isCancelled ? CocoaError(.userCancelled) : error)
+				completion.call(nil, nil, progress.isCancelled ? CocoaError(.userCancelled) : Self.reportable(error))
 			}
 		}
 		return progress
@@ -219,7 +241,8 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
 	// MARK: - Changes
 
-	/// Fields only the system keeps; Syncthing does not sync them, so changing them needs no work
+	/// Fields only the system keeps; Syncthing does not sync them, so changing them needs no work on disk (tags, the
+	/// favorite rank and the last used date are stored in the index)
 	private static let systemFields: NSFileProviderItemFields = [
 		.lastUsedDate, .tagData, .favoriteRank, .extendedAttributes, .typeAndCreator, .fileSystemFlags, .creationDate,
 	]
@@ -235,6 +258,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		}
 		do {
 			let item = try writer.create(template: itemTemplate, fields: fields, contents: url, options: options)
+			try context.saveAttributes(of: itemTemplate, fields: fields, itemID: item.id)
 			trace("create \(itemTemplate.filename) in \(itemTemplate.parentItemIdentifier.rawValue) -> \(item.id)")
 			completionHandler(try context.makeItem(item), [], false, nil)
 		}
@@ -275,12 +299,8 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 					options: options)
 			}
 
+			try context.saveAttributes(of: item, fields: changedFields, itemID: outcome.item.id)
 			let current = try context.makeItem(outcome.item)
-			if let current = current as? FileProviderItem {
-				current.lastUsedDate = item.lastUsedDate ?? nil
-				current.tagData = item.tagData ?? nil
-				current.favoriteRank = item.favoriteRank ?? nil
-			}
 			trace(
 				"modify \(item.itemIdentifier.rawValue) fields \(changedFields.rawValue) -> \(outcome.item.path) fetch \(outcome.shouldFetchContent)"
 			)
@@ -307,9 +327,13 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 			return Progress()
 		}
 		do {
-			try writer.delete(identifier: identifier, baseVersion: version, options: options)
+			let removedDescendants = try writer.delete(identifier: identifier, baseVersion: version, options: options)
 			trace("delete \(identifier.rawValue)")
 			completionHandler(nil)
+			if removedDescendants {
+				// The system learns about the items inside from the working set
+				signalWorkingSet()
+			}
 		}
 		catch {
 			trace("delete \(identifier.rawValue) failed: \(error)")
@@ -329,7 +353,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 	}
 
 	/// The framework only accepts Cocoa and File Provider errors
-	private static func reportable(_ error: Error) -> Error {
+	static func reportable(_ error: Error) -> Error {
 		if let error = error as? IndexError {
 			return error.fileProviderError
 		}
@@ -379,8 +403,12 @@ extension FileProviderExtension: NSFileProviderCustomAction {
 			}
 			try context.store.recordLocalChanges { recorder throws(IndexError) in
 				for item in items where item.kind != .folderRoot {
-					// The latest choice wins
-					try recorder.dequeue(kind == .select ? .deselectSafely : .select, folderID: item.folderID, path: item.path)
+					// The latest choice wins, except that new items are still selected: that is how Syncthing gets
+					// them at all (the app selects before it deselects, and only deselects what another device has)
+					if kind == .select || (item.pending != .create && item.pending != .rename) {
+						try recorder.dequeue(
+							kind == .select ? .deselectSafely : .select, folderID: item.folderID, path: item.path)
+					}
 					try recorder.enqueue(kind, folderID: item.folderID, path: item.path)
 				}
 			}

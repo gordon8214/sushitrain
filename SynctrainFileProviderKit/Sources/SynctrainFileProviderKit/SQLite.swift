@@ -83,13 +83,23 @@ final class SQLiteConnection {
 		}
 		self.handle = db
 
+		// Wait for the other process's locks before anything else: setting the journal mode needs a lock as well
+		sqlite3_busy_timeout(db, 2500)
 		// Rollback journal mode: unlike WAL, no locks are held while no transaction is active
 		try execute("PRAGMA journal_mode=DELETE")
-		try execute("PRAGMA busy_timeout=2500")
+		// A small cache for reads. A write transaction whose dirty pages exceed the spill threshold writes them to the
+		// database file early, which takes the exclusive lock until it commits and locks the other process out. The
+		// app's batches stay well below the threshold. Beyond it (a huge removal in the extension) bounding memory
+		// matters more: without a limit (cache_spill=OFF), or with SQLite's default on Apple platforms (20,000 pages),
+		// such a transaction could grow far past the extension's memory limit.
 		try execute("PRAGMA cache_size=-256")
+		try execute("PRAGMA cache_spill=\(Self.spillThresholdPages)")
 		try execute("PRAGMA mmap_size=0")
 		try execute("PRAGMA temp_store=MEMORY")
 	}
+
+	/// The number of dirty pages (4 MiB) a write transaction may hold in memory before it spills them to the file
+	static let spillThresholdPages = 1024
 
 	deinit {
 		statements.removeAll()
@@ -176,7 +186,16 @@ final class SQLiteConnection {
 	/// Runs the block in a write transaction. BEGIN IMMEDIATE takes the write lock up front, so two processes never
 	/// deadlock trying to upgrade read locks.
 	func transaction<T>(_ block: () throws(IndexError) -> T) throws(IndexError) -> T {
-		try execute("BEGIN IMMEDIATE")
+		try transaction(begin: "BEGIN IMMEDIATE", block)
+	}
+
+	/// Runs the block in a read transaction, so that all of its queries see the same state of the database
+	func readTransaction<T>(_ block: () throws(IndexError) -> T) throws(IndexError) -> T {
+		try transaction(begin: "BEGIN DEFERRED", block)
+	}
+
+	private func transaction<T>(begin: String, _ block: () throws(IndexError) -> T) throws(IndexError) -> T {
+		try execute(begin)
 		do {
 			let result = try block()
 			try execute("COMMIT")
@@ -215,12 +234,27 @@ final class SQLiteStatement {
 			let result: Int32
 			switch value.sqlValue {
 			case .integer(let int): result = sqlite3_bind_int64(handle, position, int)
-			case .text(let text): result = sqlite3_bind_text(handle, position, text, -1, transient)
+			case .text(let text): result = Self.bind(text, to: handle, at: position, destructor: transient)
 			case .real(let real): result = sqlite3_bind_double(handle, position, real)
 			case .null: result = sqlite3_bind_null(handle, position)
 			}
 			if result != SQLITE_OK {
 				throw .sqlite(code: result, message: String(cString: sqlite3_errmsg(connection)))
+			}
+		}
+	}
+
+	/// Binds the text with its length in bytes, so that names containing NUL are not cut short
+	private static func bind(
+		_ text: String, to handle: OpaquePointer, at position: Int32, destructor: sqlite3_destructor_type
+	) -> Int32 {
+		var text = text
+		return text.withUTF8 { bytes in
+			guard let base = bytes.baseAddress, !bytes.isEmpty else {
+				return sqlite3_bind_text(handle, position, "", 0, destructor)
+			}
+			return base.withMemoryRebound(to: CChar.self, capacity: bytes.count) { chars in
+				sqlite3_bind_text(handle, position, chars, Int32(bytes.count), destructor)
 			}
 		}
 	}
@@ -255,7 +289,9 @@ final class SQLiteStatement {
 		guard let raw = sqlite3_column_text(handle, column) else {
 			return ""
 		}
-		return String(cString: raw)
+		// The length in bytes (asked for after the text, as SQLite recommends), so that NUL does not end the text
+		let count = Int(sqlite3_column_bytes(handle, column))
+		return String(decoding: UnsafeBufferPointer(start: raw, count: count), as: UTF8.self)
 	}
 
 	func optionalText(_ column: Int32) -> String? {
