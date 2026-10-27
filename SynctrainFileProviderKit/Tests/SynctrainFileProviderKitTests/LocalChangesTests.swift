@@ -183,4 +183,37 @@ extension IndexStore {
 		let later = try #require(try store.item(folderID: "f1", path: "z.txt"))
 		#expect(later.changedSequence > changes.updated.map(\.changedSequence).max()!)
 	}
+
+	@Test func moveToAnotherFolder() throws {
+		let store = try makeStore()
+		try store.syncing([directory("d", seq: 1), file("d/x.txt", seq: 2, size: 3, modNs: 30)])
+		let other = FolderDescription(folderID: "f2", label: "Docs", folderType: "sendrecieve", isSelective: false)
+		let otherRootID = try store.write { writer throws(IndexError) in
+			let id = try writer.upsertFolder(other)
+			try writer.setCursor(10, folderID: "f2")
+			return id
+		}
+		let dir = try #require(try store.item(folderID: "f1", path: "d"))
+		let child = try #require(try store.item(folderID: "f1", path: "d/x.txt"))
+
+		let moved = try store.recordLocalChanges { recorder throws(IndexError) in
+			try recorder.recordMove(dir, toFolder: "f2", parentID: otherRootID, path: "Moved")
+		}
+		#expect(moved.id == dir.id && moved.folderID == "f2" && moved.path == "Moved" && moved.pending == .create)
+		let movedChild = try #require(try store.item(id: child.id))
+		#expect(movedChild.folderID == "f2" && movedChild.path == "Moved/x.txt" && movedChild.parentID == dir.id)
+
+		// Records in the first folder from before the move do not bring the items back
+		try store.applying([directory("d", seq: 1), file("d/x.txt", seq: 2, size: 3, modNs: 30)])
+		#expect(try store.item(folderID: "f1", path: "d") == nil)
+		#expect(try store.item(folderID: "f1", path: "d/x.txt") == nil)
+
+		// Syncthing scanning the new folder confirms the move
+		try store.write { writer throws(IndexError) in
+			try writer.apply(
+				[directory("Moved", seq: 11), ownFile("Moved/x.txt", seq: 12, size: 3, modNs: 30)], folderID: "f2")
+		}
+		#expect(try store.item(id: child.id)?.pending == PendingChange.none)
+		#expect(try store.item(id: dir.id)?.pending == PendingChange.none)
+	}
 }

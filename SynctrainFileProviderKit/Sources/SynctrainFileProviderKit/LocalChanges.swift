@@ -187,6 +187,52 @@ public final class LocalChangeRecorder {
 		return try reload(item.id)
 	}
 
+	/// Records that an item (and everything below it) moved to another folder. To Syncthing that is a removal from one
+	/// folder and an addition to the other; the item keeps its identifier. The old folder gets tombstones for what
+	/// Syncthing knows there, so that its records from before the move do not bring the items back. Items with a
+	/// pending rename cannot be moved this way (their old paths are not all recorded).
+	public func recordMove(_ item: IndexItem, toFolder folderID: String, parentID: Int64, path: String)
+		throws(IndexError) -> IndexItem
+	{
+		let oldPath = item.path
+		let moved = item.kind.isContainer ? [item] + (try descendants(of: item)) : [item]
+		if moved.contains(where: { $0.pending == .rename }) {
+			throw .notAllowed("items with a pending rename cannot be moved to another folder")
+		}
+
+		for entry in moved where entry.pending != .create {
+			try connection.run(
+				"""
+				INSERT INTO items (folder_id, path, parent_id, name, name_key, kind, size, mod_ns, changed_seq,
+					deleted, deleted_at, pending, pending_size, pending_mod_ns, pending_after)
+				SELECT folder_id, path, parent_id, name, name_key, kind, size, mod_ns, ?, 1, ?, ?, size, mod_ns,
+					(SELECT cursor FROM folders WHERE folder_id = items.folder_id)
+				FROM items WHERE id = ?
+				""", [allocateSequence(), now, PendingChange.delete.rawValue, entry.id])
+		}
+
+		// In the new folder, everything is new to Syncthing
+		let (lower, upper) = Self.descendantRange(of: oldPath)
+		try connection.run(
+			"""
+			UPDATE items SET folder_id = ?, path = ? || substr(path, ?), pending = \(PendingChange.create.rawValue),
+				pending_path = NULL, pending_size = COALESCE(pending_size, size),
+				pending_mod_ns = COALESCE(pending_mod_ns, mod_ns),
+				pending_after = (SELECT cursor FROM folders WHERE folder_id = ?)
+			WHERE folder_id = ? AND deleted = 0 AND (path = ? OR (path >= ? AND path < ?))
+			""",
+			[
+				folderID, path, oldPath.unicodeScalars.count + 1, folderID, item.folderID, oldPath, lower, upper,
+			])  // substr counts code points
+		let name = FileNames.lastComponent(path)
+		try connection.run(
+			"""
+			UPDATE items SET parent_id = ?, name = ?, name_key = ?, meta_rev = meta_rev + 1, changed_seq = ?
+			WHERE id = ?
+			""", [parentID, name, FileNames.collisionKey(name), allocateSequence(), item.id])
+		return try reload(item.id)
+	}
+
 	/// Records that an item (and everything below it) was deleted from disk. Until Syncthing has indexed the deletion,
 	/// records of the deleted versions are ignored.
 	public func recordDeletion(_ item: IndexItem) throws(IndexError) {

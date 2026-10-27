@@ -103,6 +103,7 @@ final class ContainerEnumerator: NSObject, NSFileProviderEnumerator {
 		do {
 			let children = try context.store.children(of: parentID, after: after, limit: limit)
 			observer.didEnumerate(try context.makeItems(children))
+			trace("listed \(children.count) items in \(parentID.map(String.init) ?? "root") \(memoryFootprint())")
 			if children.count == limit, let last = children.last {
 				observer.finishEnumerating(upTo: NSFileProviderPage(ItemIdentifiers.page(after: last.id)))
 			}
@@ -142,6 +143,7 @@ final class WorkingSetEnumerator: NSObject, NSFileProviderEnumerator {
 		do {
 			let items = try context.store.liveItems(after: after, limit: limit)
 			observer.didEnumerate(try context.makeItems(items))
+			trace("listed \(items.count) items of the working set \(memoryFootprint())")
 			if items.count == limit, let last = items.last {
 				observer.finishEnumerating(upTo: NSFileProviderPage(ItemIdentifiers.page(after: last.id)))
 			}

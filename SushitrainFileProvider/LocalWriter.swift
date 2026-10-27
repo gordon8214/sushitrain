@@ -174,20 +174,18 @@ struct LocalWriter: Sendable {
 		guard let parentID = parentIdentifier.itemID, let parent = try store.item(id: parentID),
 			parent.kind.isContainer
 		else {
-			throw Rejection.cannotSynchronize(String(localized: "Items can only be moved within their folder."))
-		}
-		guard parent.folderID == item.folderID else {
-			throw Rejection.cannotSynchronize(String(localized: "Items can only be moved within their folder."))
+			throw Rejection.cannotSynchronize(String(localized: "Items can only be moved into a folder."))
 		}
 		let name = FileNames.normalized(name)
 		guard FileNames.isValid(name), !FileNames.isReserved(name) else {
 			throw Rejection.cannotSynchronize(String(localized: "This name is reserved for Syncthing."))
 		}
 		let path = FileNames.join(parent.path, name)
-		if path == item.path {
+		let isSameFolder = parent.folderID == item.folderID
+		if isSameFolder && path == item.path {
 			return item
 		}
-		if item.kind.isContainer, FileNames.isSelfOrDescendant(parent.path, of: item.path) {
+		if item.kind.isContainer, isSameFolder, FileNames.isSelfOrDescendant(parent.path, of: item.path) {
 			throw Rejection.cannotSynchronize(String(localized: "A folder cannot be moved into itself."))
 		}
 		if let existing = try store.child(of: parent.id, named: name), existing.id != item.id {
@@ -196,27 +194,32 @@ struct LocalWriter: Sendable {
 		guard isOnDevice(item) else {
 			throw Rejection.notOnDevice
 		}
+		// A directory that is only partly on this device would be split: what is only on other devices stays behind
 		if folder.isSelective && item.kind.isContainer && item.pending != .create {
-			throw Rejection.cannotSynchronize(
-				String(localized: "Folders in on-demand folders cannot be renamed or moved yet."))
+			guard item.isSelected, try store.descendants(of: item).allSatisfy(\.isSelected) else {
+				throw Rejection.cannotSynchronize(
+					String(localized: "Keep the whole folder on this device to rename or move it."))
+			}
+		}
+		if !isSameFolder {
+			return try move(item, from: folder, toFolderOf: parent, path: path)
 		}
 
 		let source = url(folderID: item.folderID, path: item.path)
 		let destination = url(folderID: item.folderID, path: path)
 		try materialize(parent)
 
-		// In an on-demand folder, Syncthing ignores paths until they are selected. Renaming a file it knows would make
-		// it look deleted, so the new name is linked and the app finishes the rename after selecting it.
+		// In an on-demand folder, Syncthing ignores paths until they are selected. Renaming something it knows would make
+		// it look deleted, so the new name gets a link (or, for a directory, a clone) and the app finishes the rename
+		// after selecting it.
 		let isKnownToSyncthing = item.pending != .create && !(folder.isSelective && item.pending == .rename)
-		let linksNewName = folder.isSelective && isKnownToSyncthing
+		let keepsOldName = folder.isSelective && isKnownToSyncthing
 		let unfinishedRename =
 			folder.isSelective && item.pending == .rename
 			? try store.queuedWork(.finishRename, folderID: item.folderID, extra: item.path) : nil
 		if let unfinishedRename, unfinishedRename.path == path {
 			// Renamed back before the app finished the rename: the original name is still there
-			guard unlink(source.fileSystemPath) == 0 || errno == ENOENT else {
-				throw Self.posixError()
-			}
+			try Self.remove(source)
 			let moved = try store.recordLocalChanges { recorder throws(IndexError) in
 				try recorder.dequeue(.finishRename, folderID: item.folderID, path: path)
 				try recorder.enqueue(.rescan, folderID: item.folderID, path: path)
@@ -225,8 +228,11 @@ struct LocalWriter: Sendable {
 			SharedNotification.workQueued.post()
 			return moved
 		}
-		if linksNewName {
-			guard link(source.fileSystemPath, destination.fileSystemPath) == 0 else {
+		if keepsOldName {
+			if item.kind.isContainer {
+				try Self.cloneDirectory(source, to: destination)
+			}
+			else if link(source.fileSystemPath, destination.fileSystemPath) != 0 {
 				throw errno == EEXIST ? NSFileProviderError(.filenameCollision) : Self.posixError()
 			}
 		}
@@ -236,7 +242,7 @@ struct LocalWriter: Sendable {
 
 		let moved = try store.recordLocalChanges { recorder throws(IndexError) in
 			let moved = try recorder.recordMove(item, to: parent.id, path: path)
-			if linksNewName {
+			if keepsOldName {
 				try recorder.enqueue(.finishRename, folderID: item.folderID, path: item.path, extra: path)
 			}
 			else if folder.isSelective && item.pending == .rename {
@@ -247,11 +253,53 @@ struct LocalWriter: Sendable {
 				try recorder.dequeue(.select, folderID: item.folderID, path: item.path, includingDescendants: true)
 				try recorder.enqueue(.select, folderID: item.folderID, path: path)
 			}
-			if !linksNewName {
+			if !keepsOldName {
 				try recorder.enqueue(.rescan, folderID: item.folderID, path: item.path)
 				try recorder.enqueue(.rescan, folderID: item.folderID, path: path)
 			}
 			return moved
+		}
+		SharedNotification.workQueued.post()
+		return moved
+	}
+
+	/// Moves an item to another folder. To Syncthing that is a removal from one folder and an addition to the other.
+	private func move(_ item: IndexItem, from folder: IndexFolder, toFolderOf parent: IndexItem, path: String) throws
+		-> IndexItem
+	{
+		let target = try writableFolder(parent.folderID)
+		if item.pending == .rename {
+			throw Rejection.cannotSynchronize(
+				String(localized: "Open Synctrain to finish the previous rename before moving this to another folder."))
+		}
+		try materialize(parent)
+		try Self.rename(
+			url(folderID: item.folderID, path: item.path), url(folderID: target.folderID, path: path),
+			flags: RENAME_EXCL)
+
+		let moved: IndexItem
+		do {
+			moved = try store.recordLocalChanges { recorder throws(IndexError) in
+				let moved = try recorder.recordMove(item, toFolder: target.folderID, parentID: parent.id, path: path)
+				if folder.isSelective {
+					try recorder.dequeue(.select, folderID: folder.folderID, path: item.path, includingDescendants: true)
+				}
+				try recorder.enqueue(.rescan, folderID: folder.folderID, path: item.path)
+				if target.isSelective {
+					try recorder.enqueue(.select, folderID: target.folderID, path: path)
+				}
+				try recorder.enqueue(.rescan, folderID: target.folderID, path: path)
+				return moved
+			}
+		}
+		catch IndexError.notAllowed(let reason) {
+			// Put it back: something inside it is still being renamed
+			try? Self.rename(
+				url(folderID: target.folderID, path: path), url(folderID: item.folderID, path: item.path),
+				flags: RENAME_EXCL)
+			log.info("Could not move \(item.id) to another folder: \(reason)")
+			throw Rejection.cannotSynchronize(
+				String(localized: "Open Synctrain to finish the previous rename before moving this to another folder."))
 		}
 		SharedNotification.workQueued.post()
 		return moved
@@ -538,6 +586,27 @@ struct LocalWriter: Sendable {
 		for name in buffer.split(separator: 0).map({ String(decoding: $0.map { UInt8(bitPattern: $0) }, as: UTF8.self) })
 		where name.hasPrefix("com.apple.fileprovider") {
 			removexattr(path, name, XATTR_NOFOLLOW)
+		}
+	}
+
+	/// Copies a directory tree, as a clone where the file system supports it (taking no extra space)
+	private static func cloneDirectory(_ source: URL, to destination: URL) throws {
+		if clonefile(source.fileSystemPath, destination.fileSystemPath, UInt32(CLONE_NOFOLLOW)) == 0 {
+			return
+		}
+		if errno == EEXIST {
+			throw NSFileProviderError(.filenameCollision)
+		}
+		try FileManager.default.copyItem(at: source, to: destination)
+	}
+
+	/// Removes a file or a directory tree, if it is there
+	private static func remove(_ url: URL) throws {
+		do {
+			try FileManager.default.removeItem(at: url)
+		}
+		catch CocoaError.fileNoSuchFile {
+			// Already gone
 		}
 	}
 

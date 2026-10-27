@@ -28,12 +28,12 @@ What works depends on whether Synctrain is running, because only the app runs Sy
 Saving a file that is only on other devices first downloads it (Files shows the save as waiting until Synctrain has the
 file); the edit is then an ordinary change of that version, not a second, conflicting one.
 
-Deleting removes the item on all devices. Only items kept on this device can be renamed, moved or deleted.
+Deleting removes the item on all devices. Only items kept on this device can be renamed, moved or deleted; in on-demand
+folders, a directory can only be renamed or moved when it is kept on this device as a whole. Items can also be moved to
+another folder, which other devices see as a removal from one folder and an addition to the other.
 
 ### Limitations
 
-- Items cannot be moved from one folder to another (copy them instead).
-- Directories in on-demand folders cannot be renamed or moved.
 - Receive-only folders are read-only. Symbolic links are not shown.
 - Thumbnails are only available for images on this device.
 - There is no macOS version yet.
@@ -75,9 +75,14 @@ When an edit is based on a version that has changed on another device since, it 
 way Syncthing names them (or rejected when the system asks for that, from iOS 26).
 
 In an on-demand folder, Syncthing ignores a path until it is selected, and would treat a plain rename as a deletion. A
-rename there links the new name instead; the app selects it, removes the old name and has both scanned. The old name
-stays selected, because Syncthing marks the entries of newly ignored paths as invalid, and other devices disregard
-those.
+rename there links the new name instead (a directory is cloned, which takes no extra space); the app selects it, removes
+the old name and has both scanned. Anything that arrived in an old directory in the meantime is moved over first. The
+old name stays selected, because Syncthing marks the entries of newly ignored paths as invalid, and other devices
+disregard those.
+
+Moving an item to another folder is a rename on disk (both folders are on the same volume). The item keeps its
+identifier; the index leaves tombstones in the old folder so that its records from before the move do not bring it back,
+and the new folder selects (if on-demand) and scans it.
 
 ### Opening files
 

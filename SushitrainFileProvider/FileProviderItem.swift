@@ -78,7 +78,7 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 	}
 
 	/// Items can be changed in folders that send changes. Renaming, moving and deleting is limited to what is kept on
-	/// this device (deleting removes the item on all devices); directories in on-demand folders cannot be renamed yet.
+	/// this device (deleting removes the item on all devices).
 	/// The system's copy of files and directories can always be removed (their contents are in the folder or on other
 	/// devices). This depends on the index only, because the system refreshes capabilities only when the item's version
 	/// changes; the extension checks the disk when it makes the change.
@@ -100,7 +100,8 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 			if isKept || isOnDevice {
 				capabilities.insert(.allowsDeleting)
 			}
-			if !isSelective || item.pending == .create {
+			// In an on-demand folder, only directories that are kept as a whole
+			if !isSelective || item.isSelected || item.pending == .create {
 				capabilities.formUnion([.allowsRenaming, .allowsReparenting])
 			}
 			return capabilities

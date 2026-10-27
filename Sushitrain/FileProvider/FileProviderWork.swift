@@ -123,21 +123,48 @@
 			}
 		}
 
-		/// The extension renamed a file in an on-demand folder by linking the new name. Select the new name, then remove
-		/// the old one and have both scanned, so that Syncthing sends the removal (or recognizes the rename). The old name
-		/// stays selected: Syncthing marks the entries of paths that become ignored as invalid, which other devices
-		/// disregard, so deselecting it would keep the removal from reaching them. Every step can be repeated, so a failed
-		/// attempt can simply be retried.
+		/// The extension renamed a file or directory in an on-demand folder by linking (or cloning) the new name. Select
+		/// the new name, then remove the old one and have both scanned, so that Syncthing sends the removal (or
+		/// recognizes the rename). The old name stays selected: Syncthing marks the entries of paths that become ignored as
+		/// invalid, which other devices disregard, so deselecting it would keep the removal from reaching them. Every step
+		/// can be repeated, so a failed attempt can simply be retried.
 		private func finishRename(_ item: WorkItem, in folder: SushitrainFolder) throws {
 			guard let newPath = item.extra else {
 				return
 			}
 			try folder.setLocalPathsExplicitlySelected(SushitrainListOfStrings.from([newPath]))
-			let oldPath = container.fileURL(folderID: item.folderID, path: item.path).path(percentEncoded: false)
-			if unlink(oldPath) != 0 && errno != ENOENT {
-				throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-			}
+			try removeOldName(
+				container.fileURL(folderID: item.folderID, path: item.path),
+				keeping: container.fileURL(folderID: item.folderID, path: newPath))
 			try folder.scanPaths(SushitrainListOfStrings.from([item.path, newPath]))
+		}
+
+		/// Removes the old name of a renamed item. What arrived in an old directory since it was cloned (from another
+		/// device) is moved to the new one first, so that it is not removed everywhere.
+		private func removeOldName(_ old: URL, keeping new: URL) throws {
+			let fileManager = FileManager.default
+			let oldPath = old.path(percentEncoded: false)
+			let newPath = new.path(percentEncoded: false)
+			var isDirectory: ObjCBool = false
+			guard fileManager.fileExists(atPath: oldPath, isDirectory: &isDirectory) else {
+				return
+			}
+			if isDirectory.boolValue, let entries = fileManager.enumerator(atPath: oldPath) {
+				while let relative = entries.nextObject() as? String {
+					if FileNames.isReservedPath(relative) {
+						continue
+					}
+					let target = newPath + "/" + relative
+					if fileManager.fileExists(atPath: target) {
+						continue
+					}
+					try fileManager.createDirectory(
+						atPath: FileNames.parentPath(target), withIntermediateDirectories: true)
+					try fileManager.moveItem(atPath: oldPath + "/" + relative, toPath: target)
+					entries.skipDescendants()
+				}
+			}
+			try fileManager.removeItem(atPath: oldPath)
 		}
 
 		/// Stops keeping a path on this device, but only when another device has the whole of its current version.
