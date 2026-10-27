@@ -416,6 +416,9 @@ enum ContinuedTaskType {
 				}
 			}
 
+			// Apply changes made in the Files app and update what it shows
+			FileProviderCoordinator.shared.backgroundRefresh()
+
 			// Feed the watchdog
 			Log.info("Rescheduling watchdog")
 			await self.rescheduleWatchdogNotification()

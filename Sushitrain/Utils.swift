@@ -159,6 +159,10 @@ extension SushitrainFolder {
 				values.isHidden = newValue
 				do {
 					try lu.setResourceValues(values)
+					#if os(iOS)
+						// Hidden folders are not shown in the Synctrain location in the Files app
+						Task { @MainActor in FileProviderCoordinator.shared.folderConfigurationChanged() }
+					#endif
 				}
 				catch {
 					Log.info("Unable to set hide setting: \(error.localizedDescription)")

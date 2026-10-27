@@ -109,11 +109,12 @@
 			exposedFolders().map(\.folderID)
 		}
 
-		/// Folders that are shown in the Files app: internal folders with a native file system in the shared container
+		/// Folders that are shown in the Files app: internal folders with a native file system in the shared container,
+		/// unless they are hidden (the folder setting that hides them in the Files app)
 		private func exposedFolders() -> [FolderDescription] {
 			(client.folders()?.asArray() ?? []).compactMap { folderID in
 				guard let folder = client.folder(withID: folderID), folder.isInManagedBase(), folder.isRegularFolder,
-					!folder.isPhotoFolder
+					!folder.isPhotoFolder, folder.isHidden != true
 				else {
 					return nil
 				}

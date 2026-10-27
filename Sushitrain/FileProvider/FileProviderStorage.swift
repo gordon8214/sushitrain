@@ -6,6 +6,7 @@
 #if os(iOS)
 	@preconcurrency import FileProvider
 	import Foundation
+	import os
 	@preconcurrency import SushitrainCore
 	import SynctrainFileProviderKit
 
@@ -29,13 +30,25 @@
 			}
 		}
 
-		/// Whether the URL lies inside the shared container (where folders cannot be added as external folders)
+		/// Where the Synctrain location is on disk (inside the system's File Provider storage), once known
+		private static let locationPath = OSAllocatedUnfairLock<String?>(initialState: nil)
+
+		static func setLocationURL(_ url: URL?) {
+			let path = url?.resolvingSymlinksInPath().path(percentEncoded: false)
+			locationPath.withLock { $0 = path }
+		}
+
+		/// Whether the URL lies inside the shared container or the Synctrain location. Folders there cannot be added as
+		/// external folders: Syncthing would then synchronize its own files a second time.
 		static func contains(_ url: URL) -> Bool {
+			let path = url.resolvingSymlinksInPath().path(percentEncoded: false)
+			if let location = locationPath.withLock({ $0 }), path.hasPrefix(location) {
+				return true
+			}
 			guard let container else {
 				return false
 			}
-			return url.resolvingSymlinksInPath().path(percentEncoded: false)
-				.hasPrefix(container.baseURL.resolvingSymlinksInPath().path(percentEncoded: false))
+			return path.hasPrefix(container.baseURL.resolvingSymlinksInPath().path(percentEncoded: false))
 		}
 
 		/// Where a file in a shared folder appears in the Files app (inside the Synctrain location), if it does

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F3000000000000000000001F /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 6506158A2C3C4EA9002B6EE6 /* Localizable.xcstrings */; };
 		6505643D2CA98930009FFFB9 /* GridFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6505643C2CA9892D009FFFB9 /* GridFilesView.swift */; };
 		6505643F2CA98D22009FFFB9 /* ThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6505643E2CA98D1F009FFFB9 /* ThumbnailView.swift */; };
 		650615872C3B3676002B6EE6 /* BrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 650615862C3B3676002B6EE6 /* BrowserView.swift */; };
@@ -550,6 +551,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F3000000000000000000001F /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

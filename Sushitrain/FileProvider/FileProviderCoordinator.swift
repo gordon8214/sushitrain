@@ -152,6 +152,7 @@
 				let domains = try await NSFileProviderManager.domains()
 				isDomainEnabled =
 					domains.first { $0.identifier.rawValue == SharedContainer.domainIdentifier }?.userEnabled
+				FileProviderStorage.setLocationURL(try? await manager?.getUserVisibleURL(for: .rootContainer))
 			}
 			catch {
 				Log.warn("Could not query File Provider domains: \(error.localizedDescription)")
@@ -227,7 +228,21 @@
 			}
 		}
 
-		fileprivate func folderConfigurationChanged() {
+		/// For background runs: applies changes made in the Files app while the app was not running, and brings the
+		/// index up to date, so that changes travel in both directions without the app being opened
+		func backgroundRefresh() {
+			guard let client else {
+				return
+			}
+			processWork()
+			indexer?.scheduleFolderReconciliation()
+			for folderID in client.folders()?.asArray() ?? [] {
+				indexer?.schedule(folderID: folderID, fullPass: false)
+			}
+		}
+
+		/// Call when something changes which folders are shown in the Files app
+		func folderConfigurationChanged() {
 			indexer?.scheduleFolderReconciliation()
 		}
 
