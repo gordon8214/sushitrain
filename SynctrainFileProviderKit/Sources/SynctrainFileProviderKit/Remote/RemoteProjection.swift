@@ -376,12 +376,17 @@ final class RemoteProjector {
 			current = nil
 		}
 
-		// Other rows where this one goes: the same path, or a name that cannot coexist with this one
+		// Other rows where this one goes: the same path, or a name that cannot coexist with this one. Two lookups, each
+		// on its index: for an OR of the two, SQLite scans every row (or every sibling), once per item placed.
+		let excluded = current?.id ?? 0
 		let obstacles = try connection.query(
 			"""
-			SELECT \(Self.localColumns) FROM items
-			WHERE deleted = 0 AND id != ? AND ((folder_id = ? AND path = ?) OR (parent_id = ? AND name_key = ?))
-			""", [current?.id ?? 0, parent.folderID, path, parent.id, FileNames.collisionKey(name)], Self.localRow)
+			SELECT \(Self.localColumns) FROM items INDEXED BY items_live_path
+			WHERE deleted = 0 AND id != ? AND folder_id = ? AND path = ?
+			UNION
+			SELECT \(Self.localColumns) FROM items INDEXED BY items_child_name
+			WHERE deleted = 0 AND id != ? AND parent_id = ? AND name_key = ?
+			""", [excluded, parent.folderID, path, excluded, parent.id, FileNames.collisionKey(name)], Self.localRow)
 		for other in obstacles {
 			let samePath = other.folderID == parent.folderID && other.path.utf8.elementsEqual(path.utf8)
 			let otherHasOverlay = try hasOverlay(other.id)

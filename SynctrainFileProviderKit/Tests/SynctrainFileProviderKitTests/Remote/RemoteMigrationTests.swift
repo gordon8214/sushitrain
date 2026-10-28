@@ -24,7 +24,7 @@ import Testing
 		RemoteMigration.Journal(
 			direction: .toGateway, serviceID: testServiceID, remoteFolderID: testRemoteFolder,
 			rootGatewayID: testRootGatewayID, permissions: RemotePermissions(read: true, write: true),
-			label: "Documents")
+			label: "Documents", localSequence: 42)
 	}
 
 	@Test func journalSurvivesAndAdvances() throws {
@@ -48,6 +48,7 @@ import Testing
 		#expect(reread.folderID == "docs" && reread.state == .engineStopped)
 		#expect(reread.journal.permissions == RemotePermissions(read: true, write: true))
 		#expect(reread.journal.label == "Documents")
+		#expect(reread.journal.localSequence == 42)
 
 		try store.finishRemoteMigration(folderID: "docs")
 		#expect(try store.remoteMigrations().isEmpty)
@@ -70,6 +71,22 @@ import Testing
 		#expect(throws: unreadable) { try store.remoteMigration(folderID: "docs") }
 		try store.finishRemoteMigration(folderID: "docs")
 		#expect(try store.beginRemoteMigration(folderID: "docs", journal: toGateway()).state == .fenced)
+	}
+
+	/// A journal written before switches recorded the local sequence still reads, without one
+	@Test func journalWithoutLocalSequenceReads() throws {
+		let store = try makeSyncthingStore()
+		var object = try #require(
+			try JSONSerialization.jsonObject(with: RemoteJSON.encoder().encode(toGateway())) as? [String: Any])
+		object["localSequence"] = nil
+		let json = String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self)
+		try store.withConnection { connection throws(IndexError) in
+			try connection.run(
+				"INSERT INTO remote_migrations (folder_id, state, journal, updated_at) VALUES ('docs', 'fenced', ?, 0)",
+				[json])
+		}
+		let migration = try #require(try store.remoteMigration(folderID: "docs"))
+		#expect(migration.journal.localSequence == nil && migration.journal.label == "Documents")
 	}
 
 	/// The fence is checked in the transaction that records an edit, on the Syncthing path as well

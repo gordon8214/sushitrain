@@ -43,6 +43,9 @@ public struct RemoteMigration: Hashable, Sendable {
 		public var permissions: RemotePermissions?
 		/// The label the folder keeps in the Files app
 		public var label: String?
+		/// To the gateway: the sequence of this device's latest change in Syncthing's index of the folder before the
+		/// checks that the gateway has every change made on this device
+		public var localSequence: Int64?
 		public var startedAt: Date
 		/// Why the last attempt to continue did not get further, if it did not
 		public var lastError: String?
@@ -50,7 +53,7 @@ public struct RemoteMigration: Hashable, Sendable {
 		public init(
 			direction: Direction, serviceID: String? = nil, remoteFolderID: String? = nil,
 			rootGatewayID: String? = nil, permissions: RemotePermissions? = nil, label: String? = nil,
-			startedAt: Date = Date(), lastError: String? = nil
+			localSequence: Int64? = nil, startedAt: Date = Date(), lastError: String? = nil
 		) {
 			self.direction = direction
 			self.serviceID = serviceID
@@ -58,6 +61,7 @@ public struct RemoteMigration: Hashable, Sendable {
 			self.rootGatewayID = rootGatewayID
 			self.permissions = permissions
 			self.label = label
+			self.localSequence = localSequence
 			self.startedAt = startedAt
 			self.lastError = lastError
 		}

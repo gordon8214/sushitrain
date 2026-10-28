@@ -939,7 +939,10 @@ struct SyncState: Equatable {
 			else {
 				await self.suspend(true)
 			}
-			try? self.client.setReconnectIntervalS(60)
+			// Off the main thread: the change waits until Syncthing has applied it, which can take longer than the system
+			// allows a scene update while it is still connecting
+			let client = self.client
+			try? await goTask { try client.setReconnectIntervalS(60) }
 			self.client.ignoreEvents = true
 
 			Task {
@@ -951,7 +954,8 @@ struct SyncState: Equatable {
 
 		#if os(macOS)
 			await self.suspend(true)
-			try? self.client.setReconnectIntervalS(60)
+			let client = self.client
+			try? await goTask { try client.setReconnectIntervalS(60) }
 			self.client.ignoreEvents = true
 		#endif
 

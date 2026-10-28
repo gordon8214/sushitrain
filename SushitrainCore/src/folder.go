@@ -1522,6 +1522,15 @@ func (fld *Folder) FilesNeededBy(peer string) (*ListOfStrings, error) {
 	return List(files), nil
 }
 
+// LocalSequence is the sequence of this device's latest change to the folder's index. Unlike FilesNeededBy it also
+// answers for a paused folder, which Syncthing no longer runs.
+func (fld *Folder) LocalSequence() (int64, error) {
+	if fld.client.app == nil || fld.client.app.Internals == nil {
+		return 0, ErrStillLoading
+	}
+	return fld.client.app.Internals.LocalSequence(fld.FolderID)
+}
+
 func (fld *Folder) IsDiskSpaceSufficient() bool {
 	if minFree := fld.folderConfiguration().MinDiskFree; minFree.Value > 0 {
 		fs := fld.folderConfiguration().Filesystem()

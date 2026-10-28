@@ -140,10 +140,15 @@
 				throw .notSharedWithGateway(gateway: gateway)
 			}
 
+			// Taken before the checks: once Syncthing stopped with the folder, an unchanged sequence shows that nothing
+			// was scanned or pulled after them
+			let sequence = try localSequence(of: folder)
+
 			// Fence new edits, in one transaction with the check that Files has no change waiting for Syncthing
 			let journal = RemoteMigration.Journal(
 				direction: .toGateway, serviceID: endpoint.serviceID, remoteFolderID: remoteFolder.id,
-				rootGatewayID: remoteFolder.rootItemID, permissions: remoteFolder.permissions, label: folder.displayName)
+				rootGatewayID: remoteFolder.rootItemID, permissions: remoteFolder.permissions, label: folder.displayName,
+				localSequence: sequence)
 			let migration: RemoteMigration
 			do throws(IndexError) {
 				migration = try store.beginRemoteMigration(folderID: folderID, journal: journal)
@@ -159,7 +164,7 @@
 				do throws(RemoteSwitchError) {
 					try checkEngineIsSettled(folder: folder, deviceID: deviceID, gateway: gateway)
 					try checkGatewayHasLocalChanges(folder: folder, deviceID: deviceID, gateway: gateway)
-					try stopEngine(folder: folder, deviceID: deviceID, gateway: gateway)
+					try stopEngine(folder: folder, expectedSequence: migration.journal.localSequence)
 				}
 				catch {
 					throw abandonSwitch(folderID: folderID, folder: folder, because: error)
@@ -253,7 +258,7 @@
 		/// Makes Syncthing on this device stop scanning, pulling and announcing the folder, then checks once more that
 		/// no edit reached the folder (or was scanned) in the meantime, which would otherwise only be on this device.
 		/// When one did, the caller gives up the switch (and Syncthing takes the folder back).
-		private func stopEngine(folder: SushitrainFolder, deviceID: String, gateway: String) throws(RemoteSwitchError) {
+		private func stopEngine(folder: SushitrainFolder, expectedSequence: Int64?) throws(RemoteSwitchError) {
 			let folderID = folder.folderID
 			do {
 				try client.setFolderRemoteManaged(folderID, managed: true)
@@ -261,7 +266,7 @@
 			catch {
 				throw .engine(error.localizedDescription)
 			}
-			try checkStoppedEngine(folder: folder, deviceID: deviceID, gateway: gateway)
+			try checkStoppedEngine(folder: folder, expectedSequence: expectedSequence)
 			_ = try stored { () throws(IndexError) in
 				try store.updateRemoteMigration(folderID: folderID, state: .engineStopped, lastError: nil)
 			}
@@ -269,52 +274,54 @@
 		}
 
 		/// Once Syncthing on this device has stopped with the folder (nothing changes what it knows anymore): refuses the
-		/// switch when an edit reached the folder or was scanned before it stopped, or the gateway lacks a version that
-		/// only this device has
-		private func checkStoppedEngine(folder: SushitrainFolder, deviceID: String, gateway: String)
-			throws(RemoteSwitchError)
-		{
+		/// switch when an edit reached the folder, or was scanned or pulled after the checks. Syncthing only tells what
+		/// the gateway needs for folders it runs, so those checks are not repeated: an unchanged sequence of this
+		/// device's latest change shows that they still hold.
+		private func checkStoppedEngine(folder: SushitrainFolder, expectedSequence: Int64?) throws(RemoteSwitchError) {
 			let changes = try stored { () throws(IndexError) in try store.localChanges(folderID: folder.folderID) }
 			guard changes.isEmpty else {
 				throw .localChangesWaiting(changes)
 			}
-			try checkGatewayHasLocalChanges(folder: folder, deviceID: deviceID, gateway: gateway)
+			guard let expectedSequence, try localSequence(of: folder) == expectedSequence else {
+				throw .notEligible(String(localized: "Switching the folder was interrupted. Try again."))
+			}
+		}
+
+		/// The sequence of this device's latest change in Syncthing's index of the folder (also while it is paused)
+		private func localSequence(of folder: SushitrainFolder) throws(RemoteSwitchError) -> Int64 {
+			var sequence: Int64 = 0
+			do {
+				try folder.localSequence(&sequence)
+			}
+			catch {
+				throw .engine(error.localizedDescription)
+			}
+			return sequence
 		}
 
 		/// For a switch interrupted after Syncthing stopped with the folder but before that was recorded: the checks made
-		/// after stopping may not have run. They run again (asking the gateway which Syncthing device it is); when they
-		/// refuse the switch, it is given up.
-		private func recheckStoppedEngine(folderID: String, journal: RemoteMigration.Journal)
-			async
-			throws(RemoteSwitchError)
-		{
+		/// after stopping may not have run. They run again; when they refuse the switch, it is given up.
+		private func recheckStoppedEngine(folderID: String, journal: RemoteMigration.Journal) throws(RemoteSwitchError) {
 			guard let folder = client.folder(withID: folderID), folder.exists() else {
 				throw abandonSwitch(
 					folderID: folderID, folder: nil,
 					because: .notEligible(String(localized: "The folder does not exist on this device.")))
 			}
 			guard let serviceID = journal.serviceID,
-				let endpoint = try stored({ () throws(IndexError) in try store.remoteEndpoint(serviceID: serviceID) })
+				try stored({ () throws(IndexError) in try store.remoteEndpoint(serviceID: serviceID) }) != nil
 			else {
+				logMissingEndpoint(journal.serviceID, folderID: folderID)
 				throw abandonSwitch(
 					folderID: folderID, folder: folder,
 					because: .notEligible(String(localized: "The gateway is not paired anymore.")))
 			}
-			let capabilities: Capabilities
-			do throws(RemoteError) {
-				capabilities = try await environment.sync(for: endpoint).refreshCapabilities()
-			}
-			catch {
-				// The check waits until the gateway can be reached (the folder stays fenced until then)
-				_ = try? store.updateRemoteMigration(folderID: folderID, lastError: error.userDescription)
-				throw .remote(error)
-			}
-			guard let deviceID = capabilities.syncthingDeviceID, !deviceID.isEmpty else {
-				throw abandonSwitch(
-					folderID: folderID, folder: folder, because: .gatewayDeviceUnknown(gateway: endpoint.displayName))
-			}
 			do throws(RemoteSwitchError) {
-				try checkStoppedEngine(folder: folder, deviceID: deviceID, gateway: endpoint.displayName)
+				try checkStoppedEngine(folder: folder, expectedSequence: journal.localSequence)
+			}
+			catch .engine(let message) {
+				// Syncthing may still be starting: the check waits (the folder stays fenced until then)
+				_ = try? store.updateRemoteMigration(folderID: folderID, lastError: message)
+				throw .engine(message)
 			}
 			catch {
 				throw abandonSwitch(folderID: folderID, folder: folder, because: error)
@@ -336,7 +343,7 @@
 					try? store.finishRemoteMigration(folderID: folderID)
 					throw .notEligible(String(localized: "Switching the folder was interrupted. Try again."))
 				}
-				try await recheckStoppedEngine(folderID: folderID, journal: migration.journal)
+				try recheckStoppedEngine(folderID: folderID, journal: migration.journal)
 				migration = try stored { () throws(IndexError) in
 					try store.updateRemoteMigration(folderID: folderID, state: .engineStopped, lastError: nil)
 				}
@@ -365,10 +372,19 @@
 			try await completeSnapshot(folderID: folderID, serviceID: serviceID)
 		}
 
+		/// Records which gateway a switch looked for and which ones are paired, when it found none
+		private func logMissingEndpoint(_ serviceID: String?, folderID: String) {
+			let paired = (try? store.remoteEndpoints().map(\.serviceID)) ?? []
+			Log.warn(
+				"Switching folder \(folderID): gateway \(serviceID ?? "(none)") is not paired; paired: \(paired.joined(separator: ", "))"
+			)
+		}
+
 		/// Takes the first snapshot of a newly bound folder, and ends its switch once that is complete
 		private func completeSnapshot(folderID: String, serviceID: String) async throws(RemoteSwitchError) {
 			guard let endpoint = try stored({ () throws(IndexError) in try store.remoteEndpoint(serviceID: serviceID) })
 			else {
+				logMissingEndpoint(serviceID, folderID: folderID)
 				throw .notEligible(String(localized: "The gateway is not paired anymore."))
 			}
 			do throws(RemoteError) {
