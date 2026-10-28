@@ -151,3 +151,20 @@ location /v1/ {
   or from another device.
 - The audit log (in the service database) records which client did what, by client, operation and item ID (no file
   names).
+
+## macOS extended attributes
+
+The shared Syncthing engine defaults to Apple's syncable-attribute policy for
+folders that send or sync extended attributes. In the Syncthing web folder settings,
+**macOS extended attributes** selects **Syncable attributes (recommended)** or
+**All attributes** (`xattrFilter.macOSMode`: `syncable` or `all`). Explicit filter
+rules retain their first-match, default-deny override behavior. Size limits remain
+configurable; zero means unlimited.
+
+Finder info, resource forks, tags, comments, text encoding, and quarantine are
+included by Apple's policy. Unmarked application metadata is generally excluded.
+The NAS still relays and archives foreign Mac metadata; existing historical
+attributes remain archived, but Mac receivers apply only attributes permitted by
+their current policy. Excluded source attributes do not enter future NAS history.
+Use All attributes when archival completeness is required. Folders with extended
+attribute synchronization disabled remain disabled.
