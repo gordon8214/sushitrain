@@ -195,7 +195,16 @@
 		/// files in the Syncthing folders are not affected, but changes the system has not handed to the extension yet
 		/// are lost (see `pendingItemCount`). The user has to enable the location again in Files.
 		func rebuild() async {
-			guard let indexer, !isRebuilding else {
+			guard let indexer, let store, !isRebuilding else {
+				return
+			}
+			// The index keeps what folders on gateways need (their outbox, staged edits and item mappings), which it
+			// cannot while their edits are unresolved; check before the system's copy is removed
+			let hasUnresolvedEdits = await Task.detached(priority: .userInitiated) {
+				(try? store.hasUnresolvedMutations()) ?? true
+			}.value
+			if hasUnresolvedEdits {
+				lastError = Self.unresolvedRemoteEditsMessage
 				return
 			}
 			isRebuilding = true
@@ -219,6 +228,10 @@
 				UserDefaults.standard.set(Self.itemFormat, forKey: Self.itemFormatKey)
 				lastError = nil
 			}
+			catch IndexError.notAllowed {
+				Log.warn("Could not rebuild the Files index: edits of remote folders are unresolved")
+				lastError = Self.unresolvedRemoteEditsMessage
+			}
 			catch {
 				Log.warn("Could not rebuild the Files index: \(error.localizedDescription)")
 				lastError = error.localizedDescription
@@ -232,6 +245,13 @@
 				lastError = error.localizedDescription
 			}
 			await refreshDomainState()
+		}
+
+		static var unresolvedRemoteEditsMessage: String {
+			String(
+				localized:
+					"The Synctrain location cannot be rebuilt while edits of folders on gateways are being sent or wait for review. Wait until they are sent, or export or discard them under Remote folders, then try again."
+			)
 		}
 
 		/// How many items have changes in the system's copy that the extension has not accepted yet (such as edits of
@@ -269,7 +289,8 @@
 			}
 		}
 
-		private func signalResolved(_ code: NSFileProviderError.Code) {
+		/// Tells the system that errors with the code were resolved, so that it retries what failed with them
+		func signalResolved(_ code: NSFileProviderError.Code) {
 			manager?.signalErrorResolved(NSFileProviderError(code)) { error in
 				if let error {
 					Log.warn("Could not signal the File Provider that an error was resolved: \(error.localizedDescription)")
@@ -296,8 +317,16 @@
 			indexer?.scheduleFolderReconciliation()
 		}
 
+		/// Call when a folder was switched between Syncthing on this device and a gateway: a folder Syncthing takes
+		/// over again gets a full pass (its rows came from the gateway), and one that is only on a gateway leaves
+		func folderAccessChanged(folderID: String) {
+			indexer?.scheduleFolderReconciliation()
+			indexer?.schedule(folderID: folderID, fullPass: true)
+			signalWorkingSet()
+		}
+
 		/// Tells the system to fetch changes from the extension, after a short delay to coalesce updates
-		private func signalWorkingSet() {
+		func signalWorkingSet() {
 			signalTask?.cancel()
 			signalTask = Task {
 				try? await Task.sleep(for: .milliseconds(500))
@@ -430,18 +459,33 @@
 		nonisolated private static func performWork(_ runner: FileProviderWorkRunner, store: IndexStore) async -> WorkPass {
 			var pass = WorkPass()
 			do {
-				let changes = try store.pendingWork(
+				// Syncthing does not scan or select in folders it leaves to a gateway. Work queued for them is stale: a
+				// switch to a gateway starts only without such work, and edits are fenced from then on (Syncthing takes a
+				// folder back with a full pass). It is dropped, rather than kept in the way of the other folders' work.
+				let remote = Set(try store.remoteBindings().filter(\.isRemote).map(\.folderID))
+					.union(runner.client.remoteManagedFolderIDs()?.asArray() ?? [])
+				let pending = try store.pendingWork(
 					limit: workBatchSize, kinds: [.select, .deselectSafely, .rescan, .finishRename])
+				let stale = pending.filter { remote.contains($0.folderID) }
+				for work in stale {
+					try store.completeWork(id: work.id)
+				}
+				if !stale.isEmpty {
+					Log.info("Dropped \(stale.count) Files work items of folders accessed through a gateway")
+				}
+				let changes = pending.filter { !remote.contains($0.folderID) }
+				var completed = stale.count
 				if !changes.isEmpty {
 					let outcome = runner.run(changes)
 					pass.shouldRetry = outcome.shouldRetry
-					// Work that keeps failing would come first again, so only continue when this batch got somewhere
-					pass.hasMore = changes.count == workBatchSize && outcome.completed > 0
+					completed += outcome.completed
 					for item in outcome.deselected {
 						try store.enqueue(.evict, folderID: item.folderID, path: item.path)
 					}
 					pass.refusals = outcome.refusals
 				}
+				// Work that keeps failing would come first again, so only continue when this batch got somewhere
+				pass.hasMore = pending.count == workBatchSize && completed > 0
 				let evictions = try store.pendingWork(limit: workBatchSize, kinds: [.evict])
 				if await !evict(evictions, store: store) {
 					pass.shouldRetry = true

@@ -1,0 +1,23 @@
+{
+  "apiVersion": 1,
+  "serviceID": "svc_nfawJqjGwm48Os0jcKFukw",
+  "serviceName": "truenas",
+  "syncthingDeviceID": "ABCDEFG-HIJKLMN-OPQRSTU-VWXYZ23-4567ABC-DEFGHIJ-KLMNOPQ-RSTUVWX",
+  "authorityGeneration": 3,
+  "features": [
+    "longPoll",
+    "thumbnails.image",
+    "directoryMoves",
+    "crossFolderMoves"
+  ],
+  "limits": {
+    "pageSize": 256,
+    "maxPageSize": 1024,
+    "manifestPageSize": 1024,
+    "longPollSeconds": 60,
+    "leaseSeconds": 86400,
+    "uploadExpirySeconds": 604800,
+    "maxUploadSize": 1099511627776,
+    "maxControlBodyBytes": 1048576
+  }
+}

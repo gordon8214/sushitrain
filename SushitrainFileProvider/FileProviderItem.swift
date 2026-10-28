@@ -40,6 +40,9 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 
 	/// What only the system keeps about the item (Syncthing does not synchronize it), stored for it in the index
 	let attributes: ItemAttributes
+	/// The folder's binding, for items of a folder accessed through a gateway (nil for folders that Syncthing on this
+	/// device synchronizes)
+	let remote: RemoteFolderBinding?
 
 	var lastUsedDate: Date? { attributes.lastUsedDate }
 	var tagData: Data? { attributes.tagData }
@@ -50,13 +53,14 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 
 	init(
 		item: IndexItem, folder: IndexFolder?, isOnDevice: Bool, fallbackDate: Date? = nil,
-		attributes: ItemAttributes = ItemAttributes()
+		attributes: ItemAttributes = ItemAttributes(), remote: RemoteFolderBinding? = nil
 	) {
 		self.item = item
 		self.folder = folder
 		self.isOnDevice = isOnDevice
 		self.fallbackDate = fallbackDate
 		self.attributes = attributes
+		self.remote = remote
 	}
 
 	var itemIdentifier: NSFileProviderItemIdentifier {
@@ -89,6 +93,9 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	/// devices). This depends on the index only, because the system refreshes capabilities only when the item's version
 	/// changes; the extension checks the disk when it makes the change.
 	var capabilities: NSFileProviderItemCapabilities {
+		if let remote {
+			return remoteCapabilities(isWritable: remote.permissions.write)
+		}
 		let isWritable = folder?.acceptsLocalChanges == true
 		let isSelective = folder?.isSelective == true
 		let isKept = !isSelective || item.isSelected || item.pending == .create
@@ -122,6 +129,36 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 		}
 	}
 
+	/// In a folder accessed through a gateway, what may be changed follows the folder's permissions there. Items with a
+	/// local change the gateway has not confirmed are not evicted (their contents are staged, but the system keeps its
+	/// copy until the change is synchronized anyway).
+	private func remoteCapabilities(isWritable: Bool) -> NSFileProviderItemCapabilities {
+		switch item.kind {
+		case .folderRoot:
+			return isWritable
+				? [.allowsReading, .allowsContentEnumerating, .allowsAddingSubItems]
+				: [.allowsReading, .allowsContentEnumerating]
+		case .directory:
+			var capabilities: NSFileProviderItemCapabilities = [.allowsReading, .allowsContentEnumerating]
+			if item.pending == .none {
+				capabilities.insert(.allowsEvicting)
+			}
+			if isWritable {
+				capabilities.formUnion([.allowsAddingSubItems, .allowsRenaming, .allowsReparenting, .allowsDeleting])
+			}
+			return capabilities
+		case .file, .symlink:
+			var capabilities: NSFileProviderItemCapabilities = [.allowsReading]
+			if item.pending == .none {
+				capabilities.insert(.allowsEvicting)
+			}
+			if isWritable {
+				capabilities.formUnion([.allowsWriting, .allowsRenaming, .allowsReparenting, .allowsDeleting])
+			}
+			return capabilities
+		}
+	}
+
 	var documentSize: NSNumber? {
 		item.kind == .file ? NSNumber(value: item.size) : nil
 	}
@@ -146,20 +183,32 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 		item.kind.isContainer ? [.userReadable, .userWritable, .userExecutable] : [.userReadable, .userWritable]
 	}
 
-	/// Read by the activation rules of custom actions and decorations
+	/// Read by the activation rules of custom actions and decorations. In folders accessed through a gateway, keeping
+	/// files on this device is up to this device alone (`remoteFile`, `onDevice` and `localChange`).
 	var userInfo: [AnyHashable: Any]? {
-		[
+		if remote != nil {
+			return [
+				"selective": false,
+				"selected": false,
+				"onDevice": isOnDevice,
+				"folderRoot": item.kind == .folderRoot,
+				"remoteFile": item.kind == .file,
+				"localChange": item.pending != .none,
+			]
+		}
+		return [
 			"selective": folder?.isSelective ?? false,
 			"selected": item.isSelected,
 			"onDevice": isOnDevice,
 			"folderRoot": item.kind == .folderRoot,
+			"remoteFile": false,
 		]
 	}
 
 	/// Badges declared in the extension's Info.plist (NSFileProviderDecorations)
 	var decorations: [NSFileProviderItemDecorationIdentifier]? {
 		var decorations: [NSFileProviderItemDecorationIdentifier] = []
-		if item.kind != .folderRoot, folder?.isSelective == true, item.isSelected {
+		if remote == nil, item.kind != .folderRoot, folder?.isSelective == true, item.isSelected {
 			decorations.append(Self.decoration("kept"))
 		}
 		if item.kind == .file, FileNames.isConflictCopy(item.name) {
@@ -175,7 +224,8 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	@available(iOS 27.0, *)
 	var namespacePolicy: NSFileProviderNamespacePolicy {
 		// Folders that are kept on this device are browsable without the app, so keep them fully enumerated
-		item.kind.isContainer && item.isSelected && folder?.isSelective == true ? .materializeEagerly : .inherited
+		remote == nil && item.kind.isContainer && item.isSelected && folder?.isSelective == true
+			? .materializeEagerly : .inherited
 	}
 
 	static func versionData(_ revision: Int64) -> Data {

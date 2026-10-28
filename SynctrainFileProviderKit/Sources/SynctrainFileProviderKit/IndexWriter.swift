@@ -39,6 +39,8 @@ public final class IndexWriter {
 	private var touchedFolders: Set<String> = []
 	private var pendingRenamesByFolder: [String: PendingRenames] = [:]
 	private let now = Date().timeIntervalSince1970
+	/// Folders accessed through a gateway: their rows come from the gateway's metadata, never from Syncthing's records
+	private let remoteFolders: Set<String>
 
 	/// The short device ID of this device, used to recognize records of our own writes
 	public var localShortDeviceID: String?
@@ -49,6 +51,12 @@ public final class IndexWriter {
 		nextSequence = Int64(try IndexStore.meta(connection, "next_seq") ?? "1") ?? 1
 		startSequence = nextSequence
 		localShortDeviceID = try IndexStore.meta(connection, "local_short_id")
+		remoteFolders = try IndexStore.remoteManagedFolderIDs(connection)
+	}
+
+	/// Whether the folder is accessed through a gateway, so that Syncthing's records do not apply to it
+	public func isRemoteManaged(folderID: String) -> Bool {
+		remoteFolders.contains(folderID)
 	}
 
 	func finish() throws(IndexError) {
@@ -153,8 +161,12 @@ public final class IndexWriter {
 		}
 	}
 
-	/// Removes a folder and all of its items
+	/// Removes a folder and all of its items. Folders accessed through a gateway are kept (they leave only through an
+	/// explicit change of their binding).
 	public func removeFolder(folderID: String) throws(IndexError) {
+		if remoteFolders.contains(folderID) {
+			return
+		}
 		let start = try allocateSequencesByID()
 		try connection.run(
 			"""
@@ -330,6 +342,9 @@ public final class IndexWriter {
 		-> ApplyResult
 	{
 		var result = ApplyResult()
+		if remoteFolders.contains(folderID) {
+			return result
+		}
 		touchedFolders.insert(folderID)
 		for var record in records {
 			// Paths with names that cannot be on disk (empty, "." or "..", or containing NUL) are not shown
@@ -795,6 +810,9 @@ public final class IndexWriter {
 	}
 
 	public func finishSweep(folderID: String, token: Int64) throws(IndexError) {
+		if remoteFolders.contains(folderID) {
+			return
+		}
 		touchedFolders.insert(folderID)
 		// Entries below a directory renamed through the File Provider are where Syncthing has not seen them yet
 		let renamed = try pendingRenames(folderID: folderID).destinations.map(\.path)
@@ -866,18 +884,23 @@ public final class IndexWriter {
 
 	/// Permanently removes tombstones older than the date. Anchors from before the removed tombstones expire. Deletions
 	/// made through the File Provider that Syncthing has not confirmed yet are kept: they keep older records from
-	/// bringing the items back.
+	/// bringing the items back. So are the rows of items whose change a gateway has not confirmed (they have an
+	/// overlay): a rejected deletion brings the same row back.
 	public func pruneTombstones(before date: Date) throws(IndexError) {
 		let cutoff = date.timeIntervalSince1970
+		let prunable = """
+			deleted = 1 AND pending = 0 AND deleted_at < ?
+				AND NOT EXISTS (SELECT 1 FROM remote_overlays AS o WHERE o.item_id = items.id)
+			"""
 		guard
 			let highest = try connection.queryOne(
-				"SELECT MAX(changed_seq) FROM items WHERE deleted = 1 AND pending = 0 AND deleted_at < ?", [cutoff],
-				{ $0.optionalInt64(0) }), let highest
+				"SELECT MAX(changed_seq) FROM items WHERE \(prunable)", [cutoff], { $0.optionalInt64(0) }), let highest
 		else {
 			return
 		}
-		try connection.run("DELETE FROM items WHERE deleted = 1 AND pending = 0 AND deleted_at < ?", [cutoff])
+		try connection.run("DELETE FROM items WHERE \(prunable)", [cutoff])
 		try connection.run("DELETE FROM item_attributes WHERE item_id NOT IN (SELECT id FROM items)")
+		try IndexStore.forgetPrunedRemoteRows(connection)
 		let prunedBelow = Int64(try IndexStore.meta(connection, "pruned_below") ?? "0") ?? 0
 		try IndexStore.setMeta(connection, "pruned_below", String(max(prunedBelow, highest)))
 	}

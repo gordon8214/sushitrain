@@ -1,0 +1,35 @@
+{
+  "changes": [
+    {
+      "id": "itm_hF6RgxMZ6JxNZWvbgMJ4rA",
+      "folderID": "Documents",
+      "parentID": "itm_wG3IzBclHqTA5RCcjR2j2g",
+      "name": "report.pdf",
+      "path": "Taxes/report.pdf",
+      "kind": "file",
+      "size": 266240,
+      "modifiedNs": 1793150180790414961,
+      "mode": 420,
+      "writable": true,
+      "revision": "r1.wxfGgXGPxa5LXQYSJhB68RUj363eF2MJjgCVQ4H0FiA",
+      "contentID": "c1.0PQuLA1Ythwbj9UtAT7Ozmyq4hWb4yL8x0Mr5i8QwRI.266240",
+      "availability": "local"
+    },
+    {
+      "id": "itm_y6BrVzb69n5UsHtWHq6UOQ",
+      "folderID": "Documents",
+      "parentID": "itm_wG3IzBclHqTA5RCcjR2j2g",
+      "name": "old.txt",
+      "path": "Taxes/old.txt",
+      "kind": "file",
+      "size": 0,
+      "modifiedNs": 1793150180790414961,
+      "mode": 0,
+      "writable": true,
+      "revision": "r1.wQUIbDbgBVes8mh3bbQs7X-2IJFI6s4cyZeRTSN42iI",
+      "deleted": true
+    }
+  ],
+  "cursor": "g3.1207",
+  "more": false
+}

@@ -48,6 +48,17 @@ public final class LocalChangeRecorder {
 		}
 	}
 
+	/// Edits are refused while the folder is being switched to or from a gateway, and for folders accessed through a
+	/// gateway, whose edits go to its outbox (checked in the recording transaction)
+	private func checkSyncthingOwned(_ folderID: String) throws(IndexError) {
+		if try IndexStore.isRemoteMigrationFenced(connection, folderID: folderID) {
+			throw .notAllowed("the folder is being switched to another way of access; try again when that is done")
+		}
+		if try IndexStore.remoteBinding(connection, folderID: folderID)?.isRemote == true {
+			throw .notAllowed("the folder is accessed through a gateway; its changes are recorded for the gateway")
+		}
+	}
+
 	private func allocateSequence() -> Int64 {
 		defer { nextSequence += 1 }
 		return nextSequence
@@ -183,6 +194,7 @@ public final class LocalChangeRecorder {
 		guard kind != .folderRoot else {
 			throw .notAllowed("folder roots cannot be created")
 		}
+		try checkSyncthingOwned(folderID)
 		let path = FileNames.normalized(path)
 		_ = try container(parentID, folderID: folderID, for: path)
 		let name = FileNames.lastComponent(path)
@@ -221,6 +233,7 @@ public final class LocalChangeRecorder {
 		guard current.kind != .folderRoot else {
 			throw .notAllowed("folder roots cannot be changed")
 		}
+		try checkSyncthingOwned(current.folderID)
 		let size = current.kind == .file ? (size ?? current.size) : 0
 		// A creation or rename that Syncthing has not seen yet stays one; it now expects the new state
 		let pending: PendingChange = current.pending == .none ? .modify : current.pending
@@ -247,6 +260,7 @@ public final class LocalChangeRecorder {
 		guard moving.kind != .folderRoot else {
 			throw .notAllowed("folder roots cannot be moved")
 		}
+		try checkSyncthingOwned(moving.folderID)
 		let oldPath = moving.path
 		if path.utf8.elementsEqual(oldPath.utf8) {
 			return moving
@@ -342,6 +356,8 @@ public final class LocalChangeRecorder {
 		guard moving.kind != .folderRoot else {
 			throw .notAllowed("folder roots cannot be moved")
 		}
+		try checkSyncthingOwned(moving.folderID)
+		try checkSyncthingOwned(folderID)
 		if moving.folderID == folderID {
 			return try recordMove(moving, to: parentID, path: path)
 		}
@@ -389,6 +405,7 @@ public final class LocalChangeRecorder {
 		guard current.kind != .folderRoot else {
 			throw .notAllowed("folder roots cannot be deleted")
 		}
+		try checkSyncthingOwned(current.folderID)
 		let (subtree, values) = Self.subtree(below: current.path)
 		let start = try allocateSequences(for: current)
 		// A renamed item keeps the path Syncthing knows it by, so that records of that path do not bring it back

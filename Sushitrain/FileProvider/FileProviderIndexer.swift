@@ -187,7 +187,16 @@
 		}
 
 		func exposedFolderIDs() -> [String] {
-			exposedFolders().map(\.folderID)
+			let remote = (try? remoteFolderIDs()) ?? []
+			return exposedFolders().map(\.folderID).filter { !remote.contains($0) }
+		}
+
+		/// Folders whose rows come from a gateway, or that Syncthing on this device leaves to one while a switch is
+		/// under way. The index keeps their rows (and so their Files identifiers); Syncthing's records never apply to
+		/// them, and they never leave for not being exposed. Only an explicit switch back changes that.
+		private func remoteFolderIDs() throws -> Set<String> {
+			let bound = try store.remoteBindings().filter(\.isRemote).map(\.folderID)
+			return Set(bound).union(client.remoteManagedFolderIDs()?.asArray() ?? [])
 		}
 
 		/// Folders that are shown in the Files app: internal folders with a native file system in the shared container,
@@ -208,9 +217,11 @@
 		/// Adds and removes folders. Returns whether the index changed, and the folders that were added (which still need
 		/// to be populated).
 		private func reconcileFolderList() throws -> (Bool, Set<String>) {
-			let exposed = exposedFolders()
+			let remote = try remoteFolderIDs()
+			let exposed = exposedFolders().filter { !remote.contains($0.folderID) }
 			let exposedIDs = Set(exposed.map(\.folderID))
-			let indexed = Dictionary(uniqueKeysWithValues: try store.folders().map { ($0.folderID, $0) })
+			let indexed = Dictionary(
+				uniqueKeysWithValues: try store.folders().filter { !remote.contains($0.folderID) }.map { ($0.folderID, $0) })
 			let indexedIDs = Set(indexed.keys)
 			let shortID = client.shortDeviceID()
 			// Renamed folders, and ones whose type or mode changed (which changes what can be done with their items)
@@ -237,6 +248,9 @@
 		}
 
 		private func sync(folderID: String, fullPass: Bool) throws -> Bool {
+			if try remoteFolderIDs().contains(folderID) {
+				return false
+			}
 			guard let folder = client.folder(withID: folderID),
 				let description = exposedFolders().first(where: { $0.folderID == folderID })
 			else {

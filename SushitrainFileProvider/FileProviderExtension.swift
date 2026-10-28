@@ -55,18 +55,22 @@ struct Completion<T>: @unchecked Sendable {
 /// Serves the Synctrain location in the Files app from the shared index that the app maintains. This process must
 /// stay small (the system terminates File Provider extensions on iOS that use more than about 20 MB), so it does not
 /// run Syncthing: files on this device are cloned directly, other files are fetched through the app while it runs.
+/// Folders accessed through a gateway are served by `RemoteProvider` instead, which talks to the gateway itself.
 final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 	let domain: NSFileProviderDomain
 	let context: ExtensionContext?
 	let fetcher: ContentFetcher?
 	private let writer: LocalWriter?
+	let remote: RemoteProvider?
 
 	required init(domain: NSFileProviderDomain) {
 		self.domain = domain
 		self.context = ExtensionContext()
 		self.fetcher = context.map { ContentFetcher(context: $0) }
 		self.writer = context.map { LocalWriter(context: $0) }
+		self.remote = context.map { RemoteProvider(context: $0, domain: domain) }
 		super.init()
+		remote?.start()
 		if let context {
 			// Left behind when an earlier instance was terminated in the middle of a change or a download
 			LocalWriter.removeLeftovers(in: context.container.stagingURL)
@@ -81,6 +85,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
 	func invalidate() {
 		fetcher?.invalidate()
+		remote?.invalidate()
 	}
 
 	private var unavailableError: Error {
@@ -129,6 +134,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		case .workingSet:
 			return WorkingSetEnumerator(context: context)
 		case .rootContainer:
+			remote?.refreshSoon()
 			return ContainerEnumerator(context: context, parentID: nil)
 		case .trashContainer:
 			// There is no trash: deleting removes items on all devices
@@ -145,6 +151,8 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 			guard let item = found, item.kind.isContainer else {
 				throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: containerItemIdentifier)
 			}
+			// Only folders accessed through a gateway are refreshed; this never waits for it
+			remote?.refreshSoon(folderIDs: [item.folderID])
 			return ContainerEnumerator(context: context, parentID: item.id)
 		}
 	}
@@ -180,6 +188,18 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		}
 		catch {
 			completionHandler(nil, nil, error)
+			return Progress()
+		}
+
+		// Folders accessed through a gateway never use the folder tree or the app
+		do {
+			if let remote, let binding = try context.remoteBinding(folderID: item.folderID) {
+				return remote.fetchContents(
+					of: item, binding: binding, to: destination, request: request, completionHandler: completionHandler)
+			}
+		}
+		catch {
+			completionHandler(nil, nil, error.fileProviderError)
 			return Progress()
 		}
 
@@ -243,7 +263,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
 	/// Fields only the system keeps; Syncthing does not sync them, so changing them needs no work on disk (tags, the
 	/// favorite rank and the last used date are stored in the index)
-	private static let systemFields: NSFileProviderItemFields = [
+	static let systemFields: NSFileProviderItemFields = [
 		.lastUsedDate, .tagData, .favoriteRank, .extendedAttributes, .typeAndCreator, .fileSystemFlags, .creationDate,
 	]
 
@@ -254,6 +274,20 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 	) -> Progress {
 		guard let context, let writer else {
 			completionHandler(nil, [], false, unavailableError)
+			return Progress()
+		}
+		do {
+			if let remote, let parentID = itemTemplate.parentItemIdentifier.itemID,
+				let parent = try context.store.item(id: parentID),
+				let binding = try context.remoteBinding(folderID: parent.folderID)
+			{
+				return remote.createItem(
+					basedOn: itemTemplate, fields: fields, contents: url, options: options, parent: parent,
+					binding: binding, completionHandler: completionHandler)
+			}
+		}
+		catch {
+			completionHandler(nil, [], false, Self.reportable(error))
 			return Progress()
 		}
 		do {
@@ -282,6 +316,27 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		}
 		guard let context, let writer else {
 			completionHandler(nil, [], false, unavailableError)
+			return Progress()
+		}
+		do {
+			if let remote, let id = item.itemIdentifier.itemID, let stored = try context.store.item(id: id) {
+				if let binding = try context.remoteBinding(folderID: stored.folderID) {
+					return remote.modifyItem(
+						item, baseVersion: version, changedFields: changedFields, contents: newContents,
+						options: options, item: stored, binding: binding, completionHandler: completionHandler)
+				}
+				// Into a folder accessed through a gateway: Syncthing on this device cannot move an item there
+				if changedFields.contains(.parentItemIdentifier), let parentID = item.parentItemIdentifier.itemID,
+					let parent = try context.store.item(id: parentID), parent.folderID != stored.folderID,
+					try context.remoteBinding(folderID: parent.folderID) != nil
+				{
+					throw RemoteFailure.acrossEngines
+				}
+			}
+		}
+		catch {
+			trace("modify \(item.itemIdentifier.rawValue) fields \(changedFields.rawValue) failed: \(error)")
+			completionHandler(nil, [], false, Self.reportable(error))
 			return Progress()
 		}
 		do {
@@ -324,6 +379,17 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 	) -> Progress {
 		guard let writer else {
 			completionHandler(unavailableError)
+			return Progress()
+		}
+		do {
+			if let remote, let binding = try remote.binding(ofDeleted: identifier) {
+				return remote.deleteItem(
+					identifier: identifier, baseVersion: version, options: options, binding: binding,
+					completionHandler: completionHandler)
+			}
+		}
+		catch {
+			completionHandler(Self.reportable(error))
 			return Progress()
 		}
 		do {
@@ -396,22 +462,21 @@ extension FileProviderExtension: NSFileProviderCustomAction {
 
 		do {
 			var items: [IndexItem] = []
+			var remoteItems: [IndexItem] = []
 			for identifier in itemIdentifiers {
 				if let id = identifier.itemID, let item = try context.store.item(id: id) {
-					items.append(item)
-				}
-			}
-			try context.store.recordLocalChanges { recorder throws(IndexError) in
-				for item in items where item.kind != .folderRoot {
-					// The latest choice wins, except that new items are still selected: that is how Syncthing gets
-					// them at all (the app selects before it deselects, and only deselects what another device has)
-					if kind == .select || (item.pending != .create && item.pending != .rename) {
-						try recorder.dequeue(
-							kind == .select ? .deselectSafely : .select, folderID: item.folderID, path: item.path)
+					if remote != nil, try context.remoteBinding(folderID: item.folderID) != nil {
+						remoteItems.append(item)
 					}
-					try recorder.enqueue(kind, folderID: item.folderID, path: item.path)
+					else {
+						items.append(item)
+					}
 				}
 			}
+			if let remote, !remoteItems.isEmpty {
+				return perform(kind, legacy: items, remote: remoteItems, with: remote, completionHandler: completionHandler)
+			}
+			try Self.queue(kind, for: items, in: context)
 			trace("action \(actionIdentifier.rawValue) on \(items.map(\.id))")
 			SharedNotification.workQueued.post()
 			completionHandler(nil)
@@ -420,5 +485,55 @@ extension FileProviderExtension: NSFileProviderCustomAction {
 			completionHandler(Self.reportable(error))
 		}
 		return Progress()
+	}
+}
+
+extension FileProviderExtension {
+	/// Queues the change of what Syncthing keeps for the items, for the app
+	fileprivate static func queue(_ kind: WorkKind, for items: [IndexItem], in context: ExtensionContext)
+		throws(IndexError)
+	{
+		try context.store.recordLocalChanges { recorder throws(IndexError) in
+			for item in items where item.kind != .folderRoot {
+				// The latest choice wins, except that new items are still selected: that is how Syncthing gets
+				// them at all (the app selects before it deselects, and only deselects what another device has)
+				if kind == .select || (item.pending != .create && item.pending != .rename) {
+					try recorder.dequeue(
+						kind == .select ? .deselectSafely : .select, folderID: item.folderID, path: item.path)
+				}
+				try recorder.enqueue(kind, folderID: item.folderID, path: item.path)
+			}
+		}
+	}
+
+	/// Carries out an action on a selection with items of folders accessed through a gateway (for which it changes only
+	/// what this device keeps), and queues it for the others as usual
+	fileprivate func perform(
+		_ kind: WorkKind, legacy items: [IndexItem], remote remoteItems: [IndexItem], with remote: RemoteProvider,
+		completionHandler: @escaping ((any Error)?) -> Void
+	) -> Progress {
+		do {
+			if let context, !items.isEmpty {
+				try Self.queue(kind, for: items, in: context)
+				SharedNotification.workQueued.post()
+			}
+		}
+		catch {
+			completionHandler(Self.reportable(error))
+			return Progress()
+		}
+		let completion = Completion(call: completionHandler)
+		let task = Task {
+			do {
+				try await remote.perform(keep: kind == .select, on: remoteItems)
+				completion.call(nil)
+			}
+			catch {
+				completion.call(Self.reportable(error))
+			}
+		}
+		let progress = Progress(totalUnitCount: Int64(remoteItems.count))
+		progress.cancellationHandler = { task.cancel() }
+		return progress
 	}
 }

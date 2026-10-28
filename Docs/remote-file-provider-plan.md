@@ -1,6 +1,12 @@
 # Remote file access for the Files extension
 
 Status: implementation plan, October 27, 2026. This replaces the proposed native iOS synchronization-engine rewrite.
+Implemented on the `file-provider` branch: the API contract in [remote-api](remote-api/openapi.yaml), the service in
+`SushitrainCore/gateway` (Linux host `SushitrainCore/cmd/synctrain-gateway`, macOS host in `Sushitrain/Gateway`), the
+engine hook in the [`gordon8214/syncthing`](https://github.com/gordon8214/syncthing) fork (branch
+`synctrain/v2.1.7`), the shared client in `SynctrainFileProviderKit/Sources/SynctrainFileProviderKit/Remote`, and its
+use in the extension and the iOS app. Operating it: [gateway.md](gateway.md). The device release gates below (memory
+footprint, background sessions after termination, local network access) still need a physical iPhone.
 
 ## Goal and architecture
 

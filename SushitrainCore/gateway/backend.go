@@ -1,0 +1,314 @@
+// Copyright (C) 2026 Gordon
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this file,
+// You can obtain one at https://mozilla.org/MPL/2.0/.
+
+package gateway
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"sync"
+	"time"
+
+	"github.com/syncthing/syncthing/lib/config"
+	"github.com/syncthing/syncthing/lib/events"
+	"github.com/syncthing/syncthing/lib/osutil"
+	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/syncthing/syncthing/lib/syncthing"
+)
+
+// FolderInfo describes a Syncthing folder as the service needs it
+type FolderInfo struct {
+	ID    string
+	Label string
+	// config.FolderType's text form: sendreceive, sendonly, receiveonly or receiveencrypted
+	Type   string
+	Paused bool
+	// Whether this device holds only a selection of the folder
+	Selective bool
+	// The folder's directory, when its filesystem is the native one ("basic" or a wrapper of it)
+	NativePath     string
+	FilesystemType string
+	MarkerName     string
+	ModTimeWindow  time.Duration
+	IgnorePerms    bool
+}
+
+// GlobalEntry is a global index entry without blocks, as iterated by name
+type GlobalEntry struct {
+	Name     string
+	Sequence int64
+	Type     protocol.FileInfoType
+	Deleted  bool
+	Invalid  bool
+}
+
+// RemoteFileBackend is what the service needs from the Syncthing engine of its host
+type RemoteFileBackend interface {
+	DeviceID() protocol.DeviceID
+	Folder(id string) (FolderInfo, bool)
+	FolderState(id string) string
+	// IndexID and LocalSequence identify the state of this device's index of a folder, to detect a reset or restore
+	IndexID(folder string) (protocol.IndexID, error)
+	LocalSequence(folder string) (int64, error)
+	// GlobalEntries calls fn for every global index entry of the folder
+	GlobalEntries(folder string, fn func(GlobalEntry) error) error
+	GlobalFile(folder, name string) (protocol.FileInfo, bool, error)
+	LocalFile(folder, name string) (protocol.FileInfo, bool, error)
+	// BlockAvailable reports whether a connected device can provide the block
+	BlockAvailable(folder string, file protocol.FileInfo, index int) bool
+	// FetchBlock gets a block from a connected device. The result is verified against the block's hash.
+	FetchBlock(ctx context.Context, folder string, file protocol.FileInfo, index int) ([]byte, error)
+	// RunInFolderLoop runs fn where it cannot race the folder's scanner and puller. It stops waiting for that when ctx
+	// is done; fn's context also ends then.
+	RunInFolderLoop(ctx context.Context, folder string, fn func(context.Context, syncthing.FolderHandle) error) error
+	// ScanPaths has the given paths scanned soon
+	ScanPaths(folder string, paths []string)
+	// Watch calls fn with a folder ID whenever that folder's index may have changed, until stop is called
+	Watch(fn func(folder string)) (stop func())
+}
+
+var (
+	errNoPeer        = errors.New("no connected device has the block")
+	errBlockMismatch = errors.New("block does not match its hash")
+)
+
+// verifyBlock checks a block's contents against its hash. Blocks are never trusted unverified, whether read from
+// disk or received from a peer.
+func verifyBlock(data []byte, block protocol.BlockInfo) error {
+	if len(data) != block.Size {
+		return fmt.Errorf("%w: %d bytes, expected %d", errBlockMismatch, len(data), block.Size)
+	}
+	sum := sha256.Sum256(data)
+	if !bytes.Equal(sum[:], block.Hash) {
+		return errBlockMismatch
+	}
+	return nil
+}
+
+// EngineBackend implements RemoteFileBackend on a running Syncthing app
+type EngineBackend struct {
+	App    *syncthing.App
+	Config config.Wrapper
+	Events events.Logger
+	ID     protocol.DeviceID
+	// Optional: fetches a block from peers (for instance with the host's peer selection). Results are verified.
+	Fetch func(ctx context.Context, folder string, file protocol.FileInfo, index int) ([]byte, error)
+	// Optional: whether the folder holds only a selection of its files on this device
+	IsSelective func(folderID string) bool
+
+	scanMutex sync.Mutex
+	scans     map[string]map[string]struct{}
+}
+
+func (b *EngineBackend) DeviceID() protocol.DeviceID {
+	return b.ID
+}
+
+func (b *EngineBackend) Folder(id string) (FolderInfo, bool) {
+	fc, ok := b.Config.Folder(id)
+	if !ok {
+		return FolderInfo{}, false
+	}
+	info := FolderInfo{
+		ID:             fc.ID,
+		Label:          fc.Label,
+		Type:           fc.Type.String(),
+		Paused:         fc.Paused,
+		FilesystemType: string(fc.FilesystemType),
+		MarkerName:     fc.MarkerName,
+		ModTimeWindow:  fc.ModTimeWindow(),
+		IgnorePerms:    fc.IgnorePerms,
+	}
+	if info.Label == "" {
+		info.Label = fc.ID
+	}
+	if isNativeFilesystemType(info.FilesystemType) {
+		if path, err := filepath.Abs(fc.Path); err == nil {
+			info.NativePath = path
+		}
+	}
+	if b.IsSelective != nil {
+		info.Selective = b.IsSelective(fc.ID)
+	}
+	return info, true
+}
+
+// isNativeFilesystemType reports whether a folder of this filesystem type is a plain directory on disk
+func isNativeFilesystemType(fsType string) bool {
+	return fsType == string(config.FilesystemTypeBasic) || fsType == "basic-trash"
+}
+
+func (b *EngineBackend) FolderState(id string) string {
+	state, _, err := b.App.Internals.FolderState(id)
+	if err != nil {
+		return "error"
+	}
+	return state
+}
+
+func (b *EngineBackend) IndexID(folder string) (protocol.IndexID, error) {
+	return b.App.Internals.LocalIndexID(folder)
+}
+
+func (b *EngineBackend) LocalSequence(folder string) (int64, error) {
+	return b.App.Internals.LocalSequence(folder)
+}
+
+func (b *EngineBackend) GlobalEntries(folder string, fn func(GlobalEntry) error) error {
+	entries, errFn := b.App.Internals.AllGlobalFiles(folder)
+	for meta := range entries {
+		entry := GlobalEntry{
+			// Syncthing returns names in the platform's form (NFD on macOS); item paths use its normalized form,
+			// which is also the order entries come in
+			Name:     osutil.NormalizedFilename(meta.Name),
+			Sequence: meta.Sequence,
+			Type:     meta.Type,
+			Deleted:  meta.Deleted,
+			Invalid:  meta.LocalFlags&protocol.LocalInvalidFlags != 0,
+		}
+		if err := fn(entry); err != nil {
+			return err
+		}
+	}
+	return errFn()
+}
+
+func (b *EngineBackend) GlobalFile(folder, name string) (protocol.FileInfo, bool, error) {
+	return b.App.Internals.GlobalFileInfo(folder, name)
+}
+
+func (b *EngineBackend) LocalFile(folder, name string) (protocol.FileInfo, bool, error) {
+	return b.App.Internals.LocalFileInfo(folder, name)
+}
+
+func (b *EngineBackend) BlockAvailable(folder string, file protocol.FileInfo, index int) bool {
+	availables, err := b.App.Internals.BlockAvailability(folder, file, file.Blocks[index])
+	if err != nil {
+		return false
+	}
+	for _, available := range availables {
+		if b.App.Internals.IsConnectedTo(available.ID) {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *EngineBackend) FetchBlock(ctx context.Context, folder string, file protocol.FileInfo, index int) ([]byte, error) {
+	block := file.Blocks[index]
+	if b.Fetch != nil {
+		data, err := b.Fetch(ctx, folder, file, index)
+		if err != nil {
+			return nil, err
+		}
+		return data, verifyBlock(data, block)
+	}
+	availables, err := b.App.Internals.BlockAvailability(folder, file, block)
+	if err != nil {
+		return nil, err
+	}
+	lastErr := errNoPeer
+	for _, available := range availables {
+		if !b.App.Internals.IsConnectedTo(available.ID) {
+			continue
+		}
+		data, err := b.App.Internals.DownloadBlock(ctx, available.ID, folder, file.Name, index, block,
+			available.FromTemporary)
+		if err == nil {
+			if err = verifyBlock(data, block); err == nil {
+				return data, nil
+			}
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func (b *EngineBackend) RunInFolderLoop(ctx context.Context, folder string,
+	fn func(context.Context, syncthing.FolderHandle) error,
+) error {
+	return b.App.Internals.RunInFolderLoop(ctx, folder, fn)
+}
+
+// ScanPaths queues the paths and scans them in the background, coalescing requests that arrive while a scan of the
+// folder waits
+func (b *EngineBackend) ScanPaths(folder string, paths []string) {
+	b.scanMutex.Lock()
+	if b.scans == nil {
+		b.scans = make(map[string]map[string]struct{})
+	}
+	pending, running := b.scans[folder]
+	if !running {
+		pending = make(map[string]struct{})
+		b.scans[folder] = pending
+	}
+	for _, p := range paths {
+		pending[p] = struct{}{}
+	}
+	b.scanMutex.Unlock()
+	if running {
+		return
+	}
+	go func() {
+		for {
+			b.scanMutex.Lock()
+			batch := b.scans[folder]
+			if len(batch) == 0 {
+				delete(b.scans, folder)
+				b.scanMutex.Unlock()
+				return
+			}
+			b.scans[folder] = make(map[string]struct{})
+			b.scanMutex.Unlock()
+			list := make([]string, 0, len(batch))
+			for p := range batch {
+				list = append(list, p)
+			}
+			_ = b.App.Internals.ScanFolderSubdirs(folder, list)
+		}
+	}()
+}
+
+func (b *EngineBackend) Watch(fn func(folder string)) func() {
+	sub := b.Events.Subscribe(events.LocalIndexUpdated | events.RemoteIndexUpdated | events.FolderPaused |
+		events.FolderResumed)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case ev, ok := <-sub.C():
+				if !ok {
+					return
+				}
+				if data, ok := ev.Data.(map[string]any); ok {
+					if folder, ok := data["folder"].(string); ok {
+						fn(folder)
+					}
+				} else if data, ok := ev.Data.(map[string]string); ok {
+					if folder, ok := data["id"]; ok {
+						fn(folder)
+					}
+				}
+			}
+		}
+	}()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			close(done)
+			sub.Unsubscribe()
+		})
+	}
+}

@@ -1,0 +1,21 @@
+{
+  "contentID": "c1.0PQuLA1Ythwbj9UtAT7Ozmyq4hWb4yL8x0Mr5i8QwRI.266240",
+  "blockSize": 131072,
+  "blocks": [
+    {
+      "offset": 0,
+      "size": 131072,
+      "hash": "PaKJLTeCPZKY4dUBHX3PqvLZ2abUZemb4zr1vh2HwSs"
+    },
+    {
+      "offset": 131072,
+      "size": 131072,
+      "hash": "mlnF-CKaq1Xp-FUXPvlEhaq4SX7qBYjzZchx1tBWFyI"
+    },
+    {
+      "offset": 262144,
+      "size": 4096,
+      "hash": "bQsH7nc1kfKhtJLTymWv3vyQ4crfzFQqdASLsK59qic"
+    }
+  ]
+}

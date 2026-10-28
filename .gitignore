@@ -6,6 +6,7 @@
 *.p12
 /SushitrainCore/gobind
 /SushitrainCore/gomobile
+/SushitrainCore/synctrain-gateway
 /.build
 /SynctrainFileProviderKit/.build
 /SynctrainFileProviderKit/.swiftpm

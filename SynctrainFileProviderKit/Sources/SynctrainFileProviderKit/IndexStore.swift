@@ -12,7 +12,7 @@ public struct IndexStore: Sendable {
 	/// Where the folders are, to compare Syncthing's records with the files on disk (nil when only the index is used)
 	let container: SharedContainer?
 
-	static let schemaVersion = 4
+	static let schemaVersion = 7
 
 	static let itemColumns = """
 		id, folder_id, path, parent_id, name, kind, size, mod_ns, blocks_hash, modified_by, content_rev, meta_rev, \
@@ -41,9 +41,10 @@ public struct IndexStore: Sendable {
 		}
 	}
 
-	static func migrate(_ connection: SQLiteConnection) throws(IndexError) {
+	/// Brings the database to the schema version (the current one, except in tests of older versions)
+	static func migrate(_ connection: SQLiteConnection, to target: Int = schemaVersion) throws(IndexError) {
 		let version = try connection.userVersion
-		if version == schemaVersion {
+		if version == target {
 			return
 		}
 		if version > schemaVersion {
@@ -53,13 +54,13 @@ public struct IndexStore: Sendable {
 		try connection.transaction { () throws(IndexError) in
 			// Another process may have migrated in the meantime
 			let version = try connection.userVersion
-			if version >= schemaVersion {
+			if version >= target {
 				return
 			}
 			if version < 1 {
 				try createInitialSchema(connection)
 			}
-			if version < 2 {
+			if version < 2, target >= 2 {
 				// For changes made through the File Provider: where a renamed item was before, and the Syncthing
 				// sequence the folder's index was at (records up to it predate the change)
 				try connection.execute(
@@ -68,7 +69,7 @@ public struct IndexStore: Sendable {
 					ALTER TABLE items ADD COLUMN pending_after INTEGER NOT NULL DEFAULT 0;
 					""")
 			}
-			if version < 3 {
+			if version < 3, target >= 3 {
 				try connection.execute(
 					"""
 					CREATE INDEX IF NOT EXISTS items_implied ON items(folder_id) WHERE implied = 1 AND deleted = 0;
@@ -86,7 +87,7 @@ public struct IndexStore: Sendable {
 					""")
 				try canonicalizePaths(connection)
 			}
-			if version < 4 {
+			if version < 4, target >= 4 {
 				// What the system keeps about items but Syncthing does not synchronize (tags, favorites, recents)
 				try connection.execute(
 					"""
@@ -98,7 +99,17 @@ public struct IndexStore: Sendable {
 					);
 					""")
 			}
-			try connection.setUserVersion(schemaVersion)
+			if version < 5, target >= 5 {
+				// Folders accessed through a gateway's remote file API (see RemoteStore.swift)
+				try createRemoteSchema(connection)
+			}
+			if version < 6, target >= 6 {
+				try addOutboxConflictPolicy(connection)
+			}
+			if version < 7, target >= 7 {
+				try addOriginsAndDiscards(connection)
+			}
+			try connection.setUserVersion(target)
 		}
 	}
 
@@ -456,12 +467,23 @@ public struct IndexStore: Sendable {
 		}
 	}
 
-	/// Removes all items and folders and starts a new generation, which invalidates all anchors handed out before
+	/// Removes all items and folders and starts a new generation, which invalidates all anchors handed out before.
+	/// Folders accessed through a gateway keep their items (and so their gateway item mappings), overlays, outbox and
+	/// staged files; the reset is refused while any of their operations is unresolved.
 	public func reset() throws(IndexError) {
 		try transaction { connection throws(IndexError) in
-			try connection.run("DELETE FROM items")
-			try connection.run("DELETE FROM folders")
-			try connection.run("DELETE FROM item_attributes")
+			if try Self.hasUnresolvedRemoteMutations(connection) {
+				throw .notAllowed("changes to folders on a gateway are still being sent")
+			}
+			// A switch in progress resumes from its journal and the rows it fenced, which a reset would drop
+			if try connection.queryOne("SELECT EXISTS (SELECT 1 FROM remote_migrations)", [], { $0.bool(0) }) == true {
+				throw .notAllowed("a folder is being switched between Syncthing and a gateway")
+			}
+			let kept = "SELECT folder_id FROM remote_bindings WHERE access_mode = '\(RemoteAccessMode.remoteAPI.rawValue)'"
+			try connection.run(
+				"DELETE FROM item_attributes WHERE item_id IN (SELECT id FROM items WHERE folder_id NOT IN (\(kept)))")
+			try connection.run("DELETE FROM items WHERE folder_id NOT IN (\(kept))")
+			try connection.run("DELETE FROM folders WHERE folder_id NOT IN (\(kept))")
 			try Self.setMeta(connection, "generation", UUID().uuidString)
 			try Self.setMeta(connection, "pruned_below", "0")
 		}

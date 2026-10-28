@@ -13,7 +13,8 @@ import UniformTypeIdentifiers
 /// Thumbnails made without the system downloading files into its own copy first. Files on this device are read where
 /// they are in the folder. Files that are only on other devices are fetched through the app while it is awake: videos
 /// are streamed (only the frames needed are transferred), other files are downloaded up to a size. Items without a
-/// thumbnail get the icon for their type.
+/// thumbnail get the icon for their type. In folders accessed through a gateway, thumbnails come from the gateway
+/// when it renders the type; otherwise only images this device holds are decoded here.
 extension FileProviderExtension: NSFileProviderThumbnailing {
 	private static let defaultThumbnailSize: CGFloat = 256
 	/// Larger files (other than videos) that are only on other devices get no thumbnail (fetching them takes too long)
@@ -23,6 +24,8 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 	private static let maximumDecodedPixels = 20_000_000
 	/// How long a thumbnail of a file on another device may take
 	private static let remoteTimeout: Duration = .seconds(20)
+	/// How long a gateway's thumbnail may take. A gateway that does not answer in time is not asked again for a while.
+	private static let gatewayTimeout: Duration = .seconds(5)
 
 	func fetchThumbnails(
 		for itemIdentifiers: [NSFileProviderItemIdentifier], requestedSize size: CGSize,
@@ -38,6 +41,7 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 		let perThumbnail = Completion(call: perThumbnailCompletionHandler)
 		let completion = Completion(call: completionHandler)
 		let fetcher = self.fetcher
+		let remoteProvider = self.remote
 
 		let task = Task.detached(priority: .utility) {
 			var remote: RemoteFiles? = nil
@@ -45,22 +49,32 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 				if progress.isCancelled {
 					break
 				}
-				// One at a time, also across requests: the extension has little memory to spare
-				await ThumbnailQueue.shared.acquire()
 				var data: Data? = nil
 				var error: (any Error)? = nil
 				do {
 					if let id = identifier.itemID, let item = try context.store.item(id: id), item.kind == .file {
 						let type = UTType(filenameExtension: (item.name as NSString).pathExtension) ?? .data
-						if context.isOnDevice(item) {
-							data = await Self.thumbnail(
-								of: context.localURL(for: item), type: type, maximumPixels: maximumPixels)
+						if let remoteProvider, let binding = try context.remoteBinding(folderID: item.folderID) {
+							// Waiting for the gateway takes no memory: only what is decoded here waits for the queue
+							data = try await Self.remoteThumbnail(
+								of: item, binding: binding, provider: remoteProvider, type: type,
+								maximumPixels: maximumPixels)
 						}
-						else if let fetcher {
-							if remote == nil {
-								remote = await RemoteFiles(fetcher: fetcher)
+						else {
+							// One at a time, also across requests: the extension has little memory to spare
+							data = try await Self.oneAtATime {
+								if context.isOnDevice(item) {
+									return await Self.thumbnail(
+										of: context.localURL(for: item), type: type, maximumPixels: maximumPixels)
+								}
+								guard let fetcher else {
+									return nil
+								}
+								if remote == nil {
+									remote = await RemoteFiles(fetcher: fetcher)
+								}
+								return try await remote?.thumbnail(of: item, type: type, maximumPixels: maximumPixels)
 							}
-							data = try await remote?.thumbnail(of: item, type: type, maximumPixels: maximumPixels)
 						}
 					}
 				}
@@ -68,7 +82,6 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 					// Not "no thumbnail" (which the system keeps until the item changes): it may work later
 					error = CocoaError(.fileReadUnknown, userInfo: [NSUnderlyingErrorKey: failure as NSError])
 				}
-				await ThumbnailQueue.shared.release()
 				perThumbnail.call(identifier, data, error)
 				progress.completedUnitCount += 1
 			}
@@ -118,6 +131,51 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 				_ = try await fetcher.download(item, from: heartbeat, to: temporary, progress: Progress())
 			}
 			return await FileProviderExtension.thumbnail(of: temporary, type: type, maximumPixels: maximumPixels)
+		}
+	}
+
+	/// A thumbnail of a file in a folder accessed through a gateway: the gateway's, when it renders the type (for the
+	/// exact revision), else one decoded here from an image this device holds. Videos are never streamed and files are
+	/// never downloaded for it.
+	private static func remoteThumbnail(
+		of item: IndexItem, binding: RemoteFolderBinding, provider: RemoteProvider, type: UTType, maximumPixels: CGFloat
+	) async throws -> Data? {
+		let decodable = type.conforms(to: .image) && !type.conforms(to: .rawImage)
+		do {
+			let data = try await withTimeout(gatewayTimeout) {
+				try await provider.gatewayThumbnail(of: item, binding: binding, type: type, maximumPixels: maximumPixels)
+			}
+			if let data {
+				return data
+			}
+		}
+		catch {
+			if error is CancellationError, !Task.isCancelled, let serviceID = binding.serviceID {
+				// Too slow: the next thumbnails do not wait for it again
+				provider.noteUnresponsive(serviceID: serviceID)
+			}
+			// Unreachable, or too slow: an image this device holds still does
+			guard decodable, try provider.localCopy(of: item) != nil else {
+				throw error
+			}
+		}
+		guard decodable, let local = try provider.localCopy(of: item) else {
+			return nil
+		}
+		return try await oneAtATime { autoreleasepool { imageThumbnail(of: local, maximumPixels: maximumPixels) } }
+	}
+
+	/// Runs the work while no other thumbnail is made in the extension (decoding takes much of its memory)
+	private static func oneAtATime<T>(_ work: () async throws -> T) async throws -> T {
+		await ThumbnailQueue.shared.acquire()
+		do {
+			let result = try await work()
+			await ThumbnailQueue.shared.release()
+			return result
+		}
+		catch {
+			await ThumbnailQueue.shared.release()
+			throw error
 		}
 	}
 

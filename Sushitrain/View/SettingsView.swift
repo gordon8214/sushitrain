@@ -943,6 +943,15 @@ private struct BandwidthSettingsView: View {
 						})
 
 					Tab(
+						value: "gateway",
+						content: {
+							GatewaySettingsView()
+						},
+						label: {
+							Label("Remote file service", systemImage: "externaldrive.connected.to.line.below")
+						})
+
+					Tab(
 						value: "photo",
 						content: {
 							PhotoBackupSettingsView(photoBackup: appState.photoBackup)
@@ -1068,6 +1077,11 @@ private struct BandwidthSettingsView: View {
 						if FileProviderStorage.container != nil {
 							NavigationLink(destination: FileProviderSettingsView()) {
 								Text("Files app").badge(FileProviderCoordinator.shared.isDomainEnabled == true ? "On" : "Off")
+							}
+
+							NavigationLink(destination: RemoteFoldersSettingsView()) {
+								// As on the Files app page: the folders accessed through a gateway
+								Text("Remote folders").badge(RemoteCoordinator.shared.bindings.count)
 							}
 						}
 					#endif

@@ -1,0 +1,960 @@
+openapi: 3.1.0
+info:
+  title: Synctrain remote file API
+  version: "1"
+  summary: Browse, download and edit files in Syncthing folders through a gateway.
+  description: |
+    Version 1 of the API the Synctrain gateway serves to paired clients (the iOS Files extension and app). Formats,
+    invariants and failure handling are in invariants.md; examples in fixtures/.
+
+    Changes within v1 are additive: clients ignore unknown fields, and optional behavior is announced in
+    `capabilities.features`.
+
+    Every response carries `Synctrain-Correlation-ID`; a client may send its own value in that header. Errors use the
+    `Error` body. `Retry-After` accompanies `429`, `503` and preparation in progress.
+  license:
+    name: MPL-2.0
+    url: https://mozilla.org/MPL/2.0/
+servers:
+  - url: https://{host}:{port}
+    variables:
+      host:
+        default: truenas.example.org
+      port:
+        default: "20920"
+security:
+  - credential: []
+tags:
+  - name: service
+  - name: metadata
+  - name: content
+  - name: uploads
+  - name: operations
+  - name: pairing
+
+paths:
+  /v1/capabilities:
+    get:
+      tags: [service]
+      summary: API version, service identity, authority generation, features and limits.
+      operationId: getCapabilities
+      responses:
+        "200":
+          description: Capabilities.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Capabilities" }
+              example: { $ref: "fixtures/capabilities.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /v1/folders:
+    get:
+      tags: [metadata]
+      summary: Folders this client may access, with its effective permissions.
+      operationId: listFolders
+      responses:
+        "200":
+          description: Folders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [folders]
+                properties:
+                  folders:
+                    type: array
+                    items: { $ref: "#/components/schemas/Folder" }
+              example: { $ref: "fixtures/folders.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /v1/folders/{folderID}/snapshot:
+    parameters:
+      - $ref: "#/components/parameters/FolderID"
+    get:
+      tags: [metadata]
+      summary: A page of a paginated metadata snapshot.
+      description: |
+        Without `snapshot`, starts a snapshot session and returns its first page. The session records the change cursor
+        at its start; pages may show later states. After the last page (no `next`), the client applies the changes
+        after `cursor` before treating the snapshot as complete. Pages are idempotent: repeating a request with the same
+        `page` returns the same position. Sessions expire after 24 hours (`410 snapshot_expired`).
+      operationId: getSnapshot
+      parameters:
+        - name: snapshot
+          in: query
+          schema: { type: string, pattern: "^snp_" }
+        - name: page
+          in: query
+          schema: { type: string, pattern: "^pg_" }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A snapshot page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SnapshotPage" }
+              example: { $ref: "fixtures/snapshot-page.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+
+  /v1/folders/{folderID}/changes:
+    parameters:
+      - $ref: "#/components/parameters/FolderID"
+    get:
+      tags: [metadata]
+      summary: Changes and tombstones after a cursor.
+      description: |
+        Each change is the item's current metadata, or a tombstone (`deleted: true`). With `wait`, the request is held
+        until a change arrives or `wait` seconds pass (at most `limits.longPollSeconds`). A cursor from another
+        authority generation, older than the retention period, or beyond the change log's head answers
+        `410 cursor_expired`; the client then takes a fresh snapshot, keeping its pending work.
+      operationId: getChanges
+      parameters:
+        - name: cursor
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/Limit"
+        - name: wait
+          in: query
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Changes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangesPage" }
+              example: { $ref: "fixtures/changes-page.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+
+  /v1/items/{itemID}:
+    parameters:
+      - $ref: "#/components/parameters/ItemID"
+    get:
+      tags: [metadata]
+      summary: Current metadata and revision of an item.
+      operationId: getItem
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Item" }
+              example: { $ref: "fixtures/item-file.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/items/{itemID}/read-leases:
+    parameters:
+      - $ref: "#/components/parameters/ItemID"
+    post:
+      tags: [content]
+      summary: Bind an exact revision to a stable content representation.
+      description: |
+        Returns a lease for the file's content at `revision`, with a read token scoped to it. A repeated request for the
+        same credential, item and revision returns the existing lease (`200`) with current preparation progress, so it
+        doubles as a progress query. Content requests for blocks that are not prepared yet wait for them. Leases last 24
+        hours and are renewed on use.
+      operationId: createReadLease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: { $ref: "#/components/schemas/Revision" }
+      responses:
+        "200":
+          description: The existing lease.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadLease" }
+        "201":
+          description: A new lease.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadLease" }
+              example: { $ref: "fixtures/read-lease.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+        "507": { $ref: "#/components/responses/InsufficientStorage" }
+
+  /v1/content/{leaseID}/manifest:
+    parameters:
+      - $ref: "#/components/parameters/LeaseID"
+    get:
+      tags: [content]
+      summary: A page of the lease's block manifest.
+      operationId: getManifest
+      security:
+        - credential: []
+        - leaseToken: []
+      parameters:
+        - name: from
+          in: query
+          description: Index of the first block.
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1024, default: 1024 }
+      responses:
+        "200":
+          description: Manifest page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManifestPage" }
+              example: { $ref: "fixtures/manifest-page.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+
+  /v1/content/{leaseID}:
+    parameters:
+      - $ref: "#/components/parameters/LeaseID"
+    get:
+      tags: [content]
+      summary: The lease's content, with byte ranges.
+      description: |
+        Immutable content with a strong `ETag` (the content identity in quotes), `Content-Length`, `Accept-Ranges:
+        bytes`, single byte ranges (`206`) and `If-Range`. An unavailable later block ends the transfer early; the
+        client keeps only verified blocks.
+      operationId: getContent
+      security:
+        - credential: []
+        - leaseToken: []
+      parameters:
+        - name: Range
+          in: header
+          schema: { type: string, example: "bytes=0-8388607" }
+        - name: If-Range
+          in: header
+          schema: { type: string }
+      responses:
+        "200":
+          description: The whole content.
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/octet-stream: {}
+        "206":
+          description: A byte range.
+          headers:
+            ETag: { schema: { type: string } }
+            Content-Range: { schema: { type: string } }
+          content:
+            application/octet-stream: {}
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "416":
+          description: The range is outside the content.
+        "503": { $ref: "#/components/responses/Unavailable" }
+    head:
+      tags: [content]
+      summary: Length and validator of the lease's content.
+      operationId: headContent
+      security:
+        - credential: []
+        - leaseToken: []
+      responses:
+        "200":
+          description: Headers only.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+
+  /v1/items/{itemID}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/ItemID"
+    get:
+      tags: [content]
+      summary: Optional thumbnail of an exact content revision.
+      description: Only when `capabilities.features` lists the matching `thumbnails.*` feature. Never needed to open a file.
+      operationId: getThumbnail
+      parameters:
+        - name: revision
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/Revision" }
+        - name: size
+          in: query
+          description: Longest side in pixels. The gateway may round it up to the next size it renders and caches (64, 128, 256, 512 or 1024).
+          schema: { type: integer, minimum: 16, maximum: 1024, default: 256 }
+      responses:
+        "200":
+          description: JPEG thumbnail.
+          content:
+            image/jpeg: {}
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /v1/uploads:
+    options:
+      tags: [uploads]
+      summary: tus 1.0 discovery.
+      operationId: uploadOptions
+      security: []
+      responses:
+        "204":
+          description: |
+            `Tus-Resumable: 1.0.0`, `Tus-Version: 1.0.0`, `Tus-Extension: creation,checksum,expiration,termination`,
+            `Tus-Max-Size` and `Tus-Checksum-Algorithm: sha256`.
+    post:
+      tags: [uploads]
+      summary: Create a staged upload (tus creation).
+      description: |
+        Headers: `Tus-Resumable: 1.0.0`, `Upload-Length`, and `Upload-Metadata` with `folder` (the folder ID) and
+        `digest` (the SHA-256 of the whole file, base64), both base64-encoded as tus requires. Answers `201` with
+        `Location`, `Upload-Expires` and `Synctrain-Upload-Token`, and the same in the body. The upload expires after
+        seven days without activity; an operation referencing it pins it until resolved.
+      operationId: createUpload
+      responses:
+        "201":
+          description: Upload created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Upload" }
+              example: { $ref: "fixtures/upload-created.json" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413":
+          description: Larger than `Tus-Max-Size`.
+        "507": { $ref: "#/components/responses/InsufficientStorage" }
+
+  /v1/uploads/{uploadID}:
+    parameters:
+      - name: uploadID
+        in: path
+        required: true
+        schema: { type: string, pattern: "^upl_" }
+    head:
+      tags: [uploads]
+      summary: The confirmed offset (tus).
+      operationId: headUpload
+      security:
+        - credential: []
+        - uploadToken: []
+      responses:
+        "200":
+          description: "`Upload-Offset`, `Upload-Length`, `Upload-Expires`, `Cache-Control: no-store`."
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: Unknown, terminated or expired upload.
+    patch:
+      tags: [uploads]
+      summary: Append bytes at the confirmed offset (tus).
+      description: |
+        `Content-Type: application/offset+octet-stream`, `Upload-Offset`, optionally `Upload-Checksum: sha256 <base64>`.
+        Without a checksum the gateway keeps the bytes of an interrupted request. Requests for one upload are
+        serialized.
+      operationId: patchUpload
+      security:
+        - credential: []
+        - uploadToken: []
+      responses:
+        "204":
+          description: Appended; `Upload-Offset` is the new offset.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: Unknown, terminated or expired upload.
+        "409":
+          description: "`Upload-Offset` does not match the confirmed offset."
+        "415":
+          description: Wrong content type.
+        "460":
+          description: Checksum mismatch; nothing appended.
+        "507": { $ref: "#/components/responses/InsufficientStorage" }
+    delete:
+      tags: [uploads]
+      summary: Terminate an upload (tus termination).
+      operationId: deleteUpload
+      security:
+        - credential: []
+        - uploadToken: []
+      responses:
+        "204":
+          description: Terminated.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: Unknown upload.
+        "409":
+          description: An operation still references the upload.
+
+  /v1/operations:
+    post:
+      tags: [operations]
+      summary: Create, replace, move or delete an item.
+      description: |
+        Idempotent per client identity and `id`. `201` when the result is final while handling the request, `202` while
+        work remains, `200` for a replay. `409`/`412` for failures found while handling it; the operation is then
+        stored as `failed` and a replay returns the same answer.
+      operationId: createOperation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperationRequest" }
+            examples:
+              create: { externalValue: fixtures/operation-create.json }
+              replace: { externalValue: fixtures/operation-replace.json }
+              move: { externalValue: fixtures/operation-move.json }
+              delete: { externalValue: fixtures/operation-delete.json }
+      responses:
+        "200":
+          description: Replay of a known operation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Operation" }
+        "201":
+          description: Final result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Operation" }
+              example: { $ref: "fixtures/operation-committed.json" }
+        "202":
+          description: Accepted; poll `GET /v1/operations/{operation}`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Operation" }
+              example: { $ref: "fixtures/operation-pending.json" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "422": { $ref: "#/components/responses/OperationMismatch" }
+        "429": { $ref: "#/components/responses/Overloaded" }
+        "507": { $ref: "#/components/responses/InsufficientStorage" }
+
+  /v1/operations/{operationID}:
+    parameters:
+      - name: operationID
+        in: path
+        required: true
+        description: The server operation ID (`op_…`).
+        schema: { type: string, pattern: "^op_" }
+    get:
+      tags: [operations]
+      summary: The operation's current state and result.
+      operationId: getOperation
+      responses:
+        "200":
+          description: The operation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Operation" }
+              examples:
+                committed: { externalValue: fixtures/operation-committed.json }
+                conflict: { externalValue: fixtures/operation-conflict.json }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/pairing:
+    post:
+      tags: [pairing]
+      summary: Submit the pairing secret from the QR code.
+      description: |
+        The secret is single use. The host approves or denies the request; the client polls
+        `GET /v1/pairing/{requestID}` with the returned poll token. Wrong secrets count against a small attempt limit,
+        after which pairing must be started again on the host.
+      operationId: requestPairing
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PairingRequest" }
+            example: { $ref: "fixtures/pairing-request.json" }
+      responses:
+        "202":
+          description: Waiting for approval on the host.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairingPending" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "429": { $ref: "#/components/responses/Overloaded" }
+
+  /v1/pairing/{requestID}:
+    parameters:
+      - name: requestID
+        in: path
+        required: true
+        schema: { type: string, pattern: "^prq_" }
+    get:
+      tags: [pairing]
+      summary: Poll a pairing request.
+      description: Returns the credential once, when approved. Later polls answer `410`.
+      operationId: getPairing
+      security:
+        - pairingPollToken: []
+      parameters:
+        - $ref: "#/components/parameters/Wait"
+      responses:
+        "200":
+          description: Approved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairingResult" }
+              example: { $ref: "fixtures/pairing-approved.json" }
+        "202":
+          description: Still waiting.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairingResult" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403":
+          description: Denied on the host.
+        "410": { $ref: "#/components/responses/Gone" }
+
+components:
+  securitySchemes:
+    credential:
+      type: http
+      scheme: bearer
+      description: Per-client credential (`stc_…`) from pairing.
+    leaseToken:
+      type: http
+      scheme: bearer
+      description: Read token (`stl_…`) scoped to one lease, for background tasks.
+    uploadToken:
+      type: http
+      scheme: bearer
+      description: Upload token (`stu_…`) scoped to one upload, for background tasks.
+    pairingPollToken:
+      type: http
+      scheme: bearer
+      description: Poll token (`stp_…`) for one pairing request.
+
+  parameters:
+    FolderID:
+      name: folderID
+      in: path
+      required: true
+      description: Syncthing folder ID, percent-encoded.
+      schema: { type: string }
+    ItemID:
+      name: itemID
+      in: path
+      required: true
+      schema: { type: string, pattern: "^itm_" }
+    LeaseID:
+      name: leaseID
+      in: path
+      required: true
+      schema: { type: string, pattern: "^lse_" }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 1024, default: 256 }
+    Wait:
+      name: wait
+      in: query
+      description: Seconds to hold the request for a change.
+      schema: { type: integer, minimum: 0 }
+
+  responses:
+    BadRequest:
+      description: Malformed request (`invalid_request`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthenticated:
+      description: "Missing, expired or revoked credential (`unauthenticated`). Has `WWW-Authenticate: Bearer`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Not permitted (`forbidden`, `folder_read_only`, `reserved_name`, `pairing_denied`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No such item, folder, lease or operation (`not_found`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Name or operation conflict (`name_conflict`, `ignored_path`, `not_empty`, `cross_folder`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    PreconditionFailed:
+      description: The base revision or subtree generation is not current (`revision_mismatch`). Includes `item`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Gone:
+      description: |
+        Expired cursor (`cursor_expired`), snapshot (`snapshot_expired`), lease (`lease_expired`) or pairing request
+        (`pairing_expired`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { $ref: "fixtures/error-cursor-expired.json" }
+    OperationMismatch:
+      description: The operation ID was used with a different payload (`operation_mismatch`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Overloaded:
+      description: Load shedding or too many attempts (`overloaded`, `too_many_attempts`); has `Retry-After`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unavailable:
+      description: Content temporarily unavailable (`content_unavailable`); has `Retry-After`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InsufficientStorage:
+      description: Storage or quota exhausted (`insufficient_storage`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Revision:
+      type: string
+      pattern: "^r1\\.[A-Za-z0-9_-]{43}$"
+    ContentID:
+      type: string
+      pattern: "^c1\\.[A-Za-z0-9_-]+\\.[0-9]+$"
+    Cursor:
+      type: string
+      pattern: "^g[0-9]+\\.[0-9]+$"
+
+    Capabilities:
+      type: object
+      required: [apiVersion, serviceID, serviceName, authorityGeneration, features, limits]
+      properties:
+        apiVersion: { type: integer, const: 1 }
+        serviceID: { type: string, pattern: "^svc_" }
+        serviceName: { type: string }
+        syncthingDeviceID:
+          type: string
+          description: The gateway's Syncthing device ID.
+        authorityGeneration: { type: integer }
+        features:
+          type: array
+          description: |
+            Known values: `longPoll`, `thumbnails.image`, `thumbnails.video`, `thumbnails.pdf`, `directoryMoves`,
+            `crossFolderMoves`. Unknown values are ignored.
+          items: { type: string }
+        limits:
+          type: object
+          required: [pageSize, maxPageSize, longPollSeconds, leaseSeconds, uploadExpirySeconds, maxUploadSize, maxControlBodyBytes]
+          properties:
+            pageSize: { type: integer }
+            maxPageSize: { type: integer }
+            manifestPageSize: { type: integer }
+            longPollSeconds: { type: integer }
+            leaseSeconds: { type: integer }
+            uploadExpirySeconds: { type: integer }
+            maxUploadSize: { type: integer, format: int64 }
+            maxControlBodyBytes: { type: integer }
+        certificate:
+          type: object
+          description: Announced rotation of a pinned certificate.
+          properties:
+            spki: { type: string }
+            next:
+              type: object
+              properties:
+                spki: { type: string }
+                effective: { type: string, format: date-time }
+
+    Folder:
+      type: object
+      required: [id, label, rootItemID, permissions, type]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        rootItemID: { type: string, pattern: "^itm_" }
+        permissions:
+          type: object
+          required: [read, write]
+          properties:
+            read: { type: boolean }
+            write: { type: boolean }
+        type:
+          type: string
+          enum: [sendreceive, sendonly, receiveonly]
+        selective:
+          type: boolean
+          description: The gateway holds only part of the folder; content may be streamed from peers.
+        state:
+          type: string
+          description: Syncthing's folder state (`idle`, `scanning`, `syncing`, `error`, …).
+
+    Item:
+      type: object
+      required: [id, folderID, name, path, kind, revision, modifiedNs]
+      properties:
+        id: { type: string, pattern: "^itm_" }
+        folderID: { type: string }
+        parentID:
+          type: [string, "null"]
+          description: Null for a folder's root.
+        name: { type: string }
+        path:
+          type: string
+          description: Slash-separated path within the folder; empty for the root.
+        kind:
+          type: string
+          enum: [file, directory, symlink]
+        size: { type: integer, format: int64 }
+        modifiedNs: { type: integer, format: int64 }
+        mode:
+          type: integer
+          description: POSIX permission bits; 0 when the folder ignores permissions.
+        writable:
+          type: boolean
+          description: Whether this client may change the item.
+        revision: { $ref: "#/components/schemas/Revision" }
+        contentID:
+          $ref: "#/components/schemas/ContentID"
+          description: Present for files.
+        subtreeGeneration:
+          type: integer
+          format: int64
+          description: For directories; changes with any change below it.
+        availability:
+          type: string
+          enum: [local, peers, unavailable]
+          description: Where the gateway can read the current content from now.
+        deleted:
+          type: boolean
+          description: Tombstone in a change list.
+        movedToFolderID:
+          type: string
+          description: >-
+            On a tombstone in the change list of a folder the item left for another folder of the same gateway: that
+            folder. The item keeps its ID there and appears in that folder's change list. A client that has the other
+            folder keeps the item (its change list moves it); others treat the tombstone as a deletion.
+
+    SnapshotPage:
+      type: object
+      required: [snapshot, cursor, items]
+      properties:
+        snapshot: { type: string, pattern: "^snp_" }
+        cursor: { $ref: "#/components/schemas/Cursor" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Item" }
+        next:
+          type: string
+          pattern: "^pg_"
+          description: Absent after the last page.
+
+    ChangesPage:
+      type: object
+      required: [changes, cursor, more]
+      properties:
+        changes:
+          type: array
+          items: { $ref: "#/components/schemas/Item" }
+        cursor: { $ref: "#/components/schemas/Cursor" }
+        more: { type: boolean }
+
+    ReadLease:
+      type: object
+      required: [lease, token, itemID, revision, contentID, size, blockSize, blockCount, expires, preparation]
+      properties:
+        lease: { type: string, pattern: "^lse_" }
+        token: { type: string, pattern: "^stl_" }
+        itemID: { type: string }
+        revision: { $ref: "#/components/schemas/Revision" }
+        contentID: { $ref: "#/components/schemas/ContentID" }
+        size: { type: integer, format: int64 }
+        blockSize: { type: integer }
+        blockCount: { type: integer }
+        expires: { type: string, format: date-time }
+        preparation:
+          type: object
+          required: [state, readyBytes]
+          properties:
+            state:
+              type: string
+              enum: [ready, preparing, failed]
+            readyBytes:
+              type: integer
+              format: int64
+              description: Bytes verified and ready from the start of the file.
+            retryAfter: { type: integer }
+
+    ManifestPage:
+      type: object
+      required: [contentID, blockSize, blocks]
+      properties:
+        contentID: { $ref: "#/components/schemas/ContentID" }
+        blockSize: { type: integer }
+        blocks:
+          type: array
+          items:
+            type: object
+            required: [offset, size, hash]
+            properties:
+              offset: { type: integer, format: int64 }
+              size: { type: integer }
+              hash: { type: string }
+        next:
+          type: integer
+          description: Index of the next block; absent after the last page.
+
+    Upload:
+      type: object
+      required: [upload, token, offset, length, expires]
+      properties:
+        upload: { type: string, pattern: "^upl_" }
+        token: { type: string, pattern: "^stu_" }
+        offset: { type: integer, format: int64 }
+        length: { type: integer, format: int64 }
+        expires: { type: string, format: date-time }
+
+    OperationRequest:
+      type: object
+      required: [id, kind, folderID]
+      properties:
+        id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum: [create, replace, move, delete]
+        folderID: { type: string }
+        itemID:
+          type: string
+          description: replace, move, delete.
+        baseRevision:
+          $ref: "#/components/schemas/Revision"
+          description: replace, move, delete.
+        subtreeGeneration:
+          type: integer
+          format: int64
+          description: move and delete of a directory.
+        parentID:
+          type: string
+          description: create; destination of move.
+        name:
+          type: string
+          description: create; destination name of move.
+        destinationFolderID:
+          type: string
+          description: move to another folder on the same gateway (requires `crossFolderMoves`).
+        itemKind:
+          type: string
+          enum: [file, directory]
+          description: create.
+        upload:
+          type: string
+          description: create (file) and replace.
+        uploadDigest:
+          type: string
+          description: SHA-256 of the whole staged file, base64url; create (file) and replace.
+        modifiedNs:
+          type: integer
+          format: int64
+          description: create and replace; the new modification time.
+        onConflict:
+          type: string
+          enum: [keepBoth, reject]
+          default: keepBoth
+          description: replace; whether a racing version keeps the edit as a conflict copy or rejects it.
+
+    Operation:
+      type: object
+      required: [id, operation, kind, state, authorityGeneration]
+      properties:
+        id: { type: string, format: uuid }
+        operation: { type: string, pattern: "^op_" }
+        kind:
+          type: string
+          enum: [create, replace, move, delete]
+        state:
+          type: string
+          enum: [pending, committed, conflict, failed]
+        item:
+          $ref: "#/components/schemas/Item"
+          description: The resulting item (committed), or the current item (conflict).
+        conflictItem:
+          $ref: "#/components/schemas/Item"
+          description: The conflict copy holding the edit (conflict).
+        contentID:
+          $ref: "#/components/schemas/ContentID"
+          description: Content identity of the committed upload, so the client's staged copy becomes a cached version.
+        error: { $ref: "#/components/schemas/ErrorDetail" }
+        authorityGeneration: { type: integer }
+
+    PairingRequest:
+      type: object
+      required: [secret, clientID, clientName]
+      properties:
+        secret: { type: string }
+        serviceID: { type: string, description: From the QR code; checked by the gateway. }
+        clientID:
+          type: string
+          format: uuid
+          description: Stable client identity, kept across credential rotation and re-pairing.
+        clientName: { type: string }
+        platform: { type: string }
+
+    PairingPending:
+      type: object
+      required: [request, pollToken, serviceID, expires]
+      properties:
+        request: { type: string, pattern: "^prq_" }
+        pollToken: { type: string, pattern: "^stp_" }
+        serviceID: { type: string }
+        expires: { type: string, format: date-time }
+
+    PairingResult:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [pending, approved]
+        credential: { type: string, pattern: "^stc_" }
+        clientID: { type: string }
+        serviceID: { type: string }
+
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: |
+            `invalid_request`, `unauthenticated`, `forbidden`, `folder_read_only`, `reserved_name`, `not_found`,
+            `name_conflict`, `ignored_path`, `not_empty`, `cross_folder`, `revision_mismatch`, `upload_mismatch`,
+            `cursor_expired`, `snapshot_expired`, `lease_expired`, `operation_mismatch`, `overloaded`,
+            `too_many_attempts`, `content_unavailable`, `insufficient_storage`, `pairing_denied`,
+            `pairing_expired`, `internal`. Unknown codes are treated by their HTTP status.
+        message: { type: string }
+        correlationID: { type: string }
+        retryAfter: { type: integer }
+        item:
+          $ref: "#/components/schemas/Item"
+          description: The current item, for `revision_mismatch` and `name_conflict`.
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: "#/components/schemas/ErrorDetail" }

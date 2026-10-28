@@ -10,6 +10,8 @@ import SynctrainFileProviderKit
 struct ExtensionContext: Sendable {
 	let container: SharedContainer
 	let store: IndexStore
+	/// The contents of folders accessed through a gateway: staged edits and verified cached copies
+	let storage: RemoteStorage
 
 	static let maximumPageSize = 500
 
@@ -19,6 +21,24 @@ struct ExtensionContext: Sendable {
 		}
 		self.container = container
 		self.store = IndexStore(container: container)
+		self.storage = RemoteStorage(container: container)
+	}
+
+	/// The binding of a folder accessed through a gateway; nil for folders that Syncthing on this device synchronizes
+	func remoteBinding(folderID: String) throws(IndexError) -> RemoteFolderBinding? {
+		guard let binding = try store.remoteBinding(folderID: folderID), binding.isRemote else {
+			return nil
+		}
+		return binding
+	}
+
+	/// The bindings of the folders accessed through a gateway, by folder ID
+	private func remoteBindings() throws(IndexError) -> [String: RemoteFolderBinding] {
+		var bindings: [String: RemoteFolderBinding] = [:]
+		for binding in try store.remoteBindings() where binding.isRemote {
+			bindings[binding.folderID] = binding
+		}
+		return bindings
 	}
 
 	func localURL(for item: IndexItem) -> URL {
@@ -41,25 +61,73 @@ struct ExtensionContext: Sendable {
 		}
 	}
 
+	/// For an item of a folder accessed through a gateway: whether this device holds the contents the row shows (its
+	/// staged local change, or a verified copy of the gateway's version). The Syncthing folder tree plays no part.
+	func isOnDevice(remote item: IndexItem, content: RemoteLocalContent?) -> Bool {
+		guard item.kind == .file else {
+			return false
+		}
+		func exists(_ path: String?) -> Bool {
+			path.map { FileManager.default.fileExists(atPath: storage.url(relativePath: $0).path(percentEncoded: false)) }
+				?? false
+		}
+		if exists(content?.overlayStagedPath) {
+			return true
+		}
+		guard let shown = item.blocksHash.map({ ContentIdentity($0) }) else {
+			return false
+		}
+		if let cached = storage.cachedContentURL(shown),
+			FileManager.default.fileExists(atPath: cached.path(percentEncoded: false))
+		{
+			return true
+		}
+		return content?.contentID == shown && exists(content?.committedStagedPath)
+	}
+
 	func makeItems(_ items: [IndexItem]) throws(IndexError) -> [NSFileProviderItem] {
+		let bindings = try remoteBindings()
+		let remoteIDs = bindings.isEmpty ? [] : items.filter { bindings[$0.folderID] != nil }.map(\.id)
+		let content = remoteIDs.isEmpty ? [:] : try store.remoteLocalContent(of: remoteIDs)
+		// An item the system created in a folder accessed through a gateway is listed once the gateway committed it: until
+		// then the system shows its own pending item, and listing ours too would look like a second item with the same
+		// name. What Synctrain made itself (the conflict copy of an edit) is listed right away: the system has no item for
+		// it, and learns about it only from enumerations.
+		let items =
+			content.isEmpty
+			? items : items.filter { !($0.pending == .create && content[$0.id]?.overlayOrigin == .system) }
 		let folders = Dictionary(uniqueKeysWithValues: try store.folders().map { ($0.folderID, $0) })
 		let attributes = try store.attributes(of: items.map(\.id))
-		return items.map { makeItem($0, folder: folders[$0.folderID], attributes: attributes[$0.id]) }
+		return items.map {
+			makeItem(
+				$0, folder: folders[$0.folderID], attributes: attributes[$0.id], remote: bindings[$0.folderID],
+				content: content[$0.id])
+		}
 	}
 
 	func makeItem(_ item: IndexItem) throws(IndexError) -> NSFileProviderItem {
-		makeItem(
-			item, folder: try store.folder(id: item.folderID), attributes: try store.attributes(of: [item.id])[item.id])
+		let remote = try remoteBinding(folderID: item.folderID)
+		return makeItem(
+			item, folder: try store.folder(id: item.folderID), attributes: try store.attributes(of: [item.id])[item.id],
+			remote: remote, content: remote == nil ? nil : try store.remoteLocalContent(of: [item.id])[item.id])
 	}
 
 	/// The item to return with its contents, which must not be missing (without the folder's details if they cannot be
-	/// read)
-	func makeItemForContents(_ item: IndexItem) -> NSFileProviderItem {
-		(try? makeItem(item)) ?? makeItem(item, folder: nil, attributes: nil)
+	/// read). Items of a folder accessed through a gateway pass its binding, which then still applies.
+	func makeItemForContents(_ item: IndexItem, remote: RemoteFolderBinding? = nil) -> NSFileProviderItem {
+		(try? makeItem(item)) ?? makeItem(item, folder: nil, attributes: nil, remote: remote, content: nil)
 	}
 
-	private func makeItem(_ item: IndexItem, folder: IndexFolder?, attributes: ItemAttributes?) -> NSFileProviderItem {
-		FileProviderItem(
+	private func makeItem(
+		_ item: IndexItem, folder: IndexFolder?, attributes: ItemAttributes?, remote: RemoteFolderBinding?,
+		content: RemoteLocalContent?
+	) -> NSFileProviderItem {
+		if let remote {
+			return FileProviderItem(
+				item: item, folder: folder, isOnDevice: isOnDevice(remote: item, content: content),
+				attributes: attributes ?? ItemAttributes(), remote: remote)
+		}
+		return FileProviderItem(
 			item: item, folder: folder, isOnDevice: isOnDevice(item),
 			fallbackDate: item.modificationDate == nil ? localModificationDate(item) : nil,
 			attributes: attributes ?? ItemAttributes())
@@ -69,20 +137,7 @@ struct ExtensionContext: Sendable {
 	func saveAttributes(of template: NSFileProviderItem, fields: NSFileProviderItemFields, itemID: Int64)
 		throws(IndexError)
 	{
-		guard !fields.isDisjoint(with: [.tagData, .favoriteRank, .lastUsedDate]) else {
-			return
-		}
-		var attributes = try store.attributes(of: [itemID])[itemID] ?? ItemAttributes()
-		if fields.contains(.tagData) {
-			attributes.tagData = template.tagData ?? nil
-		}
-		if fields.contains(.favoriteRank) {
-			attributes.favoriteRank = (template.favoriteRank ?? nil).map { Int64(bitPattern: $0.uint64Value) }
-		}
-		if fields.contains(.lastUsedDate) {
-			attributes.lastUsedDate = template.lastUsedDate ?? nil
-		}
-		try store.setAttributes(attributes, of: itemID)
+		try saveAttributes(ItemTemplate(template), fields: fields, itemID: itemID)
 	}
 
 	/// The modification time of the item on this device

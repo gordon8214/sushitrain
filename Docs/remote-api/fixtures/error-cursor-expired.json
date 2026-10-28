@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "cursor_expired",
+    "message": "The change cursor is no longer valid; take a new snapshot.",
+    "correlationID": "5f0c8a2e7b1d4c39"
+  }
+}

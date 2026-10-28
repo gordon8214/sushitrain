@@ -252,7 +252,10 @@ struct LocalWriter: Sendable {
 		}
 		let name = FileNames.normalized(name)
 		guard FileNames.isValid(name), !FileNames.isReserved(name) else {
-			throw Rejection.cannotSynchronize(String(localized: "This name is reserved for Syncthing."))
+			// Refused by keeping the item as it is: the item returned carries its current name and place, which the
+			// system takes back. An error would leave the system retrying a change that can never be made.
+			log.info("Not moving \(item.id) to a name reserved for Syncthing")
+			return item
 		}
 		let path = FileNames.join(parent.path, name)
 		let isSameFolder = parent.folderID == item.folderID
@@ -806,7 +809,7 @@ struct LocalWriter: Sendable {
 	}
 
 	/// Extended attributes the system uses to track files in its replica must not travel into the folder
-	private static func removeFileProviderAttributes(_ url: URL) {
+	static func removeFileProviderAttributes(_ url: URL) {
 		let path = url.fileSystemPath
 		let size = listxattr(path, nil, 0, XATTR_NOFOLLOW)
 		guard size > 0 else {

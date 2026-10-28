@@ -8,7 +8,9 @@
 
 	struct FileProviderSettingsView: View {
 		private var coordinator = FileProviderCoordinator.shared
+		private var remote = RemoteCoordinator.shared
 		@State private var showRebuildConfirmation = false
+		@State private var showRebuildRefusal = false
 		@State private var pendingItemCount = 0
 		@State private var showPendingItemsConfirmation = false
 
@@ -72,19 +74,43 @@
 				}
 
 				Section {
+					NavigationLink(destination: RemoteFoldersSettingsView()) {
+						Text("Remote folders").badge(remote.bindings.count)
+					}
+				} footer: {
+					Text(
+						"Folders opened through a gateway appear in the Synctrain location too, without being synchronized on this device."
+					)
+				}
+				RemoteMigrationsSection()
+				RemoteNoticeSection()
+				RemoteOperationsSection()
+
+				Section {
 					Button("Rebuild Synctrain location", role: .destructive) {
-						showRebuildConfirmation = true
+						if remote.hasUnresolvedOperations {
+							showRebuildRefusal = true
+						}
+						else {
+							showRebuildConfirmation = true
+						}
 					}
 					.disabled(coordinator.isRebuilding)
 				} footer: {
 					Text(
-						"Removes the Synctrain location from the Files app and sets it up again. Your files are not affected, but you will need to turn the location on again in the Files app."
+						"Removes the Synctrain location from the Files app and sets it up again. Your files are not affected, but you will need to turn the location on again in the Files app. Edits of folders on gateways are kept."
 					)
 				}
 			}
 			.navigationTitle("Files app")
 			.task {
 				await coordinator.refreshDomainState()
+				await remote.reloadState()
+			}
+			.alert("The location cannot be rebuilt now", isPresented: $showRebuildRefusal) {
+				Button("OK") {}
+			} message: {
+				Text(FileProviderCoordinator.unresolvedRemoteEditsMessage)
 			}
 			.confirmationDialog(
 				"Rebuild the Synctrain location?", isPresented: $showRebuildConfirmation, titleVisibility: .visible

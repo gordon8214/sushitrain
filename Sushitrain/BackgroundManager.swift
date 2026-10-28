@@ -297,6 +297,7 @@ enum ContinuedTaskType {
 				// If we are now in the background, we need to sleep
 				if UIApplication.shared.applicationState == .background {
 					Log.info("We are backgrounded, so we're finally going to sleep")
+					await RemoteCoordinator.shared.prepareForSuspension()
 					await appState.sleep()
 				}
 				task.setTaskCompleted(success: true)
@@ -418,6 +419,8 @@ enum ContinuedTaskType {
 
 			// Apply changes made in the Files app and update what it shows
 			FileProviderCoordinator.shared.backgroundRefresh()
+			// Refresh folders on gateways and send edits waiting for them, within this run's time
+			RemoteCoordinator.shared.backgroundRefresh()
 
 			// Feed the watchdog
 			Log.info("Rescheduling watchdog")
@@ -528,6 +531,10 @@ enum ContinuedTaskType {
 
 				Log.info("Background sync stopped at \(run.ended!.debugDescription)")
 				self.appState.photoBackup.cancel()
+
+				// The rest of a long upload to a gateway goes to the background session, which sends it while the app
+				// is suspended
+				await RemoteCoordinator.shared.prepareForSuspension()
 
 				Log.info("Suspending peers")
 				await self.appState.suspend(true)

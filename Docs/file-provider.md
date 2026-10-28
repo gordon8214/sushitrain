@@ -37,6 +37,36 @@ Deleting removes the item on all devices. Only items kept on this device can be 
 folders, a directory can only be renamed or moved when it is kept on this device as a whole. Items can also be moved to
 another folder, which other devices see as a removal from one folder and an addition to the other.
 
+### Folders on a gateway
+
+A folder can instead be accessed through a gateway: a Mac running Synctrain or a Linux server that runs Syncthing and
+Synctrain's remote file service (see [gateway.md](gateway.md)). Files then opens, saves, renames, moves and deletes
+items through the gateway over HTTPS, whether or not Synctrain is running, and the phone's own Syncthing leaves the
+folder alone (it stays paused and cannot be resumed until the folder is switched back).
+
+- **Pairing**: Settings › Remote folders › Pair, then scan the gateway's code (or paste its link) and approve the
+  phone on the gateway.
+- **Adding a folder**: a gateway folder this phone doesn't have can be added to Files. A Syncthing folder this phone
+  shares with the gateway can be switched to the gateway (**Switch…** in the gateway's folder list, or the folder's
+  settings). Switching is refused (try again later) until Syncthing has picked up all changes made on this phone and
+  the gateway has every version that only this phone had; it keeps the folder's files on this device and the items'
+  Files identifiers, tags and favorites. **Switch Back** returns it to Syncthing; the folder then stays paused until
+  you resume it.
+- **Saving**: an edit is reported as saved only once the gateway has committed it. While the gateway can't be reached,
+  Files keeps the edit and tries again; Synctrain sends it as well when it runs. A large edit still being sent after a
+  minute (or when Synctrain is about to be suspended) is sent on in the background, also while neither Files nor
+  Synctrain runs; Files shows it as waiting until the gateway has committed it. An edit based on a version that
+  changed meanwhile is kept as a conflict copy. Edits that could not be sent are listed on the Files app page with
+  **Export…** (a copy of the edit) and **Discard**.
+- **Opening**: files are downloaded from the gateway in verified parts and kept as long as the system keeps them.
+  **Keep on This Device** downloads an item, **Stop Keeping on This Device** removes the downloaded copy (never one
+  with an edit that wasn't sent). Thumbnails come from the gateway.
+- **Moving** a file to a folder on another gateway copies it there and then deletes the original; directories can't
+  be moved between gateways (copy them, then delete them).
+
+The gateway must be reachable (on the local network, a VPN or a public address you set up) for files that are not
+on the phone to open, and for edits to complete.
+
 ### Limitations
 
 - Receive-only folders are read-only. Symbolic links are not shown.

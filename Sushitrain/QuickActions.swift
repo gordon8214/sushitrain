@@ -61,6 +61,11 @@ class QuickActionService: ObservableObject {
 			NSApplication.shared.activate()
 		}
 
+		func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+			// The remote file service stops first, off the main thread
+			GatewayController.shared.terminationReply()
+		}
+
 		func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
 			guard let routes = appState?.bookmarkedRoutesAsRoute, !routes.isEmpty else { return nil }
 			let menu = NSMenu()
@@ -99,6 +104,21 @@ class QuickActionService: ObservableObject {
 				sessionRole: connectingSceneSession.role)
 			configuration.delegateClass = SceneDelegate.self
 			return configuration
+		}
+
+		/// Background transfers of folders on gateways finished while the app was not running: the app's own session,
+		/// or the File Provider extension's (which the app recreates only to finish its events). The system's handler is
+		/// called on the main thread, exactly once, after the events were handled.
+		func application(
+			_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+			completionHandler: @escaping () -> Void
+		) {
+			let completion: @MainActor @Sendable () -> Void = { completionHandler() }
+			let handled = RemoteCoordinator.shared.handleBackgroundEvents(identifier: identifier, completion: completion)
+			if !handled {
+				Log.warn("Events for unknown background session \(identifier)")
+				completionHandler()
+			}
 		}
 	}
 

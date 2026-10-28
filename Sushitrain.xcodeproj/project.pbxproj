@@ -230,6 +230,11 @@
 			path = FileProvider;
 			sourceTree = "<group>";
 		};
+		F40000000000000000000001 /* Gateway */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Gateway;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -284,6 +289,7 @@
 			children = (
 				65EAD895307129E70042B3CD /* View */,
 				F3000000000000000000000D /* FileProvider */,
+				F40000000000000000000001 /* Gateway */,
 				65AE11FC2C39EE0E00E721D4 /* App.swift */,
 				65AE12722C3B163000E721D4 /* AppState.swift */,
 				65AE12002C39EE0F00E721D4 /* Assets.xcassets */,
@@ -435,6 +441,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				F3000000000000000000000D /* FileProvider */,
+				F40000000000000000000001 /* Gateway */,
 			);
 			name = Synctrain;
 			packageProductDependencies = (

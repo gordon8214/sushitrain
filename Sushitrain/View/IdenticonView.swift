@@ -189,11 +189,6 @@ private struct ResolvedAddressesView: View {
 
 private struct QRView: View {
 	private var text: String
-	#if os(iOS)
-		@State private var image: UIImage? = nil
-	#elseif os(macOS)
-		@State private var image: NSImage? = nil
-	#endif
 
 	init(text: String) {
 		self.text = text
@@ -208,20 +203,8 @@ private struct QRView: View {
 				.fixedSize(horizontal: false, vertical: true)
 				.multilineTextAlignment(.center)
 
-				if let image = image {
-					#if os(iOS)
-						Image(uiImage: image)
-							.resizable()
-							.frame(width: 200, height: 200)
-					#elseif os(macOS)
-						Image(nsImage: image)
-							.resizable()
-							.frame(width: 200, height: 200)
-					#endif
-				}
-				else {
-					ProgressView()
-				}
+				QRCodeImage(text: self.text)
+					.frame(width: 200, height: 200)
 
 				Text(self.text)
 					.monospaced()
@@ -254,19 +237,51 @@ private struct QRView: View {
 		#if os(iOS)
 			.navigationBarTitleDisplayMode(.inline)
 		#endif
-		.onAppear {
-			let filter = CIFilter.qrCodeGenerator()
-			let data = text.data(using: .ascii, allowLossyConversion: false)!
-			filter.message = data
-			if let ciimage = filter.outputImage {
-				let transform = CGAffineTransform(scaleX: 10, y: 10)
-				let scaledCIImage = ciimage.transformed(by: transform)
+	}
+}
+
+/// Shows text (such as a device ID or a link) as a QR code that fills the available space
+struct QRCodeImage: View {
+	let text: String
+	#if os(iOS)
+		@State private var image: UIImage? = nil
+	#elseif os(macOS)
+		@State private var image: NSImage? = nil
+	#endif
+
+	var body: some View {
+		Group {
+			if let image = image {
 				#if os(iOS)
-					image = UIImage(data: UIImage(ciImage: scaledCIImage).pngData()!)
+					Image(uiImage: image)
+						.resizable()
+						.interpolation(.none)
 				#elseif os(macOS)
-					image = NSImage.fromCIImage(scaledCIImage)
+					Image(nsImage: image)
+						.resizable()
+						.interpolation(.none)
 				#endif
 			}
+			else {
+				ProgressView()
+			}
+		}
+		.onChange(of: text, initial: true) {
+			self.generate()
+		}
+	}
+
+	private func generate() {
+		let filter = CIFilter.qrCodeGenerator()
+		filter.message = Data(text.utf8)
+		if let ciimage = filter.outputImage {
+			let transform = CGAffineTransform(scaleX: 10, y: 10)
+			let scaledCIImage = ciimage.transformed(by: transform)
+			#if os(iOS)
+				image = UIImage(data: UIImage(ciImage: scaledCIImage).pngData()!)
+			#elseif os(macOS)
+				image = NSImage.fromCIImage(scaledCIImage)
+			#endif
 		}
 	}
 }

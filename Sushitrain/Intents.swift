@@ -765,6 +765,16 @@ struct ConfigureFolderIntent: AppIntent {
 		for f in self.folderEntities {
 			switch self.enable {
 			case .enabled:
+				#if os(iOS)
+					// Syncthing refuses to resume a folder accessed through a gateway; say why
+					if appState.client.isFolderRemoteManaged(f.folder.folderID) {
+						throw IntentHandlingError.unsupported(
+							String(
+								localized:
+									"\(f.folder.displayName) is accessed through a gateway. Switch it back to Syncthing in its settings in Synctrain to synchronize it on this device."
+							))
+					}
+				#endif
 				try f.folder.setPaused(false)
 			case .disabled:
 				try f.folder.setPaused(true)

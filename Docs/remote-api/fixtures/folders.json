@@ -1,0 +1,28 @@
+{
+  "folders": [
+    {
+      "id": "Documents",
+      "label": "Documents",
+      "rootItemID": "itm_SBNJTRN-FjG7owHVrKtuew",
+      "permissions": {
+        "read": true,
+        "write": true
+      },
+      "type": "sendreceive",
+      "selective": false,
+      "state": "idle"
+    },
+    {
+      "id": "Sync",
+      "label": "Sync",
+      "rootItemID": "itm_M-FWiLTkz1oagycJ_kYxKA",
+      "permissions": {
+        "read": true,
+        "write": false
+      },
+      "type": "sendreceive",
+      "selective": false,
+      "state": "syncing"
+    }
+  ]
+}

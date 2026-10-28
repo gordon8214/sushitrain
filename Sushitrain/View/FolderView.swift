@@ -839,6 +839,15 @@ struct FolderView: View {
 			}
 		}
 
+		#if os(iOS)
+			// Syncthing refuses to resume a folder that is accessed through a gateway. The coordinator's state is observed,
+			// so that this follows a switch; Syncthing's own answer covers the time before the coordinator has read it.
+			let isRemoteManaged =
+				RemoteCoordinator.shared.isRemoteManaged(folderID: folder.folderID)
+				|| appState.client.isFolderRemoteManaged(folder.folderID)
+		#else
+			let isRemoteManaged = false
+		#endif
 		Section {
 			Toggle(
 				"Synchronize",
@@ -846,7 +855,18 @@ struct FolderView: View {
 					get: { !folder.isPaused() },
 					set: { active in try? folder.setPaused(!active) })
 			)
+			.disabled(isRemoteManaged)
+		} footer: {
+			if isRemoteManaged {
+				Text(
+					"This folder is accessed through a gateway, so Syncthing does not synchronize it on this device. Switch it back to Syncthing to synchronize it here."
+				)
+			}
 		}
+
+		#if os(iOS)
+			RemoteFolderAccessSection(folder: folder)
+		#endif
 	}
 }
 

@@ -445,6 +445,9 @@ struct SyncState: Equatable {
 			self.startNetworkMonitor()
 			#if os(iOS)
 				FileProviderCoordinator.shared.start(client: client)
+				RemoteCoordinator.shared.start(client: client)
+			#elseif os(macOS)
+				GatewayController.shared.start(client: client)
 			#endif
 
 			#if os(macOS)

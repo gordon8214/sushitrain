@@ -65,6 +65,7 @@ type Client struct {
 	Measurements             *Measurements
 	logHandler               *logHandler
 	appLock                  *flock.Flock
+	remoteManaged            *remoteManagedSet
 }
 
 type Change struct {
@@ -612,7 +613,13 @@ func (clt *Client) Load(resetDeltaIdxs bool) error {
 	// Load or create the config
 	devID := protocol.NewDeviceID(cert.Certificate[0])
 	slog.Info("loading config file", "path", locations.Get(locations.ConfigFile))
-	config, err := loadOrDefaultConfig(devID, clt.ctx, clt.evLogger, clt.filesPath)
+	remoteManaged, err := loadRemoteManaged(remoteManagedPath())
+	if err != nil {
+		clt.cancel()
+		return err
+	}
+	clt.remoteManaged = remoteManaged
+	config, err := loadOrDefaultConfig(devID, clt.ctx, clt.evLogger, clt.filesPath, clt.remoteManaged)
 	if err != nil {
 		clt.cancel()
 		return err
@@ -715,7 +722,8 @@ func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) {
 	})
 }
 
-func loadOrDefaultConfig(devID protocol.DeviceID, ctx context.Context, logger events.Logger, filesPath string) (config.Wrapper, error) {
+func loadOrDefaultConfig(devID protocol.DeviceID, ctx context.Context, logger events.Logger, filesPath string,
+	remoteManaged *remoteManagedSet) (config.Wrapper, error) {
 	cfgFile := locations.Get(locations.ConfigFile)
 	cfg, _, err := config.Load(cfgFile, devID, logger)
 	if err != nil {
@@ -774,6 +782,9 @@ func loadOrDefaultConfig(devID protocol.DeviceID, ctx context.Context, logger ev
 				conf.SetFolder(folderConfig)
 			}
 		}
+
+		// Remote-managed folders stay paused, even if the file was edited to resume them
+		remoteManaged.enforce(conf)
 	})
 
 	if err != nil {
@@ -786,6 +797,8 @@ func loadOrDefaultConfig(devID protocol.DeviceID, ctx context.Context, logger ev
 		return nil, err
 	}
 
+	// From now on, no change may resume them
+	cfg.Subscribe(remoteManaged)
 	return cfg, err
 }
 

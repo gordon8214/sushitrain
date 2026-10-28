@@ -1,0 +1,16 @@
+{
+  "lease": "lse_tUSnaG0RhmgKnY8k_1QrAA",
+  "token": "stl_3xpRh0tMquBnF7WGIKVa7KdNlTTEEBKQPnLoBqOoVvA",
+  "itemID": "itm_hF6RgxMZ6JxNZWvbgMJ4rA",
+  "revision": "r1.srELRKiDJvmwBm1HLNbb2krlDu6fckAh_Kp0-AgHWi0",
+  "contentID": "c1.0PQuLA1Ythwbj9UtAT7Ozmyq4hWb4yL8x0Mr5i8QwRI.266240",
+  "size": 266240,
+  "blockSize": 131072,
+  "blockCount": 3,
+  "expires": "2026-10-28T19:00:00Z",
+  "preparation": {
+    "state": "preparing",
+    "readyBytes": 131072,
+    "retryAfter": 1
+  }
+}

@@ -7,7 +7,7 @@ PATH := $(shell pwd):/opt/homebrew/bin:$(HOME)/go/bin:$(PATH)
 SHELL := env PATH="$(PATH)" /bin/bash
 GO_VERSION := $(shell go version)
 
-.PHONY: clean install deps
+.PHONY: clean install deps test gateway-linux gateway-test-linux
 
 build: build/SushitrainCore.xcframework
 
@@ -23,7 +23,7 @@ notices.html: notices.template.html go.mod go.sum
 	go get -tool github.com/google/go-licenses@latest
 	go tool go-licenses report ./... --template=./notices.template.html > notices.html
 
-build/SushitrainCore.xcframework: src/*.go Makefile go.mod notices.html
+build/SushitrainCore.xcframework: src/*.go gateway/*.go Makefile go.mod go.sum notices.html
 	go tool gomobile bind -target ios,iossimulator,macos -iosversion=15 -tags noassets -o ./build/SushitrainCore.xcframework ./src
 
 install: build
@@ -33,3 +33,19 @@ clean:
 
 test:
 	go test ./... -tags noassets
+
+# The remote file service as a headless executable for Linux hosts, with Syncthing's web GUI
+GATEWAY_VERSION ?= $(shell git describe --always --dirty 2>/dev/null)
+# The engine's version as Syncthing reports it (to its GUI and other devices)
+SYNCTHING_VERSION ?= v2.1.7-gateway.1
+SYNCTHING_BUILD = github.com/syncthing/syncthing/lib/build
+
+gateway-linux:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(GATEWAY_VERSION) \
+		-X $(SYNCTHING_BUILD).Version=$(SYNCTHING_VERSION) -X $(SYNCTHING_BUILD).Tags=noupgrade" \
+		-o build/linux-amd64/synctrain-gateway ./cmd/synctrain-gateway
+
+# Test executables to run on a Linux host (go test -c), including the multi-device integration tests
+gateway-test-linux:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -c -tags noassets,gwintegration -o build/linux-amd64/gateway.test ./gateway
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -c -o build/linux-amd64/synctrain-gateway.test ./cmd/synctrain-gateway

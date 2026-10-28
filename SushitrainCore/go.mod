@@ -8,15 +8,26 @@ replace github.com/gobwas/glob v0.2.3 => github.com/calmh/glob v0.0.0-2022061508
 // genproto pulled in by go-licenses so it does not overlap the split API modules.
 replace google.golang.org/genproto v0.0.0-20220815135757-37a418bb8959 => google.golang.org/genproto v0.0.0-20230526161137-0005af68ea54
 
+// Syncthing v2.1.7 with Gordon's metadata history patch, extended attributes on read-only files, the generated web GUI
+// assets and the folder coordinator hook the remote file service uses
+// (branch synctrain/v2.1.7).
+replace github.com/syncthing/syncthing => github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261028060835-3cf90ec8ac0d
+
 require (
 	github.com/gobwas/glob v0.2.3
 	github.com/gofrs/flock v0.13.1
+	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/hooklift/iso9660 v1.0.0
+	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/miscreant/miscreant.go v0.0.0-20200214223636-26d376326b75
 	github.com/syncthing/syncthing v1.30.0-rc.1.0.20261020195438-d6d0181f7d46
+	github.com/vitrun/qart v0.0.0-20160531060029-bf64b92db6b0
 	golang.org/x/exp v0.0.0-20261007192929-f45ad48fbe92
+	golang.org/x/sys v0.49.0
+	golang.org/x/text v0.43.0
 	google.golang.org/protobuf v1.36.12
+	modernc.org/sqlite v1.60.1
 )
 
 require (
@@ -43,7 +54,6 @@ require (
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/go-licenses v1.6.0 // indirect
 	github.com/google/licenseclassifier v0.0.0-20210722185704-3043a050f148 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/hooklift/assert v0.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/jackpal/gateway v1.2.0 // indirect
@@ -55,7 +65,6 @@ require (
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd // indirect
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/mattn/go-sqlite3 v1.14.52 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
@@ -80,21 +89,18 @@ require (
 	github.com/thejerf/suture/v4 v4.0.6 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
-	github.com/vitrun/qart v0.0.0-20160531060029-bf64b92db6b0 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/xanzy/ssh-agent v0.2.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/mobile v0.0.0-20260410095206-2cfb76559b7b // indirect
-	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/mobile v0.0.0-20261011034528-197770444867 // indirect
+	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
-	golang.org/x/tools v0.51.0 // indirect
+	golang.org/x/tools v0.52.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	gopkg.in/src-d/go-billy.v4 v4.3.2 // indirect
@@ -104,7 +110,6 @@ require (
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
-	modernc.org/sqlite v1.60.1 // indirect
 )
 
 tool (

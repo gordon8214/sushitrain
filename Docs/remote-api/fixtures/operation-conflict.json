@@ -1,0 +1,38 @@
+{
+  "id": "5d2c9e10-8f7b-4a3e-b1c2-3e4f5a6b7c8d",
+  "operation": "op_fTxrjVGsjseaKtv5gEWUTw",
+  "kind": "replace",
+  "state": "conflict",
+  "item": {
+    "id": "itm_hF6RgxMZ6JxNZWvbgMJ4rA",
+    "folderID": "Documents",
+    "parentID": "itm_wG3IzBclHqTA5RCcjR2j2g",
+    "name": "report.pdf",
+    "path": "Taxes/report.pdf",
+    "kind": "file",
+    "size": 266240,
+    "modifiedNs": 1793150180790414961,
+    "mode": 420,
+    "writable": true,
+    "revision": "r1.gpcVrlnS3GothfAF_vcHhzCr9bV5LUWsP2bViyaUxho",
+    "contentID": "c1.0PQuLA1Ythwbj9UtAT7Ozmyq4hWb4yL8x0Mr5i8QwRI.266240",
+    "availability": "local"
+  },
+  "conflictItem": {
+    "id": "itm_-p4dIiBa2FKw3JUJ7E4xZA",
+    "folderID": "Documents",
+    "parentID": "itm_wG3IzBclHqTA5RCcjR2j2g",
+    "name": "report.sync-conflict-20261027-120000-ABCDEFG.pdf",
+    "path": "Taxes/report.sync-conflict-20261027-120000-ABCDEFG.pdf",
+    "kind": "file",
+    "size": 6,
+    "modifiedNs": 1793150180790414961,
+    "mode": 420,
+    "writable": true,
+    "revision": "r1.kXmjU5O_iGYLpExpOGAsfppJlmq1E8ULS6e8GEIZwQ8",
+    "contentID": "c1.EVB6Di9eadXfpApiob17buV-a82FxnybhDGzb_8hxDc.6",
+    "availability": "local"
+  },
+  "contentID": "c1.EVB6Di9eadXfpApiob17buV-a82FxnybhDGzb_8hxDc.6",
+  "authorityGeneration": 3
+}
