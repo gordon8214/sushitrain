@@ -53,7 +53,9 @@ import SynctrainFileProviderKit
 	/// Where versions are downloaded for previews, removed when the sheet closes
 	private nonisolated static let downloadsPrefix = "Versions-"
 
-	@ObservationIgnored private let itemID: Int64?
+	@ObservationIgnored private let itemIdentifier: NSFileProviderItemIdentifier?
+	/// The file's index row, once its identifier is resolved
+	@ObservationIgnored private var itemID: Int64?
 	@ObservationIgnored private let domainIdentifier: NSFileProviderDomainIdentifier
 	@ObservationIgnored private var browser: RemoteVersionBrowser?
 	@ObservationIgnored private var started = false
@@ -67,7 +69,7 @@ import SynctrainFileProviderKit
 		itemIdentifier: NSFileProviderItemIdentifier?, domainIdentifier: NSFileProviderDomainIdentifier?,
 		complete: @escaping @MainActor () -> Void
 	) {
-		itemID = itemIdentifier.flatMap { ItemIdentifiers.itemID(from: $0.rawValue) }
+		self.itemIdentifier = itemIdentifier
 		self.domainIdentifier = domainIdentifier ?? NSFileProviderDomainIdentifier(SharedContainer.domainIdentifier)
 		self.complete = complete
 	}
@@ -85,6 +87,9 @@ import SynctrainFileProviderKit
 
 	func load() async {
 		phase = .loading
+		if itemID == nil, let itemIdentifier {
+			itemID = await Self.itemID(of: itemIdentifier, in: domainIdentifier)
+		}
 		do {
 			let (browser, initial) = try await Self.open(itemID: itemID, current: browser).get()
 			self.browser = browser
@@ -111,6 +116,32 @@ import SynctrainFileProviderKit
 		catch {
 			log.warning("Could not list versions: \(String(describing: error), privacy: .private)")
 			phase = .failed(problem(error, forVersion: false))
+		}
+	}
+
+	/// The index row of the file. The Files app names it by its document ID (`__fp/fs/docID(…)`) rather than by the
+	/// identifier the File Provider gave it, so that identifier is looked up through the file's location.
+	@concurrent private nonisolated static func itemID(
+		of identifier: NSFileProviderItemIdentifier, in domainIdentifier: NSFileProviderDomainIdentifier
+	) async -> Int64? {
+		if let itemID = ItemIdentifiers.itemID(from: identifier.rawValue) {
+			return itemID
+		}
+		do {
+			guard
+				let domain = try await NSFileProviderManager.domains().first(where: { $0.identifier == domainIdentifier }),
+				let manager = NSFileProviderManager(for: domain)
+			else {
+				return nil
+			}
+			let url = try await manager.getUserVisibleURL(for: identifier)
+			let (resolved, _) = try await NSFileProviderManager.identifierForUserVisibleFile(at: url)
+			return ItemIdentifiers.itemID(from: resolved.rawValue)
+		}
+		catch {
+			log.warning(
+				"Could not resolve \(identifier.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+			return nil
 		}
 	}
 
