@@ -713,27 +713,10 @@ func (s *Service) handleContent(w http.ResponseWriter, r *http.Request, p princi
 	if err != nil {
 		return err
 	}
-	etag := `"` + l.contentID + `"`
-	header := w.Header()
-	header.Set("ETag", etag)
-	header.Set("Accept-Ranges", "bytes")
-	header.Set("Content-Type", "application/octet-stream")
-
-	start, end := int64(0), file.Size
-	status := http.StatusOK
-	if rangeHeader := r.Header.Get("Range"); rangeHeader != "" && file.Size > 0 {
-		ifRange := r.Header.Get("If-Range")
-		if ifRange == "" || ifRange == etag {
-			s, e, ok := parseRange(rangeHeader, file.Size)
-			if !ok {
-				header.Set("Content-Range", "bytes */"+strconv.FormatInt(file.Size, 10))
-				return newAPIError(http.StatusRequestedRangeNotSatisfiable, codeInvalidRequest, "unsatisfiable range")
-			}
-			start, end, status = s, e, http.StatusPartialContent
-			header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end-1, file.Size))
-		}
+	start, end, status, err := contentRange(w, r, `"`+l.contentID+`"`, file.Size)
+	if err != nil {
+		return err
 	}
-	header.Set("Content-Length", strconv.FormatInt(end-start, 10))
 	if r.Method == http.MethodHead || end == start {
 		w.WriteHeader(status)
 		return nil
@@ -776,6 +759,33 @@ func (s *Service) handleContent(w http.ResponseWriter, r *http.Request, p princi
 	return nil
 }
 
+// contentRange sets the headers of a response with content of the given size and strong validator, and returns the
+// byte range [start, end) it sends (the requested range, or all of it) and the status
+func contentRange(w http.ResponseWriter, r *http.Request, etag string, size int64) (int64, int64, int, error) {
+	header := w.Header()
+	header.Set("ETag", etag)
+	header.Set("Accept-Ranges", "bytes")
+	header.Set("Content-Type", "application/octet-stream")
+
+	start, end := int64(0), size
+	status := http.StatusOK
+	if rangeHeader := r.Header.Get("Range"); rangeHeader != "" && size > 0 {
+		ifRange := r.Header.Get("If-Range")
+		if ifRange == "" || ifRange == etag {
+			s, e, ok := parseRange(rangeHeader, size)
+			if !ok {
+				header.Set("Content-Range", "bytes */"+strconv.FormatInt(size, 10))
+				return 0, 0, 0, newAPIError(http.StatusRequestedRangeNotSatisfiable, codeInvalidRequest,
+					"unsatisfiable range")
+			}
+			start, end, status = s, e, http.StatusPartialContent
+			header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end-1, size))
+		}
+	}
+	header.Set("Content-Length", strconv.FormatInt(end-start, 10))
+	return start, end, status, nil
+}
+
 // parseRange parses a single byte range ("bytes=a-b", "bytes=a-" or "bytes=-n") and returns [start, end)
 func parseRange(header string, size int64) (int64, int64, bool) {
 	spec, ok := strings.CutPrefix(header, "bytes=")
@@ -803,7 +813,10 @@ func parseRange(header string, size int64) (int64, int64, bool) {
 		if err != nil || e < start {
 			return 0, 0, false
 		}
-		end = min(size, e+1)
+		// e+1 would overflow for the largest end
+		if e < size-1 {
+			end = e + 1
+		}
 	}
 	return start, end, true
 }

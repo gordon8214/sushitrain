@@ -13,7 +13,7 @@ import Testing
 	@Test func decodesEveryFixture() throws {
 		let names = try FileManager.default.contentsOfDirectory(atPath: fixturesURL.path(percentEncoded: false))
 			.filter { $0.hasSuffix(".json") }.sorted()
-		#expect(names.count == 20)
+		#expect(names.count == 23)
 		for name in names {
 			let data = try Data(contentsOf: fixturesURL.appending(path: name))
 			let decoder = RemoteJSON.decoder()
@@ -48,12 +48,17 @@ import Testing
 				let operation = try decoder.decode(RemoteOperation.self, from: data)
 				#expect(operation.authorityGeneration == 3)
 				#expect(name != "operation-conflict.json" || operation.conflictItem != nil)
-			case "operation-create.json", "operation-delete.json", "operation-move.json", "operation-replace.json":
+			case "operation-create.json", "operation-delete.json", "operation-move.json", "operation-replace.json",
+				"operation-restore.json", "operation-copy-version.json":
 				// Requests encode back to the same JSON
 				let request = try decoder.decode(OperationRequest.self, from: data)
 				let reencoded = try JSONSerialization.jsonObject(with: try request.canonicalJSON()) as? NSDictionary
 				let original = try JSONSerialization.jsonObject(with: data) as? NSDictionary
 				#expect(reencoded == original, "\(name)")
+			case "version-list.json":
+				let list = try decoder.decode(RemoteVersionList.self, from: data)
+				#expect(list.versioning == .staggered && list.versions.count == 2)
+				#expect(list.versions[0].versionTime > list.versions[1].versionTime)
 			case "pairing-approved.json":
 				let result = try decoder.decode(PairingResult.self, from: data)
 				#expect(result.state == .approved && result.credential?.hasPrefix("stc_") == true)

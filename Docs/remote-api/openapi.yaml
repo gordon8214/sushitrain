@@ -31,6 +31,7 @@ tags:
   - name: uploads
   - name: operations
   - name: pairing
+  - name: versions
 
 paths:
   /v1/capabilities:
@@ -302,6 +303,89 @@ paths:
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /v1/items/{itemID}/versions:
+    parameters:
+      - $ref: "#/components/parameters/ItemID"
+    get:
+      tags: [versions]
+      summary: The previous versions of a file that the folder's Syncthing versioning keeps.
+      description: |
+        Only when `capabilities.features` lists `versions`. Versions are found by the file's current path, newest
+        first. A folder without versioning, with `external` versioning (whose versions can't be listed), or keeping
+        its versions in a custom path answers an empty list; `versioning` says which.
+      operationId: listVersions
+      responses:
+        "200":
+          description: The file's versions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemVersionList" }
+              example: { $ref: "fixtures/version-list.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The item is a directory (`invalid_request`).
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /v1/items/{itemID}/versions/{versionID}/content:
+    parameters:
+      - $ref: "#/components/parameters/ItemID"
+      - name: versionID
+        in: path
+        required: true
+        schema: { type: string, pattern: "^ver_-?[0-9]+$" }
+    get:
+      tags: [versions]
+      summary: A version's content, with byte ranges.
+      description: |
+        Served from the gateway's disk with a strong `ETag`, `Content-Length`, `Accept-Ranges: bytes`, single byte
+        ranges (`206`) and `If-Range`. Not verified against a manifest (invariant 12): clients only preview it,
+        and never keep it as an item's content. A version that no longer exists answers `version_not_found`.
+      operationId: getVersionContent
+      parameters:
+        - name: Range
+          in: header
+          schema: { type: string }
+        - name: If-Range
+          in: header
+          schema: { type: string }
+      responses:
+        "200":
+          description: The whole version.
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/octet-stream: {}
+        "206":
+          description: A byte range.
+          headers:
+            ETag: { schema: { type: string } }
+            Content-Range: { schema: { type: string } }
+          content:
+            application/octet-stream: {}
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The item is a directory (`invalid_request`).
+        "416":
+          description: The range is outside the version.
+        "503": { $ref: "#/components/responses/Unavailable" }
+    head:
+      tags: [versions]
+      summary: Length and validator of a version's content.
+      operationId: headVersionContent
+      responses:
+        "200":
+          description: Headers only (`206` with a range).
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The item is a directory (`invalid_request`).
+        "416":
+          description: The range is outside the version.
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /v1/uploads:
     options:
       tags: [uploads]
@@ -414,6 +498,8 @@ paths:
               replace: { externalValue: fixtures/operation-replace.json }
               move: { externalValue: fixtures/operation-move.json }
               delete: { externalValue: fixtures/operation-delete.json }
+              restore: { externalValue: fixtures/operation-restore.json }
+              copyVersion: { externalValue: fixtures/operation-copy-version.json }
       responses:
         "200":
           description: Replay of a known operation.
@@ -440,6 +526,7 @@ paths:
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         "422": { $ref: "#/components/responses/OperationMismatch" }
         "429": { $ref: "#/components/responses/Overloaded" }
+        "503": { $ref: "#/components/responses/Unavailable" }
         "507": { $ref: "#/components/responses/InsufficientStorage" }
 
   /v1/operations/{operationID}:
@@ -656,7 +743,8 @@ components:
           type: array
           description: |
             Known values: `longPoll`, `thumbnails.image`, `thumbnails.video`, `thumbnails.pdf`, `directoryMoves`,
-            `crossFolderMoves`. Unknown values are ignored.
+            `crossFolderMoves`, `versions` (listing and previewing versions, and `sourceVersion` in operations).
+            Unknown values are ignored.
           items: { type: string }
         limits:
           type: object
@@ -829,6 +917,42 @@ components:
         length: { type: integer, format: int64 }
         expires: { type: string, format: date-time }
 
+    ItemVersionList:
+      type: object
+      required: [itemID, revision, versioning, versions]
+      properties:
+        itemID: { type: string }
+        revision: { $ref: "#/components/schemas/Revision" }
+        versioning:
+          type: string
+          description: |
+            The folder's Syncthing versioning: `none`, `simple`, `staggered`, `trashcan`, `external`, or
+            `customPath` for versioning that keeps versions somewhere other than the folder's default `.stversions`.
+            The gateway lists no versions for `none`, `external` and `customPath` (a custom path may be shared with
+            another folder, or point into one). Unknown values are shown as they are.
+        versions:
+          type: array
+          description: Newest first.
+          items: { $ref: "#/components/schemas/ItemVersion" }
+
+    ItemVersion:
+      type: object
+      required: [id, versionTime, modifiedNs, size]
+      properties:
+        id:
+          type: string
+          pattern: "^ver_-?[0-9]+$"
+          description: Opaque (`ver_` and the Unix time it was archived); unique among the versions of a path.
+        versionTime:
+          type: string
+          format: date-time
+          description: When the version was archived (to the second, UTC).
+        modifiedNs:
+          type: integer
+          format: int64
+          description: The version's modification time (to the second).
+        size: { type: integer, format: int64 }
+
     OperationRequest:
       type: object
       required: [id, kind, folderID]
@@ -863,14 +987,28 @@ components:
           description: create.
         upload:
           type: string
-          description: create (file) and replace.
+          description: create (file) and replace, unless `sourceVersion` is set.
         uploadDigest:
           type: string
-          description: SHA-256 of the whole staged file, base64url; create (file) and replace.
+          description: SHA-256 of the whole staged file, base64url; create (file) and replace, with `upload`.
+        sourceItemID:
+          type: string
+          description: |
+            Required for create (file) from a version: the file in the same folder whose version is copied (an
+            unknown file, or one in another folder, answers `404 not_found`). A replace writes a version of its own
+            item, so it leaves this out or names the item.
+        sourceVersion:
+          type: string
+          pattern: "^ver_-?[0-9]+$"
+          description: |
+            create (file) and replace (requires `versions`): writes this version (`ItemVersion.id`) instead of an
+            upload. A replace restores the item to it; the replaced content is archived as usual, which may remove
+            the version (invariant 13). The version is looked up when the operation is accepted
+            (`version_not_found` if it doesn't exist, `503` while the folder isn't running).
         modifiedNs:
           type: integer
           format: int64
-          description: create and replace; the new modification time.
+          description: create and replace; the new modification time. Defaults to the version's for `sourceVersion`.
         onConflict:
           type: string
           enum: [keepBoth, reject]
@@ -945,7 +1083,7 @@ components:
             `name_conflict`, `ignored_path`, `not_empty`, `cross_folder`, `revision_mismatch`, `upload_mismatch`,
             `cursor_expired`, `snapshot_expired`, `lease_expired`, `operation_mismatch`, `overloaded`,
             `too_many_attempts`, `content_unavailable`, `insufficient_storage`, `pairing_denied`,
-            `pairing_expired`, `internal`. Unknown codes are treated by their HTTP status.
+            `pairing_expired`, `version_not_found`, `internal`. Unknown codes are treated by their HTTP status.
         message: { type: string }
         correlationID: { type: string }
         retryAfter: { type: integer }

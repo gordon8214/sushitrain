@@ -53,6 +53,16 @@ certificate's SubjectPublicKeyInfo; without it the certificate must be trusted n
     the service's database, or a new write authority. A restored service database is recognized by a client's cursor
     beyond the change log, which starts a new generation at most once per start of the service. Clients then take a fresh snapshot and treat operations they
     could not confirm as outcome-unknown, resolved through preconditions and user review, never by resubmission.
+12. Previous versions (the `versions` feature) are not item content. `GET /v1/items/{id}/versions/{versionID}/content`
+    serves a version from the gateway's disk without a lease or manifest, the one exception to invariant 5: clients
+    only preview it, and never publish it as an item's content. To get a version back, a client has the gateway write
+    it (invariant 13).
+13. An operation with `sourceVersion` writes the version through the same journal as an upload. The version is looked
+    up by path when the operation is accepted and copied, not moved, beside the target when staged. The replaced
+    content is archived by the folder's versioning, and invariants 7 to 9 hold as for uploads. Only the version's
+    content is written, not platform metadata the versioning keeps with it. The version is not removed by the copy,
+    but the folder's versioning may remove it when it archives the replaced content: the trashcan keeps one entry per
+    path, and simple and staggered versioning thin out versions by their own rules.
 
 ## Operation states
 
@@ -79,9 +89,9 @@ A mutation passes through these states in the service database. Each transition 
 | State | Meaning | Recovery after a crash |
 | --- | --- | --- |
 | `intent` | Request, payload digest and preconditions recorded. Live files untouched. | Re-run from the start: check preconditions again. |
-| `staged` | New content is in place beside the target (temporary name), displaced content not yet moved. Its device and inode are recorded. | Reuse the temporary file if it is unchanged, otherwise stage again; check preconditions again. |
+| `staged` | New content (the upload, or a copy of the named version) is in place beside the target (temporary name), displaced content not yet moved. Its device and inode are recorded. | Reuse the temporary file if it is unchanged, otherwise stage again; check preconditions again. |
 | `publishing` | Preconditions held and the change is about to happen. Recorded with its method (rename, swap, archive, mkdir, move, delete), final target name and, for moves, the moved entry's device and inode. | Look at disk: if the target is the staged file (or the moved entry, or the new directory), continue as `published`. If an archive moved the replaced file away but the rename didn't happen, finish the rename. If nothing happened, continue as before. A delete resumes removing what is left. Preconditions are not checked again once the change may have started. |
-| `published` | Live files changed; displaced content archived or kept as recovery copy. | Check Syncthing's index for the expected version and `BlocksHash`. If absent, rebuild the entry from disk (only if disk still is the staged file) and commit it. If something replaced the file before it was indexed, index what is there and publish the edit again from its upload as a conflict copy. From here on the operation never fails; it keeps trying to finish. |
+| `published` | Live files changed; displaced content archived or kept as recovery copy. | Check Syncthing's index for the expected version and `BlocksHash`. If absent, rebuild the entry from disk (only if disk still is the staged file) and commit it. If something replaced the file before it was indexed, index what is there and publish the edit again from its upload (or version) as a conflict copy. From here on the operation never fails, except when the version it writes was removed meanwhile; it keeps trying to finish. The modification time is set once the file is in place (Syncthing removes temporary files that look old), and set again here. |
 | `indexed` | Syncthing committed the entry. | Write the receipt and change log entry. |
 | `receipted` | Result and change log entry stored. Terminal. | Nothing. |
 
@@ -102,4 +112,5 @@ A mutation passes through these states in the service database. Each transition 
 | Response from another origin | Never sent. | Protocol error; revokes the task's scoped token. |
 | Credential revoked | `401`. | `notAuthenticated` in Files; keeps local work. |
 | Storage exhausted | `507 insufficient_storage`. | Keeps the operation pending; surfaces it. |
+| Version removed (by versioning cleanup) before an operation copies it | The operation fails with `404 version_not_found`. | Shows the failure; the version list no longer has it. |
 | Replay after deduplication records expired, preconditions fail | If the intended result already holds, records `committed` and returns the current item. | As committed. |

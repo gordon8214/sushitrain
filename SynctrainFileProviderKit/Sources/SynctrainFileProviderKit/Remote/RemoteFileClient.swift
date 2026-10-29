@@ -14,6 +14,8 @@ public enum RemoteError: Error, Sendable, Equatable {
 	case forbidden(code: String)
 	/// No such item, folder, lease, upload or operation (`404`)
 	case notFound
+	/// The version of a file is no longer kept, or was never (`404 version_not_found`)
+	case versionNotFound
 	/// The name is taken (`409 name_conflict`), with the item that has it when the gateway says
 	case nameConflict(current: RemoteItem?)
 	/// The base revision or subtree generation is not current (`412`), with the current item
@@ -267,6 +269,7 @@ public final class RemoteFileClient: Sendable {
 		switch status {
 		case 401: return .unauthenticated
 		case 403: return .forbidden(code: code ?? RemoteErrorCode.forbidden)
+		case 404 where code == RemoteErrorCode.versionNotFound: return .versionNotFound
 		case 404: return .notFound
 		case 409 where code == RemoteErrorCode.nameConflict: return .nameConflict(current: detail?.item)
 		case 410:
@@ -421,6 +424,20 @@ public final class RemoteFileClient: Sendable {
 		]
 		_ = try await download(
 			try request("GET", url(["v1", "items", itemID, "thumbnail"], query: query)), to: destination)
+	}
+
+	// MARK: - Versions
+
+	/// The versions the folder's versioning keeps of a file, newest first
+	public func versions(itemID: String) async throws(RemoteError) -> RemoteVersionList {
+		try await json(RemoteVersionList.self, try request("GET", url(["v1", "items", itemID, "versions"])))
+	}
+
+	/// Downloads a version's content, for previewing it. Versions are not verified against a manifest: they are never
+	/// kept as an item's content.
+	public func downloadVersion(itemID: String, versionID: String, to destination: URL) async throws(RemoteError) {
+		_ = try await download(
+			try request("GET", url(["v1", "items", itemID, "versions", versionID, "content"])), to: destination)
 	}
 
 	/// Runs a download task into the destination. Error bodies (bounded) are read from the file and mapped.

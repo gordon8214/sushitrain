@@ -42,6 +42,14 @@
 			self = export.allowWrite ? .write : .read
 		}
 
+		/// What reading a folder includes, shown with the access of devices
+		static var historyNote: String {
+			String(
+				localized:
+					"A device that can read a folder can also see and download the previous versions that the folder's versioning keeps."
+			)
+		}
+
 		var label: String {
 			switch self {
 			case .none: return String(localized: "No access")

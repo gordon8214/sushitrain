@@ -140,6 +140,8 @@
 				return String(localized: "The gateway does not allow this (\(code)).")
 			case .notFound:
 				return String(localized: "The gateway does not know this item.")
+			case .versionNotFound:
+				return String(localized: "The gateway no longer keeps this version.")
 			case .nameConflict:
 				return String(localized: "An item with this name exists already.")
 			case .revisionMismatch:

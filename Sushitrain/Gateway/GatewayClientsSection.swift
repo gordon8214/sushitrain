@@ -11,13 +11,19 @@
 		private var controller = GatewayController.shared
 
 		var body: some View {
-			Section("Paired devices") {
+			Section {
 				if controller.clients.isEmpty {
 					Text("No devices are paired yet.")
 						.foregroundStyle(.secondary)
 				}
 				ForEach(controller.clients) { client in
 					GatewayClientRow(client: client)
+				}
+			} header: {
+				Text("Paired devices")
+			} footer: {
+				if !controller.clients.isEmpty {
+					Text(GatewayAccess.historyNote)
 				}
 			}
 			.disabled(controller.state != .running)

@@ -63,6 +63,18 @@ folder alone (it stays paused and cannot be resumed until the folder is switched
   with an edit that wasn't sent). Thumbnails come from the gateway.
 - **Moving** a file to a folder on another gateway copies it there and then deletes the original; directories can't
   be moved between gateways (copy them, then delete them).
+- **Previous Versions…** (in a file's menu in Files) lists the versions the folder's Syncthing versioning keeps on the
+  gateway, newest first. Versions whose modification time and size equal those of the next newer one (Syncthing
+  archives a version when only a file's metadata changes) are left out. Tap a version to preview it (and share it from
+  the preview). **Restore** replaces the file with the version on the gateway: the current contents are kept as a
+  version (with trash can versioning, in place of the restored one). A file that changed on the gateway since the phone last saw it is not
+  overwritten, and a file with an edit that hasn't been sent can't be restored until it has. **Save a Copy** puts the
+  version next to the file as "Name (date time).ext". Both happen on the gateway, so nothing is uploaded; they copy
+  the file's contents only, not extended attributes or resource forks that the version may have kept. Versions are
+  found by the file's current name, so versions from before a rename aren't shown. This needs a gateway with the
+  `versions` feature and versioning turned on for the folder, keeping versions in the default `.stversions` (not
+  external versioning, nor a custom versions path). The sheet is shown by the
+  **SynctrainFileProviderUI** extension, which reads the index and the gateway's credential from the app group.
 
 The gateway must be reachable (on the local network, a VPN or a public address you set up) for files that are not
 on the phone to open, and for edits to complete.

@@ -25,7 +25,8 @@ the phone, and for edits to complete. Edits made while it is unreachable wait on
 
 ## Pairing
 
-Pairing creates one credential per phone, with access to the folders you grant (read or read and write).
+Pairing creates one credential per phone, with access to the folders you grant (read or read and write; read
+includes the folder's previous versions).
 
 1. On the gateway, start pairing. It shows a QR code and a `synctrain+pair://…` link that works once, for ten minutes.
 2. In Synctrain on the phone, scan it (Settings › Remote folders › Pair).
@@ -68,6 +69,16 @@ synctrain-gateway serve --home /var/syncthing/config --listen :20920 \
 The service keeps its own database, staged uploads and content cache in `<home>/synctrain-gateway/` (in Syncthing's
 data directory when the home isn't given; never inside Syncthing's database). Folders whose deletions go to the system
 Trash (`basic-trash`) can't be exported for writing on Linux; use Syncthing's versioning instead.
+
+Phones can browse, preview, restore and copy the previous versions of a file that the folder's Syncthing versioning
+keeps (simple, staggered or trash can; external versioning can't be listed). Turn versioning on for every exported
+folder whose history phones should see, and leave its versions path empty: versions in a custom path aren't shown,
+as that path may be shared with another folder (or point into one) that a phone has no access to. Read access to a
+folder includes its history: a phone that may only read a folder can still see and preview its previous versions.
+Restoring and copying happen on the gateway, through the same journal as other edits: the version is copied, the
+replaced contents are archived as usual (the trash can then keeps those instead of the restored version), and only
+the file's contents are written, not platform metadata kept with the version. Version reads are recorded in the audit
+log.
 
 When the home has no `cert.pem` and `key.pem`, the gateway logs a warning and creates a new device identity (and a
 new `config.xml` when there is none); a certificate or key that exists but can't be read stops it instead. A restart
@@ -148,7 +159,8 @@ location /v1/ {
   *authority generation*: phones take a fresh listing, and edits they couldn't confirm are shown for review rather
   than sent again.
 - Content is verified against Syncthing's block hashes before it is served, whether it comes from the gateway's disk
-  or from another device.
+  or from another device. Previous versions, which only get previewed, are served from the gateway's disk as they
+  are.
 - The audit log (in the service database) records which client did what, by client, operation and item ID (no file
   names).
 

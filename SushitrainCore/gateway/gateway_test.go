@@ -48,6 +48,9 @@ func TestAPIFixtures(t *testing.T) {
 		"error-revision-mismatch.json": &ErrorResponse{},
 		"pairing-request.json":         &PairingRequest{},
 		"pairing-approved.json":        &PairingResult{},
+		"version-list.json":            &ItemVersionList{},
+		"operation-restore.json":       &OperationRequest{},
+		"operation-copy-version.json":  &OperationRequest{},
 	}
 	dir := filepath.Join("..", "..", "Docs", "remote-api", "fixtures")
 	entries, err := os.ReadDir(dir)
@@ -85,6 +88,18 @@ func TestAPIFixtures(t *testing.T) {
 	}
 	if !hasIDFormat(types["item-file.json"].(*Item).ID, prefixItem) {
 		t.Error("fixture item ID has the wrong format")
+	}
+	// Version IDs name the time the version was archived
+	for _, version := range types["version-list.json"].(*ItemVersionList).Versions {
+		archived, ok := parseVersionID(version.ID)
+		if !ok || archived.UTC().Format(time.RFC3339) != version.VersionTime {
+			t.Errorf("fixture version %s was archived at %s", version.ID, version.VersionTime)
+		}
+	}
+	for _, name := range []string{"operation-restore.json", "operation-copy-version.json"} {
+		if _, _, err := normalizedRequest(*types[name].(*OperationRequest)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }
 

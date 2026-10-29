@@ -343,6 +343,8 @@ public struct Capabilities: Codable, Hashable, Sendable {
 		case pdfThumbnails = "thumbnails.pdf"
 		case directoryMoves
 		case crossFolderMoves
+		/// Listing and previewing the versions of files, and writing them (`OperationRequest.sourceVersion`)
+		case versions
 	}
 
 	public func supports(_ feature: Feature) -> Bool {
@@ -426,6 +428,75 @@ public struct RemoteItem: Codable, Hashable, Sendable {
 
 	public var isDeleted: Bool { deleted == true }
 	public var isRoot: Bool { parentID == nil }
+}
+
+// MARK: - Versions
+
+/// A folder's Syncthing versioning
+public enum RemoteVersioning: OpenEnumeration {
+	case none
+	case simple
+	case staggered
+	case trashcan
+	/// Versions kept by an external command, which the gateway cannot list
+	case external
+	/// Versions kept somewhere other than the folder's default versions directory, which the gateway doesn't serve
+	case customPath
+	case unknown(String)
+
+	public init(rawValue: String) {
+		switch rawValue {
+		case "none": self = .none
+		case "simple": self = .simple
+		case "staggered": self = .staggered
+		case "trashcan": self = .trashcan
+		case "external": self = .external
+		case "customPath": self = .customPath
+		default: self = .unknown(rawValue)
+		}
+	}
+
+	public var rawValue: String {
+		switch self {
+		case .none: return "none"
+		case .simple: return "simple"
+		case .staggered: return "staggered"
+		case .trashcan: return "trashcan"
+		case .external: return "external"
+		case .customPath: return "customPath"
+		case .unknown(let value): return value
+		}
+	}
+}
+
+/// A previous version of a file, as the folder's versioning keeps it on the gateway
+public struct RemoteVersion: Codable, Hashable, Sendable, Identifiable {
+	/// Opaque (`ver_…`), unique among the versions of a path
+	public var id: String
+	/// When the version was archived
+	public var versionTime: Date
+	public var modifiedNs: Int64
+	public var size: Int64
+
+	public init(id: String, versionTime: Date, modifiedNs: Int64, size: Int64) {
+		self.id = id
+		self.versionTime = versionTime
+		self.modifiedNs = modifiedNs
+		self.size = size
+	}
+
+	public var modificationDate: Date {
+		Date(timeIntervalSince1970: Double(modifiedNs) / 1_000_000_000)
+	}
+}
+
+/// The versions the gateway keeps of a file, newest first
+public struct RemoteVersionList: Codable, Hashable, Sendable {
+	public var itemID: String
+	/// The file's current revision
+	public var revision: RemoteRevision
+	public var versioning: RemoteVersioning
+	public var versions: [RemoteVersion]
 }
 
 public struct SnapshotPage: Codable, Hashable, Sendable {
@@ -526,12 +597,17 @@ public struct OperationRequest: Codable, Hashable, Sendable {
 	public var uploadDigest: String?
 	public var modifiedNs: Int64?
 	public var onConflict: RemoteConflictPolicy?
+	/// The file whose version a creation writes (a replacement writes a version of its own item)
+	public var sourceItemID: String?
+	/// The version (`RemoteVersion.id`) written instead of an upload
+	public var sourceVersion: String?
 
 	public init(
 		id: String, kind: RemoteOperationKind, folderID: String, itemID: String? = nil,
 		baseRevision: RemoteRevision? = nil, subtreeGeneration: Int64? = nil, parentID: String? = nil,
 		name: String? = nil, destinationFolderID: String? = nil, itemKind: RemoteItemKind? = nil, upload: String? = nil,
-		uploadDigest: String? = nil, modifiedNs: Int64? = nil, onConflict: RemoteConflictPolicy? = nil
+		uploadDigest: String? = nil, modifiedNs: Int64? = nil, onConflict: RemoteConflictPolicy? = nil,
+		sourceItemID: String? = nil, sourceVersion: String? = nil
 	) {
 		self.id = id
 		self.kind = kind
@@ -547,6 +623,8 @@ public struct OperationRequest: Codable, Hashable, Sendable {
 		self.uploadDigest = uploadDigest
 		self.modifiedNs = modifiedNs
 		self.onConflict = onConflict
+		self.sourceItemID = sourceItemID
+		self.sourceVersion = sourceVersion
 	}
 
 	public static func create(
@@ -583,6 +661,24 @@ public struct OperationRequest: Codable, Hashable, Sendable {
 		OperationRequest(
 			id: id, kind: .delete, folderID: folderID, itemID: itemID, baseRevision: baseRevision,
 			subtreeGeneration: subtreeGeneration)
+	}
+
+	/// Restores a file to one of its versions. A file changed since `baseRevision` is not overwritten.
+	public static func restore(
+		id: String, folderID: String, itemID: String, baseRevision: RemoteRevision, version: String
+	) -> OperationRequest {
+		OperationRequest(
+			id: id, kind: .replace, folderID: folderID, itemID: itemID, baseRevision: baseRevision, onConflict: .reject,
+			sourceVersion: version)
+	}
+
+	/// Creates a file holding a version of another file of the folder
+	public static func copyVersion(
+		id: String, folderID: String, parentID: String, name: String, sourceItemID: String, version: String
+	) -> OperationRequest {
+		OperationRequest(
+			id: id, kind: .create, folderID: folderID, parentID: parentID, name: name, itemKind: .file,
+			sourceItemID: sourceItemID, sourceVersion: version)
 	}
 
 	/// The request as it is sent and stored: sorted keys, no optional fields that are not set
@@ -664,6 +760,7 @@ public enum RemoteErrorCode {
 	public static let insufficientStorage = "insufficient_storage"
 	public static let pairingDenied = "pairing_denied"
 	public static let pairingExpired = "pairing_expired"
+	public static let versionNotFound = "version_not_found"
 	public static let internalError = "internal"
 }
 

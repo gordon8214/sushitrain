@@ -19,6 +19,7 @@ const (
 	featureThumbnailsPDF    = "thumbnails.pdf"
 	featureDirectoryMoves   = "directoryMoves"
 	featureCrossFolderMoves = "crossFolderMoves"
+	featureVersions         = "versions"
 )
 
 type Capabilities struct {
@@ -208,6 +209,26 @@ type OperationRequest struct {
 	UploadDigest        string `json:"uploadDigest,omitempty"`
 	ModifiedNs          *int64 `json:"modifiedNs,omitempty"`
 	OnConflict          string `json:"onConflict,omitempty"`
+	// A version (ItemVersion.ID) of SourceItemID whose content a create or replace writes instead of an upload
+	SourceItemID  string `json:"sourceItemID,omitempty"`
+	SourceVersion string `json:"sourceVersion,omitempty"`
+}
+
+// The versions the folder's Syncthing versioner keeps of a file
+type ItemVersionList struct {
+	ItemID   string `json:"itemID"`
+	Revision string `json:"revision"`
+	// The folder's versioning (versioning… constants)
+	Versioning string        `json:"versioning"`
+	Versions   []ItemVersion `json:"versions"`
+}
+
+type ItemVersion struct {
+	ID string `json:"id"`
+	// When the version was archived (RFC 3339, UTC)
+	VersionTime string `json:"versionTime"`
+	ModifiedNs  int64  `json:"modifiedNs"`
+	Size        int64  `json:"size"`
 }
 
 type Operation struct {

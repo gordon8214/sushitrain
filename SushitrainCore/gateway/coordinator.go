@@ -375,8 +375,9 @@ func (s *Service) awaitingBase(folder, target, base string) bool {
 	return err == nil && (!ok || !local.Version.Equal(global.Version))
 }
 
-// stage copies the operation's upload into a temporary file in the target's directory, hashing it into blocks and
-// checking it against its digest, and returns the blocks
+// stage copies what the operation writes (its upload, or the version it names) into a temporary file in the target's
+// directory, hashing it into blocks and checking it against the upload's digest or the version's size, and returns the
+// blocks
 func (s *Service) stage(ctx context.Context, op *operationRecord, root *dir, parent string) ([]protocol.BlockInfo, error) {
 	pdir, err := root.openDir(parent)
 	if err != nil {
@@ -400,15 +401,11 @@ func (s *Service) stage(ctx context.Context, op *operationRecord, root *dir, par
 		_ = pdir.remove(temp)
 	}
 
-	src, err := os.Open(s.uploads.path(op.req.Upload))
-	if err != nil {
-		return nil, newAPIError(http.StatusConflict, codeUploadMismatch, "the upload is gone")
-	}
-	defer src.Close()
-	stat, err := src.Stat()
+	src, size, err := s.stagingSource(op)
 	if err != nil {
 		return nil, err
 	}
+	defer src.Close()
 	_ = pdir.remove(temp)
 	dst, err := pdir.createExclusive(temp, 0o644)
 	if err != nil {
@@ -421,12 +418,19 @@ func (s *Service) stage(ctx context.Context, op *operationRecord, root *dir, par
 			_ = pdir.remove(temp)
 		}
 	}()
-	blocks, digest, err := hashBlocks(ctx, io.TeeReader(src, dst), s.blockSizeFor(op, stat.Size()))
+	blocks, digest, err := hashBlocks(ctx, io.TeeReader(src, dst), s.blockSizeFor(op, size))
 	if err != nil {
 		return nil, err
 	}
-	want, _ := parseDigest(op.req.UploadDigest)
-	if !bytes.Equal(digest, want) {
+	if op.req.SourceVersion != "" {
+		var copied int64
+		for _, b := range blocks {
+			copied += int64(b.Size)
+		}
+		if copied != size {
+			return nil, errVersionNotFound
+		}
+	} else if want, _ := parseDigest(op.req.UploadDigest); !bytes.Equal(digest, want) {
 		return nil, newAPIError(http.StatusConflict, codeUploadMismatch, "the upload does not match uploadDigest")
 	}
 	if err := dst.Sync(); err != nil {
@@ -447,6 +451,23 @@ func (s *Service) stage(ctx context.Context, op *operationRecord, root *dir, par
 		return nil, err
 	}
 	return blocks, nil
+}
+
+// stagingSource opens what an operation writes, the version it names or its upload, and returns its size
+func (s *Service) stagingSource(op *operationRecord) (io.ReadCloser, int64, error) {
+	if op.req.SourceVersion != "" {
+		return s.openVersionSource(op)
+	}
+	src, err := os.Open(s.uploads.path(op.req.Upload))
+	if err != nil {
+		return nil, 0, newAPIError(http.StatusConflict, codeUploadMismatch, "the upload is gone")
+	}
+	stat, err := src.Stat()
+	if err != nil {
+		src.Close()
+		return nil, 0, err
+	}
+	return src, stat.Size(), nil
 }
 
 // blockSizeFor picks the block size a scan would use for the new content of the target
@@ -576,13 +597,15 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 		}
 	}
 
+	// The modification time is set once the file is in place: Syncthing removes temporary files that look old
 	modTime := s.store.now()
 	if op.req.ModifiedNs != nil {
 		modTime = time.Unix(0, *op.req.ModifiedNs)
+	} else if op.req.SourceVersion != "" {
+		// A version keeps its modification time, as when Syncthing restores it
+		modTime = time.Unix(0, op.data.SourceModNs)
 	}
-	if err := pdir.chtimes(temp, modTime); err != nil {
-		return "", err
-	}
+	op.data.ModNs = modTime.UnixNano()
 	if replace && !info.IgnorePerms {
 		// Keep the replaced file's permissions, which Syncthing synchronizes
 		if local, ok, err := h.CurrentFile(target); err == nil && ok && !local.Deleted {
@@ -644,6 +667,9 @@ func (s *Service) putInPlace(ctx context.Context, op *operationRecord, h syncthi
 		}
 		return err
 	}
+	if err := s.setPublishedTime(op, pdir, name); err != nil {
+		return err
+	}
 	if err := pdir.sync(); err != nil {
 		return err
 	}
@@ -651,6 +677,15 @@ func (s *Service) putInPlace(ctx context.Context, op *operationRecord, h syncthi
 		return err
 	}
 	return s.indexFile(ctx, op, h, pdir, target, blocks)
+}
+
+// setPublishedTime gives the published file its modification time. Operations journaled before it was recorded set it
+// before publishing.
+func (s *Service) setPublishedTime(op *operationRecord, pdir *dir, name string) error {
+	if op.data.ModNs == 0 {
+		return nil
+	}
+	return pdir.chtimes(name, time.Unix(0, op.data.ModNs))
 }
 
 // freeConflictName returns a conflict copy name for target, named as Syncthing names them, that is free
@@ -742,6 +777,10 @@ func (s *Service) indexPublished(ctx context.Context, op *operationRecord, h syn
 	if !st.exists || st.id.dev != op.data.Device || st.id.ino != op.data.Inode {
 		// The published file was replaced or removed before it was indexed
 		return s.keepAsConflict(ctx, op, h, target)
+	}
+	// A run that stopped right after publishing may not have set it
+	if err := s.setPublishedTime(op, pdir, baseName(target)); err != nil {
+		return err
 	}
 	return s.indexFile(ctx, op, h, pdir, target, nil)
 }

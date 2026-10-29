@@ -126,7 +126,7 @@
 				Text("Only approve the request if it comes from the device you are pairing.")
 			}
 
-			Section("Access") {
+			Section {
 				if exportedFolders.isEmpty {
 					Text("No folders are exported. You can give the device access after exporting folders.")
 						.foregroundStyle(.secondary)
@@ -138,6 +138,12 @@
 						selection: Binding(
 							get: { grants[folder.id] ?? .none },
 							set: { grants[folder.id] = $0 }))
+				}
+			} header: {
+				Text("Access")
+			} footer: {
+				if !exportedFolders.isEmpty {
+					Text(GatewayAccess.historyNote)
 				}
 			}
 

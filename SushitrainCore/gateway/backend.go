@@ -18,6 +18,7 @@ import (
 
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/events"
+	"github.com/syncthing/syncthing/lib/fs"
 	"github.com/syncthing/syncthing/lib/osutil"
 	"github.com/syncthing/syncthing/lib/protocol"
 	"github.com/syncthing/syncthing/lib/syncthing"
@@ -38,6 +39,11 @@ type FolderInfo struct {
 	MarkerName     string
 	ModTimeWindow  time.Duration
 	IgnorePerms    bool
+	// The type of the folder's versioning ("" without)
+	Versioning string
+	// Whether the versioning keeps versions somewhere other than the default directory in the folder, whose versions
+	// the service doesn't serve
+	CustomVersionsPath bool
 }
 
 // GlobalEntry is a global index entry without blocks, as iterated by name
@@ -68,6 +74,13 @@ type RemoteFileBackend interface {
 	// RunInFolderLoop runs fn where it cannot race the folder's scanner and puller. It stops waiting for that when ctx
 	// is done; fn's context also ends then.
 	RunInFolderLoop(ctx context.Context, folder string, fn func(context.Context, syncthing.FolderHandle) error) error
+	// FileVersions returns the versions of a file the folder's versioner keeps, newest first. It fails with
+	// syncthing.ErrNoVersioner or syncthing.ErrVersionsNotSupported for folders whose versions cannot be listed, or are
+	// not kept in the default versions directory (see versionsServed).
+	FileVersions(folder, name string) ([]syncthing.FileVersion, error)
+	// OpenFileVersion opens the version of a file archived at versionTime, or fails with
+	// syncthing.ErrVersionNotFound. It doesn't wait for the folder loop.
+	OpenFileVersion(folder, name string, versionTime time.Time) (fs.File, error)
 	// ScanPaths has the given paths scanned soon
 	ScanPaths(folder string, paths []string)
 	// Watch calls fn with a folder ID whenever that folder's index may have changed, until stop is called
@@ -125,7 +138,9 @@ func (b *EngineBackend) Folder(id string) (FolderInfo, bool) {
 		MarkerName:     fc.MarkerName,
 		ModTimeWindow:  fc.ModTimeWindow(),
 		IgnorePerms:    fc.IgnorePerms,
+		Versioning:     fc.Versioning.Type,
 	}
+	info.CustomVersionsPath = info.Versioning != "" && !versionsServed(fc)
 	if info.Label == "" {
 		info.Label = fc.ID
 	}
@@ -238,6 +253,27 @@ func (b *EngineBackend) RunInFolderLoop(ctx context.Context, folder string,
 	fn func(context.Context, syncthing.FolderHandle) error,
 ) error {
 	return b.App.Internals.RunInFolderLoop(ctx, folder, fn)
+}
+
+// versionsServed reports whether the service serves a folder's versions: only from the default versions directory in
+// the folder. A custom path may be shared with another folder or point into one, whose files a client without access
+// to that folder would then see.
+func versionsServed(fc config.FolderConfiguration) bool {
+	return fc.Versioning.FSPath == ""
+}
+
+func (b *EngineBackend) FileVersions(folder, name string) ([]syncthing.FileVersion, error) {
+	if fc, ok := b.Config.Folder(folder); ok && !versionsServed(fc) {
+		return nil, syncthing.ErrVersionsNotSupported
+	}
+	return b.App.Internals.FileVersions(folder, name)
+}
+
+func (b *EngineBackend) OpenFileVersion(folder, name string, versionTime time.Time) (fs.File, error) {
+	if fc, ok := b.Config.Folder(folder); ok && !versionsServed(fc) {
+		return nil, syncthing.ErrVersionsNotSupported
+	}
+	return b.App.Internals.OpenFileVersion(folder, name, versionTime)
 }
 
 // ScanPaths queues the paths and scans them in the background, coalescing requests that arrive while a scan of the

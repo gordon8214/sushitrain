@@ -86,7 +86,7 @@ func (g folderGrants) Set(value string) error {
 func pairCommand(args []string) error {
 	fs, cf := newFlagSet("pair")
 	grants := folderGrants{}
-	fs.Var(grants, "folder", "grant access to a folder: ID:read or ID:write (repeatable)")
+	fs.Var(grants, "folder", "grant access to a folder: ID:read or ID:write (repeatable); read includes previous versions")
 	yes := fs.Bool("yes", false, "approve the first client that submits the code without asking")
 	png := fs.String("qr-png", "", "also write the pairing code as a PNG image to this file")
 	timeout := fs.Duration("timeout", 10*time.Minute, "how long to wait for a client (at most until the code expires)")
@@ -219,7 +219,7 @@ func clientsCommand(args []string) error {
 	revoke := fs.String("revoke", "", "revoke the client with this ID")
 	client := fs.String("client", "", "client ID, with --folder and --access")
 	folder := fs.String("folder", "", "folder ID, with --client and --access")
-	access := fs.String("access", "", "read, write, or none, with --client and --folder")
+	access := fs.String("access", "", "read (including previous versions), write, or none, with --client and --folder")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if err := parseFlags(fs, args); err != nil {
 		return err

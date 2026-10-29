@@ -82,6 +82,14 @@ type journalData struct {
 	Method string `json:"method,omitempty"`
 	// Failed attempts with server errors, which are retried a limited number of times
 	Attempts int `json:"attempts,omitempty"`
+	// The modification time a written file gets once it is in place (Unix nanoseconds)
+	ModNs int64 `json:"modNs,omitempty"`
+	// For operations that write a version (sourceVersion): its file's path when the operation was accepted, the time
+	// it was archived (Unix seconds), its size and its modification time
+	SourcePath    string `json:"sourcePath,omitempty"`
+	SourceVersion int64  `json:"sourceVersion,omitempty"`
+	SourceSize    int64  `json:"sourceSize,omitempty"`
+	SourceModNs   int64  `json:"sourceModNs,omitempty"`
 }
 
 type operationRecord struct {
@@ -192,6 +200,24 @@ func normalizedRequest(req OperationRequest) (OperationRequest, []byte, error) {
 	if req.Name != "" {
 		req.Name = norm.NFC.String(req.Name)
 	}
+	// A version is written instead of an upload
+	fromVersion := req.SourceVersion != ""
+	if fromVersion {
+		if req.Upload != "" || req.UploadDigest != "" {
+			return req, nil, invalid("an operation writes either an upload or a version")
+		}
+		t, ok := parseVersionID(req.SourceVersion)
+		if !ok {
+			return req, nil, invalid("malformed sourceVersion")
+		}
+		// Spellings of the same version have the same digest
+		req.SourceVersion = versionID(t)
+		if req.Kind != opCreate && req.Kind != opReplace {
+			return req, nil, invalid("only create and replace write versions")
+		}
+	} else if req.SourceItemID != "" {
+		return req, nil, invalid("sourceItemID needs sourceVersion")
+	}
 	switch req.Kind {
 	case opCreate:
 		if req.ParentID == "" || req.Name == "" {
@@ -199,19 +225,29 @@ func normalizedRequest(req OperationRequest) (OperationRequest, []byte, error) {
 		}
 		switch req.ItemKind {
 		case kindFile:
-			if req.Upload == "" || req.UploadDigest == "" {
+			if fromVersion && req.SourceItemID == "" {
+				return req, nil, invalid("creating a file from a version needs sourceItemID")
+			}
+			if !fromVersion && (req.Upload == "" || req.UploadDigest == "") {
 				return req, nil, invalid("creating a file needs upload and uploadDigest")
 			}
 		case kindDirectory:
-			if req.Upload != "" {
-				return req, nil, invalid("a directory has no upload")
+			if req.Upload != "" || fromVersion {
+				return req, nil, invalid("a directory has no content")
 			}
 		default:
 			return req, nil, invalid("itemKind must be file or directory")
 		}
 	case opReplace:
-		if req.ItemID == "" || req.BaseRevision == "" || req.Upload == "" || req.UploadDigest == "" {
-			return req, nil, invalid("replace needs itemID, baseRevision, upload and uploadDigest")
+		if req.ItemID == "" || req.BaseRevision == "" || (!fromVersion && (req.Upload == "" || req.UploadDigest == "")) {
+			return req, nil, invalid("replace needs itemID, baseRevision, and upload and uploadDigest or sourceVersion")
+		}
+		// A replacement writes a version of the item itself
+		if req.SourceItemID == req.ItemID {
+			req.SourceItemID = ""
+		}
+		if req.SourceItemID != "" {
+			return req, nil, invalid("a replacement can only write a version of the item")
 		}
 		if req.OnConflict == "" {
 			req.OnConflict = onConflictKeepBoth
@@ -242,7 +278,7 @@ func normalizedRequest(req OperationRequest) (OperationRequest, []byte, error) {
 	}
 	// Receipts are kept for a long time: only well-formed references are stored
 	for _, ref := range []struct{ value, prefix string }{{req.ItemID, prefixItem}, {req.ParentID, prefixItem},
-		{req.Upload, prefixUpload}} {
+		{req.Upload, prefixUpload}, {req.SourceItemID, prefixItem}} {
 		if ref.value != "" && !hasIDFormat(ref.value, ref.prefix) {
 			return req, nil, invalid("malformed item or upload ID")
 		}
@@ -310,6 +346,13 @@ func (s *Service) handleCreateOperation(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
+	var data journalData
+	if req.SourceVersion != "" {
+		if data, err = s.versionSource(req); err != nil {
+			return err
+		}
+	}
+
 	generation, err := s.store.generation()
 	if err != nil {
 		return err
@@ -328,7 +371,12 @@ func (s *Service) handleCreateOperation(w http.ResponseWriter, r *http.Request, 
 		digest:     digest,
 		state:      stateResultPending,
 		journal:    journalIntent,
+		data:       data,
 		generation: generation,
+	}
+	journal, err := json.Marshal(op.data)
+	if err != nil {
+		return err
 	}
 	err = s.store.tx(r.Context(), func(tx *sql.Tx) error {
 		// The same operation sent twice at the same moment (by the app and the extension) gets the replay answer
@@ -358,9 +406,9 @@ func (s *Service) handleCreateOperation(w http.ResponseWriter, r *http.Request, 
 		}
 		now := s.store.now().Unix()
 		_, err = tx.Exec(`INSERT INTO operations (op_id, client_id, client_op, kind, folder_id, payload, payload_digest,
-			state, journal, generation, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, op.id,
-			op.clientID, op.clientOp, op.kind, op.folder, string(payload), digest, op.state, op.journal, generation, now,
-			now)
+			state, journal, journal_data, generation, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+			?)`, op.id, op.clientID, op.clientOp, op.kind, op.folder, string(payload), digest, op.state, op.journal,
+			string(journal), generation, now, now)
 		return err
 	})
 	if err != nil {

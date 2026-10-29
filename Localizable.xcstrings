@@ -70,6 +70,52 @@
         }
       }
     },
+    "%@ can't do this right now. Try again in a moment." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kann das gerade nicht ausführen. Versuchen Sie es gleich noch einmal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no puede hacerlo ahora mismo. Vuelve a intentarlo en un momento."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ non può farlo in questo momento. Riprova tra poco."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@は現在この操作を実行できません。しばらくしてからもう一度お試しください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kan dit nu niet doen. Probeer het zo opnieuw."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ зараз не може цього зробити. Спробуйте ще раз за мить."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 现在无法执行此操作。请稍后再试。"
+          }
+        }
+      }
+    },
     "%@ cannot be reached (%@). Make sure it is running and that this device is on the same network or VPN. Edits wait on this device until it is back." : {
       "localizations" : {
         "de" : {
@@ -208,6 +254,52 @@
         }
       }
     },
+    "%@ could not complete the request." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte die Anfrage nicht abschließen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no ha podido completar la solicitud."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ non è riuscito a completare la richiesta."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@はリクエストを完了できませんでした。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kon het verzoek niet voltooien."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ не вдалося виконати запит."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 无法完成该请求。"
+          }
+        }
+      }
+    },
     "%@ did not accept this change." : {
       "localizations" : {
         "de" : {
@@ -250,6 +342,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 未接受此更改。"
+          }
+        }
+      }
+    },
+    "%@ did not allow this change." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hat diese Änderung nicht zugelassen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no ha permitido este cambio."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ non ha consentito questa modifica."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@はこの変更を許可しませんでした。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ heeft deze wijziging niet toegestaan."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ не дозволив цю зміну."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不允许此更改。"
           }
         }
       }
@@ -438,6 +576,52 @@
         }
       }
     },
+    "%@ is out of storage space." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf %@ ist kein Speicherplatz mehr frei."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no tiene espacio de almacenamiento."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ha esaurito lo spazio di archiviazione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@のストレージ容量が不足しています。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ heeft geen opslagruimte meer."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На %@ закінчилося місце."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的存储空间已用完。"
+          }
+        }
+      }
+    },
     "%@ is paired." : {
       "localizations" : {
         "de" : {
@@ -530,6 +714,98 @@
         }
       }
     },
+    "%@ is still working on it. The file shows the result in Files when it is done." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ arbeitet noch daran. Die Datei zeigt das Ergebnis in der Dateien-App, sobald es fertig ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ todavía está en ello. El archivo mostrará el resultado en Archivos cuando termine."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ci sta ancora lavorando. Il file mostrerà il risultato in File quando avrà finito."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@はまだ処理中です。完了すると、ファイルアプリのファイルに結果が反映されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is er nog mee bezig. Het bestand toont het resultaat in Bestanden zodra het klaar is."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ще працює над цим. Файл покаже результат у Файлах, коли все буде готово."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 仍在处理。完成后，文件将在“文件”中显示结果。"
+          }
+        }
+      }
+    },
+    "%@ keeps a previous version of this file when it is changed or replaced." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ bewahrt eine frühere Version dieser Datei auf, wenn sie geändert oder ersetzt wird."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ guarda una versión anterior de este archivo cuando se modifica o se reemplaza."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ conserva una versione precedente di questo file quando viene modificato o sostituito."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@は、このファイルが変更または置き換えられたときに以前のバージョンを保持します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ bewaart een eerdere versie van dit bestand wanneer het wordt gewijzigd of vervangen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ зберігає попередню версію цього файлу, коли його змінюють або замінюють."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件被更改或替换时，%@ 会保留其以前的版本。"
+          }
+        }
+      }
+    },
     "%@ may have lost recent changes: its database was reset or restored, or another device became the folders' authority. Edits it could not confirm are listed for review." : {
       "localizations" : {
         "de" : {
@@ -572,6 +848,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 可能丢失了最近的更改：它的数据库已被重置或恢复，或者另一台设备成为了这些文件夹的权威来源。它无法确认的编辑内容已列出，供你查看。"
+          }
+        }
+      }
+    },
+    "%@ no longer accepts this device. Open Synctrain and pair it again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ akzeptiert dieses Gerät nicht mehr. Öffnen Sie Synctrain und koppeln Sie es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ya no acepta este dispositivo. Abre Synctrain y vuelve a vincularlo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ non accetta più questo dispositivo. Apri Synctrain e abbinalo di nuovo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@はこのデバイスを受け付けなくなりました。Synctrainを開いて、もう一度ペアリングしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ accepteert dit apparaat niet meer. Open Synctrain en koppel het opnieuw."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ більше не приймає цей пристрій. Відкрийте Synctrain і створіть пару знову."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不再接受此设备。请打开 Synctrain 并重新配对。"
           }
         }
       }
@@ -944,6 +1266,52 @@
         }
       }
     },
+    "%@ uses a newer version of Synctrain. Update Synctrain on this device to see previous versions of files." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ verwendet eine neuere Version von Synctrain. Aktualisieren Sie Synctrain auf diesem Gerät, um frühere Versionen von Dateien zu sehen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ usa una versión más reciente de Synctrain. Actualiza Synctrain en este dispositivo para ver versiones anteriores de archivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ usa una versione più recente di Synctrain. Aggiorna Synctrain su questo dispositivo per vedere le versioni precedenti dei file."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@は新しいバージョンのSynctrainを使用しています。ファイルの以前のバージョンを表示するには、このデバイスのSynctrainをアップデートしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ gebruikt een nieuwere versie van Synctrain. Werk Synctrain op dit apparaat bij om eerdere versies van bestanden te zien."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ використовує новішу версію Synctrain. Оновіть Synctrain на цьому пристрої, щоб бачити попередні версії файлів."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 使用的是较新版本的 Synctrain。请更新此设备上的 Synctrain 以查看文件以前的版本。"
+          }
+        }
+      }
+    },
     "%@ uses version %lld of the remote file API, which this version of Synctrain does not support." : {
       "localizations" : {
         "de" : {
@@ -986,6 +1354,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 使用的是远程文件 API 第 %lld 版，此版本的 Synctrain 不支持该版本。"
+          }
+        }
+      }
+    },
+    "%@ · Replaced %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · Replaced %2$@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · Ersetzt %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · Reemplazado %2$@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · Sostituito %2$@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@に置き換え"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · Vervangen %2$@"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · Замінено %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@被替换"
           }
         }
       }
@@ -3618,6 +4038,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "22000"
+          }
+        }
+      }
+    },
+    "A device that can read a folder can also see and download the previous versions that the folder's versioning keeps." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Gerät, das einen Ordner lesen darf, kann auch die früheren Versionen sehen und laden, die die Versionierung des Ordners aufbewahrt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un dispositivo que puede leer una carpeta también puede ver y descargar las versiones anteriores que guarda el control de versiones de la carpeta."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un dispositivo che può leggere una cartella può anche vedere e scaricare le versioni precedenti conservate dal versionamento della cartella."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダを読み取れるデバイスは、フォルダのバージョン管理が保持している以前のバージョンも表示およびダウンロードできます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een apparaat dat een map mag lezen, kan ook de eerdere versies zien en downloaden die het versiebeheer van de map bewaart."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пристрій, який може читати папку, також може бачити й завантажувати попередні версії, які зберігає керування версіями цієї папки."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以读取文件夹的设备也可以查看和下载该文件夹的版本控制所保留的以前版本。"
           }
         }
       }
@@ -7188,6 +7654,52 @@
         }
       }
     },
+    "Changes Not Uploaded Yet" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen noch nicht hochgeladen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambios aún no subidos"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifiche non ancora caricate"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "変更はまだアップロードされていません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzigingen nog niet geüpload"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зміни ще не вивантажено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改尚未上传"
+          }
+        }
+      }
+    },
     "Changes to %lld items made on this device have not been picked up by Syncthing yet. Keep Synctrain open until they are synchronized, then try again." : {
       "localizations" : {
         "de" : {
@@ -8062,6 +8574,52 @@
         }
       }
     },
+    "Device Not Accepted" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gerät nicht akzeptiert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dispositivo no aceptado"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dispositivo non accettato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デバイスが受け付けられません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apparaat niet geaccepteerd"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пристрій не прийнято"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备未被接受"
+          }
+        }
+      }
+    },
     "Devices connect to this host name and port; pairing codes contain them. This Mac's local name only works on the same network: elsewhere, use a VPN or an address you set up to reach this Mac. Paired devices show the service name. The content cache holds files fetched from other devices and changes being received." : {
       "localizations" : {
         "de" : {
@@ -8706,6 +9264,144 @@
         }
       }
     },
+    "File Changed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datei geändert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivo modificado"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File modificato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルが変更されました"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestand gewijzigd"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл змінено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件已更改"
+          }
+        }
+      }
+    },
+    "File Not Found" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datei nicht gefunden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivo no encontrado"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File non trovato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルが見つかりません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestand niet gevonden"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл не знайдено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找不到文件"
+          }
+        }
+      }
+    },
+    "File versioning is off for this folder on %@. Turn it on in the folder's settings there to keep previous versions." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Dateiversionierung ist für diesen Ordner auf %@ ausgeschaltet. Schalten Sie sie dort in den Ordnereinstellungen ein, um frühere Versionen aufzubewahren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El versionado de archivos está desactivado para esta carpeta en %@. Actívalo allí en los ajustes de la carpeta para guardar versiones anteriores."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il versionamento dei file è disattivato per questa cartella su %@. Attivalo lì nelle impostazioni della cartella per conservare le versioni precedenti."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@では、このフォルダのファイルのバージョニングがオフになっています。以前のバージョンを保持するには、そちらのフォルダ設定でオンにしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestandsversies staan uit voor deze map op %@. Zet ze daar aan in de instellingen van de map om eerdere versies te bewaren."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Керування версіями файлів для цієї папки на %@ вимкнено. Увімкніть його там у налаштуваннях папки, щоб зберігати попередні версії."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 上此文件夹的文件版本控制已关闭。请在那里的文件夹设置中将其打开，以保留以前的版本。"
+          }
+        }
+      }
+    },
     "Folders are still accessed through this gateway. Switch them back to Syncthing or remove them from Files first." : {
       "localizations" : {
         "de" : {
@@ -9162,6 +9858,282 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网关"
+          }
+        }
+      }
+    },
+    "Gateway Busy" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway ausgelastet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puerta de enlace ocupada"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway occupato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイが混雑しています"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway bezet"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Шлюз зайнятий"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网关繁忙"
+          }
+        }
+      }
+    },
+    "Gateway Full" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway voll"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puerta de enlace llena"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway pieno"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイの容量がいっぱいです"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway vol"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Шлюз заповнений"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网关已满"
+          }
+        }
+      }
+    },
+    "Gateway Needs an Update" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway muss aktualisiert werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La puerta de enlace necesita una actualización"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il gateway deve essere aggiornato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイのアップデートが必要です"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway moet worden bijgewerkt"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Шлюз потребує оновлення"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网关需要更新"
+          }
+        }
+      }
+    },
+    "Gateway Not Paired" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway nicht gekoppelt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puerta de enlace no vinculada"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway non abbinato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイがペアリングされていません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway niet gekoppeld"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Немає пари зі шлюзом"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网关未配对"
+          }
+        }
+      }
+    },
+    "Gateway Not Reachable" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway nicht erreichbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede acceder a la puerta de enlace"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway non raggiungibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイに接続できません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway niet bereikbaar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Шлюз недоступний"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法连接网关"
+          }
+        }
+      }
+    },
+    "Gateway Not Trusted" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway nicht vertrauenswürdig"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puerta de enlace no fiable"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway non attendibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイが信頼されていません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway niet vertrouwd"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Шлюз не є довіреним"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网关不受信任"
           }
         }
       }
@@ -9718,6 +10690,52 @@
         }
       }
     },
+    "Name Taken" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name vergeben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre en uso"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome già in uso"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名前が使用されています"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naam in gebruik"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назва зайнята"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名称已被占用"
+          }
+        }
+      }
+    },
     "Needs a newer version of Synctrain" : {
       "localizations" : {
         "de" : {
@@ -10086,6 +11104,52 @@
         }
       }
     },
+    "No Previous Versions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine früheren Versionen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay versiones anteriores"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna versione precedente"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以前のバージョンはありません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen eerdere versies"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Немає попередніх версій"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有以前的版本"
+          }
+        }
+      }
+    },
     "None of the chosen files contains a PEM certificate." : {
       "localizations" : {
         "de" : {
@@ -10174,6 +11238,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所选文件均不包含 PEM 私钥。"
+          }
+        }
+      }
+    },
+    "Not Available" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No disponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non disponibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "利用できません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet beschikbaar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недоступно"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不可用"
           }
         }
       }
@@ -10316,6 +11426,52 @@
         }
       }
     },
+    "Not Permitted" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht erlaubt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No permitido"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non consentito"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "許可されていません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet toegestaan"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не дозволено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不允许"
+          }
+        }
+      }
+    },
     "Not reachable" : {
       "localizations" : {
         "de" : {
@@ -10358,6 +11514,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法连接"
+          }
+        }
+      }
+    },
+    "Not Uploaded Yet" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch nicht hochgeladen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no subido"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non ancora caricato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "まだアップロードされていません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nog niet geüpload"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ще не вивантажено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未上传"
           }
         }
       }
@@ -10542,6 +11744,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "只有“发送和接收”类型的文件夹才能从其他设备更改。"
+          }
+        }
+      }
+    },
+    "Open Synctrain and pair this device with the gateway again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnen Sie Synctrain und koppeln Sie dieses Gerät erneut mit dem Gateway."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Synctrain y vuelve a vincular este dispositivo con la puerta de enlace."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri Synctrain e abbina di nuovo questo dispositivo al gateway."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainを開いて、このデバイスをもう一度ゲートウェイとペアリングしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Synctrain en koppel dit apparaat opnieuw met de gateway."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відкрийте Synctrain і знову створіть пару цього пристрою зі шлюзом."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请打开 Synctrain，并将此设备重新与网关配对。"
           }
         }
       }
@@ -11236,6 +12484,190 @@
         }
       }
     },
+    "Preview" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorschau"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previsualizar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anteprima"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレビュー"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voorvertoning"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попередній перегляд"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览"
+          }
+        }
+      }
+    },
+    "Previous Versions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frühere Versionen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versiones anteriores"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versioni precedenti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以前のバージョン"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eerdere versies"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попередні версії"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以前的版本"
+          }
+        }
+      }
+    },
+    "Previous versions are shown once this file is uploaded to the gateway." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frühere Versionen werden angezeigt, sobald diese Datei auf das Gateway hochgeladen ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las versiones anteriores se mostrarán cuando este archivo se haya subido a la puerta de enlace."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le versioni precedenti verranno mostrate dopo che questo file sarà stato caricato sul gateway."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このファイルがゲートウェイにアップロードされると、以前のバージョンが表示されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eerdere versies worden getoond zodra dit bestand naar de gateway is geüpload."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попередні версії буде показано, щойно цей файл буде вивантажено на шлюз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件上传到网关后，将显示以前的版本。"
+          }
+        }
+      }
+    },
+    "Previous versions can only be shown for files in folders that Synctrain opens through a gateway." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frühere Versionen können nur für Dateien in Ordnern angezeigt werden, die Synctrain über ein Gateway öffnet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo se pueden mostrar versiones anteriores de archivos en carpetas que Synctrain abre a través de una puerta de enlace."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le versioni precedenti possono essere mostrate solo per i file nelle cartelle che Synctrain apre tramite un gateway."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以前のバージョンは、Synctrainがゲートウェイ経由で開くフォルダ内のファイルについてのみ表示できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eerdere versies kunnen alleen worden getoond voor bestanden in mappen die Synctrain via een gateway opent."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попередні версії можна показати лише для файлів у папках, які Synctrain відкриває через шлюз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只有 Synctrain 通过网关打开的文件夹中的文件才能显示以前的版本。"
+          }
+        }
+      }
+    },
     "Reachable" : {
       "localizations" : {
         "de" : {
@@ -11329,6 +12761,52 @@
       }
     },
     "Read only" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur Lesen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo lectura"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sola lettura"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み取り専用"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alleen lezen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Лише читання"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只读"
+          }
+        }
+      }
+    },
+    "Read Only" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -11788,6 +13266,145 @@
         }
       }
     },
+    "Restore" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederherstellen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristina"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "復元"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herstel"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відновити"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复"
+          }
+        }
+      }
+    },
+    "Restore This Version?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Version wiederherstellen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Restaurar esta versión?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristinare questa versione?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このバージョンを復元しますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze versie herstellen?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відновити цю версію?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复此版本？"
+          }
+        }
+      }
+    },
+    "Restoring…" : {
+      "comment" : "Shown while a previous version replaces a file",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird wiederhergestellt …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurando…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristino…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "復元中…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herstellen…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відновлення…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在恢复…"
+          }
+        }
+      }
+    },
     "Revert" : {
       "localizations" : {
         "de" : {
@@ -12064,6 +13681,52 @@
         }
       }
     },
+    "Save a Copy" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopie sichern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar una copia"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva una copia"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コピーを保存"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewaar een kopie"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зберегти копію"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存储副本"
+          }
+        }
+      }
+    },
     "Save and Restart" : {
       "localizations" : {
         "de" : {
@@ -12152,6 +13815,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已保存"
+          }
+        }
+      }
+    },
+    "Saving a copy…" : {
+      "comment" : "Shown while a copy of a previous version is made",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopie wird gesichert …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardando una copia…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvataggio di una copia…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コピーを保存中…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopie bewaren…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Збереження копії…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在存储副本…"
           }
         }
       }
@@ -12386,6 +14096,98 @@
         }
       }
     },
+    "Shows a preview of this version" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeigt eine Vorschau dieser Version"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra una previsualización de esta versión"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra un'anteprima di questa versione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このバージョンのプレビューを表示します"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toont een voorvertoning van deze versie"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показує попередній перегляд цієї версії"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示此版本的预览"
+          }
+        }
+      }
+    },
+    "Something Went Wrong" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Etwas ist schiefgelaufen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algo ha salido mal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualcosa è andato storto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "問題が発生しました"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er is iets misgegaan"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щось пішло не так"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "出现问题"
+          }
+        }
+      }
+    },
     "Start pairing on the gateway: in Synctrain on a Mac, under Settings › Remote file service; on a server, with synctrain-gateway pair. Then scan the code it shows, or paste its link here." : {
       "localizations" : {
         "de" : {
@@ -12474,6 +14276,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在启动…"
+          }
+        }
+      }
+    },
+    "Still in Progress" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch in Arbeit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún en curso"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ancora in corso"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "まだ処理中です"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nog bezig"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ще триває"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍在进行中"
           }
         }
       }
@@ -13536,6 +15384,52 @@
         }
       }
     },
+    "Synctrain could not find a free name for the copy." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain konnte keinen freien Namen für die Kopie finden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no ha podido encontrar un nombre libre para la copia."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non è riuscito a trovare un nome libero per la copia."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainはコピーに使える名前を見つけられませんでした。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kon geen vrije naam voor de kopie vinden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не вдалося знайти вільну назву для копії."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法为副本找到可用的名称。"
+          }
+        }
+      }
+    },
     "Synctrain could not prepare this change. It tries again later." : {
       "localizations" : {
         "de" : {
@@ -13578,6 +15472,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synctrain 无法准备此更改，稍后会重试。"
+          }
+        }
+      }
+    },
+    "Synctrain could not reach %@. Check your connection and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain konnte %@ nicht erreichen. Überprüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no ha podido conectar con %@. Comprueba tu conexión y vuelve a intentarlo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non è riuscito a raggiungere %@. Controlla la connessione e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainは%@に接続できませんでした。接続を確認して、もう一度お試しください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kon %@ niet bereiken. Controleer je verbinding en probeer het opnieuw."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не вдалося зв'язатися з %@. Перевірте з'єднання й спробуйте ще раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法连接到 %@。请检查网络连接，然后重试。"
+          }
+        }
+      }
+    },
+    "Synctrain could not read what it knows about this file." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain konnte seine Informationen zu dieser Datei nicht lesen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no ha podido leer lo que sabe de este archivo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non è riuscito a leggere le informazioni su questo file."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainはこのファイルの情報を読み取れませんでした。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kon niet lezen wat het over dit bestand weet."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не вдалося прочитати відомості про цей файл."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法读取此文件的信息。"
           }
         }
       }
@@ -14272,6 +16258,144 @@
         }
       }
     },
+    "The file changed on %@ since this device last saw it. Nothing was restored." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Datei wurde auf %@ geändert, seit dieses Gerät sie zuletzt gesehen hat. Es wurde nichts wiederhergestellt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo ha cambiado en %@ desde que este dispositivo lo vio por última vez. No se ha restaurado nada."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il file è stato modificato su %@ dall'ultima volta che questo dispositivo lo ha visto. Non è stato ripristinato nulla."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このデバイスが最後に確認してから、%@上のファイルが変更されました。何も復元されていません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het bestand is op %@ gewijzigd sinds dit apparaat het voor het laatst zag. Er is niets hersteld."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл на %@ змінився відтоді, як цей пристрій бачив його востаннє. Нічого не відновлено."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自此设备上次查看以来，%@ 上的文件已更改。未恢复任何内容。"
+          }
+        }
+      }
+    },
+    "The file is no longer on %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Datei ist nicht mehr auf %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo ya no está en %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il file non è più su %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このファイルは%@にもうありません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het bestand staat niet meer op %@."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файлу більше немає на %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件已不在 %@ 上。"
+          }
+        }
+      }
+    },
+    "The file is replaced by this version on %@. Its current contents are kept as a previous version." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Datei wird auf %@ durch diese Version ersetzt. Ihr aktueller Inhalt wird als frühere Version aufbewahrt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo se reemplazará por esta versión en %@. Su contenido actual se guardará como versión anterior."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il file verrà sostituito da questa versione su %@. Il contenuto attuale verrà conservato come versione precedente."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@上のファイルがこのバージョンに置き換えられます。現在の内容は以前のバージョンとして保持されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het bestand wordt op %@ vervangen door deze versie. De huidige inhoud wordt als eerdere versie bewaard."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл на %@ буде замінено цією версією. Його поточний вміст буде збережено як попередню версію."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 上的文件将被此版本替换。其当前内容将作为以前的版本保留。"
+          }
+        }
+      }
+    },
     "The Files index could not be read or written." : {
       "localizations" : {
         "de" : {
@@ -14820,6 +16944,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在你恢复之前，该文件夹会保持暂停；恢复后，Syncthing 会先扫描此设备上的文件。"
+          }
+        }
+      }
+    },
+    "The folder's versioning on %@ has removed this version." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Versionierung des Ordners auf %@ hat diese Version entfernt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El control de versiones de la carpeta en %@ ha eliminado esta versión."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il versionamento della cartella su %@ ha rimosso questa versione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@上のフォルダのバージョン管理によって、このバージョンは削除されました。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het versiebeheer van de map op %@ heeft deze versie verwijderd."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Керування версіями папки на %@ вилучило цю версію."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 上该文件夹的版本控制已删除此版本。"
           }
         }
       }
@@ -15468,6 +17638,52 @@
         }
       }
     },
+    "The gateway no longer keeps this version." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Gateway bewahrt diese Version nicht mehr auf."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La puerta de enlace ya no guarda esta versión."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il gateway non conserva più questa versione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイはこのバージョンをもう保持していません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De gateway bewaart deze versie niet meer."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Шлюз більше не зберігає цю версію."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网关已不再保留此版本。"
+          }
+        }
+      }
+    },
     "The gateway received a different change with the same identifier." : {
       "localizations" : {
         "de" : {
@@ -15836,6 +18052,52 @@
         }
       }
     },
+    "The previous versions of this file have the same contents as the current one." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die früheren Versionen dieser Datei haben denselben Inhalt wie die aktuelle."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las versiones anteriores de este archivo tienen el mismo contenido que la actual."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le versioni precedenti di questo file hanno lo stesso contenuto di quella attuale."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このファイルの以前のバージョンは、現在のものと同じ内容です。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De eerdere versies van dit bestand hebben dezelfde inhoud als de huidige."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попередні версії цього файлу мають той самий вміст, що й поточна."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件以前的版本与当前版本内容相同。"
+          }
+        }
+      }
+    },
     "The record of the switch is incomplete." : {
       "localizations" : {
         "de" : {
@@ -16200,6 +18462,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此设备已无权读取网关上的该文件夹。"
+          }
+        }
+      }
+    },
+    "This device may only read this folder on %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät darf diesen Ordner auf %@ nur lesen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo solo puede leer esta carpeta en %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo dispositivo può solo leggere questa cartella su %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このデバイスは%@上のこのフォルダを読み取ることしかできません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dit apparaat mag deze map op %@ alleen lezen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей пристрій може лише читати цю папку на %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备只能读取 %@ 上的此文件夹。"
+          }
+        }
+      }
+    },
+    "This device may only read this folder, so versions can only be previewed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät darf diesen Ordner nur lesen, daher können Versionen nur in der Vorschau angezeigt werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo solo puede leer esta carpeta, así que las versiones solo se pueden previsualizar."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo dispositivo può solo leggere questa cartella, quindi le versioni possono solo essere visualizzate in anteprima."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このデバイスはこのフォルダを読み取ることしかできないため、バージョンはプレビューのみ可能です。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dit apparaat mag deze map alleen lezen, dus versies kunnen alleen worden bekeken."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей пристрій може лише читати цю папку, тож версії можна лише переглядати."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备只能读取此文件夹，因此只能预览版本。"
           }
         }
       }
@@ -38288,6 +40642,98 @@
         }
       }
     },
+    "This folder on %@ keeps versions in a custom location, which the gateway doesn't show. Its versioning must use the default location." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Ordner auf %@ bewahrt Versionen an einem eigenen Ort auf, den das Gateway nicht anzeigt. Seine Versionierung muss den Standardort verwenden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta carpeta en %@ guarda las versiones en una ubicación personalizada, que la puerta de enlace no muestra. Su control de versiones debe usar la ubicación predeterminada."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa cartella su %@ conserva le versioni in una posizione personalizzata, che il gateway non mostra. Il suo versionamento deve usare la posizione predefinita."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@上のこのフォルダはカスタムの場所にバージョンを保持しているため、ゲートウェイでは表示されません。バージョン管理ではデフォルトの場所を使用する必要があります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze map op %@ bewaart versies op een aangepaste locatie, die de gateway niet toont. Het versiebeheer moet de standaardlocatie gebruiken."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ця папка на %@ зберігає версії в нестандартному місці, яке шлюз не показує. Керування версіями має використовувати стандартне місце."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 上的此文件夹将版本保存在自定位置，网关不会显示这些版本。其版本控制必须使用默认位置。"
+          }
+        }
+      }
+    },
+    "This folder on %@ keeps versions with an external command, which Synctrain can't show." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Ordner auf %@ bewahrt Versionen mit einem externen Befehl auf, die Synctrain nicht anzeigen kann."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta carpeta en %@ guarda versiones con un comando externo, que Synctrain no puede mostrar."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa cartella su %@ conserva le versioni con un comando esterno, che Synctrain non può mostrare."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@上のこのフォルダは外部コマンドでバージョンを保持しているため、Synctrainでは表示できません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze map op %@ bewaart versies met een externe opdracht, die Synctrain niet kan tonen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ця папка на %@ зберігає версії за допомогою зовнішньої команди, які Synctrain не може показати."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 上的此文件夹使用外部命令保留版本，Synctrain 无法显示这些版本。"
+          }
+        }
+      }
+    },
     "This is not a pairing code of a remote file service. It starts with synctrain+pair://." : {
       "localizations" : {
         "de" : {
@@ -57202,6 +59648,98 @@
         }
       }
     },
+    "Update Synctrain" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain aktualisieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualiza Synctrain"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiorna Synctrain"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainをアップデート"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Werk Synctrain bij"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оновіть Synctrain"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新 Synctrain"
+          }
+        }
+      }
+    },
+    "Update Synctrain on %@ (or synctrain-gateway) to see previous versions of files." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisieren Sie Synctrain auf %@ (oder synctrain-gateway), um frühere Versionen von Dateien zu sehen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualiza Synctrain en %@ (o synctrain-gateway) para ver versiones anteriores de archivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiorna Synctrain su %@ (o synctrain-gateway) per vedere le versioni precedenti dei file."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルの以前のバージョンを表示するには、%@上のSynctrain（またはsynctrain-gateway）をアップデートしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Werk Synctrain op %@ (of synctrain-gateway) bij om eerdere versies van bestanden te zien."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оновіть Synctrain на %@ (або synctrain-gateway), щоб бачити попередні версії файлів."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请更新 %@ 上的 Synctrain（或 synctrain-gateway）以查看文件以前的版本。"
+          }
+        }
+      }
+    },
     "Upgraded at" : {
       "localizations" : {
         "de" : {
@@ -57980,6 +60518,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "版本信息"
+          }
+        }
+      }
+    },
+    "Version No Longer Available" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version nicht mehr verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versión ya no disponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versione non più disponibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このバージョンは利用できなくなりました"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versie niet meer beschikbaar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Версія більше недоступна"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此版本已不可用"
           }
         }
       }
@@ -61062,6 +63646,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "您可以将当前配置导出到应用程序目录。当应用程序目录中存在配置文件（config.xml）时，应用启动时将使用该配置文件，而不是内部配置。"
+          }
+        }
+      }
+    },
+    "You can restore a version once your changes to this file are uploaded." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie können eine Version wiederherstellen, sobald Ihre Änderungen an dieser Datei hochgeladen sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podrás restaurar una versión cuando se hayan subido tus cambios en este archivo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Potrai ripristinare una versione dopo che le modifiche a questo file saranno state caricate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このファイルへの変更がアップロードされると、バージョンを復元できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je kunt een versie herstellen zodra je wijzigingen aan dit bestand zijn geüpload."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ви зможете відновити версію, щойно ваші зміни в цьому файлі буде вивантажено."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件的更改上传后，即可恢复版本。"
           }
         }
       }

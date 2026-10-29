@@ -1,0 +1,19 @@
+{
+  "itemID": "itm_hF6RgxMZ6JxNZWvbgMJ4rA",
+  "revision": "r1.srELRKiDJvmwBm1HLNbb2krlDu6fckAh_Kp0-AgHWi0",
+  "versioning": "staggered",
+  "versions": [
+    {
+      "id": "ver_1793150180",
+      "versionTime": "2026-10-28T01:16:20Z",
+      "modifiedNs": 1793146580000000000,
+      "size": 4096
+    },
+    {
+      "id": "ver_1792545380",
+      "versionTime": "2026-10-21T01:16:20Z",
+      "modifiedNs": 1792541780000000000,
+      "size": 3712
+    }
+  ]
+}

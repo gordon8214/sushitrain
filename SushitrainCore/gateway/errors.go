@@ -33,6 +33,7 @@ const (
 	codeOverloaded          = "overloaded"
 	codeTooManyAttempts     = "too_many_attempts"
 	codeContentUnavailable  = "content_unavailable"
+	codeVersionNotFound     = "version_not_found"
 	codeInsufficientStorage = "insufficient_storage"
 	codePairingDenied       = "pairing_denied"
 	codePairingExpired      = "pairing_expired"
