@@ -632,8 +632,8 @@ extension RemoteProvider {
 		var isConflictCopy = false
 	}
 
-	/// Records new contents of a file. An edit of a version older than the index shows is kept as a conflict copy, or
-	/// refused when the system asks for that.
+	/// Records new contents of a file. Bytes the item has already are not sent. An edit of a version older than the index
+	/// shows is kept as a conflict copy, or refused when the system asks for that.
 	private func recordContents(
 		_ staged: StagedFile, of item: IndexItem, baseContentVersion: Data, failOnConflict: Bool,
 		binding: RemoteFolderBinding
@@ -651,18 +651,23 @@ extension RemoteProvider {
 			if hasSameContents(staged, as: earlier, overlay: overlay) {
 				return ContentRecording(operationID: earlier.operationID, consumedStaged: false)
 			}
+			if overlay.stagedPath == nil, let copy = try localCopy(of: item), Self.hasContents(copy, of: staged) {
+				// A pending move or rename keeps the gateway's contents, and these bytes are them: nothing to send
+				return ContentRecording(operationID: nil, consumedStaged: false)
+			}
 			let result = try store.recordRemoteContentChange(
 				itemID: item.id, modifiedNanoseconds: modifiedNs, stagedFile: staged,
 				onConflict: failOnConflict ? .reject : .keepBoth)
 			removeStagedFiles(result.releasedStagedFiles)
 			return ContentRecording(operationID: result.mutation?.operationID, consumedStaged: true)
 		}
+		if let copy = try localCopy(of: item), Self.hasContents(copy, of: staged) {
+			// The item has these bytes already: an app saved a file it only opened, or an earlier attempt was committed
+			// meanwhile. Sending them would only change the file's modification time on the gateway.
+			return ContentRecording(operationID: nil, consumedStaged: false)
+		}
 		if LocalWriter.revision(baseContentVersion) != item.contentRevision {
 			// The file changed on the gateway since the system's version
-			if let copy = try localCopy(of: item), Self.hasContents(copy, of: staged) {
-				// Those are these bytes (the earlier attempt was committed meanwhile)
-				return ContentRecording(operationID: nil, consumedStaged: false)
-			}
 			if failOnConflict, #available(iOS 26.0, macOS 26.0, *) {
 				throw NSFileProviderError(.localVersionConflictingWithServer)
 			}

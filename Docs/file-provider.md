@@ -55,9 +55,10 @@ folder alone (it stays paused and cannot be resumed until the folder is switched
 - **Saving**: an edit is reported as saved only once the gateway has committed it. While the gateway can't be reached,
   Files keeps the edit and tries again; Synctrain sends it as well when it runs. A large edit still being sent after a
   minute (or when Synctrain is about to be suspended) is sent on in the background, also while neither Files nor
-  Synctrain runs; Files shows it as waiting until the gateway has committed it. An edit based on a version that
-  changed meanwhile is kept as a conflict copy. Edits that could not be sent are listed on the Files app page with
-  **Export…** (a copy of the edit) and **Discard**.
+  Synctrain runs; Files shows it as waiting until the gateway has committed it. A save that leaves the contents as the
+  phone downloaded them (an app saving a file it only opened) sends nothing, so the file and its history on the
+  gateway stay as they are. An edit based on a version that changed meanwhile is kept as a conflict copy. Edits that
+  could not be sent are listed on the Files app page with **Export…** (a copy of the edit) and **Discard**.
 - **Opening**: files are downloaded from the gateway in verified parts and kept as long as the system keeps them.
   **Keep on This Device** downloads an item, **Stop Keeping on This Device** removes the downloaded copy (never one
   with an edit that wasn't sent). Thumbnails come from the gateway.
@@ -67,8 +68,9 @@ folder alone (it stays paused and cannot be resumed until the folder is switched
   gateway, newest first. Versions whose modification time and size equal those of the next newer one (Syncthing
   archives a version when only a file's metadata changes) are left out. Tap a version to preview it (and share it from
   the preview). **Restore** replaces the file with the version on the gateway: the current contents are kept as a
-  version (with trash can versioning, in place of the restored one). A file that changed on the gateway since the phone last saw it is not
-  overwritten, and a file with an edit that hasn't been sent can't be restored until it has. **Save a Copy** puts the
+  version (with trash can versioning, in place of the restored one) unless they are the same as the version's. A file
+  that changed on the gateway since the phone last saw it is not overwritten, and a file with an edit that hasn't been
+  sent can't be restored until it has. **Save a Copy** puts the
   version next to the file as "Name (date time).ext". Both happen on the gateway, so nothing is uploaded; they copy
   the file's contents only, not extended attributes or resource forks that the version may have kept. Versions are
   found by the file's current name, so versions from before a rename aren't shown. This needs a gateway with the
