@@ -196,6 +196,24 @@ struct BrowserView: View {
 	}
 
 	var body: some View {
+		#if os(iOS)
+			// Syncthing on this device leaves a folder accessed through a gateway alone (paused), so it cannot list it. The
+			// coordinator's state is observed, so that this follows a switch; Syncthing's own answer covers the time before
+			// the coordinator has read it.
+			if RemoteCoordinator.shared.isRemoteManaged(folderID: folder.folderID)
+				|| appState.client.isFolderRemoteManaged(folder.folderID)
+			{
+				RemoteFolderBrowserView(folder: folder, prefix: prefix)
+			}
+			else {
+				self.browser
+			}
+		#else
+			self.browser
+		#endif
+	}
+
+	private var browser: some View {
 		BrowserItemsView(
 			folder: folder,
 			prefix: prefix,
@@ -1262,19 +1280,19 @@ private struct BrowserItemsView: View {
 				"Folder removed", systemImage: "trash",
 				description: Text("This folder was removed."))
 		}
+		else if isEmpty && folderIsPaused {
+			ContentUnavailableView(
+				"Synchronization disabled", systemImage: "pause.fill",
+				description: Text(
+					"Synchronization has been disabled for this folder. Enable it in folder settings to access files."
+				)
+			).onTapGesture {
+				showSettings = true
+			}
+		}
 		else if isEmpty {
 			if self.prefix == "" {
-				if folderIsPaused {
-					ContentUnavailableView(
-						"Synchronization disabled", systemImage: "pause.fill",
-						description: Text(
-							"Synchronization has been disabled for this folder. Enable it in folder settings to access files."
-						)
-					).onTapGesture {
-						showSettings = true
-					}
-				}
-				else if self.folder.connectedPeerCount() == 0 {
+				if self.folder.connectedPeerCount() == 0 {
 					ContentUnavailableView(
 						"Not connected", systemImage: "network.slash",
 						description: Text(
@@ -1352,6 +1370,10 @@ private struct BrowserItemsView: View {
 				dispatchPrecondition(condition: .notOnQueue(.main))
 				guard folder.exists() else {
 					return (false, false, [SushitrainEntry](), [SushitrainEntry]())
+				}
+				// Syncthing does not list a paused folder ("no such folder"); the view says it is paused instead
+				if folder.isPaused() {
+					return (true, true, [SushitrainEntry](), [SushitrainEntry]())
 				}
 				var dirNames = try folder.list(request.prefix, directories: true, recurse: false).asArray()
 					.sorted(by: { $0.compare($1, options: .numeric) == .orderedAscending })

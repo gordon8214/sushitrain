@@ -40642,6 +40642,52 @@
         }
       }
     },
+    "This folder is not shown in the Files app. Is the Synctrain location turned on?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Ordner wird in der Dateien-App nicht angezeigt. Ist der Speicherort „Synctrain“ aktiviert?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta carpeta no se muestra en la app Archivos. ¿Está activada la ubicación Synctrain?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa cartella non è mostrata nell'app File. La posizione Synctrain è attivata?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このフォルダはファイルアプリに表示されていません。「Synctrain」の場所はオンになっていますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze map wordt niet getoond in de Bestanden-app. Staat de locatie Synctrain aan?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ця папка не показана в додатку Файли. Чи ввімкнено розташування Synctrain?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件夹未显示在文件应用中。“Synctrain”位置是否已打开？"
+          }
+        }
+      }
+    },
     "This folder on %@ keeps versions in a custom location, which the gateway doesn't show. Its versioning must use the default location." : {
       "localizations" : {
         "de" : {

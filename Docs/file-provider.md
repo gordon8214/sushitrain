@@ -62,6 +62,8 @@ folder alone (it stays paused and cannot be resumed until the folder is switched
 - **Opening**: files are downloaded from the gateway in verified parts and kept as long as the system keeps them.
   **Keep on This Device** downloads an item, **Stop Keeping on This Device** removes the downloaded copy (never one
   with an edit that wasn't sent). Thumbnails come from the gateway.
+- **In Synctrain**: the folder lists what Files shows (Syncthing on this phone leaves it paused, so it can't list it).
+  Tapping a file, or **Open in Files app** for a directory, shows it in Files.
 - **Moving** a file to a folder on another gateway copies it there and then deletes the original; directories can't
   be moved between gateways (copy them, then delete them).
 - **Previous Versions…** (in a file's menu in Files) lists the versions the folder's Syncthing versioning keeps on the

@@ -23,6 +23,8 @@
 		/// Why items the user wanted to stop keeping on this device were kept (newest first)
 		private(set) var keepNotices: [String] = []
 		private(set) var isRebuilding = false
+		/// Counts the changes of the index that Files is told about, so that views listing the index can follow them
+		private(set) var indexRevision = 0
 
 		@ObservationIgnored private var client: SushitrainClient? = nil
 		@ObservationIgnored private var store: IndexStore? = nil
@@ -333,6 +335,7 @@
 				if Task.isCancelled {
 					return
 				}
+				indexRevision &+= 1
 				do {
 					try await manager?.signalEnumerator(for: .workingSet)
 				}
