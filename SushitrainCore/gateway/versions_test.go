@@ -19,7 +19,9 @@ import (
 	"time"
 
 	"github.com/syncthing/syncthing/lib/config"
+	"github.com/syncthing/syncthing/lib/fs"
 	"github.com/syncthing/syncthing/lib/versioner"
+	"golang.org/x/sys/unix"
 )
 
 // archiveVersion puts a version of a file in the folder's versions directory, as archived at the given time
@@ -241,7 +243,8 @@ func TestUnchangedContentsAreNotArchived(t *testing.T) {
 	ts.json("POST", "/v1/operations", token, OperationRequest{ID: newUUID(), Kind: opReplace, FolderID: "docs",
 		ItemID: doc.ID, BaseRevision: doc.Revision, Upload: upload, UploadDigest: digest, ModifiedNs: &modNs},
 		http.StatusCreated, &same)
-	if same.State != stateResultCommitted || same.Item == nil || same.Item.ID != doc.ID {
+	if same.State != stateResultCommitted || same.Item == nil || same.Item.ID != doc.ID ||
+		same.Item.Revision == doc.Revision {
 		t.Fatalf("replace with the same contents: %+v", same)
 	}
 	if got, _ := e.read("log.txt"); got != "written once" {
@@ -250,6 +253,16 @@ func TestUnchangedContentsAreNotArchived(t *testing.T) {
 	local, ok, _ := e.backend.LocalFile("docs", "log.txt")
 	if !ok || !local.ModTime().Equal(mod) {
 		t.Fatalf("file is indexed as %+v", local)
+	}
+	// The replaced file was swapped out and removed
+	entries, err := os.ReadDir(e.folderPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), fs.UnixTempPrefix) {
+			t.Fatalf("left behind %s", entry.Name())
+		}
 	}
 	doc = ts.itemAt(token, "log.txt")
 	if list := ts.versions(token, doc); len(list.Versions) != 0 {
@@ -274,18 +287,57 @@ func TestUnchangedContentsAreNotArchived(t *testing.T) {
 	archived := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	e.archiveVersion("log.txt", "written twice", archived, archived.Add(-time.Hour))
 	list = ts.versions(token, doc)
-	if len(list.Versions) != 2 {
+	twice := slices.IndexFunc(list.Versions, func(v ItemVersion) bool { return v.Size == int64(len("written twice")) })
+	if len(list.Versions) != 2 || twice < 0 {
 		t.Fatalf("versions before restoring: %+v", list.Versions)
 	}
 	var restored Operation
 	ts.json("POST", "/v1/operations", token, OperationRequest{ID: newUUID(), Kind: opReplace, FolderID: "docs",
-		ItemID: doc.ID, BaseRevision: doc.Revision, SourceVersion: list.Versions[1].ID, OnConflict: onConflictReject},
+		ItemID: doc.ID, BaseRevision: doc.Revision, SourceVersion: list.Versions[twice].ID, OnConflict: onConflictReject},
 		http.StatusCreated, &restored)
 	if restored.State != stateResultCommitted {
 		t.Fatalf("restore of the same contents: %+v", restored)
 	}
 	if after := ts.versions(token, ts.itemAt(token, "log.txt")); len(after.Versions) != 2 {
 		t.Fatalf("versions after restoring the same contents: %+v", after.Versions)
+	}
+}
+
+func TestUnchangedContentsWithXattrsAreArchived(t *testing.T) {
+	e := newTestEngine(t, "docs", simpleVersioning)
+	e.write("tagged.txt", "contents")
+	path := filepath.Join(e.folderPath, "tagged.txt")
+	if err := unix.Setxattr(path, "user.synctrain-test", []byte("kept"), 0); err != nil {
+		t.Skipf("the folder's filesystem can't set extended attributes: %v", err)
+	}
+	ts := newTestService(t, e, "")
+	ts.export(true)
+	token := ts.pair(map[string]string{"docs": "write"})
+	doc := ts.itemAt(token, "tagged.txt")
+
+	// Swapping the same contents in would lose the attributes: the replaced file is archived with them
+	upload, digest := ts.upload(token, []byte("contents"))
+	var same Operation
+	ts.json("POST", "/v1/operations", token, OperationRequest{ID: newUUID(), Kind: opReplace, FolderID: "docs",
+		ItemID: doc.ID, BaseRevision: doc.Revision, Upload: upload, UploadDigest: digest}, http.StatusCreated, &same)
+	if same.State != stateResultCommitted {
+		t.Fatalf("replace with the same contents: %+v", same)
+	}
+	list := ts.versions(token, ts.itemAt(token, "tagged.txt"))
+	if len(list.Versions) != 1 {
+		t.Fatalf("versions after writing the same contents: %+v", list.Versions)
+	}
+	archived, err := filepath.Glob(filepath.Join(e.folderPath, versioner.DefaultPath, "tagged~*.txt"))
+	if err != nil || len(archived) != 1 {
+		t.Fatalf("archived files: %v %v", archived, err)
+	}
+	buf := make([]byte, 16)
+	n, err := unix.Getxattr(archived[0], "user.synctrain-test", buf)
+	if err != nil {
+		t.Fatalf("archived file's attribute: %v", err)
+	}
+	if string(buf[:n]) != "kept" {
+		t.Fatalf("archived file's attribute holds %q", buf[:n])
 	}
 }
 

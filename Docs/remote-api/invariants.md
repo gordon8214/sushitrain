@@ -59,11 +59,15 @@ certificate's SubjectPublicKeyInfo; without it the certificate must be trusted n
     it (invariant 13).
 13. An operation with `sourceVersion` writes the version through the same journal as an upload. The version is looked
     up by path when the operation is accepted and copied, not moved, beside the target when staged. The replaced
-    content is archived by the folder's versioning unless it is the same as the version's (an upload with the
-    contents a file already has archives nothing either), and invariants 7 to 9 hold as for uploads. Only the version's
-    content is written, not platform metadata the versioning keeps with it. The version is not removed by the copy,
-    but the folder's versioning may remove it when it archives the replaced content: the trashcan keeps one entry per
-    path, and simple and staggered versioning thin out versions by their own rules.
+    content is archived by the folder's versioning (except as invariant 14 says), and invariants 7 to 9 hold as for
+    uploads. Only the version's content is written, not platform metadata the versioning keeps with it. The version is
+    not removed by the copy, but the folder's versioning may remove it when it archives the replaced content: the
+    trashcan keeps one entry per path, and simple and staggered versioning thin out versions by their own rules.
+14. A replace (an upload or a version) whose content has the same Syncthing block list as the indexed file it
+    replaces is swapped in, and the replaced file is removed instead of archived, unless it has extended attributes
+    (which only archiving keeps). The file still takes the operation's modification time. "The same" is decided by the
+    index: equal bytes hashed with another block size, or a change on disk the index hasn't seen that keeps the file's
+    size and modification time, are not recognized.
 
 ## Operation states
 

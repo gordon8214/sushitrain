@@ -557,7 +557,8 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 				}
 				conflict = true
 			} else {
-				unchanged = bytes.Equal(blocksHashOf(local), op.data.BlocksHash)
+				// Swapping the edit in would lose the replaced file's extended attributes, which archiving keeps
+				unchanged = bytes.Equal(blocksHashOf(local), op.data.BlocksHash) && !pdir.hasXattrs(baseName(target))
 			}
 		}
 		if conflict {
