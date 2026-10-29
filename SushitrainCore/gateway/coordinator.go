@@ -523,6 +523,8 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 	}
 
 	replace := op.kind == opReplace && !op.data.Conflict
+	// Whether the edit writes the contents the file has (a phone saving a file it only opened, for instance)
+	var unchanged bool
 	if replace {
 		global, live, err := liveEntry(h, target)
 		if err != nil {
@@ -554,6 +556,8 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 					return "", err
 				}
 				conflict = true
+			} else {
+				unchanged = bytes.Equal(blocksHashOf(local), op.data.BlocksHash)
 			}
 		}
 		if conflict {
@@ -617,7 +621,8 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 
 	op.data.Method, op.data.Displaced = methodRename, ""
 	if replace {
-		if h.HasVersioner() || info.FilesystemType == "basic-trash" {
+		// Unchanged contents aren't archived: the versions would fill up with copies of the file as it is
+		if (h.HasVersioner() || info.FilesystemType == "basic-trash") && !unchanged {
 			op.data.Method = methodArchive
 		} else {
 			// Swapped, so the replaced content stays until the edit is indexed

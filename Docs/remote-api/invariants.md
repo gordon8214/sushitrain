@@ -59,7 +59,8 @@ certificate's SubjectPublicKeyInfo; without it the certificate must be trusted n
     it (invariant 13).
 13. An operation with `sourceVersion` writes the version through the same journal as an upload. The version is looked
     up by path when the operation is accepted and copied, not moved, beside the target when staged. The replaced
-    content is archived by the folder's versioning, and invariants 7 to 9 hold as for uploads. Only the version's
+    content is archived by the folder's versioning unless it is the same as the version's (an upload with the
+    contents a file already has archives nothing either), and invariants 7 to 9 hold as for uploads. Only the version's
     content is written, not platform metadata the versioning keeps with it. The version is not removed by the copy,
     but the folder's versioning may remove it when it archives the replaced content: the trashcan keeps one entry per
     path, and simple and staggered versioning thin out versions by their own rules.

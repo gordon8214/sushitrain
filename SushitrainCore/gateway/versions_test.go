@@ -225,6 +225,70 @@ func TestVersionsWithoutVersioning(t *testing.T) {
 	}
 }
 
+func TestUnchangedContentsAreNotArchived(t *testing.T) {
+	e := newTestEngine(t, "docs", simpleVersioning)
+	e.write("log.txt", "written once")
+	ts := newTestService(t, e, "")
+	ts.export(true)
+	token := ts.pair(map[string]string{"docs": "write"})
+	doc := ts.itemAt(token, "log.txt")
+
+	// A phone saving a file it only opened: the file takes the new modification time, and nothing is archived
+	upload, digest := ts.upload(token, []byte("written once"))
+	mod := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	modNs := mod.UnixNano()
+	var same Operation
+	ts.json("POST", "/v1/operations", token, OperationRequest{ID: newUUID(), Kind: opReplace, FolderID: "docs",
+		ItemID: doc.ID, BaseRevision: doc.Revision, Upload: upload, UploadDigest: digest, ModifiedNs: &modNs},
+		http.StatusCreated, &same)
+	if same.State != stateResultCommitted || same.Item == nil || same.Item.ID != doc.ID {
+		t.Fatalf("replace with the same contents: %+v", same)
+	}
+	if got, _ := e.read("log.txt"); got != "written once" {
+		t.Fatalf("file holds %q", got)
+	}
+	local, ok, _ := e.backend.LocalFile("docs", "log.txt")
+	if !ok || !local.ModTime().Equal(mod) {
+		t.Fatalf("file is indexed as %+v", local)
+	}
+	doc = ts.itemAt(token, "log.txt")
+	if list := ts.versions(token, doc); len(list.Versions) != 0 {
+		t.Fatalf("versions after writing the same contents: %+v", list.Versions)
+	}
+
+	// Other contents archive the ones they replace
+	upload, digest = ts.upload(token, []byte("written twice"))
+	var changed Operation
+	ts.json("POST", "/v1/operations", token, OperationRequest{ID: newUUID(), Kind: opReplace, FolderID: "docs",
+		ItemID: doc.ID, BaseRevision: doc.Revision, Upload: upload, UploadDigest: digest}, http.StatusCreated, &changed)
+	if changed.State != stateResultCommitted {
+		t.Fatalf("replace with other contents: %+v", changed)
+	}
+	doc = ts.itemAt(token, "log.txt")
+	list := ts.versions(token, doc)
+	if len(list.Versions) != 1 || list.Versions[0].Size != int64(len("written once")) {
+		t.Fatalf("versions after writing other contents: %+v", list.Versions)
+	}
+
+	// Restoring a version with the contents the file has archives nothing either
+	archived := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	e.archiveVersion("log.txt", "written twice", archived, archived.Add(-time.Hour))
+	list = ts.versions(token, doc)
+	if len(list.Versions) != 2 {
+		t.Fatalf("versions before restoring: %+v", list.Versions)
+	}
+	var restored Operation
+	ts.json("POST", "/v1/operations", token, OperationRequest{ID: newUUID(), Kind: opReplace, FolderID: "docs",
+		ItemID: doc.ID, BaseRevision: doc.Revision, SourceVersion: list.Versions[1].ID, OnConflict: onConflictReject},
+		http.StatusCreated, &restored)
+	if restored.State != stateResultCommitted {
+		t.Fatalf("restore of the same contents: %+v", restored)
+	}
+	if after := ts.versions(token, ts.itemAt(token, "log.txt")); len(after.Versions) != 2 {
+		t.Fatalf("versions after restoring the same contents: %+v", after.Versions)
+	}
+}
+
 func TestVersionsInCustomPath(t *testing.T) {
 	// A custom versions path may be shared with another folder, or point into one: its versions are not served
 	versions := t.TempDir()

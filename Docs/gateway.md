@@ -78,7 +78,8 @@ folder includes its history: a phone that may only read a folder can still see a
 Restoring and copying happen on the gateway, through the same journal as other edits: the version is copied, the
 replaced contents are archived as usual (the trash can then keeps those instead of the restored version), and only
 the file's contents are written, not platform metadata kept with the version. Version reads are recorded in the audit
-log.
+log. An edit or restore that writes the contents a file already has (as when a phone saves a file it only opened)
+archives nothing, so the history doesn't fill up with copies of the same contents.
 
 When the home has no `cert.pem` and `key.pem`, the gateway logs a warning and creates a new device identity (and a
 new `config.xml` when there is none); a certificate or key that exists but can't be read stops it instead. A restart

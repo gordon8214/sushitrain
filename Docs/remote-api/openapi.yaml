@@ -1002,8 +1002,8 @@ components:
           pattern: "^ver_-?[0-9]+$"
           description: |
             create (file) and replace (requires `versions`): writes this version (`ItemVersion.id`) instead of an
-            upload. A replace restores the item to it; the replaced content is archived as usual, which may remove
-            the version (invariant 13). The version is looked up when the operation is accepted
+            upload. A replace restores the item to it; the replaced content is archived as usual (unless it is the
+            same as the version's), which may remove the version (invariant 13). The version is looked up when the operation is accepted
             (`version_not_found` if it doesn't exist, `503` while the folder isn't running).
         modifiedNs:
           type: integer
