@@ -495,6 +495,16 @@ struct AdvancedSettingsView: View {
 				}
 			#endif
 
+			#if os(macOS)
+				Section {
+					NavigationLink("Engine options") {
+						EngineOptionsView()
+					}
+				} footer: {
+					Text("Disk space, performance, the audit log, and usage and crash reporting.")
+				}
+			#endif
+
 			Section {
 				NavigationLink("Advanced configuration") {
 					AdvancedConfigurationView()

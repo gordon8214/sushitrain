@@ -17,21 +17,25 @@ under Privacy & Security. Earlier versions were sandboxed; the app tells whether
 ## Engine settings
 
 The app relies on some engine options and folder defaults: frequent progress updates, quick relay reconnects, a
-one-hour rescan interval, no block index (`blockIndexing` off, which saves space), no crash or usage reporting (with
-the reporting and release URLs left empty), and on iOS ignored permissions and no file system watching.
+one-hour rescan interval, no block index (`blockIndexing` off, which saves space), an empty release URL, and on iOS
+ignored permissions and no file system watching. A new configuration also starts with usage and crash reporting off, and
+without their addresses.
 
 - **iOS** applies them at every start, together with moving folders back into the app's container, resuming their
   interrupted moves and turning off their scan progress. iOS has no web GUI or REST API, so nothing else can change
   them, and the app depends on them.
 - **macOS** applies them only when it creates a new configuration. An existing configuration is used as it is, so a
   value changed in the web GUI or through the REST API lasts, and an existing Syncthing configuration keeps its
-  settings. Folders stay where they are and keep Syncthing's scan progress, which the web GUI shows. In a new
-  configuration permissions sync, as in Syncthing (`ignorePerms` is off by default); configurations an earlier
-  Synctrain created keep the value they have.
+  settings, apart from reporting. Folders stay where they are and keep Syncthing's scan progress, which the web GUI
+  shows. In a new configuration permissions sync, as in Syncthing (`ignorePerms` is off by default); configurations an
+  earlier Synctrain created keep the value they have.
 
-On both, usage reporting stays off at every start (`urAccepted` is -1): the engine is a fork, which must not report to
-Syncthing's servers as an unknown build. Folders accessed through a remote file service stay paused. Loading writes the
-configuration file only when one of these settings changed it.
+Usage and crash reporting are off until the user turns them on. A configuration that comes with them on, as one from
+Syncthing.app can (crash reporting is on by default there), gets both turned off at its first start in the app. The
+marker `synctrain-reporting-reset` next to the configuration records this, so that turning them on afterwards lasts,
+whether in the app, the web GUI or through the REST API. The marker says that this happened for the folder, not who chose
+what: a `config.xml` put in its place by hand later is used as it is, reporting included. Folders accessed through a
+remote file service stay paused. Loading writes the configuration file only when one of these settings changed it.
 
 While it runs, the app still changes the configuration in these ways:
 
@@ -64,13 +68,52 @@ for new ones. It is there for settings without a screen of their own, and warns 
   page, and show its warnings when others can use the GUI without signing in. A field the engine corrects shows its new
   value after saving. Where a change only applies when the engine restarts (such as turning the GUI on or off), the
   editor offers to restart it.
-- IDs are shown but can't be changed, as a new ID makes another folder or device. The same goes for `urAccepted`, for
-  a device's `paused` (the app sets that from its own list), and for what the engine keeps empty in defaults. The GUI's
-  password and API key are never shown: left empty they stay as they are, and a new password is hashed. A folder's
-  encryption passwords do show, in plain text in the JSON of its `devices`, as they do on the app's encryption screen.
+- IDs are shown but can't be changed, as a new ID makes another folder or device. The same goes for a device's `paused`
+  (the app sets that from its own list), and for what the engine keeps empty in defaults. The GUI's password and API key
+  are never shown: left empty they stay as they are, and a new password is hashed. A folder's encryption passwords do
+  show, in plain text in the JSON of its `devices`, as they do on the app's encryption screen.
 - iOS has no GUI or LDAP sections, and hides what the app sets by itself or what does nothing there, such as a folder's
-  path (`advancedFieldsHiddenOnIOS`). `auditEnabled` and `auditFile` do nothing on macOS either, as only Syncthing's
-  command line reads them, but like every other field they are listed there.
+  path (`advancedFieldsHiddenOnIOS`).
+
+## Engine options
+
+On macOS, Advanced settings also link to a page with the options that had no native setting of their own (`options.go`,
+`EngineOptionsView`): the minimum free disk space, how long temporary files are kept, how many folders work at once,
+the limit on data for incoming requests, low priority, the temporary index threshold, sending the full index after an
+upgrade, the audit log, feature flags, and usage and crash reporting. They are saved together. The core checks them
+when saving, and only those that were edited since they were read: a value the page wouldn't accept stays until someone
+changes it, and what the web GUI or the REST API changed meanwhile stays too. Most take effect at once.
+
+- **Audit log.** Only Syncthing's command line writes the audit log by itself, so the app opens it when a run starts.
+  It goes to the file given, added to, or to a new `audit-<time>.log` in the configuration folder at each start of the
+  engine; those are removed after a week, as Syncthing does. The file has to be a full path, as Syncthing's `-` and `--`
+  (standard output and error) go nowhere in an app, and a regular file, as opening a named pipe could wait forever.
+  Syncthing stops if it can't open the file; the engine goes on without an audit log, and the page says so. A change
+  needs an engine restart, which the page offers. The log has what Syncthing's does: the events as they are, with file
+  names, device addresses, and in each `ConfigSaved` event the whole configuration, API key, password hash and folder
+  encryption passwords included. The page says so, and refuses a file in a synchronized folder, where those would reach
+  its devices. The default file is readable by its owner only.
+- **Usage reporting.** Turning it on sets `urAccepted` to the current report version and sends a report at once, then
+  one 30 minutes after each start of the engine and one a day. Syncthing's service also sends failure reports while it
+  is on, as they happen, to the crash reporting address; the fork makes turning it off stop those at once, where
+  Syncthing goes on until it restarts. The configurations the app makes have no reporting addresses, so turning
+  reporting on in the app fills in Syncthing's. Turned on in the web GUI or through the REST API, they are filled in at
+  the next start of the engine. `urURL` and `crURL` can be changed in the advanced configuration.
+- **Crash reporting.** Syncthing's monitor process, which the app doesn't have, normally saves panics and uploads them.
+  The app has the Go runtime save a crash to a `synctrain-crash-<time>.log` in the configuration folder
+  (`debug.SetCrashOutput`) and sends it at the next start of the engine, as soon as the configuration is loaded, in the
+  layout of Syncthing's crash reports, if crash reporting is on. If it is off, the crash is set aside, so that turning it
+  on later doesn't send it. Logs are removed after a week. The framework is built with `-trimpath`, so that traces don't
+  name folders on the computer that built it.
+- Reports identify the engine as `v2.1.7`, the version the app sets, with the tag `synctrain` in the long version, which
+  tells them from Syncthing's own builds. Syncthing's crash server refuses a long version it can't parse, so the app
+  recalculates it after setting the version; at package init it still says `unknown-dev`.
+- **Low priority** (`setLowPriority`) calls `setpriority` for the whole process, app included, at each start of the
+  engine, and it is on by default, as in Syncthing. It is measurably in force (the process has a nice value of 9) but
+  makes little difference on macOS. In a normally launched app the main thread stayed at priority 46 and the engine's
+  threads at 31 with either value, and two processes spinning on every core, one at nice 9, did the same work (measured
+  on October 30, 2026). A process can't lower its nice value again, so turning this off takes an app restart. A real
+  priority setting is a separate matter (Syncthing.app sets the QoS of the backend process it launches).
 
 ## Web GUI and REST API
 
@@ -221,7 +264,8 @@ StartAtLogin setting and login item back on as the receipt records, and open it.
 or on Syncthing's own folder after an import, needs its database reset first (`syncthing debug reset-database`), which
 exchanges every index anew. Going back is one-way when Synctrain's engine migrated the database to a newer schema than
 Syncthing.app's, or when a folder uses a filesystem type only Synctrain has (the Trash, photo folders);
-`return-to-syncthing-app` checks for both.
+`return-to-syncthing-app` checks for both. Usage and crash reporting stay as Synctrain left them, which is off unless they
+were turned on here.
 
 ## Restarting and shutting down
 

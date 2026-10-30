@@ -19,6 +19,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -32,6 +33,7 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/svcutil"
+	"github.com/syncthing/syncthing/lib/ur"
 
 	"t-shaped.nl/sushitrain/v2/gateway"
 	"t-shaped.nl/sushitrain/v2/sthome"
@@ -473,6 +475,142 @@ func TestEngineAppliesAdvancedSettings(t *testing.T) {
 	}
 	if clt.cfg().Options().KeepTemporariesH != 48 {
 		t.Fatal("the change did not last")
+	}
+}
+
+func TestEngineWritesTheAuditLogAfterARestart(t *testing.T) {
+	clt, _, dir := startTestEngine(t)
+	if clt.AuditStatusMessage() != "" {
+		t.Fatalf("no audit log was asked for: %s", clt.AuditStatusMessage())
+	}
+
+	options := clt.EngineOptions()
+	options.AuditEnabled = true
+	if err := clt.SetEngineOptions(options); err != nil {
+		t.Fatal(err)
+	}
+	if !clt.IsEngineRestartRequired() {
+		t.Fatal("the audit log takes a restart")
+	}
+	if err := clt.RestartEngine(); err != nil {
+		t.Fatal(err)
+	}
+	logs, err := filepath.Glob(filepath.Join(dir, "audit-*.log"))
+	if err != nil || len(logs) != 1 {
+		t.Fatalf("audit logs: %v, %v", logs, err)
+	}
+	if !strings.Contains(clt.AuditStatusMessage(), logs[0]) {
+		t.Fatalf("the app says: %s", clt.AuditStatusMessage())
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		data, err := os.ReadFile(logs[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "StartupComplete") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the audit log has: %s", data)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestEngineGoesOnWithoutAnAuditLogItCantWrite(t *testing.T) {
+	clt, _, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.Options.AuditEnabled = true
+		cfg.Options.AuditFile = "-"
+	})
+	if clt.EngineState() != EngineStateRunning {
+		t.Fatalf("the engine is %s", clt.EngineState())
+	}
+	if !strings.Contains(clt.AuditStatusMessage(), "can't be written") {
+		t.Fatalf("the app says: %q", clt.AuditStatusMessage())
+	}
+}
+
+// reportReceiver stands in for Syncthing's servers: turning reporting on sends a report at once, and a test must not
+// reach the real ones
+func reportReceiver(t *testing.T) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func TestEngineKeepsReportingOnAcrossARestart(t *testing.T) {
+	server := reportReceiver(t)
+	clt, _, dir := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.Options.URURL = server.URL
+		cfg.Options.CRURL = server.URL
+		cfg.Options.CREnabled = false
+	})
+	options := clt.EngineOptions()
+	if options.UsageReporting || options.CrashReporting {
+		t.Fatalf("reporting is on by default: %+v", options)
+	}
+	options.UsageReporting = true
+	options.CrashReporting = true
+	if err := clt.SetEngineOptions(options); err != nil {
+		t.Fatal(err)
+	}
+	if clt.IsEngineRestartRequired() {
+		t.Fatal("reporting takes no restart")
+	}
+	if err := clt.RestartEngine(); err != nil {
+		t.Fatal(err)
+	}
+	saved := savedConfig(t, filepath.Join(dir, "config.xml"), *clt.cert).Options
+	if options := clt.EngineOptions(); !options.UsageReporting || !options.CrashReporting || saved.URAccepted != ur.Version || !saved.CREnabled {
+		t.Fatalf("reporting did not stay on: %+v", options)
+	}
+}
+
+func TestEngineSendsTheCrashOfAnEarlierRun(t *testing.T) {
+	server := reportReceiver(t)
+	clt, dir := newLoadTestClient(t)
+	cert := testIdentity(t, dir)
+	cfg := config.New(protocolID(cert))
+	cfg.Options.GlobalAnnEnabled = false
+	cfg.Options.LocalAnnEnabled = false
+	cfg.Options.RelaysEnabled = false
+	cfg.Options.NATEnabled = false
+	cfg.Options.RawListenAddresses = []string{"tcp://127.0.0.1:0"}
+	cfg.Options.CREnabled = true
+	cfg.Options.CRURL = server.URL
+	cfg.GUI.Enabled = false
+	writeConfiguration(t, filepath.Join(dir, "config.xml"), cfg)
+	writeGUIMarker(dir, guiMarker{})
+	writeReportingMarker(dir)
+	crash := filepath.Join(dir, "synctrain-crash-2026-01-01-00-00-00.log")
+	if err := os.WriteFile(crash, []byte("syncthing v2.1.7\npanic: test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	clt.Delegate = newStateRecorder()
+	// Sent as soon as the configuration is known, whether or not the engine gets as far as starting
+	if err := clt.Load(false); err != nil {
+		t.Fatal(err)
+	}
+	sent := strings.TrimSuffix(crash, ".log") + crashLogDoneSuffix
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := os.Stat(sent); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the crash was not sent")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := os.Stat(clt.crashLog); err != nil {
+		t.Fatalf("this run's own crash log: %v", err)
 	}
 }
 

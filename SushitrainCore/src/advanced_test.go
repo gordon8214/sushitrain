@@ -438,7 +438,6 @@ func TestIdentitiesCannotBeChangedInTheAdvancedEditor(t *testing.T) {
 		{AdvancedSectionDefaultFolder, "id"},
 		{AdvancedSectionDefaultDevice, "deviceID"},
 		{AdvancedSectionDefaultDevice, "introducedBy"},
-		{AdvancedSectionOptions, "urAccepted"},
 		{AdvancedSectionDevicePrefix + protocol.LocalDeviceID.String(), "paused"},
 	} {
 		section, err := client.AdvancedSection(change.section)
@@ -456,6 +455,19 @@ func TestIdentitiesCannotBeChangedInTheAdvancedEditor(t *testing.T) {
 	}
 	if after := wrapper.RawCopy(); !reflect.DeepEqual(before, after) {
 		t.Fatal("changed")
+	}
+}
+
+func TestUsageReportingCanBeTurnedOnInTheAdvancedEditor(t *testing.T) {
+	client, wrapper := advancedTestClient(t)
+	if err := saveAdvancedField(t, client, AdvancedSectionOptions, "urURL", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveAdvancedField(t, client, AdvancedSectionOptions, "urAccepted", "3"); err != nil {
+		t.Fatal(err)
+	}
+	if opts := wrapper.Options(); opts.URAccepted != 3 || opts.URURL == "" {
+		t.Fatalf("usage reporting %d, to %q", opts.URAccepted, opts.URURL)
 	}
 }
 

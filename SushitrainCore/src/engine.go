@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -75,6 +76,8 @@ type engineRun struct {
 	firstRun    bool
 	stopTimeout atomic.Bool // the app did not stop in time; its configuration and logger are left alone
 	guiStarted  bool        // whether the configuration had the web GUI on when the run started
+	auditLog    *os.File    // what the app writes the audit log to; closed once the app stopped
+	auditNotice string      // says where the audit log goes, or why it can't be written (AuditStatusMessage)
 
 	// Configuration changes hold this for reading; the teardown takes it to stop them
 	writes sync.RWMutex
@@ -208,6 +211,7 @@ func (clt *Client) prepareRun() (_ *engineRun, err error) {
 			if r.closeDB != nil {
 				r.closeDB()
 			}
+			r.closeAuditLog()
 			r.cancel()
 			r.stopLog()
 			<-r.logDone
@@ -227,6 +231,10 @@ func (clt *Client) prepareRun() (_ *engineRun, err error) {
 			clt.startupProblem.Store(StartupProblemNewerConfiguration)
 		}
 		return nil, err
+	}
+	// Before anything else that can crash, as it did last time; on its own, as this run may not get as far as starting
+	if !build.IsIOS {
+		go reportCrashes(context.Background(), cfg.Options(), locations.GetBaseDir(locations.DataBaseDir), clt.crashLog)
 	}
 
 	// Refuse a database a newer Syncthing wrote, which this one would not migrate back
@@ -250,14 +258,18 @@ func (clt *Client) prepareRun() (_ *engineRun, err error) {
 	if !upgrade.DisabledByCompilation && !testing.Testing() {
 		slog.Error("This build can upgrade the engine through the REST API; build it with the noupgrade tag")
 	}
-	app, err := syncthing.New(cfg, sdb, r.evLogger, *clt.cert, syncthing.Options{
+	appOptions := syncthing.Options{
 		NoUpgrade:      true,
 		ProfilerAddr:   "",
 		ResetDeltaIdxs: clt.resetDeltaIdxs,
 
 		// Disable periodic database maintenance, we will schedule it ourselves at a convenient time
 		DBMaintenanceInterval: 0,
-	})
+	}
+	if !build.IsIOS {
+		r.startAuditLog(cfg.Options(), &appOptions)
+	}
+	app, err := syncthing.New(cfg, sdb, r.evLogger, *clt.cert, appOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -459,6 +471,7 @@ func (clt *Client) closeRun(r *engineRun) {
 		r.stopLog()
 		<-r.logDone
 	}
+	r.closeAuditLog()
 }
 
 // scanFolderSubdirs scans a folder and waits for the scan, but stops waiting when the engine stops: a folder that

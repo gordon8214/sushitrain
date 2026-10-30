@@ -70,6 +70,7 @@ type Client struct {
 	remoteManaged         *remoteManagedSet
 	startupProblem        atomic.Value // string, one of the StartupProblem constants
 	guiNotice             atomic.Value // string, what the last load changed about the web GUI (GUIStatusMessage)
+	crashLog              string       // the log a crash of this process goes to (reporting.go)
 
 	// The engine, restarted in place (engine.go). lifecycle serializes loading, starting, restarting and stopping, and
 	// is never held while calling the delegate.
@@ -186,15 +187,21 @@ func createLogFile(dir string, started time.Time) (*os.File, error) {
 	return os.Create(logFilePath(dir, started))
 }
 
+// setBuildInfo sets the version info of the engine. The tag also sets the long version that reports carry, which tells
+// this fork from Syncthing's own builds.
+func setBuildInfo() {
+	build.Version = "v2.1.7"
+	build.Host = "t-shaped.nl"
+	build.User = "sushitrain"
+	build.AddTag("synctrain")
+}
+
 // NewClient creates the client of an engine that keeps its configuration and database in configPath and treats
 // filesPath as the user's home directory. When saveLog is set, the log is also saved to a file in logPath. With
 // foldersInHome (the Mac app outside the App Sandbox, where filesPath is the real home directory), folders are the
 // user's, anywhere; otherwise they are in or outside the app's container.
 func NewClient(configPath string, filesPath string, logPath string, foldersInHome bool, saveLog bool) *Client {
-	// Set version info
-	build.Version = "v2.1.7"
-	build.Host = "t-shaped.nl"
-	build.User = "sushitrain"
+	setBuildInfo()
 
 	// Set up logging
 	var logOutWriter io.Writer = os.Stdout
@@ -770,6 +777,14 @@ func (clt *Client) Load(resetDeltaIdxs bool) error {
 	}
 	clt.cert = &cert
 
+	if !build.IsIOS {
+		crashLog, err := startCrashLog(locations.GetBaseDir(locations.DataBaseDir), time.Now())
+		if err != nil {
+			slog.Warn("could not start the crash log", "cause", err)
+		}
+		clt.crashLog = crashLog
+	}
+
 	// Load or create the config
 	slog.Info("loading config file", "path", locations.Get(locations.ConfigFile))
 	remoteManaged, err := loadRemoteManaged(remoteManagedPath())
@@ -868,8 +883,8 @@ func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) error {
 //
 // On iOS the app's settings are applied at every start: there is no web GUI or REST API to change them, and the app
 // depends on them. On macOS they are only the defaults of a new configuration, so that changes made in the web GUI or
-// through the REST API last, and an existing Syncthing configuration is used as it is. On both, usage reporting stays
-// off and remote-managed folders stay paused.
+// through the REST API last, and an existing Syncthing configuration is used as it is, except that reporting is turned
+// off once (prepareReporting). On both, remote-managed folders stay paused.
 //
 // On macOS the web GUI and REST API are on (gui.go, prepareGUI): a new configuration has them on 127.0.0.1:8384 with a
 // password nobody knows, and one that never had them turned on gets them on once where only this computer can reach
@@ -909,6 +924,7 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 	configDir := path.Dir(cfgFile)
 	var guiState *guiMarker
 	guiNotice := ""
+	reportingReset := false
 	waiter, err := staging.Modify(func(conf *config.Configuration) {
 		if ios {
 			applyAppDefaults(conf, ios)
@@ -920,11 +936,8 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 
 		if !ios {
 			guiState, guiNotice = prepareGUI(conf, configDir)
+			reportingReset = prepareReporting(conf, configDir)
 		}
-
-		// This engine is a fork, which must not send usage and failure reports to Syncthing's servers as an unknown
-		// build. (Crash uploads are the work of Syncthing's monitor process, which the app doesn't have.)
-		conf.Options.URAccepted = -1
 
 		// Remote-managed folders stay paused, even if the file was edited to resume them
 		remoteManaged.enforce(conf)
@@ -943,6 +956,9 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 	}
 	if guiState != nil {
 		writeGUIMarker(configDir, *guiState)
+	}
+	if reportingReset {
+		writeReportingMarker(configDir)
 	}
 	if relocationErr != nil {
 		// The folders stay as they are (some perhaps paused); the journal is kept for a look
@@ -963,11 +979,11 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 // applyAppDefaults sets the options and folder defaults the app wants: on iOS at every start, on macOS for a new
 // configuration only. On macOS, folders keep Syncthing's default scan progress, which the web GUI shows.
 func applyAppDefaults(conf *config.Configuration, ios bool) {
-	conf.Options.CREnabled = false               // No crash reporting for now
-	conf.Options.URAccepted = -1                 // No usage reporting for now
+	conf.Options.CREnabled = false               // No crash reporting unless the user turns it on
+	conf.Options.URAccepted = -1                 // No usage reporting unless the user turns it on
 	conf.Options.ProgressUpdateIntervalS = 1     // We want to update the user often, it improves the experience and is worth the compute cost
-	conf.Options.CRURL = ""                      // No crash reporting for now
-	conf.Options.URURL = ""                      // No usage reporting for now
+	conf.Options.CRURL = ""                      // Filled in when the user turns crash reporting on
+	conf.Options.URURL = ""                      // Filled in when the user turns usage reporting on
 	conf.Options.ReleasesURL = ""                // The app updates itself, the engine doesn't
 	conf.Defaults.Folder.RescanIntervalS = 3600  // Rescan every hour by default
 	conf.Options.RelayReconnectIntervalM = 1     // Set this to one minute (from the default 10) because on mobile networks this is more often necessary

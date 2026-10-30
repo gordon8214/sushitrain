@@ -58,6 +58,7 @@ func writeCustomConfig(t *testing.T, dir, filesPath string) string {
 func TestMacOSUsesAnExistingConfigurationAsItIs(t *testing.T) {
 	dir, filesPath := t.TempDir(), t.TempDir()
 	path := writeCustomConfig(t, dir, filesPath)
+	writeReportingMarker(dir)
 	before := stateOf(t, path)
 
 	cfg, _, err := loadEngineConfig(path, testIdentity(t, dir), events.NoopLogger, filesPath, &remoteManagedSet{}, false)
@@ -132,21 +133,65 @@ func TestNewConfigurationsGetThePlatformDefaults(t *testing.T) {
 	}
 }
 
-func TestUsageReportingStaysOffOnBothPlatforms(t *testing.T) {
+// loadWithReporting loads a configuration that has reporting on, as one from Syncthing.app can, and returns its options
+// as saved
+func loadWithReporting(t *testing.T, dir, filesPath, path string, ios bool) config.OptionsConfiguration {
+	t.Helper()
+	cert := testIdentity(t, dir)
+	cfg := savedConfig(t, path, cert)
+	cfg.Options.URAccepted = 3
+	cfg.Options.CREnabled = true
+	writeConfiguration(t, path, cfg)
+	if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, ios); err != nil {
+		t.Fatal(err)
+	}
+	return savedConfig(t, path, cert).Options
+}
+
+func TestReportingIsOffOnBothPlatformsForAConfigurationFromElsewhere(t *testing.T) {
 	for _, ios := range []bool{false, true} {
 		dir, filesPath := t.TempDir(), t.TempDir()
 		path := writeCustomConfig(t, dir, filesPath)
-		cert := testIdentity(t, dir)
-		cfg := savedConfig(t, path, cert)
-		cfg.Options.URAccepted = 3
-		writeConfiguration(t, path, cfg)
+		if opts := loadWithReporting(t, dir, filesPath, path, ios); opts.URAccepted != -1 || opts.CREnabled {
+			t.Fatalf("iOS %v: usage reporting %d, crash reporting %v", ios, opts.URAccepted, opts.CREnabled)
+		}
+	}
+}
 
-		if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, ios); err != nil {
-			t.Fatal(err)
+func TestMacOSKeepsReportingOnceTheUserChose(t *testing.T) {
+	dir, filesPath := t.TempDir(), t.TempDir()
+	path := writeCustomConfig(t, dir, filesPath)
+	// The first load turns it off; the user turning it on afterwards lasts
+	loadWithReporting(t, dir, filesPath, path, false)
+	for range 2 {
+		if opts := loadWithReporting(t, dir, filesPath, path, false); opts.URAccepted != 3 || !opts.CREnabled {
+			t.Fatalf("usage reporting %d, crash reporting %v", opts.URAccepted, opts.CREnabled)
 		}
-		if saved := savedConfig(t, path, cert); saved.Options.URAccepted != -1 {
-			t.Fatalf("iOS %v: usage reporting is %d", ios, saved.Options.URAccepted)
-		}
+	}
+}
+
+func TestIOSTurnsReportingOffAtEveryStart(t *testing.T) {
+	dir, filesPath := t.TempDir(), t.TempDir()
+	path := writeCustomConfig(t, dir, filesPath)
+	writeReportingMarker(dir)
+	if opts := loadWithReporting(t, dir, filesPath, path, true); opts.URAccepted != -1 || opts.CREnabled {
+		t.Fatalf("usage reporting %d, crash reporting %v", opts.URAccepted, opts.CREnabled)
+	}
+}
+
+func TestMacOSFillsInWhereToReport(t *testing.T) {
+	dir, filesPath := t.TempDir(), t.TempDir()
+	path := filepath.Join(dir, "config.xml")
+	cert := testIdentity(t, dir)
+	if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if opts := savedConfig(t, path, cert).Options; opts.URURL != "" || opts.CRURL != "" {
+		t.Fatalf("a new configuration has %q and %q", opts.URURL, opts.CRURL)
+	}
+	opts := loadWithReporting(t, dir, filesPath, path, false)
+	if opts.URURL == "" || opts.CRURL == "" || opts.URUniqueID == "" {
+		t.Fatalf("reporting has nowhere to go: %q, %q, ID %q", opts.URURL, opts.CRURL, opts.URUniqueID)
 	}
 }
 

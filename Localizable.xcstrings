@@ -3490,6 +3490,52 @@
         }
       }
     },
+    "256 MiB" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "256 MiB"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "256 MiB"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "256 MiB"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "256 MiB"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "256 MiB"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "256 МіБ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "256 MiB"
+          }
+        }
+      }
+    },
     "2024-08-11_IMG_2020.MOV" : {
       "localizations" : {
         "de" : {
@@ -4222,6 +4268,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "旧数据库仍然存在。如果应用程序正常运行，可以安全地手动删除此数据库。为此需要重新启动应用程序。"
+          }
+        }
+      }
+    },
+    "A new file for each start" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine neue Datei bei jedem Start"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un archivo nuevo en cada inicio"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un nuovo file a ogni avvio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "起動ごとに新しいファイル"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een nieuw bestand bij elke start"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новий файл для кожного запуску"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每次启动一个新文件"
           }
         }
       }
@@ -8746,6 +8838,98 @@
         }
       }
     },
+    "Audit log" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audit-Protokoll"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registro de auditoría"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registro di audit"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監査ログ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auditlogboek"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Журнал аудиту"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审计日志"
+          }
+        }
+      }
+    },
+    "Audit log file" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audit-Protokolldatei"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivo del registro de auditoría"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File del registro di audit"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監査ログファイル"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auditlogbestand"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл журналу аудиту"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审计日志文件"
+          }
+        }
+      }
+    },
     "Authentication" : {
       "localizations" : {
         "de" : {
@@ -10122,6 +10306,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "书签"
+          }
+        }
+      }
+    },
+    "Both are off unless you turn them on, and go to the Syncthing project. A usage report goes out when you turn it on, about 30 minutes after each start of the engine, and then once a day, under a random ID: anonymous statistics such as the platform, the number of folders and devices, the amount of data, and the features in use. While it is on, failures inside the engine are also sent as they happen, to the crash report address. A crash report goes out at the first start after a crash, with where in the code the engine stopped; its error message can include a file path. The addresses are UR URL and CR URL under Options in the advanced configuration." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beide sind aus, sofern Sie sie nicht einschalten, und gehen an das Syncthing-Projekt. Ein Nutzungsbericht wird beim Einschalten, etwa 30 Minuten nach jedem Start der Engine und danach einmal täglich unter einer zufälligen ID gesendet: anonyme Statistiken wie die Plattform, die Anzahl der Ordner und Geräte, die Datenmenge und die verwendeten Funktionen. Solange er eingeschaltet ist, werden auch Fehler innerhalb der Engine sofort an die Adresse für Absturzberichte gesendet. Ein Absturzbericht wird beim ersten Start nach einem Absturz gesendet und zeigt, wo im Code die Engine stehen blieb; seine Fehlermeldung kann einen Dateipfad enthalten. Die Adressen sind UR URL und CR URL unter Optionen in der erweiterten Konfiguration."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ambos están desactivados salvo que los actives, y se envían al proyecto Syncthing. Un informe de uso se envía al activarlo, unos 30 minutos después de cada inicio del motor y luego una vez al día, con un ID aleatorio: estadísticas anónimas como la plataforma, el número de carpetas y dispositivos, la cantidad de datos y las funciones en uso. Mientras esté activado, los errores internos del motor también se envían cuando ocurren, a la dirección de los informes de fallos. Un informe de fallo se envía en el primer inicio tras un fallo, e indica en qué parte del código se detuvo el motor; su mensaje de error puede incluir una ruta de archivo. Las direcciones son UR URL y CR URL en Opciones, en los ajustes avanzados del motor."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrambe sono disattivate finché non le attivi e vengono inviate al progetto Syncthing. Una segnalazione di utilizzo viene inviata quando la attivi, circa 30 minuti dopo ogni avvio del motore e poi una volta al giorno, con un ID casuale: statistiche anonime come la piattaforma, il numero di cartelle e dispositivi, la quantità di dati e le funzionalità in uso. Finché è attiva, anche gli errori interni del motore vengono inviati quando si verificano, all'indirizzo delle segnalazioni di arresti anomali. Una segnalazione di arresto anomalo viene inviata al primo avvio dopo l'arresto e indica in quale punto del codice il motore si è fermato; il messaggio di errore può includere un percorso di file. Gli indirizzi sono UR URL e CR URL in Opzioni, nella configurazione avanzata."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "どちらもオンにしない限りオフのままで、送信先はSyncthingプロジェクトです。使用状況レポートはランダムなIDで、オンにしたとき、エンジンの起動から約30分後、その後は1日に1回送信されます。内容はプラットフォーム、フォルダとデバイスの数、データ量、使用中の機能などの匿名の統計です。オンの間は、エンジン内部の障害も発生時にクラッシュレポートのアドレスへ送信されます。クラッシュレポートはクラッシュ後の最初の起動時に送信され、エンジンがコードのどこで停止したかを示します。エラーメッセージにファイルパスが含まれることがあります。送信先アドレスは詳細な構成の「オプション」にあるUR URLとCR URLです。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beide staan uit tenzij je ze inschakelt, en gaan naar het Syncthing-project. Een gebruiksrapport wordt verzonden bij het inschakelen, ongeveer 30 minuten na elke start van de engine en daarna eenmaal per dag, onder een willekeurig ID: anonieme statistieken zoals het platform, het aantal mappen en apparaten, de hoeveelheid gegevens en de gebruikte functies. Zolang het aanstaat, worden fouten in de engine ook meteen verzonden, naar het adres voor crashrapporten. Een crashrapport wordt verzonden bij de eerste start na een crash, met de plek in de code waar de engine stopte; de foutmelding kan een bestandspad bevatten. De adressen zijn UR URL en CR URL onder Opties in de geavanceerde configuratie."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обидва вимкнені, доки ви їх не ввімкнете, і надсилаються проєкту Syncthing. Звіт про використання надсилається під час увімкнення, приблизно через 30 хвилин після кожного запуску рушія, а далі раз на день із випадковим ідентифікатором: анонімна статистика, як-от платформа, кількість папок і пристроїв, обсяг даних і функції, що використовуються. Поки його ввімкнено, помилки всередині рушія також надсилаються одразу, на адресу звітів про збої. Звіт про збій надсилається під час першого запуску після збою і показує, де в коді зупинився рушій; його повідомлення про помилку може містити шлях до файлу. Адреси задано в UR URL і CR URL у розділі «Параметри» розширеної конфігурації."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两者默认关闭，除非你开启，报告将发送给 Syncthing 项目。使用情况报告在开启时、引擎每次启动约 30 分钟后发送，之后每天发送一次，使用随机 ID：包含平台、文件夹和设备数量、数据量以及使用的功能等匿名统计信息。开启期间，引擎内部的故障也会在发生时发送到崩溃报告地址。崩溃报告在崩溃后首次启动时发送，显示引擎在代码中的停止位置；其错误消息可能包含文件路径。地址为高级配置中“选项”下的 UR URL 和 CR URL。"
           }
         }
       }
@@ -15002,6 +15232,52 @@
         }
       }
     },
+    "Custom" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Benutzerdefiniert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personalizado"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personalizzato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カスタム"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aangepast"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Власне"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义"
+          }
+        }
+      }
+    },
     "Custom configuration saved" : {
       "localizations" : {
         "de" : {
@@ -15090,6 +15366,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "深色"
+          }
+        }
+      }
+    },
+    "Data for incoming requests" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daten für eingehende Anfragen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datos para solicitudes entrantes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dati per le richieste in arrivo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "受信リクエスト用のデータ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gegevens voor inkomende verzoeken"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дані для вхідних запитів"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "传入请求的数据量"
           }
         }
       }
@@ -17644,6 +17966,98 @@
         }
       }
     },
+    "Disk space" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicherplatz"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espacio en disco"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio su disco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ディスク容量"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schijfruimte"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Місце на диску"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "磁盘空间"
+          }
+        }
+      }
+    },
+    "Disk space, performance, the audit log, and usage and crash reporting." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicherplatz, Leistung, Audit-Protokoll sowie Nutzungs- und Absturzberichte."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espacio en disco, rendimiento, registro de auditoría e informes de uso y de fallos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio su disco, prestazioni, registro di audit e segnalazioni di utilizzo e arresti anomali."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ディスク容量、パフォーマンス、監査ログ、使用状況とクラッシュのレポート。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schijfruimte, prestaties, het auditlogboek, en gebruiks- en crashrapporten."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Місце на диску, продуктивність, журнал аудиту, звіти про використання та збої."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "磁盘空间、性能、审计日志，以及使用情况和崩溃报告。"
+          }
+        }
+      }
+    },
     "Dismiss" : {
       "localizations" : {
         "de" : {
@@ -19806,6 +20220,52 @@
         }
       }
     },
+    "Engine options" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Engine-Optionen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opciones del motor"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opzioni del motore"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エンジンのオプション"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Engine-opties"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Параметри рушія"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引擎选项"
+          }
+        }
+      }
+    },
     "Enter a text to search for in the search field above to search." : {
       "localizations" : {
         "de" : {
@@ -20170,6 +20630,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "现有文件夹..."
+          }
+        }
+      }
+    },
+    "Experimental features of the engine to turn on, one name per line. Leave this empty unless the engine's release notes name one." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Experimentelle Funktionen der Engine, die eingeschaltet werden sollen, ein Name pro Zeile. Lassen Sie dies leer, sofern die Versionshinweise der Engine keinen nennen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Funciones experimentales del motor que se activarán, un nombre por línea. Déjalo vacío salvo que las notas de la versión del motor indiquen alguno."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Funzionalità sperimentali del motore da attivare, un nome per riga. Lascia vuoto a meno che le note di rilascio del motore non ne indichino una."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有効にするエンジンの実験的機能を1行に1つずつ指定します。エンジンのリリースノートに記載がない限り、空のままにしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Experimentele functies van de engine om in te schakelen, één naam per regel. Laat dit leeg, tenzij de releaseopmerkingen van de engine er een noemen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Експериментальні функції рушія, які слід увімкнути, по одній назві в рядку. Залиште порожнім, якщо нотатки до випуску рушія не називають жодної."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要开启的引擎实验性功能，每行一个名称。除非引擎的发行说明中提到，否则请留空。"
           }
         }
       }
@@ -20814,6 +21320,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "失败：%@"
+          }
+        }
+      }
+    },
+    "Feature flags" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feature-Flags"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indicadores de funciones"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flag delle funzionalità"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "機能フラグ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feature flags"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прапорці функцій"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能标志"
           }
         }
       }
@@ -23998,6 +24550,52 @@
         }
       }
     },
+    "Folders working at once" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gleichzeitig aktive Ordner"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carpetas activas a la vez"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cartelle attive contemporaneamente"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同時に処理するフォルダ数"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappen tegelijk actief"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папок одночасно в роботі"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同时处理的文件夹数"
+          }
+        }
+      }
+    },
     "For 1 hour" : {
       "localizations" : {
         "de" : {
@@ -26402,6 +27000,52 @@
         }
       }
     },
+    "How many folders can scan or synchronize at the same time, and how much data this device handles at once for requests from other devices. Low priority sets the Unix nice value of the whole app, as the engine runs inside it, which makes little difference on macOS. Turning it on takes effect when the engine restarts, and turning it off when the app restarts." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wie viele Ordner gleichzeitig scannen oder synchronisieren können und wie viele Daten dieses Gerät gleichzeitig für Anfragen anderer Geräte verarbeitet. Niedrige Priorität setzt den Unix-Nice-Wert der gesamten App, da die Engine in ihr läuft; unter macOS macht das wenig Unterschied. Das Einschalten wird beim Neustart der Engine wirksam, das Ausschalten beim Neustart der App."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuántas carpetas pueden escanear o sincronizar a la vez, y cuántos datos gestiona este dispositivo a la vez para las solicitudes de otros dispositivos. La prioridad baja establece el valor nice de Unix de toda la app, ya que el motor se ejecuta dentro de ella, y en macOS apenas supone diferencia. Activarla se aplica cuando se reinicia el motor, y desactivarla cuando se reinicia la app."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quante cartelle possono eseguire la scansione o sincronizzarsi contemporaneamente e quanti dati questo dispositivo gestisce alla volta per le richieste di altri dispositivi. La priorità bassa imposta il valore nice Unix dell'intera app, poiché il motore vi gira all'interno, e su macOS fa poca differenza. L'attivazione ha effetto al riavvio del motore, la disattivazione al riavvio dell'app."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同時にスキャンまたは同期できるフォルダの数と、他のデバイスからのリクエストに対してこのデバイスが一度に処理するデータ量です。エンジンはアプリ内で動作するため、低優先度はアプリ全体のUnix nice値を設定しますが、macOSではほとんど差がありません。オンにするとエンジンの再起動時に、オフにするとアプリの再起動時に反映されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoeveel mappen tegelijk kunnen scannen of synchroniseren, en hoeveel gegevens dit apparaat tegelijk verwerkt voor verzoeken van andere apparaten. Lage prioriteit stelt de Unix-nice-waarde van de hele app in, omdat de engine erin draait, wat op macOS weinig verschil maakt. Inschakelen gaat in wanneer de engine opnieuw start, uitschakelen wanneer de app opnieuw start."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скільки папок можуть одночасно сканувати чи синхронізувати і скільки даних цей пристрій обробляє за раз для запитів інших пристроїв. Низький пріоритет задає значення nice у Unix для всього застосунку, адже рушій працює всередині нього, і в macOS це мало що змінює. Увімкнення набирає чинності після перезапуску рушія, а вимкнення — після перезапуску застосунку."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可同时扫描或同步的文件夹数量，以及此设备一次为其他设备的请求处理的数据量。由于引擎运行在应用内部，低优先级会设置整个应用的 Unix nice 值，这在 macOS 上影响很小。开启后在引擎重启时生效，关闭后在应用重启时生效。"
+          }
+        }
+      }
+    },
     "How much seconds in total to wait for devices to download from to become available before giving up (seconds)." : {
       "localizations" : {
         "de" : {
@@ -27874,6 +28518,52 @@
         }
       }
     },
+    "Indexes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indizes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Índices"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indici"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "インデックス"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indexen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Індекси"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "索引"
+          }
+        }
+      }
+    },
     "Info" : {
       "localizations" : {
         "de" : {
@@ -28766,6 +29456,52 @@
         }
       }
     },
+    "Keep an audit log" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audit-Protokoll führen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantener un registro de auditoría"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tieni un registro di audit"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監査ログを記録"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auditlogboek bijhouden"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вести журнал аудиту"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记录审计日志"
+          }
+        }
+      }
+    },
     "Keep conflicting versions" : {
       "localizations" : {
         "de" : {
@@ -28946,6 +29682,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重启后保留级别"
+          }
+        }
+      }
+    },
+    "Keep temporary files (hours)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temporäre Dateien aufbewahren (Stunden)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar archivos temporales (horas)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva i file temporanei (ore)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一時ファイルの保持期間（時間）"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tijdelijke bestanden bewaren (uren)"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зберігати тимчасові файли (години)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "临时文件保留时长（小时）"
           }
         }
       }
@@ -30010,6 +30792,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "浅色"
+          }
+        }
+      }
+    },
+    "Limit (KiB)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limit (KiB)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Límite (KiB)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite (KiB)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上限 (KiB)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limiet (KiB)"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обмеження (КіБ)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上限 (KiB)"
           }
         }
       }
@@ -31532,6 +32360,98 @@
         }
       }
     },
+    "Minimum blocks for a temporary index" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mindestblöcke für einen temporären Index"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloques mínimos para un índice temporal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocchi minimi per un indice temporaneo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一時インデックスの最小ブロック数"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimumaantal blokken voor een tijdelijke index"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Мінімум блоків для тимчасового індексу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "临时索引的最小块数"
+          }
+        }
+      }
+    },
+    "Minimum free disk space" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimaler freier Speicherplatz"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espacio libre mínimo en disco"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio libero minimo su disco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小空きディスク容量"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimale vrije schijfruimte"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Мінімум вільного місця на диску"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小可用磁盘空间"
+          }
+        }
+      }
+    },
     "Minimum number of devices that need to have a copy before a file can be desynchronized." : {
       "localizations" : {
         "de" : {
@@ -32912,6 +33832,52 @@
         }
       }
     },
+    "No limit" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Begrenzung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin límite"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun limite"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "制限なし"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen limiet"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Без обмежень"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无限制"
+          }
+        }
+      }
+    },
     "No log messages" : {
       "localizations" : {
         "de" : {
@@ -33924,6 +34890,52 @@
         }
       }
     },
+    "Number of folders" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anzahl der Ordner"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Número de carpetas"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Numero di cartelle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダ数"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aantal mappen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кількість папок"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹数量"
+          }
+        }
+      }
+    },
     "Obtain the source code" : {
       "localizations" : {
         "de" : {
@@ -34426,6 +35438,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "单个连接就够了"
+          }
+        }
+      }
+    },
+    "One per CPU core" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einer pro CPU-Kern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una por núcleo de CPU"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una per core CPU"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CPUコアごとに1つ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eén per CPU-kern"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По одній на ядро ЦП"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每个 CPU 核心一个"
           }
         }
       }
@@ -36911,6 +37969,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "立即执行数据库维护"
+          }
+        }
+      }
+    },
+    "Performance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leistung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rendimiento"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prestazioni"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パフォーマンス"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prestaties"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продуктивність"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "性能"
           }
         }
       }
@@ -41470,6 +42574,52 @@
         }
       }
     },
+    "Reporting" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Berichte"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segnalazioni"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レポート"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rapportage"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Звіти"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "报告"
+          }
+        }
+      }
+    },
     "Requested" : {
       "localizations" : {
         "de" : {
@@ -42709,6 +43859,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "与 Syncthing 并行运行"
+          }
+        }
+      }
+    },
+    "Run at low priority" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit niedriger Priorität ausführen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ejecutar con prioridad baja"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esegui con priorità bassa"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低優先度で実行"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met lage prioriteit uitvoeren"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Працювати з низьким пріоритетом"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以低优先级运行"
           }
         }
       }
@@ -45504,6 +46700,98 @@
         }
       }
     },
+    "Send anonymous usage reports" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anonyme Nutzungsberichte senden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar informes de uso anónimos"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invia segnalazioni di utilizzo anonime"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匿名の使用状況レポートを送信"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anonieme gebruiksrapporten verzenden"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Надсилати анонімні звіти про використання"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送匿名使用情况报告"
+          }
+        }
+      }
+    },
+    "Send crash reports" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Absturzberichte senden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar informes de fallos"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invia segnalazioni di arresti anomali"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "クラッシュレポートを送信"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crashrapporten verzenden"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Надсилати звіти про збої"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送崩溃报告"
+          }
+        }
+      }
+    },
     "Send only" : {
       "localizations" : {
         "de" : {
@@ -45546,6 +46834,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "仅发送"
+          }
+        }
+      }
+    },
+    "Send the full index after an upgrade" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach einem Upgrade den vollständigen Index senden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar el índice completo tras una actualización"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invia l'indice completo dopo un aggiornamento"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップグレード後に完全なインデックスを送信"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volledige index verzenden na een upgrade"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Надсилати повний індекс після оновлення"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "升级后发送完整索引"
           }
         }
       }
@@ -54574,6 +55908,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "应用使用 %@ 中的配置，其设备身份与旧应用容器中的不同。容器中的数据保持原样。"
+          }
+        }
+      }
+    },
+    "The audit log records every event of the engine, as lines of JSON. That includes file names, device addresses, and the configuration with its API key and encryption passwords, so keep it private. It can't be in a synchronized folder. Without a file, each start of the engine writes a new one in the configuration folder, and each is removed after a week. Changes take effect when the engine restarts." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Audit-Protokoll zeichnet jedes Ereignis der Engine als JSON-Zeilen auf. Dazu gehören Dateinamen, Geräteadressen und die Konfiguration mit API-Schlüssel und Verschlüsselungspasswörtern, behandeln Sie es also vertraulich. Es darf nicht in einem synchronisierten Ordner liegen. Ohne Datei schreibt jeder Start der Engine eine neue in den Konfigurationsordner, und jede wird nach einer Woche entfernt. Änderungen werden beim Neustart der Engine wirksam."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El registro de auditoría guarda cada evento del motor como líneas de JSON. Eso incluye nombres de archivo, direcciones de dispositivos y la configuración con su clave de API y contraseñas de cifrado, así que mantenlo en privado. No puede estar en una carpeta sincronizada. Sin un archivo, cada inicio del motor escribe uno nuevo en la carpeta de configuración, y cada uno se elimina al cabo de una semana. Los cambios se aplican cuando se reinicia el motor."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il registro di audit annota ogni evento del motore come righe JSON. Ciò include nomi di file, indirizzi dei dispositivi e la configurazione con la sua chiave API e le password di crittografia, quindi mantienilo privato. Non può trovarsi in una cartella sincronizzata. Senza un file, ogni avvio del motore ne scrive uno nuovo nella cartella di configurazione, e ciascuno viene rimosso dopo una settimana. Le modifiche hanno effetto al riavvio del motore."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監査ログには、エンジンのすべてのイベントがJSONの行として記録されます。これにはファイル名、デバイスのアドレス、APIキーと暗号化パスワードを含む構成が含まれるため、非公開にしてください。同期フォルダには保存できません。ファイルを指定しない場合、エンジンの起動ごとに設定フォルダに新しいファイルが作成され、それぞれ1週間後に削除されます。変更はエンジンの再起動時に反映されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het auditlogboek legt elke gebeurtenis van de engine vast als JSON-regels. Daar horen bestandsnamen, apparaatadressen en de configuratie met de API-sleutel en versleutelingswachtwoorden bij, dus houd het privé. Het kan niet in een gesynchroniseerde map staan. Zonder bestand schrijft elke start van de engine een nieuw bestand in de configuratiemap, en elk daarvan wordt na een week verwijderd. Wijzigingen gaan in wanneer de engine opnieuw start."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Журнал аудиту записує кожну подію рушія рядками JSON. Це охоплює назви файлів, адреси пристроїв і конфігурацію з ключем API та паролями шифрування, тож тримайте його в таємниці. Він не може бути в синхронізованій папці. Без файлу кожен запуск рушія створює новий у папці конфігурації, і кожен із них видаляється через тиждень. Зміни набирають чинності після перезапуску рушія."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审计日志以 JSON 行的形式记录引擎的每个事件，其中包括文件名、设备地址以及含 API 密钥和加密密码的配置，因此请妥善保管。它不能位于同步文件夹中。未指定文件时，引擎每次启动都会在配置文件夹中写入一个新文件，每个文件在一周后删除。更改在引擎重启后生效。"
           }
         }
       }
@@ -64113,6 +65493,52 @@
         }
       }
     },
+    "Unit" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einheit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unidad"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unità"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "単位"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eenheid"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Одиниця"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "单位"
+          }
+        }
+      }
+    },
     "unknown" : {
       "localizations" : {
         "de" : {
@@ -68713,6 +70139,52 @@
         }
       }
     },
+    "While downloading a file of more than this many blocks, this device tells others which blocks it already has, so that they can fetch those from it. After an upgrade of the engine, the full index can be sent to other devices again. That takes time, but makes up for any differences between versions." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Herunterladen einer Datei mit mehr Blöcken als hier angegeben teilt dieses Gerät anderen mit, welche Blöcke es bereits hat, damit sie diese von ihm abrufen können. Nach einem Upgrade der Engine kann der vollständige Index erneut an andere Geräte gesendet werden. Das dauert, gleicht aber Unterschiede zwischen Versionen aus."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al descargar un archivo de más bloques que estos, este dispositivo indica a los demás qué bloques ya tiene, para que puedan obtenerlos de él. Tras una actualización del motor, el índice completo se puede volver a enviar a otros dispositivos. Lleva tiempo, pero compensa cualquier diferencia entre versiones."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durante il download di un file con più blocchi di questi, questo dispositivo comunica agli altri quali blocchi ha già, così che possano recuperarli da esso. Dopo un aggiornamento del motore, l'indice completo può essere inviato di nuovo agli altri dispositivi. Richiede tempo, ma compensa eventuali differenze tra le versioni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このブロック数を超えるファイルをダウンロードしている間、このデバイスは取得済みのブロックを他のデバイスに知らせ、他のデバイスがそれらを取得できるようにします。エンジンのアップグレード後は、完全なインデックスを他のデバイスに再送信できます。時間はかかりますが、バージョン間の差異を解消できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tijdens het downloaden van een bestand met meer blokken dan dit vertelt dit apparaat andere welke blokken het al heeft, zodat zij die ervan kunnen ophalen. Na een upgrade van de engine kan de volledige index opnieuw naar andere apparaten worden verzonden. Dat kost tijd, maar vangt verschillen tussen versies op."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Під час завантаження файлу, що має більше блоків, ніж указано, цей пристрій повідомляє іншим, які блоки вже має, щоб вони могли отримати їх від нього. Після оновлення рушія повний індекс можна надіслати іншим пристроям знову. Це потребує часу, але усуває відмінності між версіями."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载块数超过此值的文件时，此设备会告知其他设备它已有哪些块，以便它们从此设备获取。引擎升级后，可以重新向其他设备发送完整索引。这需要一些时间，但能弥补版本之间的差异。"
+          }
+        }
+      }
+    },
     "While on battery (short)" : {
       "localizations" : {
         "de" : {
@@ -68755,6 +70227,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在电池供电时"
+          }
+        }
+      }
+    },
+    "While the disk with the app's database has less free space than this, folders stop with an error; 0 turns this check off. Temporary files of interrupted transfers are kept for this many hours, so that their data needn't be transferred again; with 0 they are removed at the next scan." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solange die Festplatte mit der Datenbank der App weniger freien Speicherplatz als hier angegeben hat, stoppen Ordner mit einem Fehler; 0 schaltet diese Prüfung aus. Temporäre Dateien abgebrochener Übertragungen werden so viele Stunden aufbewahrt, damit ihre Daten nicht erneut übertragen werden müssen; bei 0 werden sie beim nächsten Scan entfernt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mientras el disco con la base de datos de la app tenga menos espacio libre que este, las carpetas se detienen con un error; 0 desactiva esta comprobación. Los archivos temporales de las transferencias interrumpidas se conservan durante estas horas, para no tener que volver a transferir sus datos; con 0 se eliminan en el siguiente escaneo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finché il disco con il database dell'app ha meno spazio libero di questo, le cartelle si fermano con un errore; 0 disattiva questo controllo. I file temporanei dei trasferimenti interrotti vengono conservati per queste ore, così i loro dati non devono essere trasferiti di nuovo; con 0 vengono rimossi alla scansione successiva."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリのデータベースがあるディスクの空き容量がこの値を下回っている間、フォルダはエラーで停止します。0にするとこの確認は行われません。中断された転送の一時ファイルは、データを再度転送しなくて済むよう、指定した時間保持されます。0にすると次回のスキャンで削除されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zolang de schijf met de database van de app minder vrije ruimte heeft dan dit, stoppen mappen met een fout; 0 schakelt deze controle uit. Tijdelijke bestanden van onderbroken overdrachten worden dit aantal uren bewaard, zodat hun gegevens niet opnieuw overgedragen hoeven te worden; bij 0 worden ze bij de volgende scan verwijderd."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поки на диску з базою даних застосунку менше вільного місця, ніж указано, папки зупиняються з помилкою; 0 вимикає цю перевірку. Тимчасові файли перерваних передавань зберігаються вказану кількість годин, щоб не передавати їхні дані знову; за значення 0 вони видаляються під час наступного сканування."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当存放应用数据库的磁盘可用空间低于此值时，文件夹会因错误而停止；设为 0 则关闭此检查。中断传输的临时文件会保留所设的小时数，以免重新传输其数据；设为 0 时会在下次扫描时删除。"
           }
         }
       }

@@ -10,24 +10,7 @@
 	/// The settings of Syncthing's web GUI and REST API. Unlike the app's other settings they are saved together: each
 	/// change makes the running service listen again, and a user and a password only make sense as a pair.
 	struct GUISettingsView: View {
-		/// The settings being edited: the engine's object, in a struct so that SwiftUI sees it change
-		@dynamicMemberLookup
-		private struct Draft {
-			let settings: SushitrainGUISettings
-			private var changes = 0
-
-			init(_ settings: SushitrainGUISettings) {
-				self.settings = settings
-			}
-
-			subscript<Value>(dynamicMember keyPath: ReferenceWritableKeyPath<SushitrainGUISettings, Value>) -> Value {
-				get { settings[keyPath: keyPath] }
-				set {
-					settings[keyPath: keyPath] = newValue
-					changes += 1
-				}
-			}
-		}
+		private typealias Draft = SettingsDraft<SushitrainGUISettings>
 
 		/// The themes Syncthing comes with
 		private static let themes = ["default", "light", "dark", "black"]

@@ -61,18 +61,15 @@ var (
 	errAdvancedTooLong         = errors.New("this is too long a time")
 )
 
-// Fields that are shown but can't be changed here. A new ID makes another folder or device, the engine is a fork that
-// must not report usage to Syncthing's servers (loadEngineConfig), and the app sets whether a device is paused from its
-// own list (AppState.updateDeviceSuspension). Fields the engine keeps empty in defaults (tagged nodefault) can't be
-// changed there either.
-var advancedReadOnlyFields = []string{
-	"folder.id", "device.deviceID", AdvancedSectionDevicePrefix + ".paused", "options.urAccepted",
-}
+// Fields that are shown but can't be changed here. A new ID makes another folder or device, and the app sets whether a
+// device is paused from its own list (AppState.updateDeviceSuspension). Fields the engine keeps empty in defaults (tagged
+// nodefault) can't be changed there either.
+var advancedReadOnlyFields = []string{"folder.id", "device.deviceID", AdvancedSectionDevicePrefix + ".paused"}
 
 // Fields that are hidden on iOS: the app sets them itself, at every start (applyAppDefaults, applyIOSFolderSettings) or
 // as it goes to the background, or they do nothing there. Folders stay in the app's container, whose path changes, the
-// app can't change who owns a file, only Syncthing's command line reads the audit settings, and only the web GUI uses
-// its notifications. The GUI and LDAP sections are unavailable altogether.
+// app can't change who owns a file and writes no audit log there, and only the web GUI uses its notifications. The GUI
+// and LDAP sections are unavailable altogether.
 var advancedFieldsHiddenOnIOS = []string{
 	"options.auditEnabled",
 	"options.auditFile",
@@ -634,6 +631,7 @@ func (clt *Client) SaveAdvancedSection(section *AdvancedSection) error {
 			}
 		}
 		moved = to.GUI.RawAddress != conf.GUI.RawAddress
+		fillReportingURLs(&to.Options)
 		*conf = to
 	})
 	if invalid != nil {

@@ -821,6 +821,7 @@ func openURLInSystemFilesApp(url: URL) {
 
 extension SushitrainClient: @unchecked @retroactive Sendable {}
 extension SushitrainGUISettings: @unchecked @retroactive Sendable {}
+extension SushitrainEngineOptions: @unchecked @retroactive Sendable {}
 extension SushitrainAdvancedSection: @unchecked @retroactive Sendable {}
 extension SushitrainChange: @unchecked @retroactive Sendable {}
 extension SushitrainFolder: @unchecked @retroactive Sendable {}

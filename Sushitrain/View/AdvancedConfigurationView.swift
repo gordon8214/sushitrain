@@ -75,7 +75,7 @@ struct AdvancedConfigurationView: View {
 }
 
 /// Says when saved settings wait for the engine to restart, and offers to do that
-private struct AdvancedRestartSection: View {
+struct AdvancedRestartSection: View {
 	@Environment(AppState.self) private var appState
 
 	var body: some View {
