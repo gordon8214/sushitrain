@@ -189,6 +189,68 @@ func TestLoadTouchesNothingWhileAnotherInstanceRuns(t *testing.T) {
 	}
 }
 
+func TestLoadNeverCreatesAMissingConfigurationDirectory(t *testing.T) {
+	clt, dir := newLoadTestClient(t)
+	// A configuration folder on a disk that is not connected
+	missing := filepath.Join(dir, "Volumes", "Backup", "Synctrain")
+	for _, base := range []locations.BaseDirEnum{locations.DataBaseDir, locations.ConfigBaseDir} {
+		if err := locations.SetBaseDir(base, missing); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := clt.Load(false); !errors.Is(err, ErrMissingConfigurationDirectory) {
+		t.Fatalf("got %v", err)
+	}
+	if problem := clt.StartupProblem(); problem != StartupProblemMissingConfigurationDirectory {
+		t.Fatalf("reported %q", problem)
+	}
+	if err := clt.ClearDatabase(); !errors.Is(err, ErrMissingConfigurationDirectory) {
+		t.Fatalf("clearing the database: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "Volumes")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the configuration directory was created: %v", err)
+	}
+
+	// Once the disk is connected, trying again starts
+	if err := os.MkdirAll(missing, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := clt.Load(false); err != nil {
+		t.Fatal(err)
+	}
+	if problem := clt.StartupProblem(); problem != "" {
+		t.Fatalf("still reports %q", problem)
+	}
+}
+
+func TestLoadReportsAnInaccessibleConfigurationDirectoryAsIs(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can enter any directory")
+	}
+	clt, dir := newLoadTestClient(t)
+	locked := filepath.Join(dir, "locked")
+	inside := filepath.Join(locked, "Synctrain")
+	if err := os.MkdirAll(inside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	for _, base := range []locations.BaseDirEnum{locations.DataBaseDir, locations.ConfigBaseDir} {
+		if err := locations.SetBaseDir(base, inside); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := clt.Load(false)
+	if err == nil || errors.Is(err, ErrMissingConfigurationDirectory) || !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("got %v", err)
+	}
+	if problem := clt.StartupProblem(); problem != "" {
+		t.Fatalf("reported %q", problem)
+	}
+}
+
 func TestLoadKeepsADamagedConfigurationAndCanSetItAside(t *testing.T) {
 	clt, dir := newLoadTestClient(t)
 	testIdentity(t, dir)

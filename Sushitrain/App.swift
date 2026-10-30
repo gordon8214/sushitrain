@@ -127,8 +127,14 @@ struct SushitrainApp: App {
 		#if os(macOS)
 			var isStale = false
 			// A test run (SYNCTRAIN_TEST_ROOT) leaves the configuration folder the user chose alone
-			if EngineLocations.testRoot == nil,
-				let configDirectoryBookmark = UserDefaults.standard.data(forKey: "configDirectoryBookmark"),
+			let chosen = EngineLocations.testRoot == nil
+			if chosen && !FolderAccess.usesSecurityScope, let path = ConfigDirectorySetting.path {
+				// Never created here: if it can't be found (as on a disk that is not connected), the engine says so
+				Log.info("Using custom config directory: \(path)")
+				return URL(fileURLWithPath: path, isDirectory: true)
+			}
+			if chosen && FolderAccess.usesSecurityScope,
+				let configDirectoryBookmark = UserDefaults.standard.data(forKey: ConfigDirectorySetting.bookmarkKey),
 				let cd = try? URL(
 					resolvingBookmarkData: configDirectoryBookmark, options: [.withSecurityScope],
 					bookmarkDataIsStale: &isStale),
@@ -140,7 +146,7 @@ struct SushitrainApp: App {
 					Log.info("Config directory bookmark is stale, recreating bookmark")
 					if let bookmarkData = try? cd.bookmarkData(options: [.withSecurityScope]) {
 						UserDefaults.standard.setValue(
-							bookmarkData, forKey: "configDirectoryBookmark")
+							bookmarkData, forKey: ConfigDirectorySetting.bookmarkKey)
 					}
 				}
 				return cd

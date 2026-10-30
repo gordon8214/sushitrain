@@ -13818,6 +13818,52 @@
         }
       }
     },
+    "Restart the app" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App neu starten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reiniciar la app"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riavvia l'app"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリを再起動"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App opnieuw starten"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перезапустити додаток"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新启动应用"
+          }
+        }
+      }
+    },
     "Restore" : {
       "localizations" : {
         "de" : {
@@ -16902,6 +16948,52 @@
         }
       }
     },
+    "The app then uses the configuration in the default location, and restarts (or closes, to be opened again). If there is none there, this device starts with a new configuration and a new device identity." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die App verwendet dann die Konfiguration am Standardort und startet neu (oder wird geschlossen und muss erneut geöffnet werden). Gibt es dort keine, beginnt dieses Gerät mit einer neuen Konfiguration und einer neuen Geräteidentität."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La app usará entonces la configuración de la ubicación predeterminada y se reiniciará (o se cerrará para que la vuelvas a abrir). Si allí no hay ninguna, este dispositivo empezará con una configuración nueva y una identidad de dispositivo nueva."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'app userà quindi la configurazione nella posizione predefinita e si riavvierà (oppure si chiuderà, per essere riaperta). Se lì non ce n'è nessuna, questo dispositivo inizierà con una nuova configurazione e una nuova identità del dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリはデフォルトの場所にある設定を使用し、再起動します（または終了するので、もう一度開いてください）。そこに設定がない場合、このデバイスは新しい設定と新しいデバイスIDで開始します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De app gebruikt dan de configuratie op de standaardlocatie en start opnieuw (of sluit, om opnieuw te worden geopend). Is daar geen configuratie, dan begint dit apparaat met een nieuwe configuratie en een nieuwe apparaatidentiteit."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тоді додаток використовуватиме конфігурацію з розташування за замовчуванням і перезапуститься (або закриється, щоб його відкрили знову). Якщо там її немає, цей пристрій почне з нової конфігурації та нової ідентичності пристрою."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用随后将使用默认位置中的配置并重新启动（或关闭，需要重新打开）。如果那里没有配置，此设备将以新的配置和新的设备身份启动。"
+          }
+        }
+      }
+    },
     "The certificate of %@ is not the one it was paired with. If its certificate was replaced, pair with it again." : {
       "localizations" : {
         "de" : {
@@ -17082,6 +17174,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "配置文件将被重命名并保留在新配置文件旁边。随后应用会关闭；再次打开时，它会以新的配置启动，保留此设备的身份，但不包含任何文件夹或设备。"
+          }
+        }
+      }
+    },
+    "The configuration folder was changed. The app restarts to use it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Konfigurationsordner wurde geändert. Die App wird neu gestartet, um ihn zu verwenden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se cambió la carpeta de configuración. La aplicación se reiniciará para usarla."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cartella di configurazione è stata modificata. L'app si riavvia per utilizzarla."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定フォルダが変更されました。アプリを再起動して使用します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De configuratiemap is gewijzigd. De app wordt opnieuw gestart om deze te gebruiken."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папку конфігурації змінено. Додаток перезапуститься, щоб використовувати її."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配置文件夹已更改。应用将重新启动以使用它。"
           }
         }
       }
@@ -61346,6 +61484,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用Syncthing服务"
+          }
+        }
+      }
+    },
+    "Use the default configuration location?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standardkonfigurationsort verwenden?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Usar la ubicación de configuración predeterminada?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usare la posizione di configurazione predefinita?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デフォルトの設定場所を使用しますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standaard configuratielocatie gebruiken?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Використовувати розташування конфігурації за замовчуванням?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要使用默认配置位置吗？"
           }
         }
       }

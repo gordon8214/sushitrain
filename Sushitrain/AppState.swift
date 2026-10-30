@@ -295,7 +295,12 @@ struct SyncState: Equatable {
 		self.update()
 	}
 
+	/// Reaches the folders the user chose through their bookmarks, and follows them where they moved (on iOS and in the
+	/// sandbox; outside it, folder paths come straight from the configuration)
 	private func resolveBookmarks() {
+		guard FolderAccess.usesSecurityScope else {
+			return
+		}
 		let folderIDs = client.folders()?.asArray() ?? []
 		for folderID in folderIDs {
 			do {
@@ -321,6 +326,16 @@ struct SyncState: Equatable {
 				Log.warn("Error restoring bookmark for \(folderID): \(error.localizedDescription)")
 			}
 		}
+	}
+
+	/// Starts again after the engine could not be loaded, as once the disk of a configuration folder that could not be
+	/// found is connected
+	@MainActor func retryStart() async {
+		guard case .error = self.startupState, !self.hasLoadedClient else {
+			return
+		}
+		self.startupState = .notStarted
+		await self.start()
 	}
 
 	@MainActor func start() async {

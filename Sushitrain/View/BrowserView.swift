@@ -546,15 +546,19 @@ struct BrowserView: View {
 	private func addFilesFromImporter(result: Result<[URL], any Error>) {
 		switch result {
 		case .success(let fu):
+			var accessing: [URL] = []
 			for url in fu {
-				if !url.startAccessingSecurityScopedResource() {
+				if FolderAccess.startAccessing(url) {
+					accessing.append(url)
+				}
+				else if FolderAccess.usesSecurityScope {
 					Log.warn("failed to access security scoped URL from file importer: \(url)")
 				}
 			}
 
-			Task {
+			Task { [accessing] in
 				defer {
-					for url in fu {
+					for url in accessing {
 						url.stopAccessingSecurityScopedResource()
 					}
 				}

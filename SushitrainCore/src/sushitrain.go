@@ -140,7 +140,26 @@ const (
 	StartupProblemNewerConfiguration = "newer-configuration"
 	// The device certificate or key is missing or damaged; only a new identity (Client.ClearIdentity) gets past it
 	StartupProblemDamagedIdentity = "damaged-identity"
+	// The configuration directory does not exist, as when the disk of one the user chose is not connected
+	StartupProblemMissingConfigurationDirectory = "missing-configuration-directory"
 )
+
+// ErrMissingConfigurationDirectory is returned (wrapped, with the directory) when the configuration directory does not
+// exist. The engine never creates it: the app creates its default one, and one the user chose may be on a disk that is
+// not connected.
+var ErrMissingConfigurationDirectory = errors.New("the configuration folder cannot be found")
+
+type missingConfigurationDirectoryError struct {
+	dir string
+}
+
+func (e missingConfigurationDirectoryError) Error() string {
+	return fmt.Sprintf("the configuration folder %s cannot be found; connect the disk it is on, or choose another configuration folder", e.dir)
+}
+
+func (e missingConfigurationDirectoryError) Is(target error) bool {
+	return target == ErrMissingConfigurationDirectory
+}
 
 const (
 	ConfigFileName       = "config.xml"
@@ -320,8 +339,12 @@ func (clt *Client) acquireLock() error {
 		return nil
 	}
 
-	if err := os.MkdirAll(path.Dir(lockPath), 0o700); err != nil {
-		return err
+	dir := path.Dir(lockPath)
+	if info, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) || (err == nil && !info.IsDir()) {
+		return missingConfigurationDirectoryError{dir: dir}
+	} else if err != nil {
+		// Such as a folder the app may not access
+		return fmt.Errorf("the configuration folder %s cannot be used: %w", dir, err)
 	}
 	slog.Info("Attempting to obtain application lock at", "path", lockPath)
 	lock := flock.New(lockPath)
@@ -724,6 +747,9 @@ func (clt *Client) Load(resetDeltaIdxs bool) error {
 
 	// Check if we are the only instance running, before reading or writing anything else
 	if err := clt.acquireLock(); err != nil {
+		if errors.Is(err, ErrMissingConfigurationDirectory) {
+			clt.startupProblem.Store(StartupProblemMissingConfigurationDirectory)
+		}
 		return err
 	}
 

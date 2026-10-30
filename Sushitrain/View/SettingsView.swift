@@ -96,7 +96,7 @@ import SushitrainCore
 
 					if currentPath != nil {
 						Button("Use default configuration location") {
-							self.setBookmark(nil)
+							self.choose(nil)
 						}
 						.buttonStyle(.link)
 					}
@@ -114,10 +114,7 @@ import SushitrainCore
 				result in
 				switch result {
 				case .success(let url):
-					_ = url.startAccessingSecurityScopedResource()
-					if let bookmark = try? url.bookmarkData(options: [.withSecurityScope]) {
-						self.setBookmark(bookmark)
-					}
+					self.choose(url)
 				case .failure(let err):
 					Log.info("Failed to select home dir: \(err.localizedDescription)")
 				}
@@ -125,14 +122,26 @@ import SushitrainCore
 			.alert(
 				"Configuration folder changed", isPresented: $showRestartAlert,
 				actions: {
-					Button("Close the app") {
-						exit(0)
+					if AppRelauncher.canRelaunch {
+						Button("Restart the app") {
+							AppRelauncher.relaunch()
+						}
+					}
+					else {
+						Button("Close the app") {
+							exit(0)
+						}
 					}
 				},
 				message: {
-					Text(
-						"The path to the configuration folder was changed and will be used when the app is restarted. The app will now close."
-					)
+					if AppRelauncher.canRelaunch {
+						Text("The configuration folder was changed. The app restarts to use it.")
+					}
+					else {
+						Text(
+							"The path to the configuration folder was changed and will be used when the app is restarted. The app will now close."
+						)
+					}
 				}
 			)
 			.task {
@@ -140,15 +149,34 @@ import SushitrainCore
 			}
 		}
 
-		private func setBookmark(_ data: Data?) {
-			UserDefaults.standard.setValue(data, forKey: "configDirectoryBookmark")
+		/// Remembers the chosen folder (nil for the default location): outside the sandbox by its path, in the sandbox
+		/// with a security-scoped bookmark
+		private func choose(_ url: URL?) {
+			if FolderAccess.usesSecurityScope {
+				var bookmark: Data? = nil
+				if let url {
+					_ = url.startAccessingSecurityScopedResource()
+					guard let data = try? url.bookmarkData(options: [.withSecurityScope]) else {
+						return
+					}
+					bookmark = data
+				}
+				UserDefaults.standard.setValue(bookmark, forKey: ConfigDirectorySetting.bookmarkKey)
+			}
+			else {
+				ConfigDirectorySetting.choose(url)
+			}
 			self.updatePath()
 			self.showRestartAlert = true
 		}
 
 		private func updatePath() {
+			if !FolderAccess.usesSecurityScope {
+				self.currentPath = ConfigDirectorySetting.path.map { URL(fileURLWithPath: $0, isDirectory: true) }
+				return
+			}
 			var isStale: Bool = false
-			if let bd = UserDefaults.standard.data(forKey: "configDirectoryBookmark"),
+			if let bd = UserDefaults.standard.data(forKey: ConfigDirectorySetting.bookmarkKey),
 				let url = try? URL(
 					resolvingBookmarkData: bd, options: [.withSecurityScope, .withoutUI],
 					bookmarkDataIsStale: &isStale), !isStale

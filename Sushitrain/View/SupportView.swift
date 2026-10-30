@@ -462,10 +462,15 @@ private struct SupportBundleView: View {
 					case .failure(let e):
 						Log.warn("error selecting path: \(e)")
 					case .success(let url):
-						if !url.startAccessingSecurityScopedResource() {
+						let accessing = FolderAccess.startAccessing(url)
+						if FolderAccess.usesSecurityScope && !accessing {
 							Log.warn("Could not start accessing folder to export support bundle to")
 						}
-						defer { url.stopAccessingSecurityScopedResource() }
+						defer {
+							if accessing {
+								url.stopAccessingSecurityScopedResource()
+							}
+						}
 
 						if let sbURL = self.supportBundle {
 							let targetURL = url.appendingPathComponent(sbURL.lastPathComponent, isDirectory: false)

@@ -8,8 +8,9 @@
 	import SynctrainHostKit
 
 	/// Keeps copies of the certificate and private key the user chose for the remote file service in the app's own
-	/// folder (EngineLocations.remoteFileService), where the service can always read them. The originals are remembered with bookmarks, so that a renewed
-	/// certificate is picked up when the service starts.
+	/// folder (EngineLocations.remoteFileService), where the service can always read them. The originals are
+	/// remembered (by path, or in the sandbox with bookmarks), so that a renewed certificate is picked up when the
+	/// service starts.
 	enum GatewayCertificateStore {
 		enum ImportError: LocalizedError {
 			case unreadable(String)
@@ -30,6 +31,8 @@
 
 		private static let certificateBookmarkKey = "remoteFileServiceCertificateBookmark"
 		private static let keyBookmarkKey = "remoteFileServiceKeyBookmark"
+		private static let certificatePathKey = "remoteFileServiceCertificatePath"
+		private static let keyPathKey = "remoteFileServiceKeyPath"
 
 		static var directory: URL {
 			EngineLocations.current.remoteFileService
@@ -75,8 +78,10 @@
 		/// Copies the chosen files again if they changed since they were copied (as when a certificate is renewed). The
 		/// files are read away from the main actor.
 		@concurrent static func refreshFromOriginals() async {
-			guard let certificate = readBookmarked(certificateBookmarkKey), containsCertificate(certificate),
-				let key = readBookmarked(keyBookmarkKey), containsPrivateKey(key)
+			convertBookmarkedOriginals()
+			guard let certificate = readOriginal(pathKey: certificatePathKey, bookmarkKey: certificateBookmarkKey),
+				containsCertificate(certificate),
+				let key = readOriginal(pathKey: keyPathKey, bookmarkKey: keyBookmarkKey), containsPrivateKey(key)
 			else {
 				return
 			}
@@ -104,7 +109,7 @@
 		}
 
 		private static func read(_ url: URL) throws -> Data {
-			let accessing = url.startAccessingSecurityScopedResource()
+			let accessing = FolderAccess.startAccessing(url)
 			defer {
 				if accessing {
 					url.stopAccessingSecurityScopedResource()
@@ -154,6 +159,13 @@
 		/// are remembered or neither: a renewed certificate must not be paired with an old key.
 		private static func rememberOriginals(certificate: URL, key: URL) {
 			let defaults = UserDefaults.standard
+			if !FolderAccess.usesSecurityScope {
+				defaults.set(certificate.path(percentEncoded: false), forKey: certificatePathKey)
+				defaults.set(key.path(percentEncoded: false), forKey: keyPathKey)
+				defaults.removeObject(forKey: certificateBookmarkKey)
+				defaults.removeObject(forKey: keyBookmarkKey)
+				return
+			}
 			do {
 				let certificateBookmark = try bookmark(certificate)
 				let keyBookmark = try bookmark(key)
@@ -170,7 +182,7 @@
 		}
 
 		private static func bookmark(_ url: URL) throws -> Data {
-			let accessing = url.startAccessingSecurityScopedResource()
+			let accessing = FolderAccess.startAccessing(url)
 			defer {
 				if accessing {
 					url.stopAccessingSecurityScopedResource()
@@ -179,7 +191,41 @@
 			return try url.bookmarkData(options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess])
 		}
 
-		private static func readBookmarked(_ key: String) -> Data? {
+		/// Outside the sandbox, remembers by path the originals the sandbox remembered with bookmarks: both or neither,
+		/// and only once both are found
+		private static func convertBookmarkedOriginals() {
+			let defaults = UserDefaults.standard
+			guard !FolderAccess.usesSecurityScope,
+				defaults.string(forKey: certificatePathKey) == nil || defaults.string(forKey: keyPathKey) == nil,
+				let certificate = defaults.data(forKey: certificateBookmarkKey).flatMap(FolderAccess.path(fromBookmark:)),
+				let key = defaults.data(forKey: keyBookmarkKey).flatMap(FolderAccess.path(fromBookmark:)),
+				FileManager.default.isReadableFile(atPath: certificate), FileManager.default.isReadableFile(atPath: key)
+			else {
+				return
+			}
+			defaults.set(certificate, forKey: certificatePathKey)
+			defaults.set(key, forKey: keyPathKey)
+		}
+
+		/// Reads a chosen original: outside the sandbox from its path (or the path of the bookmark the sandbox kept), in
+		/// the sandbox through its bookmark
+		private static func readOriginal(pathKey: String, bookmarkKey key: String) -> Data? {
+			if !FolderAccess.usesSecurityScope {
+				let defaults = UserDefaults.standard
+				guard
+					let path = defaults.string(forKey: pathKey)
+						?? defaults.data(forKey: key).flatMap({ FolderAccess.path(fromBookmark: $0) })
+				else {
+					return nil
+				}
+				do {
+					return try Data(contentsOf: URL(fileURLWithPath: path))
+				}
+				catch {
+					Log.warn("Could not read the chosen certificate file \(path): \(error.localizedDescription)")
+					return nil
+				}
+			}
 			guard let saved = UserDefaults.standard.data(forKey: key) else {
 				return nil
 			}
@@ -192,7 +238,7 @@
 				Log.warn("Could not find a chosen certificate file again: \(error.localizedDescription)")
 				return nil
 			}
-			let accessing = url.startAccessingSecurityScopedResource()
+			let accessing = FolderAccess.startAccessing(url)
 			defer {
 				if accessing {
 					url.stopAccessingSecurityScopedResource()

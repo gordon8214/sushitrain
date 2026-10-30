@@ -102,7 +102,7 @@ enum FileImport {
 
 	func receive(_ url: URL) {
 		guard url.isFileURL, !urls.contains(url) else { return }
-		if url.startAccessingSecurityScopedResource() { scopedURLs.insert(url) }
+		if FolderAccess.startAccessing(url) { scopedURLs.insert(url) }
 		urls.append(url)
 		Self.pending.insert(url)
 	}

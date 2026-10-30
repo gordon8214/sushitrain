@@ -114,6 +114,8 @@ class FolderSettingsManager {
 	}
 }
 
+/// Remembers folders the user chose with bookmarks, and keeps their security scopes, on iOS and in the App Sandbox. Outside
+/// the sandbox the app reaches folders by the paths in the engine's configuration, so this keeps nothing there.
 @MainActor
 struct BookmarkManager {
 	static var shared = BookmarkManager()
@@ -130,24 +132,34 @@ struct BookmarkManager {
 		}
 	}
 
+	/// Holds the security scope of a location while it is used (outside the sandbox there is none to hold)
 	class Accessor {
 		var url: URL
+		private let accessing: Bool
 
 		init(url: URL) throws {
 			self.url = url
-			if !url.startAccessingSecurityScopedResource() {
+			self.accessing = FolderAccess.startAccessing(url)
+			if FolderAccess.usesSecurityScope && !self.accessing {
 				throw BookmarkManagerError.cannotAccess
 			}
-			Log.info("Start accessing \(url)")
+			if self.accessing {
+				Log.info("Start accessing \(url)")
+			}
 		}
 
 		deinit {
-			Log.info("Stop accessing \(url)")
-			url.stopAccessingSecurityScopedResource()
+			if self.accessing {
+				Log.info("Stop accessing \(url)")
+				url.stopAccessingSecurityScopedResource()
+			}
 		}
 	}
 
 	mutating func saveBookmark(folderID: String, url: URL) throws {
+		guard FolderAccess.usesSecurityScope else {
+			return
+		}
 		self.accessing[folderID] = try Accessor(url: url)
 		#if os(macOS)
 			let newBookmark = try url.bookmarkData(options: .withSecurityScope)
@@ -169,7 +181,7 @@ struct BookmarkManager {
 	}
 
 	mutating func resolveBookmark(folderID: String) throws -> URL? {
-		guard let bookmarkData = self.bookmarkFor(folderID: folderID) else { return nil }
+		guard FolderAccess.usesSecurityScope, let bookmarkData = self.bookmarkFor(folderID: folderID) else { return nil }
 		var isStale = false
 
 		#if os(macOS)

@@ -52,6 +52,12 @@ Outside the App Sandbox, the Mac app keeps the engine's configuration, keys and 
 `~/Library/Caches/<bundle id>`, where they can be removed at any time. The app excludes nothing from Time Machine. A
 sandboxed build keeps the layout of earlier versions in its container, and iOS keeps everything in the app's container.
 
+Outside the sandbox the app reaches folders and files by their paths, so it keeps no security-scoped bookmarks: folder
+paths come straight from the configuration, and the configuration folder chosen in the settings (and the remote file
+service's certificate files) are remembered by path. A chosen configuration folder that can't be found, as on a disk
+that is not connected, stops the start instead of being replaced by a new one; the app offers to try again or to use
+the default location.
+
 Folders are the user's, anywhere (in the home directory or on another volume), as with Syncthing:
 
 - A new folder goes in a new directory named after its label (the one the offering device uses, or else its ID) in the
