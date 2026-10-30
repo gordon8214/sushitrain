@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -87,7 +88,7 @@ func TestEngineConfigThatCannotBeUsedIsLeftAlone(t *testing.T) {
 	}
 	before := stateOf(t, path)
 
-	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, false); !errors.Is(err,
+	if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, false); !errors.Is(err,
 		sthome.ErrConfiguration) {
 		t.Fatalf("got %v", err)
 	}
@@ -96,22 +97,39 @@ func TestEngineConfigThatCannotBeUsedIsLeftAlone(t *testing.T) {
 	}
 }
 
-func TestEngineConfigIsCreatedWithTheGUIOff(t *testing.T) {
-	dir := t.TempDir()
-	cert := testIdentity(t, dir)
-	path := filepath.Join(dir, "config.xml")
-	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, false); err != nil {
-		t.Fatal(err)
-	}
-	saved, _, err := config.Load(path, protocolID(cert), events.NoopLogger)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if saved.GUI().Enabled {
-		t.Fatal("a new configuration has the GUI on")
-	}
-	if _, err := os.Stat(path + ".v0"); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("the new configuration was archived")
+func TestNewConfigurationsHaveTheGUIOnOnlyOnMacOS(t *testing.T) {
+	for _, ios := range []bool{false, true} {
+		dir := t.TempDir()
+		cert := testIdentity(t, dir)
+		path := filepath.Join(dir, "config.xml")
+		if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, ios); err != nil {
+			t.Fatal(err)
+		}
+		saved, _, err := config.Load(path, protocolID(cert), events.NoopLogger)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gui := saved.GUI()
+		if gui.Enabled == ios {
+			t.Fatalf("iOS %v: the GUI is on %v", ios, gui.Enabled)
+		}
+		if !ios {
+			// For this device only, behind a password nobody knows and the API key
+			if host, _, err := net.SplitHostPort(gui.Address()); err != nil || host != "127.0.0.1" || gui.APIKey == "" ||
+				!gui.IsAuthEnabled() {
+				t.Fatalf("GUI at %s, API key set %v, password %v", gui.Address(), gui.APIKey != "", gui.IsAuthEnabled())
+			}
+			// Syncthing's own sync port, rather than a free one that would stay
+			if listen := saved.Options().RawListenAddresses; len(listen) != 1 || listen[0] != "default" {
+				t.Fatalf("listening on %v", listen)
+			}
+			if _, err := os.Stat(filepath.Join(dir, guiEnabledMarkerName)); err != nil {
+				t.Fatalf("not recorded as turned on: %v", err)
+			}
+		}
+		if _, err := os.Stat(path + ".v0"); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("the new configuration was archived")
+		}
 	}
 }
 
@@ -120,12 +138,12 @@ func TestEngineConfigIsOnlyWrittenWhenItChanges(t *testing.T) {
 		dir := t.TempDir()
 		cert := testIdentity(t, dir)
 		path := filepath.Join(dir, "config.xml")
-		if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, ios); err != nil {
+		if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, ios); err != nil {
 			t.Fatal(err)
 		}
 		before := stateOf(t, path)
 
-		if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, ios); err != nil {
+		if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, ios); err != nil {
 			t.Fatal(err)
 		}
 		if after := stateOf(t, path); after != before {
@@ -286,7 +304,7 @@ func TestOnlyADamagedConfigurationCanBeSetAside(t *testing.T) {
 	clt, dir := newLoadTestClient(t)
 	testIdentity(t, dir)
 	path := filepath.Join(dir, "config.xml")
-	if _, err := loadEngineConfig(path, testIdentity(t, dir), events.NoopLogger, t.TempDir(),
+	if _, _, err := loadEngineConfig(path, testIdentity(t, dir), events.NoopLogger, t.TempDir(),
 		&remoteManagedSet{}, false); err != nil {
 		t.Fatal(err)
 	}
@@ -345,7 +363,7 @@ func TestLoadFailingAfterTheConfigurationLeavesItAlone(t *testing.T) {
 	clt, dir := newLoadTestClient(t)
 	cert := testIdentity(t, dir)
 	path := filepath.Join(dir, "config.xml")
-	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, false); err != nil {
+	if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, false); err != nil {
 		t.Fatal(err)
 	}
 	// A database from a newer Syncthing

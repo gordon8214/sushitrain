@@ -40,6 +40,31 @@ The engine never upgrades itself: the app is updated as a whole. Self-upgrade is
 with the `noupgrade` build tag (the app also logs an error if a build lacks it), so the update settings in a
 configuration don't matter. The gateway's Linux build uses the same tag.
 
+## Web GUI and REST API
+
+On macOS the engine runs Syncthing's web GUI and REST API, as Syncthing.app does, so that tools and scripts reach it
+the same way:
+
+- A new configuration has them on, on 127.0.0.1:8384 (and Syncthing's sync port, 22000), with a random API key and a
+  password nobody knows: only the API key opens them, not the web pages' CSRF token, which any user of this Mac could
+  get. A configuration without the marker `synctrain-gui-enabled` next to it (one an earlier version of the app made,
+  or a folder chosen in the settings) gets them turned on once, the same way, but only where no other computer can
+  reach them: on a loopback address with Syncthing's host check, or behind a password it already has. Turned off
+  afterwards, they stay off. A configuration taken over from Syncthing.app keeps its own setting.
+- If their address is in use at a start (as by Syncthing.app still running), they move to a free port on the same host
+  instead of stopping the engine, and move back once it is free again (unless their address was changed meanwhile);
+  the marker records where they belong. If they can't listen on their address at all, they are turned off. Either
+  way the app's settings say so. An address set with `STGUIADDRESS` is left alone.
+- Advanced settings show whether they are on, their address and the API key (shown on request, and copied so that
+  clipboard managers that honor it don't keep it). Turning them on or off restarts the engine: they start with it,
+  and one that runs keeps listening until then. Turning them on gives them a password if they have none.
+- The web GUI's pages are not built in (the engine is built with `noassets`), so its address shows an empty page. The
+  REST API works in full, for example `curl -H "X-API-Key: <key>" http://127.0.0.1:8384/rest/system/status`.
+
+On iOS they stay off in the configurations the app makes, and the app has no setting for them (a custom configuration
+can have them on; they can be turned off, not on). iOS gives the app no steady time in the background to serve them,
+and there are no pages to serve.
+
 ## Starting the engine
 
 The engine takes Syncthing's lock (`syncthing.lock` in its configuration directory) before it reads or writes anything

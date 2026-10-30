@@ -66,6 +66,7 @@ type Client struct {
 	lockMutex                sync.Mutex
 	remoteManaged            *remoteManagedSet
 	startupProblem           atomic.Value // string, one of the StartupProblem constants
+	guiNotice                atomic.Value // string, what the last load changed about the web GUI (GUIStatusMessage)
 
 	// The engine, restarted in place (engine.go). lifecycle serializes loading, starting, restarting and stopping, and
 	// is never held while calling the delegate.
@@ -866,14 +867,23 @@ func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) error {
 // depends on them. On macOS they are only the defaults of a new configuration, so that changes made in the web GUI or
 // through the REST API last, and an existing Syncthing configuration is used as it is. On both, usage reporting stays
 // off and remote-managed folders stay paused.
+//
+// On macOS the web GUI and REST API are on (gui.go, prepareGUI): a new configuration has them on 127.0.0.1:8384 with a
+// password nobody knows, and one that never had them turned on gets them on once where only this computer can reach
+// them. They move off an address in use and back; the second result says what was done about them.
 func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger, filesPath string,
-	remoteManaged *remoteManagedSet, ios bool) (config.Wrapper, error) {
+	remoteManaged *remoteManagedSet, ios bool) (config.Wrapper, string, error) {
 	cfg, _, err := sthome.LoadConfig(cfgFile, cert, logger, false, func(conf *config.Configuration) {
-		conf.GUI.Enabled = false // Don't need the web UI, we have our own :-)
+		// The iOS app has its own interface, and no web GUI to serve
+		conf.GUI.Enabled = !ios
+		if !ios {
+			conf.GUI.RawAddress = defaultGUIAddress
+			protectGUI(&conf.GUI)
+		}
 		applyAppDefaults(conf, ios)
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// A configuration with no path is never saved, also not when it stops being served
@@ -893,6 +903,9 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 	journal := relocationJournalPath()
 	var relocationErr error
 	var finished []folderRelocation
+	configDir := path.Dir(cfgFile)
+	var guiState *guiMarker
+	guiNotice := ""
 	waiter, err := staging.Modify(func(conf *config.Configuration) {
 		if ios {
 			applyAppDefaults(conf, ios)
@@ -902,6 +915,10 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 		// Folder moves the app stopped in the middle of
 		_, finished, relocationErr = finishRelocations(conf, journal, filesPath)
 
+		if !ios {
+			guiState, guiNotice = prepareGUI(conf, configDir)
+		}
+
 		// This engine is a fork, which must not send usage and failure reports to Syncthing's servers as an unknown
 		// build. (Crash uploads are the work of Syncthing's monitor process, which the app doesn't have.)
 		conf.Options.URAccepted = -1
@@ -910,7 +927,7 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 		remoteManaged.enforce(conf)
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	waiter.Wait()
 
@@ -918,8 +935,11 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 	if applied := staging.RawCopy(); !reflect.DeepEqual(applied, cfg.RawCopy()) {
 		cfg = config.Wrap(cfgFile, applied, myID, logger)
 		if err := cfg.Save(); err != nil {
-			return nil, err
+			return nil, "", err
 		}
+	}
+	if guiState != nil {
+		writeGUIMarker(configDir, *guiState)
 	}
 	if relocationErr != nil {
 		// The folders stay as they are (some perhaps paused); the journal is kept for a look
@@ -934,7 +954,7 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 
 	// From now on, no change may resume them
 	cfg.Subscribe(remoteManaged)
-	return cfg, nil
+	return cfg, guiNotice, nil
 }
 
 // applyAppDefaults sets the options and folder defaults the app wants: on iOS at every start, on macOS for a new

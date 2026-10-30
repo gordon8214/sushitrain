@@ -23,6 +23,8 @@ func writeCustomConfig(t *testing.T, dir, filesPath string) string {
 	cert := testIdentity(t, dir)
 	cfg := config.New(protocolID(cert))
 	cfg.GUI.Enabled = true
+	// Not one that something on this computer uses, which would move it
+	cfg.GUI.RawAddress = freeGUIAddress(t)
 	cfg.Options.ProgressUpdateIntervalS = 5
 	cfg.Options.URAccepted = -1
 	cfg.Options.CREnabled = true
@@ -58,7 +60,7 @@ func TestMacOSUsesAnExistingConfigurationAsItIs(t *testing.T) {
 	path := writeCustomConfig(t, dir, filesPath)
 	before := stateOf(t, path)
 
-	cfg, err := loadEngineConfig(path, testIdentity(t, dir), events.NoopLogger, filesPath, &remoteManagedSet{}, false)
+	cfg, _, err := loadEngineConfig(path, testIdentity(t, dir), events.NoopLogger, filesPath, &remoteManagedSet{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +89,7 @@ func TestIOSAppliesTheAppSettingsAtEveryStart(t *testing.T) {
 	path := writeCustomConfig(t, dir, filesPath)
 	cert := testIdentity(t, dir)
 
-	if _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, true); err != nil {
+	if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, true); err != nil {
 		t.Fatal(err)
 	}
 	cfg := savedConfig(t, path, cert)
@@ -110,13 +112,13 @@ func TestNewConfigurationsGetThePlatformDefaults(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "config.xml")
 		cert := testIdentity(t, dir)
-		if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, ios); err != nil {
+		if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, ios); err != nil {
 			t.Fatal(err)
 		}
 		// On macOS the defaults are applied once, so they must be in the file
 		cfg := savedConfig(t, path, cert)
 		opts, defaults := cfg.Options, cfg.Defaults.Folder
-		if opts.CREnabled || opts.URAccepted != -1 || opts.ProgressUpdateIntervalS != 1 || cfg.GUI.Enabled ||
+		if opts.CREnabled || opts.URAccepted != -1 || opts.ProgressUpdateIntervalS != 1 || cfg.GUI.Enabled == ios ||
 			opts.RelayReconnectIntervalM != 1 || opts.ReleasesURL != "" || opts.URURL != "" || opts.CRURL != "" {
 			t.Fatalf("iOS %v: options %+v", ios, opts)
 		}
@@ -139,7 +141,7 @@ func TestUsageReportingStaysOffOnBothPlatforms(t *testing.T) {
 		cfg.Options.URAccepted = 3
 		writeConfiguration(t, path, cfg)
 
-		if _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, ios); err != nil {
+		if _, _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, ios); err != nil {
 			t.Fatal(err)
 		}
 		if saved := savedConfig(t, path, cert); saved.Options.URAccepted != -1 {
@@ -175,7 +177,7 @@ func TestRemoteManagedFoldersStayPausedOnBothPlatforms(t *testing.T) {
 		dir, filesPath := t.TempDir(), t.TempDir()
 		path := writeCustomConfig(t, dir, filesPath)
 		managed := &remoteManagedSet{folders: []string{"docs"}}
-		cfg, err := loadEngineConfig(path, testIdentity(t, dir), events.NoopLogger, filesPath, managed, ios)
+		cfg, _, err := loadEngineConfig(path, testIdentity(t, dir), events.NoopLogger, filesPath, managed, ios)
 		if err != nil {
 			t.Fatal(err)
 		}

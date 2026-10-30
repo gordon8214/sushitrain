@@ -14,11 +14,14 @@ package sushitrain
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -91,6 +94,12 @@ func (s *stateRecorder) history() []string {
 // folder, and stops it when the test ends
 func startTestEngine(t *testing.T) (*Client, *stateRecorder, string) {
 	t.Helper()
+	return startTestEngineWith(t, func(*config.Configuration) {})
+}
+
+// startTestEngineWith starts an engine whose configuration was adjusted; its GUI stays off unless adjust turns it on
+func startTestEngineWith(t *testing.T, adjust func(*config.Configuration)) (*Client, *stateRecorder, string) {
+	t.Helper()
 	clt, dir := newLoadTestClient(t)
 	cert := testIdentity(t, dir)
 	cfg := config.New(protocolID(cert))
@@ -111,7 +120,10 @@ func startTestEngine(t *testing.T) (*Client, *stateRecorder, string) {
 	if err := os.MkdirAll(folder.Path, 0o700); err != nil {
 		t.Fatal(err)
 	}
+	adjust(&cfg)
 	writeConfiguration(t, filepath.Join(dir, "config.xml"), cfg)
+	// The marker keeps the GUI as adjust sets it
+	writeGUIMarker(dir, guiMarker{})
 
 	recorder := newStateRecorder()
 	clt.Delegate = recorder
@@ -359,4 +371,77 @@ func TestEngineCanBeUsedWhileRestarting(t *testing.T) {
 	}
 	close(stop)
 	wg.Wait()
+}
+
+func TestEngineServesTheRESTAPI(t *testing.T) {
+	address := freeGUIAddress(t)
+	clt, _, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.GUI.Enabled = true
+		cfg.GUI.RawAddress = address
+		protectGUI(&cfg.GUI)
+	})
+	if !clt.IsGUIEnabled() || clt.GUIAddress() != address || clt.GUIAPIKey() == "" {
+		t.Fatalf("GUI on %v at %s", clt.IsGUIEnabled(), clt.GUIAddress())
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	get := func(path string, header ...string) (*http.Response, error) {
+		request, err := http.NewRequest(http.MethodGet, clt.GUIURL()+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i+1 < len(header); i += 2 {
+			request.Header.Set(header[i], header[i+1])
+		}
+		return client.Do(request)
+	}
+	response, err := get("rest/system/status", "X-API-Key", clt.GUIAPIKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	_ = json.NewDecoder(response.Body).Decode(&body)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK || body["myID"] != clt.DeviceID() {
+		t.Fatalf("status %d, %v", response.StatusCode, body)
+	}
+	for name, header := range map[string][]string{"a wrong key": {"X-API-Key", "wrong"}} {
+		response, err := get("rest/system/status", header...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusForbidden && response.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("%s got %d", name, response.StatusCode)
+		}
+	}
+
+	// With a password, the web pages' CSRF token alone (which any local user can get) opens nothing
+	page, err := get("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.Body.Close()
+	for _, cookie := range page.Cookies() {
+		if strings.HasPrefix(cookie.Name, "CSRF-Token-") {
+			response, err := get("rest/system/status", "X-"+cookie.Name, cookie.Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			if response.StatusCode == http.StatusOK {
+				t.Fatal("the CSRF token alone opened the REST API")
+			}
+		}
+	}
+
+	// Turned off, they stop with the next start
+	if err := clt.SetGUIEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := clt.RestartEngine(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := get("rest/system/status", "X-API-Key", clt.GUIAPIKey()); err == nil {
+		t.Fatal("still listening after a restart with the GUI off")
+	}
 }

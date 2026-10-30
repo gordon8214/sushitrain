@@ -250,7 +250,7 @@ func TestLoadingFinishesAnInterruptedFolderMove(t *testing.T) {
 				managed.folders = []string{"photos"}
 			}
 
-			if _, err := loadEngineConfig(cfgPath, cert, events.NoopLogger, t.TempDir(), managed, false); err != nil {
+			if _, _, err := loadEngineConfig(cfgPath, cert, events.NoopLogger, t.TempDir(), managed, false); err != nil {
 				t.Fatal(err)
 			}
 			saved, _, err := config.Load(cfgPath, protocolID(cert), events.NoopLogger)

@@ -7102,6 +7102,52 @@
         }
       }
     },
+    "API key" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-Schlüssel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clave de API"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiave API"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APIキー"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-sleutel"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ключ API"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥"
+          }
+        }
+      }
+    },
     "Approve" : {
       "localizations" : {
         "de" : {
@@ -8298,6 +8344,98 @@
         }
       }
     },
+    "Copy address" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresse kopieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar dirección"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia indirizzo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アドレスをコピー"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adres kopiëren"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копіювати адресу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝地址"
+          }
+        }
+      }
+    },
+    "Copy API key" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-Schlüssel kopieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar clave de API"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia chiave API"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APIキーをコピー"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-sleutel kopiëren"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копіювати ключ API"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝 API 密钥"
+          }
+        }
+      }
+    },
     "Copy Link" : {
       "localizations" : {
         "de" : {
@@ -9398,6 +9536,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网关上的编辑"
+          }
+        }
+      }
+    },
+    "Engine access" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugriff auf die Engine"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acceso al motor"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accesso al motore"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エンジンへのアクセス"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toegang tot de engine"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступ до рушія"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引擎访问"
           }
         }
       }
@@ -60108,6 +60292,52 @@
         }
       }
     },
+    "Tools and scripts reach the engine here with the API key, as they would Syncthing. The key gives full control over this device's synchronization: keep it private." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Werkzeuge und Skripte erreichen die Engine hier mit dem API-Schlüssel, wie sie Syncthing erreichen würden. Der Schlüssel gewährt die volle Kontrolle über die Synchronisierung dieses Geräts: Halten Sie ihn geheim."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las herramientas y los scripts acceden aquí al motor con la clave de API, igual que a Syncthing. La clave da control total sobre la sincronización de este dispositivo: mantenla en privado."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Strumenti e script raggiungono qui il motore con la chiave API, come farebbero con Syncthing. La chiave dà il pieno controllo sulla sincronizzazione di questo dispositivo: tienila riservata."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ツールやスクリプトは、Syncthing と同じように、APIキーを使ってここでエンジンにアクセスします。このキーはこのデバイスの同期を完全に制御できるため、他人に知られないようにしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hulpmiddelen en scripts bereiken de engine hier met de API-sleutel, zoals ze Syncthing zouden bereiken. De sleutel geeft volledige controle over de synchronisatie van dit apparaat: houd hem geheim."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Інструменти та скрипти звертаються тут до рушія за ключем API, так само як до Syncthing. Ключ дає повний контроль над синхронізацією цього пристрою: тримайте його в таємниці."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工具和脚本可在此使用 API 密钥访问引擎，就像访问 Syncthing 一样。该密钥可完全控制此设备的同步：请妥善保管。"
+          }
+        }
+      }
+    },
     "Total" : {
       "localizations" : {
         "de" : {
@@ -63370,6 +63600,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "监视更改"
+          }
+        }
+      }
+    },
+    "Web GUI and REST API" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web-GUI und REST-API"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaz web y API REST"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaccia web e API REST"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web GUI と REST API"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Webinterface en REST-API"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Веб-інтерфейс і REST API"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web 界面和 REST API"
           }
         }
       }

@@ -215,9 +215,10 @@ func (clt *Client) prepareRun() (_ *engineRun, err error) {
 
 	// Loading finishes interrupted folder moves, which must not be under way meanwhile
 	relocationMutex.Lock()
-	cfg, err := loadEngineConfig(locations.Get(locations.ConfigFile), *clt.cert, r.evLogger, clt.filesPath,
+	cfg, guiNotice, err := loadEngineConfig(locations.Get(locations.ConfigFile), *clt.cert, r.evLogger, clt.filesPath,
 		clt.remoteManaged, build.IsIOS)
 	relocationMutex.Unlock()
+	clt.guiNotice.Store(guiNotice)
 	if err != nil {
 		if errors.Is(err, sthome.ErrConfiguration) {
 			clt.startupProblem.Store(StartupProblemDamagedConfiguration)

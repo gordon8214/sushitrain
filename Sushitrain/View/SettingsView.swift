@@ -259,6 +259,10 @@ struct AdvancedSettingsView: View {
 				}
 			}
 
+			#if os(macOS)
+				EngineAccessSection()
+			#endif
+
 			Section {
 				Toggle(
 					"One connection is enough",
