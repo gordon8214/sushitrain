@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -58,7 +59,23 @@ var _ fs.FileInfo = &customFileWrapper{}
 
 var errNotImplemented = errors.New("not implemented by custom filesystem")
 
+var (
+	customFilesystemTypes      []string
+	customFilesystemTypesMutex sync.Mutex
+)
+
+// registeredCustomFilesystemTypes are the types that RegisterCustomFilesystemType registered
+func registeredCustomFilesystemTypes() []string {
+	customFilesystemTypesMutex.Lock()
+	defer customFilesystemTypesMutex.Unlock()
+	return slices.Clone(customFilesystemTypes)
+}
+
 func RegisterCustomFilesystemType(fsType string, fsHandler CustomFilesystemType) {
+	customFilesystemTypesMutex.Lock()
+	customFilesystemTypes = append(customFilesystemTypes, fsType)
+	customFilesystemTypesMutex.Unlock()
+
 	fsTypeStruct := fs.FilesystemType(fsType)
 	fs.RegisterFilesystemType(fsTypeStruct, func(uri string, _opts ...fs.Option) (fs.Filesystem, error) {
 		root, err := fsHandler.Root(uri)

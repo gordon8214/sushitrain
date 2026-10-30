@@ -74,6 +74,7 @@ type engineRun struct {
 	internals   atomic.Pointer[syncthing.Internals] // set once the app has started
 	firstRun    bool
 	stopTimeout atomic.Bool // the app did not stop in time; its configuration and logger are left alone
+	guiStarted  bool        // whether the configuration had the web GUI on when the run started
 
 	// Configuration changes hold this for reading; the teardown takes it to stop them
 	writes sync.RWMutex
@@ -264,6 +265,7 @@ func (clt *Client) prepareRun() (_ *engineRun, err error) {
 
 	// Only now serve the configuration, which saves it when it stops: a failed load leaves the file as it was
 	r.config = cfg
+	r.guiStarted = cfg.GUI().Enabled
 	var cfgCtx context.Context
 	cfgCtx, r.stopCfg = context.WithCancel(context.Background())
 	go func() {

@@ -34,7 +34,7 @@ func wrapRemoteManaged(t *testing.T, set *remoteManagedSet, folders ...config.Fo
 	cfg.Folders = folders
 	set.enforce(&cfg)
 	wrapper := config.Wrap(filepath.Join(t.TempDir(), "config.xml"), cfg, id, events.NoopLogger)
-	go func() { _ = wrapper.Serve(t.Context()) }()
+	serveConfiguration(t, wrapper)
 	wrapper.Subscribe(set)
 	return wrapper
 }

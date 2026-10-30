@@ -41,6 +41,33 @@ The engine never upgrades itself: the app is updated as a whole. Self-upgrade is
 with the `noupgrade` build tag (the app also logs an error if a build lacks it), so the update settings in a
 configuration don't matter. The gateway's Linux build uses the same tag.
 
+## Advanced configuration
+
+Advanced settings link to an editor of the engine's whole configuration, the counterpart of the web GUI's Advanced
+dialog, on both platforms: the options, the GUI and LDAP settings (macOS only), each folder and device, and the defaults
+for new ones. It is there for settings without a screen of their own, and warns that these are expert settings.
+
+- The core lists the fields by reflection over Syncthing's configuration structs, under their names in the REST API
+  (`advanced.go`), so that fields a new version of the fork adds appear by themselves. Booleans, numbers, text, lists
+  (one item per line) and enumerations have their own controls, and the values of an enumeration are found by trying its
+  numbers. File system types are the exception: nothing lists them, so the core offers the ones the app can use (not
+  Syncthing's `fake`, for its tests, whose empty file system would look like every file was deleted) and the one a
+  folder has. Nested structs become groups of fields; maps and lists of structs are edited as JSON.
+- A section's edited fields are saved together, through the normal configuration change, so that other fields stay as
+  they are by then. A value that doesn't parse, or that the configuration's own checks or a subscriber refuse, changes
+  nothing and shows the error. So does a length of time the engine can't calculate with, going by a name that ends in a
+  unit (`scanProgressIntervalS`): the engine doesn't bound all of these, and one that overflows stops the app at every
+  scan. The GUI and LDAP sections keep to the rules of the GUI's settings page, and show its warnings when others can
+  use the GUI without signing in. A field the engine corrects shows its new value after saving. Where a change only
+  applies when the engine restarts (such as turning the GUI on or off), the editor offers to restart it.
+- IDs are shown but can't be changed, as a new ID makes another folder or device. The same goes for `urAccepted`, for
+  a device's `paused` (the app sets that from its own list), and for what the engine keeps empty in defaults. The GUI's
+  password and API key are never shown: left empty they stay as they are, and a new password is hashed. A folder's
+  encryption passwords do show, in plain text in the JSON of its `devices`, as they do on the app's encryption screen.
+- iOS has no GUI or LDAP sections, and hides what the app sets by itself or what does nothing there, such as a folder's
+  path (`advancedFieldsHiddenOnIOS`). `auditEnabled` and `auditFile` do nothing on macOS either, as only Syncthing's
+  command line reads them, but like every other field they are listed there.
+
 ## Web GUI and REST API
 
 On macOS the engine runs Syncthing's web GUI and REST API, as Syncthing.app does, so that tools and scripts reach it

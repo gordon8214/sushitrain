@@ -449,6 +449,33 @@ func TestEngineServesTheRESTAPI(t *testing.T) {
 	}
 }
 
+func TestEngineAppliesAdvancedSettings(t *testing.T) {
+	clt, _, _ := startTestEngine(t)
+
+	if err := saveAdvancedField(t, clt, AdvancedSectionOptions, "keepTemporariesH", "48"); err != nil {
+		t.Fatal(err)
+	}
+	if clt.cfg().Options().KeepTemporariesH != 48 || clt.IsEngineRestartRequired() {
+		t.Fatalf("a change that applies at once: %d, restart %v", clt.cfg().Options().KeepTemporariesH, clt.IsEngineRestartRequired())
+	}
+
+	if err := saveAdvancedField(t, clt, AdvancedSectionOptions, "auditFile", filepath.Join(t.TempDir(), "audit.log")); err != nil {
+		t.Fatal(err)
+	}
+	if !clt.IsEngineRestartRequired() {
+		t.Fatal("the engine says that this option takes a restart")
+	}
+	if err := clt.RestartEngine(); err != nil {
+		t.Fatal(err)
+	}
+	if clt.IsEngineRestartRequired() {
+		t.Fatal("the restart should have applied it")
+	}
+	if clt.cfg().Options().KeepTemporariesH != 48 {
+		t.Fatal("the change did not last")
+	}
+}
+
 func TestEngineChangesGUISettingsWithoutRestarting(t *testing.T) {
 	address := freeGUIAddress(t)
 	clt, recorder, _ := startTestEngineWith(t, func(cfg *config.Configuration) {

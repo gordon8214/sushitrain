@@ -495,6 +495,14 @@ struct AdvancedSettingsView: View {
 				}
 			#endif
 
+			Section {
+				NavigationLink("Advanced configuration") {
+					AdvancedConfigurationView()
+				}
+			} footer: {
+				Text("Every setting of the engine, for experts.")
+			}
+
 			#if os(macOS)
 				Section {
 					Button("Troubleshooting") {
