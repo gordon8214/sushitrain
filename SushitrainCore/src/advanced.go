@@ -509,7 +509,7 @@ func (f *AdvancedField) setInt(value reflect.Value, text string) error {
 }
 
 // fitsADuration reports whether the engine can turn a number into the length of time the field holds. Where it can't,
-// the result is not what was entered: a scan progress interval that overflows stops the app at every scan.
+// the result is not what was entered, and the engine limits only some of these fields when it prepares a configuration.
 func (f *AdvancedField) fitsADuration(number float64) bool {
 	return f.unit == 0 || math.Abs(number) <= float64(math.MaxInt64/int64(f.unit))
 }

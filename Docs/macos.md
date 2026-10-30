@@ -56,10 +56,11 @@ for new ones. It is there for settings without a screen of their own, and warns 
 - A section's edited fields are saved together, through the normal configuration change, so that other fields stay as
   they are by then. A value that doesn't parse, or that the configuration's own checks or a subscriber refuse, changes
   nothing and shows the error. So does a length of time the engine can't calculate with, going by a name that ends in a
-  unit (`scanProgressIntervalS`): the engine doesn't bound all of these, and one that overflows stops the app at every
-  scan. The GUI and LDAP sections keep to the rules of the GUI's settings page, and show its warnings when others can
-  use the GUI without signing in. A field the engine corrects shows its new value after saving. Where a change only
-  applies when the engine restarts (such as turning the GUI on or off), the editor offers to restart it.
+  unit: the engine limits only some of these when it prepares a configuration (such as `scanProgressIntervalS`), and
+  one that overflows no longer means what was entered. The GUI and LDAP sections keep to the rules of the GUI's settings
+  page, and show its warnings when others can use the GUI without signing in. A field the engine corrects shows its new
+  value after saving. Where a change only applies when the engine restarts (such as turning the GUI on or off), the
+  editor offers to restart it.
 - IDs are shown but can't be changed, as a new ID makes another folder or device. The same goes for `urAccepted`, for
   a device's `paused` (the app sets that from its own list), and for what the engine keeps empty in defaults. The GUI's
   password and API key are never shown: left empty they stay as they are, and a new password is hashed. A folder's
