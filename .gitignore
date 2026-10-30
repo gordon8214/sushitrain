@@ -10,3 +10,5 @@
 /.build
 /SynctrainFileProviderKit/.build
 /SynctrainFileProviderKit/.swiftpm
+/SynctrainHostKit/.build
+/SynctrainHostKit/.swiftpm

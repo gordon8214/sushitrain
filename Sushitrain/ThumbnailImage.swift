@@ -8,6 +8,8 @@ import SwiftUI
 import SushitrainCore
 import QuickLookThumbnailing
 import AVKit
+import CommonCrypto
+import SynctrainHostKit
 
 #if os(macOS)
 	extension NSImage {
@@ -275,8 +277,8 @@ enum PersistentCacheType {
 			self.customPersistentCache = nil
 
 		case .deviceLocal:
-			let folderSpecificPath = URL.cachesDirectory.appendingPathComponent("thumbnails", isDirectory: true)
-				.appendingPathComponent(folder.folderID, isDirectory: true)
+			let folderSpecificPath = AppLocations.current.thumbnails
+				.appendingPathComponent(Self.cacheDirectoryName(folderID: folder.folderID), isDirectory: true)
 			self.customPersistentCache = PersistentCacheType.localDirectory(url: folderSpecificPath)
 			self.diskCacheEnabled = true
 
@@ -289,12 +291,23 @@ enum PersistentCacheType {
 		}
 	}
 
+	/// The name of a folder's thumbnail cache directory. Remote devices choose folder IDs, so an ID that isn't a single,
+	/// ordinary path component is replaced by a hash of it, which keeps the cache inside the thumbnails directory.
+	nonisolated static func cacheDirectoryName(folderID: String) -> String {
+		if !folderID.isEmpty && folderID != "." && folderID != ".." && !folderID.contains("/") && !folderID.contains("\0") {
+			return folderID
+		}
+		let data = Array(folderID.utf8)
+		var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+		_ = CC_SHA256(data, CC_LONG(data.count), &digest)
+		return "id-" + digest.map { String(format: "%02x", $0) }.joined()
+	}
+
 	private var persistentCache: PersistentCacheType {
 		if let cc = self.customPersistentCache {
 			return cc
 		}
-		return PersistentCacheType.localDirectory(
-			url: URL.cachesDirectory.appendingPathComponent("thumbnails", isDirectory: true))
+		return PersistentCacheType.localDirectory(url: AppLocations.current.thumbnails)
 	}
 
 	func diskHasSpace() async -> Bool {

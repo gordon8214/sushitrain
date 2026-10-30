@@ -10,8 +10,10 @@ On macOS, `SynctrainShare` provides the Share-menu entry. It copies each item
 provider representation to the shared App Group cache before its callback
 returns, then opens those URLs with the containing app. The main app performs
 destination selection and importing. The extension is built and embedded only
-on macOS. Temporary representations are retained for the main app to read and
-are subject to the operating system's cache cleanup.
+on macOS. Each share is staged in its own `SynctrainShare-` folder, which the
+app removes once its files are imported or the import is cancelled; folders
+left behind are removed at launch after a day. Remove temporary files keeps
+the folders of files still waiting to be imported.
 
 On iOS, this uses file-based Open In sharing, not a Share extension. Source apps
 must offer a file handoff; sharing arbitrary Photos selections, text, or web links

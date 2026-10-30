@@ -6,6 +6,7 @@
 import AppKit
 import UniformTypeIdentifiers
 import OSLog
+import SynctrainHostKit
 
 /// macOS sharing hands files to the main app, which owns the destination picker and sync engine.
 final class ShareViewController: NSViewController {
@@ -94,14 +95,12 @@ final class ShareViewController: NSViewController {
 	nonisolated private static func copyToTemporaryDirectory(_ source: URL) throws -> URL {
 		guard
 			let appGroup = Bundle.main.object(forInfoDictionaryKey: "SynctrainAppGroup") as? String,
-			let sharedCacheDirectory = FileManager.default.containerURL(
-				forSecurityApplicationGroupIdentifier: appGroup)?
-				.appendingPathComponent("Library/Caches", isDirectory: true)
+			let sharedCacheDirectory = AppLocations.groupCaches(appGroup: appGroup)
 		else {
 			throw CocoaError(.fileNoSuchFile)
 		}
-		let directory = sharedCacheDirectory.appendingPathComponent("SynctrainShare-" + UUID().uuidString)
-		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+		// The app removes the folder once the files are imported, or a day later
+		let directory = try AppLocations.makeShareHandoffDirectory(in: sharedCacheDirectory)
 		let destination = directory.appendingPathComponent(source.lastPathComponent)
 		try FileImportCopy.copy(source, to: destination)
 		return destination

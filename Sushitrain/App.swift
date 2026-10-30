@@ -8,6 +8,7 @@ import SwiftUI
 import BackgroundTasks
 import Combine
 import AppIntents
+import SynctrainHostKit
 
 @main
 struct SushitrainApp: App {
@@ -43,6 +44,7 @@ struct SushitrainApp: App {
 		}
 
 		// Find out all the relevant locations we need to access
+		AppLocations.prepareCurrent()
 		let configDirectory = Self.configDirectoryURL()
 		let documentsDirectory = try! FileManager.default.url(
 			for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)

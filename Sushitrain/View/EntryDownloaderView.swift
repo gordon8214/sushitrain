@@ -7,6 +7,7 @@ import Foundation
 import SwiftUI
 import SushitrainCore
 import UniformTypeIdentifiers
+import SynctrainHostKit
 
 private class DownloadOperation: NSObject, ObservableObject, SushitrainDownloadDelegateProtocol, @unchecked Sendable {
 	@Published var error: String? = nil
@@ -141,11 +142,7 @@ struct EntryDownloaderView: View {
 		.presentationDetents([.medium])
 		.task {
 			do {
-				let tempDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-				tempDirPath = tempDir.appending(
-					component: "Downloads-\(ProcessInfo().globallyUniqueString)")
-				try FileManager.default.createDirectory(
-					at: tempDirPath!, withIntermediateDirectories: true)
+				tempDirPath = try AppLocations.current.makeTemporaryDirectory(prefix: "Downloads-")
 				let filePath = tempDirPath!.appending(component: file.fileName())
 				self.filePath = filePath
 				self.file.download(

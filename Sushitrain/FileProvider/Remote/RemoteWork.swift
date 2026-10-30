@@ -7,6 +7,7 @@
 	import Foundation
 	@preconcurrency import SushitrainCore
 	import SynctrainFileProviderKit
+	import SynctrainHostKit
 
 	/// The app's requests to gateways and its reads of the shared index, off the main actor. Nothing here holds a
 	/// database transaction open while waiting for the network.
@@ -351,9 +352,7 @@
 				throw CocoaError(.fileNoSuchFile)
 			}
 			let source = environment.storage.url(relativePath: stagedPath)
-			let directory = FileManager.default.temporaryDirectory.appending(
-				path: "Export-\(UUID().uuidString)", directoryHint: .isDirectory)
-			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+			let directory = try AppLocations.current.makeTemporaryDirectory(prefix: "Export-")
 			let name = FileNames.isValid(summary.name) ? summary.name : String(localized: "Edited file")
 			let destination = directory.appending(path: name, directoryHint: .notDirectory)
 			// FileManager clones where the volume allows it, so that exporting a large edit takes no extra space

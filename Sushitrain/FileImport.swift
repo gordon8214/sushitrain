@@ -5,6 +5,7 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
 @preconcurrency import SushitrainCore
+import SynctrainHostKit
 
 /// Shared by incoming documents and imports into the file browser.
 enum FileImport {
@@ -87,6 +88,9 @@ enum FileImport {
 
 /// Owns sandbox access while the destination sheet is open, including during startup.
 @Observable @MainActor final class IncomingFiles {
+	/// The files waiting to be imported, in any window, which removing temporary files must keep
+	private(set) static var pending: Set<URL> = []
+
 	private(set) var urls: [URL] = []
 	@ObservationIgnored private var scopedURLs: Set<URL> = []
 	var isSaving = false
@@ -100,13 +104,26 @@ enum FileImport {
 		guard url.isFileURL, !urls.contains(url) else { return }
 		if url.startAccessingSecurityScopedResource() { scopedURLs.insert(url) }
 		urls.append(url)
+		Self.pending.insert(url)
 	}
 
+	/// Stops tracking files that were imported or whose import was cancelled, and removes the copies the share
+	/// extension staged for them
 	func remove(_ completed: [URL]) {
 		for url in completed {
 			if scopedURLs.remove(url) != nil { url.stopAccessingSecurityScopedResource() }
+			Self.pending.remove(url)
 		}
 		urls.removeAll { completed.contains($0) }
+
+		let handoffs = Set(completed.compactMap { AppLocations.current.shareHandoffDirectory(containing: $0) })
+		if !handoffs.isEmpty {
+			Task.detached(priority: .utility) {
+				for handoff in handoffs {
+					try? FileManager.default.removeItem(at: handoff)
+				}
+			}
+		}
 	}
 }
 

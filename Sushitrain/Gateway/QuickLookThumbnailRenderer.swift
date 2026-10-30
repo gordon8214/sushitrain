@@ -9,6 +9,7 @@
 	import os
 	import QuickLookThumbnailing
 	@preconcurrency import SushitrainCore
+	import SynctrainHostKit
 	import UniformTypeIdentifiers
 
 	/// Renders thumbnails of images, videos and PDFs for the remote file service with Quick Look. The core calls it on
@@ -55,9 +56,7 @@
 			guard let type = Self.sniffType(url), let ext = type.preferredFilenameExtension else {
 				throw RenderError.unknownType
 			}
-			let directory = FileManager.default.temporaryDirectory.appending(
-				path: "thumbnail-" + UUID().uuidString, directoryHint: .isDirectory)
-			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+			let directory = try AppLocations.current.makeTemporaryDirectory(prefix: "thumbnail-")
 			defer {
 				try? FileManager.default.removeItem(at: directory)
 			}

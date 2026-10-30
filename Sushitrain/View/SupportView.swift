@@ -5,6 +5,7 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
 @preconcurrency import SushitrainCore
+import SynctrainHostKit
 
 private struct AppSupportBundle: Encodable {
 	enum PrefValue: Encodable {
@@ -436,6 +437,7 @@ private struct SupportBundleView: View {
 	@Environment(AppState.self) private var appState
 	@State private var writingSupportBundle: Bool = false
 	@State private var supportBundle: URL? = nil
+	@State private var supportBundleDirectory: URL? = nil
 
 	#if os(macOS)
 		@State private var showSaveSupportBundle: Bool = false
@@ -448,9 +450,11 @@ private struct SupportBundleView: View {
 			)
 			.fixedSize(horizontal: false, vertical: true)
 			.onDisappear {
-				if let s = self.supportBundle {
-					try? FileManager.default.removeItem(at: s)
+				if let directory = self.supportBundleDirectory {
+					try? FileManager.default.removeItem(at: directory)
 				}
+				self.supportBundleDirectory = nil
+				self.supportBundle = nil
 			}
 			#if os(macOS)
 				.fileImporter(isPresented: $showSaveSupportBundle, allowedContentTypes: [.directory]) { res in
@@ -503,6 +507,7 @@ private struct SupportBundleView: View {
 	private func generateSupportBundle() async {
 		if self.supportBundle == nil && !self.writingSupportBundle {
 			self.writingSupportBundle = true
+			var tempDir: URL? = nil
 			do {
 				// Generate app-side bundle
 				let appBundle = appState.generateAppSupportBundle()
@@ -510,18 +515,26 @@ private struct SupportBundleView: View {
 				encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
 				let appBundleJSON = try encoder.encode(appBundle)
 
-				let tempDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-				let tempPath = tempDir.appending(
+				let directory = try AppLocations.current.makeTemporaryDirectory(prefix: "SupportBundle-")
+				tempDir = directory
+				let tempPath = directory.appending(
 					component: "Synctrain-support-bundle-\(ProcessInfo().globallyUniqueString).zip")
 				try self.appState.client.writeSupportBundle(tempPath.path(percentEncoded: false), appInfo: appBundleJSON)
 
 				DispatchQueue.main.async {
 					self.writingSupportBundle = false
 					self.supportBundle = tempPath
+					self.supportBundleDirectory = directory
 				}
 			}
 			catch {
 				Log.warn("cannot write support bundle: \(error.localizedDescription)")
+				if let tempDir {
+					try? FileManager.default.removeItem(at: tempDir)
+				}
+				DispatchQueue.main.async {
+					self.writingSupportBundle = false
+				}
 			}
 		}
 	}
@@ -671,6 +684,7 @@ struct TroubleshootingView: View {
 	@State private var showV1BackupRemoved = false
 	@State private var showCacheCleared = false
 	@State private var showTempCleared = false
+	@State private var showClearFailed = false
 	@State private var showLog = false
 	@State private var showLogLevels = false
 	@State private var showAllBookmarksRemoved = false
@@ -894,6 +908,9 @@ struct TroubleshootingView: View {
 				.alert("Temporary files removed", isPresented: $showTempCleared) {
 					Button("OK") {}
 				}
+				.alert("Some files could not be removed", isPresented: $showClearFailed) {
+					Button("OK") {}
+				}
 			}
 
 			Section {
@@ -955,40 +972,26 @@ struct TroubleshootingView: View {
 		self.hasLegacyDatabase = appState.client.hasLegacyDatabase()
 		self.hasMigratedLegacyDatabase = appState.client.hasMigratedLegacyDatabase()
 
+		let fileManager = FileManager.default
 		let path = SushitrainApp.configDirectoryURL().appending(path: "index-v2", directoryHint: .isDirectory)
 		do {
-			// Calculate database size
-			let fileManager = FileManager.default
 			let size = try await fileManager.sizeOfFolder(path: path)
 			self.databaseSize = Int64(size)
 			Log.info("size of database is \(size) at path \(path)")
-
-			// Calculate cache directory size
-			if let cacheURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-				let cacheSize = try await fileManager.sizeOfFolder(path: cacheURL)
-				self.cacheSize = Int64(cacheSize)
-			}
-			else {
-				self.cacheSize = nil
-			}
-
-			// Calculate cache directory size
-			if let cacheURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-				let cacheSize = try await fileManager.sizeOfFolder(path: cacheURL)
-				self.cacheSize = Int64(cacheSize)
-			}
-			else {
-				self.cacheSize = nil
-			}
-
-			// Calculate temp directory size
-			let tempURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-			self.tempSize = Int64(try await fileManager.sizeOfFolder(path: tempURL))
 		}
 		catch {
 			Log.warn("could not determine database size at path \(path): \(error.localizedDescription)")
 			self.databaseSize = nil
 		}
+
+		// Only the app's own cache and temporary directories, which are all the actions below clear
+		let locations = AppLocations.current
+		self.cacheSize = (try? await fileManager.sizeOfFolder(path: locations.caches)).map { Int64($0) }
+		var tempSize: Int64 = 0
+		for directory in locations.temporaryDirectories {
+			tempSize += Int64((try? await fileManager.sizeOfFolder(path: directory)) ?? 0)
+		}
+		self.tempSize = tempSize
 	}
 
 	private func clearMigratedLegacyDatabase() {
@@ -1010,52 +1013,40 @@ struct TroubleshootingView: View {
 	}
 
 	private func clearTempDirectory() {
-		let fileManager = FileManager.default
-		let tempURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-		do {
-			let directoryContents = try fileManager.contentsOfDirectory(
-				at: tempURL, includingPropertiesForKeys: nil, options: [])
-			for file in directoryContents {
-				do {
-					try fileManager.removeItem(at: file)
-				}
-				catch {
-					Log.warn("failed to remove temp file: \(error.localizedDescription)")
-				}
+		// Files waiting to be imported may be the only copy of what was shared
+		let keeping = Array(IncomingFiles.pending)
+		Task {
+			let errors = await Task.detached(priority: .userInitiated) {
+				AppLocations.current.clearTemporaryFiles(keeping: keeping)
+			}.value
+			for error in errors {
+				Log.warn("failed to remove temp file: \(error.localizedDescription)")
 			}
-			Task {
-				await self.updateDatabaseInfo()
+			await self.updateDatabaseInfo()
+			if errors.isEmpty {
+				self.showTempCleared = true
+			}
+			else {
+				self.showClearFailed = true
 			}
 		}
-		catch let error as NSError {
-			print(error.localizedDescription)
-		}
-
-		self.showTempCleared = true
 	}
 
 	private func clearCacheDirectory() {
-		let fileManager = FileManager.default
-		if let cacheURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-			do {
-				let directoryContents = try fileManager.contentsOfDirectory(
-					at: cacheURL, includingPropertiesForKeys: nil, options: [])
-				for file in directoryContents {
-					do {
-						try fileManager.removeItem(at: file)
-					}
-					catch {
-						Log.warn("failed to remove cache file: \(error.localizedDescription)")
-					}
-				}
+		Task {
+			let errors = await Task.detached(priority: .userInitiated) {
+				AppLocations.current.clearCaches()
+			}.value
+			for error in errors {
+				Log.warn("failed to remove cache file: \(error.localizedDescription)")
 			}
-			catch let error as NSError {
-				print(error.localizedDescription)
+			await self.updateDatabaseInfo()
+			if errors.isEmpty {
+				self.showCacheCleared = true
 			}
-			Task {
-				await self.updateDatabaseInfo()
+			else {
+				self.showClearFailed = true
 			}
 		}
-		self.showCacheCleared = true
 	}
 }

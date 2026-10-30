@@ -6,6 +6,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 @preconcurrency import SushitrainCore
+import SynctrainHostKit
 
 extension SushitrainEntry: @retroactive Transferable {
 	static public var transferRepresentation: some TransferRepresentation {
@@ -25,10 +26,7 @@ extension SushitrainEntry: @retroactive Transferable {
 	}
 
 	private func downloadFileToSent() async throws -> SentTransferredFile {
-		let tempDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-		let tempDirPath = tempDir.appending(
-			component: "Downloads-\(ProcessInfo().globallyUniqueString)")
-		try FileManager.default.createDirectory(at: tempDirPath, withIntermediateDirectories: true)
+		let tempDirPath = try AppLocations.current.makeTemporaryDirectory(prefix: "Downloads-")
 		let filePath = tempDirPath.appending(component: self.fileName())
 
 		struct DownloadError: Error {

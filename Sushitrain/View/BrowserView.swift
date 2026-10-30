@@ -8,6 +8,7 @@ import QuickLook
 import UniformTypeIdentifiers
 import PhotosUI
 @preconcurrency import SushitrainCore
+import SynctrainHostKit
 
 #if os(macOS)
 	struct BrowserRefreshActions {
@@ -994,8 +995,7 @@ private struct ImportedMedia: Transferable {
 
 	static var transferRepresentation: some TransferRepresentation {
 		FileRepresentation(importedContentType: .data) { received in
-			let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+			let directory = try AppLocations.current.makeTemporaryDirectory(prefix: "Import-")
 			do {
 				let url = directory.appendingPathComponent(received.file.lastPathComponent)
 				try FileManager.default.copyItem(at: received.file, to: url)

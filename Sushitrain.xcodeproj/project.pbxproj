@@ -86,6 +86,8 @@
 		F3000000000000000000001F /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 6506158A2C3C4EA9002B6EE6 /* Localizable.xcstrings */; };
 		F50000000000000000000001 /* SynctrainFileProviderUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F50000000000000000000004 /* SynctrainFileProviderUI.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F50000000000000000000002 /* SynctrainFileProviderKit in Frameworks */ = {isa = PBXBuildFile; productRef = F50000000000000000000012 /* SynctrainFileProviderKit */; };
+		F60000000000000000000002 /* SynctrainHostKit in Frameworks */ = {isa = PBXBuildFile; productRef = F60000000000000000000012 /* SynctrainHostKit */; };
+		F60000000000000000000003 /* SynctrainHostKit in Frameworks */ = {isa = PBXBuildFile; productRef = F60000000000000000000013 /* SynctrainHostKit */; };
 		F50000000000000000000003 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 6506158A2C3C4EA9002B6EE6 /* Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
@@ -262,6 +264,11 @@
 			path = SynctrainFileProviderUI;
 			sourceTree = "<group>";
 		};
+		F60000000000000000000001 /* Host */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Host;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -273,6 +280,7 @@
 				65F15BFD2CA03DCE00E13DDD /* SushitrainCore.xcframework in Frameworks */,
 				658A29F02CA821950061D1D5 /* AVKit.framework in Frameworks */,
 				F30000000000000000000002 /* SynctrainFileProviderKit in Frameworks */,
+				F60000000000000000000002 /* SynctrainHostKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -289,6 +297,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				F50000000000000000000002 /* SynctrainFileProviderKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F60000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F60000000000000000000003 /* SynctrainHostKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -327,6 +343,7 @@
 				65EAD895307129E70042B3CD /* View */,
 				F3000000000000000000000D /* FileProvider */,
 				F40000000000000000000001 /* Gateway */,
+				F60000000000000000000001 /* Host */,
 				65AE11FC2C39EE0E00E721D4 /* App.swift */,
 				65AE12722C3B163000E721D4 /* AppState.swift */,
 				65AE12002C39EE0F00E721D4 /* Assets.xcassets */,
@@ -480,10 +497,12 @@
 			fileSystemSynchronizedGroups = (
 				F3000000000000000000000D /* FileProvider */,
 				F40000000000000000000001 /* Gateway */,
+				F60000000000000000000001 /* Host */,
 			);
 			name = Synctrain;
 			packageProductDependencies = (
 				F30000000000000000000012 /* SynctrainFileProviderKit */,
+				F60000000000000000000012 /* SynctrainHostKit */,
 			);
 			productName = Sushitrain;
 			productReference = 65AE11F92C39EE0E00E721D4 /* Synctrain.app */;
@@ -494,12 +513,16 @@
 			buildConfigurationList = F20000000000000000000007 /* Build configuration list for PBXNativeTarget "SynctrainShare" */;
 			buildPhases = (
 				F20000000000000000000005 /* Sources */,
+				F60000000000000000000004 /* Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			name = SynctrainShare;
+			packageProductDependencies = (
+				F60000000000000000000013 /* SynctrainHostKit */,
+			);
 			productName = SynctrainShare;
 			productReference = F20000000000000000000004 /* SynctrainShare.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -589,6 +612,7 @@
 			mainGroup = 65AE11F02C39EE0E00E721D4;
 			packageReferences = (
 				F30000000000000000000011 /* XCLocalSwiftPackageReference "SynctrainFileProviderKit" */,
+				F60000000000000000000011 /* XCLocalSwiftPackageReference "SynctrainHostKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 65AE11FA2C39EE0E00E721D4 /* Products */;
@@ -1316,6 +1340,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = SynctrainFileProviderKit;
 		};
+		F60000000000000000000011 /* XCLocalSwiftPackageReference "SynctrainHostKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = SynctrainHostKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1330,6 +1358,14 @@
 		F50000000000000000000012 /* SynctrainFileProviderKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SynctrainFileProviderKit;
+		};
+		F60000000000000000000012 /* SynctrainHostKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SynctrainHostKit;
+		};
+		F60000000000000000000013 /* SynctrainHostKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SynctrainHostKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

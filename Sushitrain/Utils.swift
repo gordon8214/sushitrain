@@ -1066,17 +1066,20 @@ extension URL {
 }
 
 extension FileManager {
+	/// The total size of the files in a folder. Files that disappear while it is counting are skipped.
 	nonisolated func sizeOfFolder(path: URL) async throws -> UInt {
-		let files = try self.subpathsOfDirectory(atPath: path.path(percentEncoded: false))
+		// Fail for a missing or unreadable folder, as listing it would
+		_ = try self.contentsOfDirectory(atPath: path.path(percentEncoded: false))
+		guard
+			let enumerator = self.enumerator(
+				at: path, includingPropertiesForKeys: [.fileSizeKey], options: [], errorHandler: { _, _ in true })
+		else {
+			throw CocoaError(.fileReadUnknown)
+		}
 		var totalSize: UInt = 0
-		for file in files {
-			let filePath = path.appendingPathComponent(file)
-			let fileDictionary = try self.attributesOfItem(atPath: filePath.path(percentEncoded: false))
-			if let size = fileDictionary[FileAttributeKey.size] as? UInt {
-				totalSize += size
-			}
-			else {
-				Log.warn("No file size for path \(filePath.path) \(file) \(fileDictionary)")
+		while let url = enumerator.nextObject() as? URL {
+			if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+				totalSize += UInt(size)
 			}
 		}
 		return totalSize
