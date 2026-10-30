@@ -51,6 +51,9 @@ private struct ContentView: View {
 	@Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
 	@State private var showCustomConfigWarning = false
+	#if os(macOS)
+		@State private var showContainerFolders = false
+	#endif
 	@State var topLevelRoute: Route? = .start
 	@State private var columnVisibility = NavigationSplitViewVisibility.doubleColumn
 	@State private var showSearchSheet = false
@@ -316,6 +319,26 @@ private struct ContentView: View {
 		.onAppear {
 			AppState.requestNotificationPermissionIfNecessary()
 		}
+		#if os(macOS)
+			// Once, after the app moved out of its sandbox container
+			.task {
+				guard !FolderAccess.usesSecurityScope,
+					!UserDefaults.standard.bool(forKey: ContainerMigrator.folderMoveOfferedKey)
+				else {
+					return
+				}
+				// Before looking, so that another window doesn't offer it too
+				UserDefaults.standard.set(true, forKey: ContainerMigrator.folderMoveOfferedKey)
+				if await appState.folders().contains(where: { ContainerMigrator.isInContainer($0) }) {
+					showContainerFolders = true
+				}
+			}
+			.sheet(isPresented: $showContainerFolders) {
+				NavigationStack {
+					ContainerFoldersSheet(isPresented: $showContainerFolders)
+				}
+			}
+		#endif
 		#if os(iOS)
 			// Search sheet for quick action
 			.sheet(isPresented: $showSearchSheet) {

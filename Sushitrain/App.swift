@@ -43,6 +43,11 @@ struct SushitrainApp: App {
 			)
 		}
 
+		// The first start outside the sandbox takes over the sandboxed app's preferences and engine data
+		#if os(macOS)
+			let containerMigration = ContainerMigrator.run()
+		#endif
+
 		// Find out all the relevant locations we need to access
 		AppLocations.prepareCurrent()
 		let engineLocations = EngineLocations.current
@@ -62,10 +67,19 @@ struct SushitrainApp: App {
 		if UserDefaults.standard.bool(forKey: "keepLogLevels") {
 			client.applyLogLevels(UserDefaults.standard.string(forKey: "keptLogLevels") ?? "")
 		}
+		#if os(macOS)
+			for message in containerMigration.messages {
+				Log.info(message)
+			}
+			// Nothing may be written in the configuration folder before the engine data arrives there
+			let engineDataArrived = containerMigration.error == nil
+		#else
+			let engineDataArrived = true
+		#endif
 
 		// Optionally clear v1 and/or v2 index
-		let clearV1Index = UserDefaults.standard.bool(forKey: "clearV1Index")
-		let clearV2Index = UserDefaults.standard.bool(forKey: "clearV2Index")
+		let clearV1Index = engineDataArrived && UserDefaults.standard.bool(forKey: "clearV1Index")
+		let clearV2Index = engineDataArrived && UserDefaults.standard.bool(forKey: "clearV2Index")
 		if clearV1Index {
 			Log.info("Deleting v1 index...")
 			do {
@@ -88,6 +102,10 @@ struct SushitrainApp: App {
 		}
 
 		let appState = AppState(client: client, configDirectory: configDirectory)
+		#if os(macOS)
+			appState.containerMigrationError = containerMigration.error
+			appState.containerMigrationNotice = containerMigration.notice
+		#endif
 		self.appState = appState
 		self.userSettings = appState.userSettings
 		#if os(macOS)

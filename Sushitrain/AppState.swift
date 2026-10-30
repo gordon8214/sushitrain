@@ -195,6 +195,11 @@ struct SyncState: Equatable {
 	private(set) var isEngineRestarting = false
 	/// Whether the engine can be started again (Restart Syncthing) after it failed or was shut down
 	private(set) var engineCanRestart = false
+
+	/// Why the sandboxed app's engine data could not be taken over (macOS); the engine does not start then
+	var containerMigrationError: String? = nil
+	/// What to tell the user about taking over the sandboxed app's data once the app runs (macOS)
+	@ObservationIgnored var containerMigrationNotice: String? = nil
 	@ObservationIgnored private var hasFinishedStarting = false
 	/// Set when the app is about to quit, so that a failure to start isn't shown anymore
 	@ObservationIgnored var isQuitting = false
@@ -334,6 +339,17 @@ struct SyncState: Equatable {
 		guard case .error = self.startupState, !self.hasLoadedClient else {
 			return
 		}
+		#if os(macOS)
+			if self.containerMigrationError != nil {
+				// Copying the engine data may take a while
+				let outcome = await Task.detached(priority: .userInitiated) { ContainerMigrator.run() }.value
+				for message in outcome.messages {
+					Log.info(message)
+				}
+				self.containerMigrationError = outcome.error
+				self.containerMigrationNotice = outcome.notice ?? self.containerMigrationNotice
+			}
+		#endif
 		self.startupState = .notStarted
 		await self.start()
 	}
@@ -344,6 +360,13 @@ struct SyncState: Equatable {
 		}
 
 		let client = self.client
+
+		// Starting without the engine data in the container would make a new device identity
+		if let containerMigrationError = self.containerMigrationError {
+			Log.warn("Not starting, as the engine data was not taken over from the app container")
+			self.startupState = .error(containerMigrationError)
+			return
+		}
 
 		// If we are called again from onboarding, skip the stuff we already did
 		if self.startupState == .notStarted {
@@ -506,6 +529,12 @@ struct SyncState: Equatable {
 
 		self.startupState = .started
 		Log.info("Ready to go")
+		#if os(macOS)
+			if let notice = self.containerMigrationNotice {
+				self.containerMigrationNotice = nil
+				self.alert(message: notice, type: .informational)
+			}
+		#endif
 
 		#if os(macOS)
 			self.maintenanceManager.scheduleDatabaseMaintenance()

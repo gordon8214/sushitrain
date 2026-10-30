@@ -55,6 +55,7 @@ import SushitrainCore
 		@State private var showHomeDirectorySelector = false
 		@State private var currentPath: URL? = nil
 		@State private var showRestartAlert: Bool = false
+		@State private var containerFolders = ContainerFolders()
 
 		var body: some View {
 			Form {
@@ -107,6 +108,8 @@ import SushitrainCore
 						"The configuration folder contains the settings for the app, as well as the keys to communicate with other devices and bookkeeping of synchronized folders. By default, the configuration folder is managed by the app."
 					)
 				}
+
+				ContainerFoldersSection(model: containerFolders)
 			}
 			.formStyle(.grouped)
 			.navigationTitle("Configuration settings")
@@ -146,6 +149,7 @@ import SushitrainCore
 			)
 			.task {
 				self.updatePath()
+				await containerFolders.update(appState)
 			}
 		}
 

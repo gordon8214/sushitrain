@@ -47,11 +47,16 @@ var (
 
 // expandHome expands a leading ~ to the home directory (the files path) and cleans the path
 func (clt *Client) expandHome(p string) string {
+	return expandHomeIn(clt.filesPath, p)
+}
+
+// expandHomeIn expands a leading ~ to home and cleans the path
+func expandHomeIn(home string, p string) string {
 	if p == "~" {
-		return path.Clean(clt.filesPath)
+		return path.Clean(home)
 	}
 	if rest, ok := strings.CutPrefix(p, "~/"); ok {
-		return path.Join(clt.filesPath, rest)
+		return path.Join(home, rest)
 	}
 	return path.Clean(p)
 }
@@ -76,12 +81,37 @@ func pathsOverlap(a string, b string) bool {
 	return pathKey(a) == pathKey(b) || isInsideDirectory(a, b) || isInsideDirectory(b, a)
 }
 
-// withResolved is a path, and where its symbolic links lead if that is elsewhere (for a path that exists)
+// withResolved is a path, and where its symbolic links lead if that is elsewhere: those of the part of it that exists
+// (all of it, or its nearest existing parent)
 func withResolved(p string) []string {
-	if resolved, err := filepath.EvalSymlinks(p); err == nil && pathKey(resolved) != pathKey(p) {
-		return []string{p, resolved}
+	rest := ""
+	for dir := path.Clean(p); ; dir = path.Dir(dir) {
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			resolved = path.Join(resolved, rest)
+			if pathKey(resolved) != pathKey(p) {
+				return []string{p, resolved}
+			}
+			return []string{p}
+		}
+		if dir == "/" || dir == "." {
+			return []string{p}
+		}
+		rest = path.Join(path.Base(dir), rest)
 	}
-	return []string{p}
+}
+
+// overlapsAnyFolder reports whether a path overlaps one of the folders, also where symbolic links lead
+func overlapsAnyFolder(p string, folders []string) bool {
+	for _, candidate := range withResolved(p) {
+		for _, folder := range folders {
+			for _, existing := range withResolved(folder) {
+				if pathsOverlap(candidate, existing) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // overlapsEngineData reports whether a folder at p would contain, or be inside, the engine's configuration or database
@@ -181,12 +211,9 @@ func (clt *Client) homeFolderBases(defaultFolderPath string) []string {
 // ID, in the first of homeFolderBases that is in no other folder. The directory never exists yet and overlaps no other
 // folder: a name that is taken gets a number.
 func (clt *Client) defaultHomeFolderPath(folderID string, label string) (string, error) {
-	name := folderDirectoryName(label)
-	if name == "" {
-		name = folderDirectoryName(folderID)
-	}
-	if name == "" {
-		return "", fmt.Errorf("%w: %q; choose a location for the folder", errUnsafeFolderID, folderID)
+	name, err := folderName(folderID, label)
+	if err != nil {
+		return "", err
 	}
 	cfg := clt.cfg()
 	if cfg == nil {
@@ -194,28 +221,49 @@ func (clt *Client) defaultHomeFolderPath(folderID string, label string) (string,
 	}
 	existing := clt.folderPaths(cfg.FolderList())
 	for _, base := range clt.homeFolderBases(cfg.DefaultFolder().Path) {
-		if slices.ContainsFunc(existing, func(folder string) bool {
-			return pathKey(base) == pathKey(folder) || isInsideDirectory(base, folder)
-		}) {
+		if candidate, err := newFolderPathIn(base, name, existing); err == nil || !errors.Is(err, ErrNoDefaultFolderPath) {
+			return candidate, err
+		}
+	}
+	return "", ErrNoDefaultFolderPath
+}
+
+// folderName is the name of a folder's new directory: from its label, or else its ID
+func folderName(folderID string, label string) (string, error) {
+	name := folderDirectoryName(label)
+	if name == "" {
+		name = folderDirectoryName(folderID)
+	}
+	if name == "" {
+		return "", fmt.Errorf("%w: %q; choose a location for the folder", errUnsafeFolderID, folderID)
+	}
+	return name, nil
+}
+
+// newFolderPathIn is a new directory for a folder in base, named name (or with a number added, when that is taken), that
+// does not exist and overlaps none of the existing folders nor the engine's data. ErrNoDefaultFolderPath when base is a
+// folder or inside one, or no number is left.
+func newFolderPathIn(base string, name string, existing []string) (string, error) {
+	if slices.ContainsFunc(existing, func(folder string) bool {
+		return pathKey(base) == pathKey(folder) || isInsideDirectory(base, folder)
+	}) {
+		return "", ErrNoDefaultFolderPath
+	}
+	for number := 1; number <= maxNumberedFolderNames; number++ {
+		candidate := path.Join(base, name)
+		if number > 1 {
+			candidate += " " + strconv.Itoa(number)
+		}
+		if path.Dir(candidate) != base {
+			return "", fmt.Errorf("%w: %q", errUnsafeFolderID, name)
+		}
+		if overlapsAnyFolder(candidate, existing) || overlapsEngineData(candidate) {
 			continue
 		}
-		for number := 1; number <= maxNumberedFolderNames; number++ {
-			candidate := path.Join(base, name)
-			if number > 1 {
-				candidate += " " + strconv.Itoa(number)
-			}
-			if path.Dir(candidate) != base {
-				return "", fmt.Errorf("%w: %q", errUnsafeFolderID, name)
-			}
-			if slices.ContainsFunc(existing, func(folder string) bool { return pathsOverlap(candidate, folder) }) ||
-				overlapsEngineData(candidate) {
-				continue
-			}
-			if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return candidate, nil
+		if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
+			continue
 		}
+		return candidate, nil
 	}
 	return "", ErrNoDefaultFolderPath
 }
@@ -266,7 +314,7 @@ func (clt *Client) OverlappingFolderID(folderPath string) string {
 	expanded := clt.expandHome(folderPath)
 	for _, folder := range cfg.FolderList() {
 		if isNativeFilesystem(folder.FilesystemType) && folder.Path != "" &&
-			pathsOverlap(expanded, clt.expandHome(folder.Path)) {
+			overlapsAnyFolder(expanded, []string{clt.expandHome(folder.Path)}) {
 			return folder.ID
 		}
 	}

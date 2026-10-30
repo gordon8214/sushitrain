@@ -890,11 +890,17 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 		<-stagingDone
 	}()
 
+	journal := relocationJournalPath()
+	var relocationErr error
+	var finished []folderRelocation
 	waiter, err := staging.Modify(func(conf *config.Configuration) {
 		if ios {
 			applyAppDefaults(conf, ios)
 			applyIOSFolderSettings(conf, filesPath)
 		}
+
+		// Folder moves the app stopped in the middle of
+		_, finished, relocationErr = finishRelocations(conf, journal, filesPath)
 
 		// This engine is a fork, which must not send usage and failure reports to Syncthing's servers as an unknown
 		// build. (Crash uploads are the work of Syncthing's monitor process, which the app doesn't have.)
@@ -913,6 +919,16 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 		cfg = config.Wrap(cfgFile, applied, myID, logger)
 		if err := cfg.Save(); err != nil {
 			return nil, err
+		}
+	}
+	if relocationErr != nil {
+		// The folders stay as they are (some perhaps paused); the journal is kept for a look
+		slog.Warn("could not finish interrupted folder moves", "journal", journal, "cause", relocationErr)
+	} else if len(finished) > 0 {
+		if err := changeRelocations(func(relocations []folderRelocation) []folderRelocation {
+			return slices.DeleteFunc(relocations, func(r folderRelocation) bool { return slices.Contains(finished, r) })
+		}); err != nil {
+			slog.Warn("could not update the journal of folder moves", "journal", journal, "cause", err)
 		}
 	}
 

@@ -6964,6 +6964,52 @@
         }
       }
     },
+    "An earlier version of the app still uses the data in its app container. Quit it, then try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine frühere Version der App verwendet noch die Daten in ihrem App-Container. Beenden Sie sie und versuchen Sie es dann erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una versión anterior de la app todavía usa los datos de su contenedor. Ciérrala y vuelve a intentarlo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una versione precedente dell'app usa ancora i dati nel suo contenitore. Chiudila, poi riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以前のバージョンのアプリがまだアプリコンテナ内のデータを使用しています。それを終了してから、もう一度お試しください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een eerdere versie van de app gebruikt de gegevens in haar app-container nog. Sluit die af en probeer het opnieuw."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попередня версія додатка ще використовує дані у своєму контейнері. Закрийте її, а потім спробуйте ще раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用的早期版本仍在使用其应用容器中的数据。请退出它，然后重试。"
+          }
+        }
+      }
+    },
     "An item with this name exists already." : {
       "localizations" : {
         "de" : {
@@ -7880,6 +7926,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在检查网关是否拥有在此设备上所做的全部更改"
+          }
+        }
+      }
+    },
+    "Choose a folder outside the old app container." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wählen Sie einen Ordner außerhalb des alten App-Containers."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige una carpeta fuera del antiguo contenedor de la app."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli una cartella al di fuori del vecchio contenitore dell'app."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以前のアプリコンテナの外にあるフォルダを選択してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies een map buiten de oude app-container."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть папку поза старим контейнером додатка."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择旧应用容器之外的文件夹。"
           }
         }
       }
@@ -9724,6 +9816,52 @@
         }
       }
     },
+    "Folders in the old app container" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordner im alten App-Container"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carpetas en el antiguo contenedor de la app"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cartelle nel vecchio contenitore dell'app"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以前のアプリコンテナ内のフォルダ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappen in de oude app-container"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папки в старому контейнері додатка"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旧应用容器中的文件夹"
+          }
+        }
+      }
+    },
     "Folders opened through a gateway appear in the Synctrain location too, without being synchronized on this device." : {
       "localizations" : {
         "de" : {
@@ -11012,6 +11150,52 @@
         }
       }
     },
+    "Move folders out of the app container" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordner aus dem App-Container verschieben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sacar las carpetas del contenedor de la app"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sposta le cartelle fuori dal contenitore dell'app"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダをアプリコンテナの外へ移動"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappen uit de app-container verplaatsen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перемістити папки з контейнера додатка"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将文件夹移出应用容器"
+          }
+        }
+      }
+    },
     "Move or rename" : {
       "localizations" : {
         "de" : {
@@ -11054,6 +11238,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移动或重命名"
+          }
+        }
+      }
+    },
+    "Move to another folder..." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In einen anderen Ordner verschieben..."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mover a otra carpeta..."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sposta in un'altra cartella..."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "別のフォルダへ移動..."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verplaatsen naar een andere map..."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перемістити в іншу папку..."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移动到其他文件夹..."
           }
         }
       }
@@ -14878,6 +15108,52 @@
         }
       }
     },
+    "Some folders could not be moved" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Ordner konnten nicht verschoben werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron mover algunas carpetas"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non è stato possibile spostare alcune cartelle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部のフォルダを移動できませんでした"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sommige mappen konden niet worden verplaatst"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося перемістити деякі папки"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分文件夹无法移动"
+          }
+        }
+      }
+    },
     "Something Went Wrong" : {
       "localizations" : {
         "de" : {
@@ -16902,6 +17178,98 @@
         }
       }
     },
+    "The app could not move its data out of its old app container (%@). Your data is still in the container." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die App konnte ihre Daten nicht aus ihrem alten App-Container verschieben (%@). Ihre Daten befinden sich noch im Container."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La app no pudo sacar sus datos de su antiguo contenedor (%@). Tus datos siguen en el contenedor."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'app non è riuscita a spostare i suoi dati fuori dal vecchio contenitore (%@). I tuoi dati sono ancora nel contenitore."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリは以前のアプリコンテナからデータを移動できませんでした（%@）。データはまだコンテナ内にあります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De app kon haar gegevens niet uit haar oude app-container verplaatsen (%@). Je gegevens staan nog in de container."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Додатку не вдалося перемістити свої дані зі старого контейнера (%@). Ваші дані все ще в контейнері."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用无法将其数据移出旧的应用容器（%@）。您的数据仍在容器中。"
+          }
+        }
+      }
+    },
+    "The app could not take over its settings from its old app container (%@). Your data is still in the container." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die App konnte ihre Einstellungen nicht aus ihrem alten App-Container übernehmen (%@). Ihre Daten befinden sich noch im Container."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La app no pudo recuperar sus ajustes de su antiguo contenedor (%@). Tus datos siguen en el contenedor."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'app non è riuscita a riprendere le sue impostazioni dal vecchio contenitore (%@). I tuoi dati sono ancora nel contenitore."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリは以前のアプリコンテナから設定を引き継げませんでした（%@）。データはまだコンテナ内にあります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De app kon haar instellingen niet overnemen uit haar oude app-container (%@). Je gegevens staan nog in de container."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Додатку не вдалося перенести свої налаштування зі старого контейнера (%@). Ваші дані все ще в контейнері."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用无法从其旧的应用容器中接管设置（%@）。您的数据仍在容器中。"
+          }
+        }
+      }
+    },
     "The app is logging to a file, which you can share with the developers." : {
       "localizations" : {
         "de" : {
@@ -16948,6 +17316,52 @@
         }
       }
     },
+    "The app may not read its old app container. Allow it in System Settings, under Privacy & Security, then try again. Your data is still in the container." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die App darf ihren alten App-Container nicht lesen. Erlauben Sie es in den Systemeinstellungen unter „Datenschutz & Sicherheit“ und versuchen Sie es dann erneut. Ihre Daten befinden sich noch im Container."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La app no tiene permiso para leer su antiguo contenedor. Permíteselo en Ajustes del Sistema, en Privacidad y seguridad, y vuelve a intentarlo. Tus datos siguen en el contenedor."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'app non ha il permesso di leggere il suo vecchio contenitore. Consentilo in Impostazioni di Sistema, in Privacy e sicurezza, poi riprova. I tuoi dati sono ancora nel contenitore."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリは以前のアプリコンテナを読み取ることを許可されていません。システム設定の「プライバシーとセキュリティ」で許可してから、もう一度お試しください。データはまだコンテナ内にあります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De app mag haar oude app-container niet lezen. Sta het toe in Systeeminstellingen, onder Privacy en beveiliging, en probeer het opnieuw. Je gegevens staan nog in de container."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Додатку не дозволено читати свій старий контейнер. Дозвольте це в Системних параметрах, у розділі «Приватність і безпека», а потім спробуйте ще раз. Ваші дані все ще в контейнері."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用无权读取其旧的应用容器。请在“系统设置”的“隐私与安全性”中允许，然后重试。您的数据仍在容器中。"
+          }
+        }
+      }
+    },
     "The app then uses the configuration in the default location, and restarts (or closes, to be opened again). If there is none there, this device starts with a new configuration and a new device identity." : {
       "localizations" : {
         "de" : {
@@ -16990,6 +17404,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "应用随后将使用默认位置中的配置并重新启动（或关闭，需要重新打开）。如果那里没有配置，此设备将以新的配置和新的设备身份启动。"
+          }
+        }
+      }
+    },
+    "The app uses the configuration in %@, whose device identity differs from the one in its old app container. The data in the container was left as it is." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die App verwendet die Konfiguration in %@, deren Geräteidentität sich von der in ihrem alten App-Container unterscheidet. Die Daten im Container wurden unverändert gelassen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La app usa la configuración de %@, cuya identidad de dispositivo es distinta de la de su antiguo contenedor. Los datos del contenedor se han dejado tal cual."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'app usa la configurazione in %@, la cui identità del dispositivo è diversa da quella nel vecchio contenitore. I dati nel contenitore sono stati lasciati come sono."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリは %@ の設定を使用しています。そのデバイスIDは、以前のアプリコンテナ内のものとは異なります。コンテナ内のデータはそのまま残されています。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De app gebruikt de configuratie in %@, waarvan de apparaatidentiteit verschilt van die in haar oude app-container. De gegevens in de container zijn gelaten zoals ze waren."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Додаток використовує конфігурацію в %@, ідентичність пристрою якої відрізняється від тієї, що в старому контейнері. Дані в контейнері залишено як є."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用使用 %@ 中的配置，其设备身份与旧应用容器中的不同。容器中的数据保持原样。"
           }
         }
       }
@@ -19202,6 +19662,52 @@
         }
       }
     },
+    "The preferences file is damaged." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Einstellungsdatei ist beschädigt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo de preferencias está dañado."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il file delle preferenze è danneggiato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "環境設定ファイルが破損しています。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het voorkeurenbestand is beschadigd."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл параметрів пошкоджено."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "偏好设置文件已损坏。"
+          }
+        }
+      }
+    },
     "The previous versions of this file have the same contents as the current one." : {
       "localizations" : {
         "de" : {
@@ -19428,6 +19934,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有可导出的文件夹。"
+          }
+        }
+      }
+    },
+    "These folders are still where the app kept them inside the App Sandbox. They keep working there. Moving them puts each in a new folder inside the folder you choose, on the same disk." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Ordner liegen noch dort, wo die App sie in der App-Sandbox aufbewahrt hat. Sie funktionieren dort weiterhin. Beim Verschieben kommt jeder in einen neuen Ordner innerhalb des Ordners, den Sie auswählen, auf demselben Laufwerk."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estas carpetas siguen donde la app las guardaba dentro del App Sandbox. Siguen funcionando ahí. Al moverlas, cada una pasa a una carpeta nueva dentro de la carpeta que elijas, en el mismo disco."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queste cartelle si trovano ancora dove l'app le teneva nell'App Sandbox. Continuano a funzionare lì. Spostandole, ognuna finisce in una nuova cartella all'interno della cartella che scegli, sullo stesso disco."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これらのフォルダは、アプリが App Sandbox 内で保管していた場所に残っています。そこでも引き続き機能します。移動すると、選択したフォルダ内の新しいフォルダにそれぞれ移されます（同じディスク上）。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze mappen staan nog waar de app ze in de App Sandbox bewaarde. Ze blijven daar werken. Bij het verplaatsen komt elke map in een nieuwe map binnen de map die je kiest, op dezelfde schijf."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ці папки все ще там, де додаток зберігав їх у App Sandbox. Вони й далі там працюють. Під час переміщення кожна потрапить у нову папку всередині вибраної вами папки на тому самому диску."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些文件夹仍在应用于 App Sandbox 中存放它们的位置，并且在那里可以继续使用。移动后，每个文件夹都会放入您所选文件夹中的一个新文件夹，位于同一磁盘上。"
           }
         }
       }

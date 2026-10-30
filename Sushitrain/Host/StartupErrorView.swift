@@ -38,8 +38,8 @@ struct StartupErrorView: View {
 					}
 				}
 			#endif
-			if problem == SushitrainStartupProblemMissingConfigurationDirectory {
-				// Once its disk is connected
+			if problem == SushitrainStartupProblemMissingConfigurationDirectory || appState.containerMigrationError != nil {
+				// Once the disk of the configuration folder is connected, or the app using the container quit
 				Button("Try Again") {
 					isRetrying = true
 					Task {

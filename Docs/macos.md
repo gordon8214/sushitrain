@@ -76,6 +76,31 @@ Folders are the user's, anywhere (in the home directory or on another volume), a
 - No folder counts as another app's (external), and none is excluded from Time Machine. On iOS, new folders are still
   left out of the device backup by default.
 
+## Moving out of the App Sandbox
+
+The first start outside the sandbox takes over what the sandboxed app kept in its container
+(`~/Library/Containers/<bundle id>/Data`), before the engine starts:
+
+- **Preferences.** Both preference files are first backed up in
+  `~/Library/Application Support/Synctrain Migration Backups/<time>/`; then the container's values that are not set yet
+  are added (but not AppKit's window and open panel state). Its bookmarks become paths when they are first used.
+- **Engine data**, unless a configuration folder was chosen: its data stays where it is, and only the remote file
+  service's certificate copies are taken over. Otherwise the configuration, keys, databases and the remote file
+  service's state are copied (cloned, on APFS) into `Synctrain.migrating`, with the container's lock held, checked file
+  by file (and the device certificate and key by their SHA-256), and renamed into place as
+  `~/Library/Application Support/Synctrain`, with a receipt (`container-migration.json`) naming what was copied and the
+  certificate's SHA-256. Caches stay behind; a destination with no engine data (such as what a failed attempt left) is
+  set aside as `Synctrain.premigration-<time>`.
+- **When it can't.** If the container can't be read (macOS may ask to allow that), the preferences can't be taken over,
+  an earlier version still runs, or the copy fails, the copy is removed and the engine doesn't start, as it would start
+  anew with another device identity. The app says why and offers to try again. A destination that has engine data of
+  its own is used as it is; the app says so once when its device identity differs from the container's.
+- **The container** is left as it is. It is the copy to go back to, and can be removed once all is well.
+- **Folders in the container** keep their paths and keep working. The app offers, once and in the configuration
+  settings, to move them to a folder the user chooses: each is renamed (never copied) into a new folder there, named
+  after its label, and paused while it moves. A journal in the configuration folder (`folder-relocations.json`) lets
+  the next start finish a move the app stopped in the middle of.
+
 ## Restarting and shutting down
 
 Restarting Syncthing (from the web GUI or the REST API's `/rest/system/restart`, from Troubleshooting in the app's
