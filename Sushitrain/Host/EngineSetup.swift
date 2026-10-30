@@ -26,19 +26,13 @@
 		static let choiceKey = "engineSetupChoice"
 		static let receiptName = "syncthing-takeover.json"
 
-		/// The choice made (a test run keeps its own, TestRun)
+		/// The choice made
 		static var choice: Choice? {
 			get {
-				let value = TestRun.isActive ? TestRun.value(forKey: choiceKey) : UserDefaults.standard.object(forKey: choiceKey)
-				return (value as? String).flatMap(Choice.init(rawValue:))
+				UserDefaults.standard.string(forKey: choiceKey).flatMap(Choice.init(rawValue:))
 			}
 			set {
-				if TestRun.isActive {
-					TestRun.set(newValue?.rawValue, forKey: choiceKey)
-				}
-				else {
-					UserDefaults.standard.set(newValue?.rawValue, forKey: choiceKey)
-				}
+				UserDefaults.standard.set(newValue?.rawValue, forKey: choiceKey)
 			}
 		}
 
@@ -68,8 +62,7 @@
 			}
 			facts.usesSyncthingHome = configDirectory.standardizedFileURL.path == home.standardizedFileURL.path
 			// An app that ran before (before this choice existed) has its setup
-			facts.choiceRecorded =
-				self.choice != nil || (!TestRun.isActive && UserDefaults.standard.integer(forKey: "lastRunBuild") > 0)
+			facts.choiceRecorded = self.choice != nil || UserDefaults.standard.integer(forKey: "lastRunBuild") > 0
 			facts.syncthingHasConfiguration = SyncthingInstallation.hasConfiguration
 			facts.syncthingRunning = SyncthingInstallation.isRunning(besides: client)
 			if let own = ContainerMigration.sha256(of: configDirectory.appending(path: "cert.pem")) {

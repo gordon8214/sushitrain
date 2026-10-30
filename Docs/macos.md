@@ -171,8 +171,10 @@ device identity never runs twice:
   Syncthing runs: the app waits, whether or not a window shows it, and starts once Syncthing has quit. Another
   Syncthing, with another identity, runs alongside only once that is chosen; both then compete for the same ports. The
   app comes forward when the user has to choose.
-- A debug run with `SYNCTRAIN_TEST_ROOT` takes over the Syncthing folder in its scratch directory, keeps its choices
-  there, and changes nothing in the real app's or Syncthing.app's settings.
+- A debug run with `SYNCTRAIN_TEST_ROOT` takes over the Syncthing folder in its scratch directory, and changes nothing
+  in the real app's or Syncthing.app's settings. Its preferences are in `Library/Preferences` there: `TestRun` changes
+  what `UserDefaults.standard` returns before anything reads it, so that the app's code, `@AppStorage` and AppKit all
+  use them, and the rest of the app treats them as usual. A test run stops rather than fall back to the real ones.
 
 A taken-over configuration keeps its own web GUI setting, and its paused devices stay paused (the app pauses and
 resumes devices from its own list, which the takeover fills). A receipt, `syncthing-takeover.json` in

@@ -45,6 +45,7 @@ struct SushitrainApp: App {
 
 		// The first start outside the sandbox takes over the sandboxed app's preferences and engine data
 		#if os(macOS)
+			TestRun.redirectPreferences()
 			let containerMigration = ContainerMigrator.run()
 		#endif
 

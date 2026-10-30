@@ -379,10 +379,6 @@ struct SyncState: Equatable {
 		/// devices from its own list), and skips the introduction and the upgrade steps, which are for the app's own
 		/// configurations
 		@MainActor func adoptSyncthingSettings(pausedDevices: [String]) {
-			// A test run leaves the real settings alone
-			guard !TestRun.isActive else {
-				return
-			}
 			self.userSettings.userPausedDevices = Set(pausedDevices)
 			self.userSettings.onboardingVersionShown = Self.currentOnboardingVersion
 			UserDefaults.standard.set(Int(Bundle.main.buildVersionNumber ?? "0") ?? 0, forKey: "lastRunBuild")
