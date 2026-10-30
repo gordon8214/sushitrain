@@ -210,7 +210,7 @@ struct SyncState: Equatable {
 		@ObservationIgnored private var engineSetupWatcher: Task<Void, Never>? = nil
 	#endif
 	@ObservationIgnored private var hasFinishedStarting = false
-	/// Set when the app is about to quit, so that a failure to start isn't shown anymore
+	/// Set when the app is about to quit, so that no alert opens anymore: one would hold up quitting
 	@ObservationIgnored var isQuitting = false
 	private(set) var isMigratedToNewDatabase: Bool = false
 	private(set) var syncState: SyncState = SyncState(isDownloading: false, isUploading: false, connectedPeerCount: 0)
@@ -559,9 +559,7 @@ struct SyncState: Equatable {
 			self.startupState = .error(error.localizedDescription)
 
 			#if os(macOS)
-				if !self.isQuitting {
-					self.alert(message: error.localizedDescription)
-				}
+				self.alert(message: error.localizedDescription)
 			#endif
 		}
 	}
@@ -837,7 +835,10 @@ struct SyncState: Equatable {
 			// The web GUI or the REST API asked Syncthing to shut down, which for the app means quitting
 			Log.info("The engine was shut down; quitting")
 			#if os(macOS)
-				NSApplication.shared.terminate(nil)
+				if !isQuitting {
+					isQuitting = true
+					AppRelauncher.quit()
+				}
 			#else
 				startupState = .error(String(localized: "Synchronization was stopped."))
 			#endif
@@ -856,6 +857,10 @@ struct SyncState: Equatable {
 	}
 
 	func alert(message: String, type: AlertType = .error) {
+		guard !isQuitting else {
+			Log.info("Not showing an alert while quitting: \(message)")
+			return
+		}
 		Self.modalAlert(message: message, type: type)
 	}
 

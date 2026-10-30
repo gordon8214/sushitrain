@@ -7,7 +7,7 @@
 	import AppKit
 	import SynctrainHostKit
 
-	/// Quits the app and opens it again, as after choosing another configuration folder
+	/// Quits the app, and opens it again if asked, as after choosing another configuration folder
 	enum AppRelauncher {
 		/// Whether the app can open itself again: outside the App Sandbox, and not in a test run (whose environment
 		/// opening it again would lose). Otherwise it only quits.
@@ -15,11 +15,20 @@
 			!FolderAccess.usesSecurityScope && EngineLocations.testRoot == nil
 		}
 
+		/// Quits the app normally (stopping the engine), from code that may be running on the main queue. terminate waits
+		/// in a nested run loop for applicationShouldTerminate's main actor task, which that run loop can't start from
+		/// inside a main queue block or a main actor task, so it is called from the run loop instead. This returns at
+		/// once; the app quits on a later turn of the run loop.
+		@MainActor static func quit() {
+			NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0, inModes: [.common])
+		}
+
 		/// Quits the app normally (stopping the engine), and opens it again once this process has exited, so that the
-		/// two never run at the same time. Should the app still run after two minutes, it is not opened again.
+		/// two never run at the same time. Should the app still run after two minutes, it is not opened again. Like
+		/// quit, this returns at once.
 		@MainActor static func relaunch() {
 			guard canRelaunch else {
-				NSApp.terminate(nil)
+				quit()
 				return
 			}
 			let opener = Process()
@@ -39,7 +48,7 @@
 			catch {
 				Log.warn("Could not arrange to open the app again: \(error.localizedDescription)")
 			}
-			NSApp.terminate(nil)
+			quit()
 		}
 	}
 #endif
