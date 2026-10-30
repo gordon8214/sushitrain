@@ -49,8 +49,7 @@ jobs:
 
       - name: Build for iOS and macOS
         run: |
-          make ios mac
-          make cleanup
+          make build
 
       - name: Package application
         run: |

@@ -3,9 +3,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
-.PHONY: lint format macos ios clean build cleanup
+.PHONY: lint format core mac ios clean build
+# Both platforms archive the same scheme into the same derived data, which Xcode can't do concurrently
+.NOTPARALLEL:
 
-build: macos ios
+build: mac ios
 
 format: Sushitrain/*.swift
 	swift format format -r -i .
@@ -25,7 +27,6 @@ core:
 
 mac: core
 	# Build .app
-	plutil -remove "com\.apple\.developer\.device-information\.user-assigned-device-name" Sushitrain/Sushitrain.entitlements
 	xcodebuild -scheme "Synctrain release" \
 		-archivePath "$(BUILD_DIR)/synctrain-macos.xcarchive" \
 		-sdk macosx \
