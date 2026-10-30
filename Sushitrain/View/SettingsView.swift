@@ -165,7 +165,7 @@ import SushitrainCore
 					}
 					else {
 						Button("Close the app") {
-							exit(0)
+							AppRelauncher.quit()
 						}
 					}
 				},
