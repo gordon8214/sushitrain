@@ -5,9 +5,10 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 #if os(macOS)
 	import Foundation
+	import SynctrainHostKit
 
-	/// Keeps copies of the certificate and private key the user chose for the remote file service in the app's
-	/// container, where the service can always read them. The originals are remembered with bookmarks, so that a renewed
+	/// Keeps copies of the certificate and private key the user chose for the remote file service in the app's own
+	/// folder (EngineLocations.remoteFileService), where the service can always read them. The originals are remembered with bookmarks, so that a renewed
 	/// certificate is picked up when the service starts.
 	enum GatewayCertificateStore {
 		enum ImportError: LocalizedError {
@@ -31,7 +32,7 @@
 		private static let keyBookmarkKey = "remoteFileServiceKeyBookmark"
 
 		static var directory: URL {
-			URL.applicationSupportDirectory.appending(path: "RemoteFileService", directoryHint: .isDirectory)
+			EngineLocations.current.remoteFileService
 		}
 
 		static var certificateURL: URL {

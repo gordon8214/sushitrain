@@ -209,7 +209,6 @@ struct SyncState: Equatable {
 	fileprivate(set) var currentNetworkPath: NWPath? = nil
 	private(set) var isLowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
 
-	private let documentsDirectory: URL
 	private let configDirectory: URL
 	private var changeCancellable: AnyCancellable? = nil
 	private var settingsCancellable: AnyCancellable? = nil
@@ -228,9 +227,8 @@ struct SyncState: Equatable {
 	static let removeMigratedV1DatabaseAfterSeconds: TimeInterval = 7 * 86400.0  // 7 days
 	static let maxChanges = 25
 
-	init(client: SushitrainClient, documentsDirectory: URL, configDirectory: URL) {
+	init(client: SushitrainClient, configDirectory: URL) {
 		self.client = client
-		self.documentsDirectory = documentsDirectory
 		self.configDirectory = configDirectory
 
 		#if os(iOS)
@@ -472,7 +470,9 @@ struct SyncState: Equatable {
 		Task {
 			await self.updateBadge()
 		}
-		self.protectFiles()
+		#if os(iOS)
+			self.protectFiles()
+		#endif
 		self.startNetworkMonitor()
 		#if os(iOS)
 			FileProviderCoordinator.shared.start(client: client)
@@ -562,6 +562,7 @@ struct SyncState: Equatable {
 		}
 	}
 
+	/// Keeps the configuration and keys unreadable until the device is first unlocked (iOS data protection)
 	func protectFiles() {
 		// Set data protection for config file and keys
 		let configDirectoryURL = self.configDirectory
@@ -1102,14 +1103,18 @@ struct SyncState: Equatable {
 		}
 	}
 
+	/// Whether a folder the user picked is in the app's own Documents folder (iOS), where only the app creates folders. On
+	/// macOS folders can be anywhere, Documents included.
 	func isInsideDocumentsFolder(_ url: URL) -> Bool {
 		#if os(iOS)
 			if FileProviderStorage.contains(url) {
 				return true
 			}
+			return url.resolvingSymlinksInPath().path(percentEncoded: false)
+				.hasPrefix(URL.documentsDirectory.resolvingSymlinksInPath().path(percentEncoded: false))
+		#else
+			return false
 		#endif
-		return url.resolvingSymlinksInPath().path(percentEncoded: false)
-			.hasPrefix(documentsDirectory.resolvingSymlinksInPath().path(percentEncoded: false))
 	}
 
 	static func requestNotificationPermissionIfNecessary() {

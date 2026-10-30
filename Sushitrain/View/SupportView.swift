@@ -699,20 +699,38 @@ struct TroubleshootingView: View {
 		Form {
 			Section {
 				Toggle("Save log to a file", isOn: userSettings.$loggingToFileEnabled)
+				#if os(macOS)
+					if appState.isLoggingToFile {
+						Button("Show in Finder", systemImage: "folder") {
+							NSWorkspace.shared.open(EngineLocations.current.logs)
+						}
+					}
+				#endif
 			} header: {
 				Text("Logging")
 			} footer: {
 				if appState.userSettings.loggingToFileEnabled {
-					if appState.isLoggingToFile {
-						Text(
-							"The app is logging to a file in the application folder, which you can share with the developers."
-						)
-					}
-					else {
-						Text(
-							"After restarting the app, the app will write a log file in the application folder, which you can then share with the developers."
-						)
-					}
+					#if os(macOS)
+						if appState.isLoggingToFile {
+							Text("The app is logging to a file, which you can share with the developers.")
+						}
+						else {
+							Text(
+								"After restarting the app, the app will write a log file, which you can then share with the developers."
+							)
+						}
+					#else
+						if appState.isLoggingToFile {
+							Text(
+								"The app is logging to a file in the application folder, which you can share with the developers."
+							)
+						}
+						else {
+							Text(
+								"After restarting the app, the app will write a log file in the application folder, which you can then share with the developers."
+							)
+						}
+					#endif
 				}
 				else {
 					if appState.isLoggingToFile {
@@ -990,7 +1008,8 @@ struct TroubleshootingView: View {
 		self.hasMigratedLegacyDatabase = appState.client.hasMigratedLegacyDatabase()
 
 		let fileManager = FileManager.default
-		let path = SushitrainApp.configDirectoryURL().appending(path: "index-v2", directoryHint: .isDirectory)
+		let path = URL(fileURLWithPath: appState.client.currentConfigDirectory(), isDirectory: true).appending(
+			path: "index-v2", directoryHint: .isDirectory)
 		do {
 			let size = try await fileManager.sizeOfFolder(path: path)
 			self.databaseSize = Int64(size)

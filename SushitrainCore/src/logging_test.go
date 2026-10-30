@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -205,5 +207,32 @@ func TestWriteLogLines(t *testing.T) {
 		if name == "warnings" && len(ours) != 1 {
 			t.Errorf("warnings include other levels: %q", ours)
 		}
+	}
+}
+
+func TestLogFileIsCreatedWithItsDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "Library", "Logs", "Synctrain")
+	started := time.Date(2026, 10, 3, 11, 5, 6, 0, time.UTC)
+	f, err := createLogFile(dir, started)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if _, err := os.Stat(filepath.Join(dir, "synctrain-2026-10-03-11-05-06.log")); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o700 {
+		t.Errorf("log directory mode %v", info.Mode().Perm())
+	}
+}
+
+func TestLogFilesAreNamedInOrder(t *testing.T) {
+	started := time.Date(2026, 10, 3, 4, 5, 6, 0, time.FixedZone("PDT", -7*3600))
+	if got := logFilePath("/logs", started); got != "/logs/synctrain-2026-10-03-11-05-06.log" {
+		t.Fatalf("got %s", got)
 	}
 }

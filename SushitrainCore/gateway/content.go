@@ -255,6 +255,10 @@ func (rep *representation) usedAt() time.Time {
 
 func (rep *representation) open() error {
 	_ = os.Remove(rep.spoolPath)
+	// The spool may be in a cache directory the host clears while the service runs
+	if err := os.MkdirAll(rep.m.dir, 0o700); err != nil {
+		return err
+	}
 	// Try a clone of the local file first: it takes no time or space, and its blocks are then verified in place
 	if rep.localPath != "" && rep.localMatches() {
 		if err := cloneFile(rep.localPath, rep.spoolPath); err == nil {

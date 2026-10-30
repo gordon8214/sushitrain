@@ -352,10 +352,12 @@ struct AddFolderView: View {
 			}
 
 			if let folder = appState.client.folder(withID: self.adding.folderID) {
-				if folder.isRegularFolder {
-					// By default, exclude from backup
-					folder.isExcludedFromBackup = true
-				}
+				#if os(iOS)
+					if folder.isRegularFolder {
+						// By default, exclude from device back-up (on macOS folders stay in Time Machine backups)
+						folder.isExcludedFromBackup = true
+					}
+				#endif
 
 				// Add peers
 				for devID in self.adding.sharedWithDevices {

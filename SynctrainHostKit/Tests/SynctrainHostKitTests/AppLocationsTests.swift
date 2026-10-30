@@ -56,6 +56,8 @@ private let dayAgo = Date().addingTimeInterval(-86400)
 	#expect(f.locations.caches.path == f.systemCaches.appending(path: "test.Synctrain").path)
 	#expect(f.locations.temporary.path == f.systemTemporary.appending(path: "test.Synctrain").path)
 	#expect(f.locations.thumbnails.path == f.systemCaches.appending(path: "test.Synctrain/thumbnails").path)
+	#expect(
+		f.locations.remoteFileService.path == f.systemCaches.appending(path: "test.Synctrain/RemoteFileService").path)
 }
 
 @Test func bundleIdentifiersMustBeARealPathComponent() {

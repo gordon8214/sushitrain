@@ -16,14 +16,11 @@ extension AppLocations {
 		var systemTemporary = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
 		let appGroup = Bundle.main.object(forInfoDictionaryKey: "SynctrainAppGroup") as? String
 		var groupCaches = appGroup.flatMap { AppLocations.groupCaches(appGroup: $0) }
-		#if DEBUG && os(macOS)
-			if let root = ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_ROOT"], !root.isEmpty {
-				let rootURL = URL(fileURLWithPath: root, isDirectory: true)
-				systemCaches = rootURL.appending(path: "Library/Caches", directoryHint: .isDirectory)
-				systemTemporary = rootURL.appending(path: "tmp", directoryHint: .isDirectory)
-				groupCaches = rootURL.appending(path: "Group/Library/Caches", directoryHint: .isDirectory)
-			}
-		#endif
+		if let root = EngineLocations.testRoot {
+			systemCaches = root.appending(path: "Library/Caches", directoryHint: .isDirectory)
+			systemTemporary = root.appending(path: "tmp", directoryHint: .isDirectory)
+			groupCaches = root.appending(path: "Group/Library/Caches", directoryHint: .isDirectory)
+		}
 
 		return AppLocations(
 			bundleIdentifier: Bundle.main.bundleIdentifier ?? "gordonbyrnes.Sushitrain", systemCaches: systemCaches,

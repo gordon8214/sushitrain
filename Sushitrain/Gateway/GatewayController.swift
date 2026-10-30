@@ -7,6 +7,7 @@
 	import AppKit
 	import Foundation
 	import os
+	import SynctrainHostKit
 	@preconcurrency import SushitrainCore
 
 	/// Runs the remote file service (Docs/gateway.md) in the app, so that Synctrain on other devices can browse, open and
@@ -373,7 +374,8 @@
 			let configuration = ServiceConfiguration(
 				listenAddress: ":\(settings.port)", certFile: certFile, keyFile: keyFile,
 				serviceName: settings.effectiveServiceName, publicHost: settings.effectivePublicHost,
-				publicPort: settings.port, contentCacheMiB: settings.contentCacheMiB)
+				publicPort: settings.port, contentCacheMiB: settings.contentCacheMiB,
+				cacheDirectory: AppLocations.current.remoteFileService.path(percentEncoded: false))
 			return try JSONEncoder().encode(configuration)
 		}
 
@@ -469,6 +471,7 @@
 		let publicHost: String
 		let publicPort: Int
 		let contentCacheMiB: Int
+		let cacheDirectory: String
 	}
 
 	enum GatewayError: LocalizedError {

@@ -45,10 +45,9 @@ struct SushitrainApp: App {
 
 		// Find out all the relevant locations we need to access
 		AppLocations.prepareCurrent()
+		let engineLocations = EngineLocations.current
 		let configDirectory = Self.configDirectoryURL()
-		let documentsDirectory = try! FileManager.default.url(
-			for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-		let documentsPath = documentsDirectory.path(percentEncoded: false)
+		let filesPath = engineLocations.files.path(percentEncoded: false)
 		let configPath = configDirectory.path(percentEncoded: false)
 		let enableLoggingToFile = UserDefaults.standard.bool(forKey: "loggingEnabled")
 		registerPhotoFilesystem()
@@ -56,7 +55,8 @@ struct SushitrainApp: App {
 		#if os(iOS)
 			FileProviderStorage.configureManagedFolderBase()
 		#endif
-		let client = SushitrainNewClient(configPath, documentsPath, enableLoggingToFile)!
+		let client = SushitrainNewClient(
+			configPath, filesPath, engineLocations.logs.path(percentEncoded: false), enableLoggingToFile)!
 		if UserDefaults.standard.bool(forKey: "keepLogLevels") {
 			client.applyLogLevels(UserDefaults.standard.string(forKey: "keptLogLevels") ?? "")
 		}
@@ -85,7 +85,7 @@ struct SushitrainApp: App {
 			}
 		}
 
-		let appState = AppState(client: client, documentsDirectory: documentsDirectory, configDirectory: configDirectory)
+		let appState = AppState(client: client, configDirectory: configDirectory)
 		self.appState = appState
 		self.userSettings = appState.userSettings
 		#if os(macOS)
@@ -119,21 +119,20 @@ struct SushitrainApp: App {
 		#endif
 	}
 
+	/// The engine's configuration directory: on macOS the one the user chose, or Synctrain's own, on iOS the app's
+	/// Application Support directory
 	static func configDirectoryURL() -> URL {
-		// Determine the config directory (on macOS the user can choose a directory)
-		var isCustom = false
 		#if os(macOS)
-			var configDirectory: URL
 			var isStale = false
-			if let configDirectoryBookmark = UserDefaults.standard.data(forKey: "configDirectoryBookmark"),
+			// A test run (SYNCTRAIN_TEST_ROOT) leaves the configuration folder the user chose alone
+			if EngineLocations.testRoot == nil,
+				let configDirectoryBookmark = UserDefaults.standard.data(forKey: "configDirectoryBookmark"),
 				let cd = try? URL(
 					resolvingBookmarkData: configDirectoryBookmark, options: [.withSecurityScope],
 					bookmarkDataIsStale: &isStale),
 				cd.startAccessingSecurityScopedResource()
 			{
-				configDirectory = cd
-				Log.info("Using custom config directory: \(configDirectory)")
-				isCustom = true
+				Log.info("Using custom config directory: \(cd)")
 
 				if isStale {
 					Log.info("Config directory bookmark is stale, recreating bookmark")
@@ -142,19 +141,25 @@ struct SushitrainApp: App {
 							bookmarkData, forKey: "configDirectoryBookmark")
 					}
 				}
+				return cd
 			}
-			else {
-				configDirectory = try! FileManager.default.url(
-					for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil,
-					create: true)
+
+			// Its own folder, for this user only; Time Machine backs it up, as with Syncthing
+			let configDirectory = EngineLocations.current.configDirectory
+			do {
+				try FileManager.default.createDirectory(
+					at: configDirectory, withIntermediateDirectories: true,
+					attributes: [.posixPermissions: 0o700])
 			}
+			catch {
+				Log.warn("Could not create \(configDirectory.path): \(error.localizedDescription)")
+			}
+			return configDirectory
 		#else
 			var configDirectory = try! FileManager.default.url(
 				for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil,
 				create: true)
-		#endif
 
-		if !isCustom {
 			// Exclude config and database directory from device back-up
 			var excludeFromBackup = URLResourceValues()
 			excludeFromBackup.isExcludedFromBackup = true
@@ -166,9 +171,8 @@ struct SushitrainApp: App {
 					"Error excluding \(configDirectory.path) from backup: \(error.localizedDescription)"
 				)
 			}
-		}
-
-		return configDirectory
+			return configDirectory
+		#endif
 	}
 
 	private func onReceiveMemoryWarning() {

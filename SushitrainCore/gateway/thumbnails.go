@@ -147,7 +147,7 @@ func (s *Service) handleThumbnail(w http.ResponseWriter, r *http.Request, p prin
 }
 
 func (s *Service) thumbnailDir() string {
-	return filepath.Join(s.cfg.Home, "thumbnails")
+	return filepath.Join(s.cfg.CacheDir, "thumbnails")
 }
 
 // pruneThumbnails removes cached thumbnails nobody asked for in a while (their content may be long gone)

@@ -148,7 +148,23 @@ const (
 	KeyFileName          = "key.pem"
 )
 
-func NewClient(configPath string, filesPath string, saveLog bool) *Client {
+// logFilePath is where a log started at a time is saved, named after the time (in UTC) so that names sort in order
+func logFilePath(dir string, started time.Time) string {
+	return path.Join(dir, started.UTC().Format("synctrain-2006-01-02-15-04-05")+".log")
+}
+
+// createLogFile creates the file a log started at a time is saved to, and the log directory if needed
+func createLogFile(dir string, started time.Time) (*os.File, error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	// Unbuffered, so that the file has every line when the app stops; the log handler writes a line at a time
+	return os.Create(logFilePath(dir, started))
+}
+
+// NewClient creates the client of an engine that keeps its configuration and database in configPath and treats
+// filesPath as the user's home directory. When saveLog is set, the log is also saved to a file in logPath.
+func NewClient(configPath string, filesPath string, logPath string, saveLog bool) *Client {
 	// Set version info
 	build.Version = "v2.1.7"
 	build.Host = "t-shaped.nl"
@@ -156,16 +172,18 @@ func NewClient(configPath string, filesPath string, saveLog bool) *Client {
 
 	// Set up logging
 	var logOutWriter io.Writer = os.Stdout
+	var logFileErr error
 	if saveLog {
-		logFilePath := path.Join(filesPath, fmt.Sprintf("%s.log", time.Now().UTC().Format("synctrain-2006-2-1-15-04-05")))
-		// Unbuffered, so that the file has every line when the app stops; the log handler writes a line at a time
-		if logFile, err := os.Create(logFilePath); err != nil {
-			fmt.Println(err)
+		if logFile, err := createLogFile(logPath, time.Now()); err != nil {
+			logFileErr = err
 		} else {
 			logOutWriter = io.MultiWriter(os.Stdout, logFile)
 		}
 	}
 	defaultLogLevel := configureLogging(logOutWriter, saveLog)
+	if logFileErr != nil {
+		slog.Warn("Could not save the log to a file", "directory", logPath, "error", logFileErr)
+	}
 
 	// Set up default locations
 	locations.SetBaseDir(locations.DataBaseDir, configPath)
@@ -173,7 +191,33 @@ func NewClient(configPath string, filesPath string, saveLog bool) *Client {
 	locations.SetBaseDir(locations.UserHomeBaseDir, filesPath)
 	slog.Info("paths", "databaseDir", configPath, "filesDir", filesPath)
 
-	// Check for custom user-provided config file
+	isUsingCustomConfiguration := useCustomConfiguration(filesPath, build.IsIOS)
+
+	return &Client{
+		Delegate:                   nil,
+		cert:                       nil,
+		Server:                     nil,
+		foldersDownloading:         make(map[string]bool, 0),
+		connectedDeviceAddresses:   make(map[string]string, 0),
+		IsUsingCustomConfiguration: isUsingCustomConfiguration,
+		filesPath:                  filesPath,
+		IgnoreEvents:               false,
+		uploadProgress:             make(map[string]map[string]map[string]int),
+		downloadProgress:           make(map[string]map[string]*model.PullerProgress),
+		ResolvedListenAddresses:    make(map[string][]string),
+		extraneousIgnored:          make([]string, 0),
+		Measurements:               nil,
+		defaultLogLevel:            defaultLogLevel,
+	}
+}
+
+// useCustomConfiguration uses a config.xml, and a cert.pem with its key.pem, in the files directory when they exist, and
+// reports whether it found either. Only on iOS, where users put them in the app's Documents directory; on macOS the
+// files directory is the home directory, whose files are no configuration.
+func useCustomConfiguration(filesPath string, ios bool) bool {
+	if !ios {
+		return false
+	}
 	isUsingCustomConfiguration := false
 	customConfigFilePath := path.Join(filesPath, ConfigFileName)
 	if info, err := os.Stat(customConfigFilePath); err == nil {
@@ -199,23 +243,7 @@ func NewClient(configPath string, filesPath string, saveLog bool) *Client {
 			}
 		}
 	}
-
-	return &Client{
-		Delegate:                   nil,
-		cert:                       nil,
-		Server:                     nil,
-		foldersDownloading:         make(map[string]bool, 0),
-		connectedDeviceAddresses:   make(map[string]string, 0),
-		IsUsingCustomConfiguration: isUsingCustomConfiguration,
-		filesPath:                  filesPath,
-		IgnoreEvents:               false,
-		uploadProgress:             make(map[string]map[string]map[string]int),
-		downloadProgress:           make(map[string]map[string]*model.PullerProgress),
-		ResolvedListenAddresses:    make(map[string][]string),
-		extraneousIgnored:          make([]string, 0),
-		Measurements:               nil,
-		defaultLogLevel:            defaultLogLevel,
-	}
+	return isUsingCustomConfiguration
 }
 
 func (clt *Client) SetExtraneousIgnored(names []string) {
@@ -330,7 +358,12 @@ func (clt *Client) SetConfigurationAside() (string, error) {
 	return asidePath, nil
 }
 
+// ExportConfigurationFile writes the configuration to exported-config.xml in the files directory (iOS), from where it
+// can be used as a custom configuration
 func (clt *Client) ExportConfigurationFile() error {
+	if !build.IsIOS {
+		return errors.New("the configuration is only exported on iOS")
+	}
 	cfg := clt.cfg().RawCopy()
 	homeDir := locations.GetBaseDir(locations.UserHomeBaseDir)
 	customConfigFilePath := path.Join(homeDir, ExportConfigFileName)

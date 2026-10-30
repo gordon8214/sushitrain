@@ -68,6 +68,11 @@ public struct AppLocations: Sendable {
 		self.caches.appending(path: "thumbnails", directoryHint: .isDirectory)
 	}
 
+	/// The remote file service's content spool and thumbnails (macOS), which it rebuilds when they are cleared.
+	public var remoteFileService: URL {
+		self.caches.appending(path: "RemoteFileService", directoryHint: .isDirectory)
+	}
+
 	/// Creates Synctrain's caches and temporary directories.
 	public func prepare() throws {
 		let fileManager = FileManager.default

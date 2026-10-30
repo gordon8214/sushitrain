@@ -44,8 +44,11 @@ const (
 
 // Config configures a service. Zero values select defaults.
 type Config struct {
-	// Directory for the service database, spool and staged uploads, normally <Syncthing home>/synctrain-gateway
+	// Directory for the service database, TLS identity and staged uploads, normally <Syncthing home>/synctrain-gateway
 	Home string
+	// Directory for the content spool and thumbnails, which are rebuilt on demand and may be removed at any time, such
+	// as a cache directory kept out of backups. Home when empty.
+	CacheDir string
 	// Address to listen on, such as ":20920"
 	ListenAddress string
 	// Certificate and key for direct TLS. When empty and Proxy is false, a persistent self-signed certificate is
@@ -141,6 +144,16 @@ func New(cfg Config, backend RemoteFileBackend) (*Service, error) {
 	if err := makePrivate(cfg.Home); err != nil {
 		return nil, err
 	}
+	if cfg.CacheDir == "" {
+		cfg.CacheDir = cfg.Home
+	} else if filepath.Clean(cfg.CacheDir) != filepath.Clean(cfg.Home) {
+		// The spool and thumbnails of a service that kept them in its home, which nothing reads any more
+		for _, name := range []string{"content", "thumbnails"} {
+			if err := os.RemoveAll(filepath.Join(cfg.Home, name)); err != nil {
+				cfg.Logger.Warn("Could not remove the remote file service's old cache", "path", filepath.Join(cfg.Home, name), "error", err)
+			}
+		}
+	}
 	st, err := openStore(filepath.Join(cfg.Home, "service.sqlite"))
 	if err != nil {
 		return nil, err
@@ -165,7 +178,7 @@ func New(cfg Config, backend RemoteFileBackend) (*Service, error) {
 		exportsChanged: make(chan struct{}, 1),
 		thumbnailSlot:  make(chan struct{}, 1),
 	}
-	if s.content, err = newContentManager(s, filepath.Join(cfg.Home, "content")); err != nil {
+	if s.content, err = newContentManager(s, filepath.Join(cfg.CacheDir, "content")); err != nil {
 		st.close()
 		return nil, err
 	}

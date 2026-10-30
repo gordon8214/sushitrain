@@ -50,6 +50,7 @@ type remoteFileServiceSettings struct {
 	PublicHost      string `json:"publicHost"`
 	PublicPort      int    `json:"publicPort"`
 	ContentCacheMiB int64  `json:"contentCacheMiB"`
+	CacheDirectory  string `json:"cacheDirectory"`
 }
 
 // RemoteThumbnailRenderer renders thumbnails for the remote file service (implemented with QuickLook on macOS)
@@ -99,7 +100,9 @@ func (a thumbnailAdapter) Render(_ context.Context, path string, size int) ([]by
 }
 
 // StartRemoteFileService starts the service with settings given as JSON (listenAddress, certFile, keyFile, proxy,
-// proxySPKI, serviceName, publicHost, publicPort, contentCacheMiB). The client must have started.
+// proxySPKI, serviceName, publicHost, publicPort, contentCacheMiB, and cacheDirectory for the content spool and
+// thumbnails, which otherwise go in the service's directory in the configuration directory). The client must have
+// started.
 func (clt *Client) StartRemoteFileService(settingsJSON []byte) (*RemoteFileService, error) {
 	if build.IsIOS {
 		return nil, errors.New("the remote file service is not available on iOS")
@@ -168,6 +171,7 @@ func (clt *Client) StartRemoteFileService(settingsJSON []byte) (*RemoteFileServi
 		ServiceName:    settings.ServiceName,
 		TrashAvailable: trashAvailable,
 		SpoolQuota:     settings.ContentCacheMiB << 20,
+		CacheDir:       settings.CacheDirectory,
 		AuditRetention: remoteAuditRetention,
 		Logger:         slog.Default(),
 	}
