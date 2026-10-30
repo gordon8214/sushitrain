@@ -119,7 +119,7 @@ extension AppState {
 }
 
 /// A log level, as the core reports it (slog's numbers)
-enum LogLevel: Int, CaseIterable, Identifiable {
+private enum LogLevel: Int, CaseIterable, Identifiable {
 	case debug = -4
 	case info = 0
 	case warning = 4
@@ -167,11 +167,17 @@ private struct LogFacility: Decodable, Identifiable {
 }
 
 /// A logged message, as `SushitrainClient.logLinesJSON` returns it
-private struct LogLine: Decodable, Equatable {
-	let when: Int64  // milliseconds since 1970
+private struct LogLine: Decodable {
+	let when: Int64  // nanoseconds since 1970
 	let level: Int
 	let facility: String
 	let message: String
+	/// The line as the log shows it, formatted once
+	let formatted: String
+
+	private enum CodingKeys: String, CodingKey {
+		case when, level, facility, message
+	}
 
 	private static let timeFormatter: DateFormatter = {
 		let formatter = DateFormatter()
@@ -180,9 +186,15 @@ private struct LogLine: Decodable, Equatable {
 		return formatter
 	}()
 
-	var formatted: String {
-		let date = Date(timeIntervalSince1970: Double(self.when) / 1000.0)
-		return "\(Self.timeFormatter.string(from: date)) \(LogLevel(slogLevel: self.level).abbreviation) \(self.message)"
+	init(from decoder: any Decoder) throws {
+		let container = try decoder.container(keyedBy: CodingKeys.self)
+		self.when = try container.decode(Int64.self, forKey: .when)
+		self.level = try container.decode(Int.self, forKey: .level)
+		self.facility = try container.decode(String.self, forKey: .facility)
+		self.message = try container.decode(String.self, forKey: .message)
+		let date = Date(timeIntervalSince1970: Double(self.when) / 1_000_000_000.0)
+		self.formatted =
+			"\(Self.timeFormatter.string(from: date)) \(LogLevel(slogLevel: self.level).abbreviation) \(self.message)"
 	}
 }
 
@@ -197,9 +209,10 @@ extension SushitrainClient {
 		}
 	}
 
-	fileprivate func logLines() -> [LogLine] {
+	/// The lines logged after the given time (in nanoseconds since 1970, or 0 for all of them)
+	fileprivate func logLines(after: Int64) -> [LogLine] {
 		do {
-			return try JSONDecoder().decode([LogLine].self, from: self.logLinesJSON())
+			return try JSONDecoder().decode([LogLine].self, from: self.logLinesJSON(after))
 		}
 		catch {
 			Log.warn("Cannot read log lines: \(error.localizedDescription)")
@@ -209,34 +222,56 @@ extension SushitrainClient {
 }
 
 private struct LogView: View {
+	/// A line as the view lists it
+	private struct Row: Identifiable {
+		let id: Int
+		let line: LogLine
+	}
+
+	/// As many lines as the core keeps
+	private static let maxRows = 1000
+
 	@Environment(AppState.self) private var appState
-	@State private var lines: [LogLine] = []
+	@State private var rows: [Row] = []
+	@State private var hasLoaded = false
+	@State private var isPaused = false
 	@State private var facilityNames: [String] = []
 	@State private var facility: String? = nil
 
-	private var shownLines: String {
-		self.lines.filter { self.facility == nil || $0.facility == self.facility }
-			.map(\.formatted)
-			.joined(separator: "\n")
+	private var shownRows: [Row] {
+		guard let facility = self.facility else {
+			return self.rows
+		}
+		return self.rows.filter { $0.line.facility == facility }
+	}
+
+	private static var controlsPlacement: ToolbarItemPlacement {
+		#if os(iOS)
+			return .bottomBar
+		#else
+			return .automatic
+		#endif
 	}
 
 	var body: some View {
-		let shownLines = self.shownLines
+		let shownRows = self.shownRows
 		ScrollView {
-			if shownLines.isEmpty {
-				ContentUnavailableView("No log messages", systemImage: "heart.text.clipboard")
+			LazyVStack(alignment: .leading, spacing: 0) {
+				ForEach(shownRows) { row in
+					Text(row.line.formatted)
+						.frame(maxWidth: .infinity, alignment: .leading)
+				}
 			}
-			else {
-				Text(shownLines)
-					.textSelection(.enabled)
-					.multilineTextAlignment(.leading)
-					.lineLimit(nil)
-					.monospaced()
-					.padding()
-					.fixedSize(horizontal: false, vertical: true)
-			}
+			.textSelection(.enabled)
+			.monospaced()
+			.padding()
 		}
 		.defaultScrollAnchor(.bottom)
+		.overlay {
+			if self.hasLoaded && shownRows.isEmpty {
+				ContentUnavailableView("No log messages", systemImage: "heart.text.clipboard")
+			}
+		}
 		.navigationTitle("Log")
 		#if os(iOS)
 			.navigationBarTitleDisplayMode(.inline)
@@ -251,28 +286,64 @@ private struct LogView: View {
 				}
 				.pickerStyle(.menu)
 			}
+
+			ToolbarItemGroup(placement: Self.controlsPlacement) {
+				Button(self.isPaused ? "Resume" : "Pause", systemImage: self.isPaused ? "play" : "pause") {
+					self.isPaused.toggle()
+				}
+
+				Button("Copy", systemImage: "doc.on.doc") {
+					writeTextToPasteboard(shownRows.map(\.line.formatted).joined(separator: "\n"))
+				}
+				.disabled(shownRows.isEmpty)
+			}
 		}
 		.task {
-			// Show new messages as they are logged
-			while !Task.isCancelled {
-				self.update()
-				try? await Task.sleep(for: .seconds(2))
-			}
+			await self.follow()
 		}
 	}
 
-	private func update() {
-		let lines = appState.client.logLines()
-		if lines != self.lines {
-			self.lines = lines
+	/// Adds lines as they are logged, until the view disappears. The core is called off the main actor, and returns only
+	/// the lines after the last one shown.
+	private func follow() async {
+		let client = appState.client
+		let registered = await Task.detached { client.logFacilities().map(\.name) }.value
+		self.addFacilityNames(registered)
+		while !Task.isCancelled {
+			if !self.isPaused {
+				let after = self.rows.last?.line.when ?? 0
+				let lines = await Task.detached { client.logLines(after: after) }.value
+				self.append(lines)
+				self.hasLoaded = true
+			}
+			try? await Task.sleep(for: .seconds(2))
 		}
+	}
 
-		// Registered facilities, and any other that logged
-		var names = Set(appState.client.logFacilities().map(\.name))
-		names.formUnion(lines.map(\.facility).filter { !$0.isEmpty })
-		let facilityNames = names.sorted()
-		if facilityNames != self.facilityNames {
-			self.facilityNames = facilityNames
+	private func append(_ lines: [LogLine]) {
+		guard !lines.isEmpty else {
+			return
+		}
+		var rows = self.rows
+		var nextID = (rows.last?.id ?? -1) + 1
+		for line in lines {
+			rows.append(Row(id: nextID, line: line))
+			nextID += 1
+		}
+		if rows.count > Self.maxRows {
+			rows.removeFirst(rows.count - Self.maxRows)
+		}
+		self.rows = rows
+		self.addFacilityNames(lines.map(\.facility))
+	}
+
+	/// Adds facilities to the filter, which keeps those whose lines are gone, so that the one shown stays listed
+	private func addFacilityNames(_ names: [String]) {
+		var all = Set(self.facilityNames)
+		all.formUnion(names.filter { !$0.isEmpty })
+		let sorted = all.sorted()
+		if sorted != self.facilityNames {
+			self.facilityNames = sorted
 		}
 	}
 }
@@ -354,7 +425,10 @@ private struct LogLevelsView: View {
 	}
 
 	private func saveKeptLevels() {
-		userSettings.keptLogLevels = userSettings.keepLogLevels ? appState.client.changedLogLevels() : ""
+		let kept = userSettings.keepLogLevels ? appState.client.changedLogLevels() : ""
+		if kept != userSettings.keptLogLevels {
+			userSettings.keptLogLevels = kept
+		}
 	}
 }
 
@@ -610,7 +684,7 @@ struct TroubleshootingView: View {
 	var body: some View {
 		Form {
 			Section {
-				Toggle("Enable debug logging", isOn: userSettings.$loggingToFileEnabled)
+				Toggle("Save log to a file", isOn: userSettings.$loggingToFileEnabled)
 			} header: {
 				Text("Logging")
 			} footer: {
@@ -650,6 +724,9 @@ struct TroubleshootingView: View {
 								}
 							}
 					}
+					#if os(macOS)
+						.frame(minWidth: 600, minHeight: 450)
+					#endif
 				}
 				#if os(macOS)
 					.buttonStyle(.link)
@@ -666,6 +743,9 @@ struct TroubleshootingView: View {
 								}
 							}
 					}
+					#if os(macOS)
+						.frame(minWidth: 500, minHeight: 450)
+					#endif
 				}
 				#if os(macOS)
 					.buttonStyle(.link)

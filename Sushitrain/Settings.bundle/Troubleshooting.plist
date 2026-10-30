@@ -30,7 +30,7 @@
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 			<key>Title</key>
-			<string>Enable debug logging to file on next start</string>
+			<string>Save log to a file on next start</string>
 			<key>Key</key>
 			<string>loggingEnabled</string>
 			<key>DefaultValue</key>

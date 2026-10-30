@@ -63,15 +63,20 @@ invocation from XCode should be rather quick if nothing changed since the manual
 
 ### Logging
 
-By default, the minimum log level for messages sent to stdout is 'WARN'. When logging to file is enabled, the minimum level
-is 'INFO'. For debugging, you can use the environment variable `SUSHITRAIN_MIN_LOG_LEVEL` to override the minimum log level,
-by setting it to either `DEBUG`, `INFO`, `WARN` or `ERROR`. In XCode you can set this through 'Edit scheme'.
+By default, the minimum log level is 'WARN', for messages written to stdout as well as the log file, the log viewer
+and support bundles. When logging to file is enabled, the minimum level is 'INFO'. For debugging, you can use the
+environment variable `SUSHITRAIN_MIN_LOG_LEVEL` to override the minimum log level, by setting it to either `DEBUG`,
+`INFO`, `WARN` or `ERROR`. In XCode you can set this through 'Edit scheme'.
 
 The level applies to every log facility: each Syncthing package that logs, and Synctrain's own
-(`t-shaped.nl/sushitrain/v2/src`). `STTRACE` then sets the levels of single facilities, as for Syncthing
-(`model,protocol:WARN`). In the app, 'Troubleshooting' > 'Log levels' lists the facilities and changes their levels while
-the app runs. The changes last until the app quits, unless 'Keep levels after restarting' is on, and 'Reset to defaults'
-undoes them. 'View log messages' shows the last thousand lines logged, and can show those of a single facility.
+(`t-shaped.nl/sushitrain/v2/src`, and the remote file service, `t-shaped.nl/sushitrain/v2/gateway`). `STTRACE` then sets
+the levels of single facilities, as for Syncthing (`model,protocol:WARN`, where a facility named without a level logs at
+`DEBUG`). In the app, 'Troubleshooting' > 'Log levels' lists the facilities and changes their levels while the app runs.
+The changes last until the app quits, unless 'Keep levels after restarting' is on, and 'Reset to defaults' undoes them.
+Only levels set on that screen are kept, not those from `STTRACE` or the web GUI, and `STTRACE` wins over a kept level
+for the facilities it names. 'View log messages' shows the last thousand lines logged, and can show those of a single
+facility. A support bundle has those lines, and the last thousand warnings and errors apart from them, which debug output
+can't push out.
 
 ## Formatting
 

@@ -6561,19 +6561,19 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Todos los servicios"
+            "value" : "Todos los componentes"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tutti i servizi"
+            "value" : "Tutti i componenti"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "すべての機能"
+            "value" : "すべてのコンポーネント"
           }
         },
         "nl" : {
@@ -6585,13 +6585,13 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Усі засоби"
+            "value" : "Усі компоненти"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "所有功能"
+            "value" : "所有模块"
           }
         }
       }
@@ -8563,7 +8563,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Зневадження"
+            "value" : "Налагодження"
           }
         },
         "zh-Hans" : {
@@ -8947,25 +8947,25 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jeder Bereich protokolliert Meldungen ab seiner Stufe. Änderungen wirken sofort, und die Meldungen erscheinen im Protokoll. Debug-Meldungen verlangsamen die App und verbrauchen mehr Akku."
+            "value" : "Jeder Bereich protokolliert Nachrichten ab seiner Stufe. Änderungen wirken sofort, und die Nachrichten erscheinen im Protokoll. Debug-Nachrichten verlangsamen die App und verbrauchen mehr Akku."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cada servicio registra los mensajes de su nivel y superiores. Los cambios se aplican de inmediato y los mensajes aparecen en el registro. Los mensajes de depuración ralentizan la app y consumen más batería."
+            "value" : "Cada componente registra los mensajes de su nivel y superiores. Los cambios se aplican de inmediato y los mensajes aparecen en el registro. Los mensajes de depuración ralentizan la app y consumen más batería."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ogni servizio registra i messaggi del proprio livello e superiori. Le modifiche hanno effetto subito e i messaggi compaiono nel log. I messaggi di debug rallentano l'app e consumano più batteria."
+            "value" : "Ogni componente registra i messaggi del proprio livello e superiori. Le modifiche hanno effetto subito e i messaggi compaiono nel registro. I messaggi di debug rallentano l'app e consumano più batteria."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "各機能は、そのレベル以上のメッセージを記録します。変更はすぐに反映され、メッセージはログに表示されます。デバッグメッセージはアプリの動作を遅くし、バッテリーを多く消費します。"
+            "value" : "各コンポーネントは、そのレベル以上のメッセージを記録します。変更はすぐに反映され、メッセージはログに表示されます。デバッグメッセージはアプリの動作を遅くし、バッテリーを多く消費します。"
           }
         },
         "nl" : {
@@ -8977,13 +8977,13 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Кожен засіб записує повідомлення свого рівня й вище. Зміна діє одразу, і повідомлення з'являються в журналі. Повідомлення зневадження уповільнюють роботу додатка та використовують більше заряду батареї."
+            "value" : "Кожен компонент записує повідомлення свого рівня й вище. Зміна діє одразу, і повідомлення з'являються в журналі. Повідомлення налагодження уповільнюють роботу додатка та використовують більше заряду батареї."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "每个功能记录其级别及以上的消息。更改会立即生效，消息会显示在日志中。调试消息会降低应用速度并消耗更多电量。"
+            "value" : "每个模块记录其级别及以上的消息。更改会立即生效，消息会显示在日志中。调试消息会降低应用速度并消耗更多电量。"
           }
         }
       }
@@ -9413,19 +9413,19 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Servicio"
+            "value" : "Componente"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Servizio"
+            "value" : "Componente"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "機能"
+            "value" : "コンポーネント"
           }
         },
         "nl" : {
@@ -9437,13 +9437,13 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Засіб"
+            "value" : "Компонент"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "功能"
+            "value" : "模块"
           }
         }
       }
@@ -11431,7 +11431,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Protokollmeldungen"
+            "value" : "Keine Protokollnachrichten"
           }
         },
         "es" : {
@@ -12760,6 +12760,52 @@
         }
       }
     },
+    "Pause" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausa"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一時停止"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzeren"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинити"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂停"
+          }
+        }
+      }
+    },
     "Pinned key %@…" : {
       "localizations" : {
         "de" : {
@@ -13669,7 +13715,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Скинути до типових"
+            "value" : "Скинути до стандартних значень"
           }
         },
         "zh-Hans" : {
@@ -13815,6 +13861,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在恢复…"
+          }
+        }
+      }
+    },
+    "Resume" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fortsetzen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reanudar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riprendi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再開"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hervatten"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продовжити"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续"
           }
         }
       }
@@ -14183,6 +14275,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存并重新启动"
+          }
+        }
+      }
+    },
+    "Save log to a file" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protokoll in einer Datei speichern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar el registro en un archivo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva il registro in un file"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ログをファイルに保存"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logboek in een bestand opslaan"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зберігати журнал у файл"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将日志保存到文件"
           }
         }
       }
@@ -27904,52 +28042,6 @@
         }
       }
     },
-    "Enable debug logging" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aktiviere Debug-Logging"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Habilitar registro de depuración"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abilita registrazione debug"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "デバッグ・ログ記録を有効にする"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schakel foutopsporing logging in"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Увімкнути журнал налагодження"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用调试日志"
-          }
-        }
-      }
-    },
     "Enable NAT-PMP / UPnP" : {
       "localizations" : {
         "de" : {
@@ -37923,7 +38015,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "登录"
+            "value" : "日志记录"
           }
         }
       }
@@ -59821,7 +59913,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Якщо ви їх не збережете, рівні повернуться до типових після перезапуску додатка."
+            "value" : "Якщо ви їх не збережете, рівні повернуться до стандартних після перезапуску додатка."
           }
         },
         "zh-Hans" : {
@@ -61431,7 +61523,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Переглянути журнали повідомлень"
+            "value" : "Переглянути повідомлення журналу"
           }
         },
         "zh-Hans" : {

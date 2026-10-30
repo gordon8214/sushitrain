@@ -7,7 +7,6 @@ package sushitrain
 
 import (
 	"archive/zip"
-	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -116,16 +115,15 @@ func NewClient(configPath string, filesPath string, saveLog bool) *Client {
 	build.User = "sushitrain"
 
 	// Set up logging
-	var logOutWriter io.Writer
+	var logOutWriter io.Writer = os.Stdout
 	if saveLog {
 		logFilePath := path.Join(filesPath, fmt.Sprintf("%s.log", time.Now().UTC().Format("synctrain-2006-2-1-15-04-05")))
-		logFile, err := os.Create(logFilePath)
-		if err != nil {
+		// Unbuffered, so that the file has every line when the app stops; the log handler writes a line at a time
+		if logFile, err := os.Create(logFilePath); err != nil {
 			fmt.Println(err)
+		} else {
+			logOutWriter = io.MultiWriter(os.Stdout, logFile)
 		}
-		logOutWriter = io.MultiWriter(os.Stdout, bufio.NewWriter(logFile))
-	} else {
-		logOutWriter = os.Stdout
 	}
 	defaultLogLevel := configureLogging(logOutWriter, saveLog)
 
@@ -1646,18 +1644,26 @@ func (c *Client) generateSupportBundle(writer io.Writer, appInfo []byte) error {
 		}
 	}
 
-	// Write log tail
-	logTailFileWriter, err := zipWriter.CreateHeader(&zip.FileHeader{
-		Name:     "log-tail.txt",
-		Modified: time.Now(),
-		Method:   zip.Deflate,
-	})
-	if err != nil {
-		return err
+	// Write log tail, and the warnings and errors, which debug output can push out of the tail
+	logFiles := []struct {
+		name  string
+		lines []syncthing.LogLine
+	}{
+		{"log-tail.txt", syncthing.LogLines(time.Time{})},
+		{"log-warnings.txt", syncthing.LogWarnings(time.Time{})},
 	}
-
-	if err := writeLogLines(logTailFileWriter); err != nil {
-		return err
+	for _, logFile := range logFiles {
+		logFileWriter, err := zipWriter.CreateHeader(&zip.FileHeader{
+			Name:     logFile.name,
+			Modified: time.Now(),
+			Method:   zip.Deflate,
+		})
+		if err != nil {
+			return err
+		}
+		if err := writeLogLines(logFileWriter, logFile.lines); err != nil {
+			return err
+		}
 	}
 
 	// Write a general info JSON

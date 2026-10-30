@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/syncthing/syncthing/lib/syncthing"
@@ -85,13 +86,26 @@ func (c *Client) DefaultLogLevel() int {
 	return int(c.defaultLogLevel)
 }
 
+// The levels set in the app (with SetLogLevel or ApplyLogLevels) since the last reset, which ChangedLogLevels returns
+// for the app to keep. Levels set by STTRACE or the web GUI aren't among them.
+var (
+	chosenLogLevelsMut sync.Mutex
+	chosenLogLevels    = make(map[string]slog.Level)
+)
+
 // SetLogLevel sets the level of one log facility. It takes effect at once, and lasts until the app quits.
 func (c *Client) SetLogLevel(facility string, level int) {
+	chosenLogLevelsMut.Lock()
+	chosenLogLevels[facility] = slog.Level(level)
+	chosenLogLevelsMut.Unlock()
 	syncthing.SetLogLevel(facility, slog.Level(level))
 }
 
 // ResetLogLevels sets every log facility to the default level
 func (c *Client) ResetLogLevels() {
+	chosenLogLevelsMut.Lock()
+	clear(chosenLogLevels)
+	chosenLogLevelsMut.Unlock()
 	for name, level := range syncthing.LogLevels() {
 		if level != c.defaultLogLevel {
 			syncthing.SetLogLevel(name, c.defaultLogLevel)
@@ -99,39 +113,75 @@ func (c *Client) ResetLogLevels() {
 	}
 }
 
-// ChangedLogLevels returns the facilities whose level differs from the default, with their levels, in the format of
-// STTRACE ("model:DEBUG,protocol:WARN"), for ApplyLogLevels to restore
+// ChangedLogLevels returns the levels set in the app since the last reset, in the format of STTRACE
+// ("model:DEBUG,protocol:WARN"), for ApplyLogLevels to restore. A level that equals the default is included, as the
+// default can change (it depends on whether the app saves its log).
 func (c *Client) ChangedLogLevels() string {
-	levels := syncthing.LogLevels()
-	var changed []string
-	for _, name := range slices.Sorted(maps.Keys(levels)) {
-		if levels[name] != c.defaultLogLevel {
-			changed = append(changed, name+":"+levels[name].String())
-		}
+	chosenLogLevelsMut.Lock()
+	defer chosenLogLevelsMut.Unlock()
+	changed := make([]string, 0, len(chosenLogLevels))
+	for _, name := range slices.Sorted(maps.Keys(chosenLogLevels)) {
+		changed = append(changed, name+":"+chosenLogLevels[name].String())
 	}
 	return strings.Join(changed, ",")
 }
 
-// ApplyLogLevels sets the levels of the facilities named in levels, in the format ChangedLogLevels returns
+// ApplyLogLevels sets the levels of the facilities named in levels, in the format ChangedLogLevels returns, as if set
+// in the app. A facility STTRACE names keeps the level STTRACE gave it.
 func (c *Client) ApplyLogLevels(levels string) {
-	syncthing.SetLogLevels(c.defaultLogLevel, levels)
+	fromEnvironment := parseLogLevels(os.Getenv("STTRACE"))
+	for name, level := range parseLogLevels(levels) {
+		chosenLogLevelsMut.Lock()
+		chosenLogLevels[name] = level
+		chosenLogLevelsMut.Unlock()
+		if _, ok := fromEnvironment[name]; !ok {
+			syncthing.SetLogLevel(name, level)
+		}
+	}
+}
+
+// parseLogLevels parses levels in the format of STTRACE, where a facility named without a level logs at DEBUG. It
+// skips an entry whose level doesn't parse.
+func parseLogLevels(levels string) map[string]slog.Level {
+	parsed := make(map[string]slog.Level)
+	for entry := range strings.SplitSeq(levels, ",") {
+		name, levelText, hasLevel := strings.Cut(strings.TrimSpace(entry), ":")
+		if name == "" {
+			continue
+		}
+		level := slog.LevelDebug
+		if hasLevel {
+			if err := level.UnmarshalText([]byte(levelText)); err != nil {
+				slog.Warn("Ignoring a bad log level", "facility", name, "level", levelText)
+				continue
+			}
+		}
+		parsed[name] = level
+	}
+	return parsed
 }
 
 type logLine struct {
-	When     int64  `json:"when"` // milliseconds since the Unix epoch
+	When     int64  `json:"when"` // nanoseconds since the Unix epoch
 	Level    int    `json:"level"`
 	Facility string `json:"facility"`
 	Message  string `json:"message"`
 }
 
-// LogLinesJSON returns the last lines logged, oldest first and redacted, as a JSON array of objects with their time,
-// level, facility (empty when unknown) and message
-func (c *Client) LogLinesJSON() ([]byte, error) {
-	recorded := syncthing.LogLines(time.Time{})
+// LogLinesJSON returns the lines logged after the given time (in nanoseconds since the Unix epoch, or 0 for all the
+// lines kept), oldest first and redacted, as a JSON array of objects with their time (in the same unit), level,
+// facility (empty when unknown) and message. A caller that passes the time of the last line it has gets only newer
+// ones, but can, rarely, miss a line that was logged at the same moment and recorded after it.
+func (c *Client) LogLinesJSON(after int64) ([]byte, error) {
+	var since time.Time
+	if after > 0 {
+		since = time.Unix(0, after)
+	}
+	recorded := syncthing.LogLines(since)
 	lines := make([]logLine, len(recorded))
 	for i, line := range recorded {
 		lines[i] = logLine{
-			When:     line.When.UnixMilli(),
+			When:     line.When.UnixNano(),
 			Level:    int(line.Level),
 			Facility: line.Facility,
 			Message:  redactLog(line.Message),
@@ -140,10 +190,10 @@ func (c *Client) LogLinesJSON() ([]byte, error) {
 	return json.Marshal(lines)
 }
 
-// writeLogLines writes the last lines logged, oldest first and redacted
-func writeLogLines(to io.Writer) error {
-	for _, line := range syncthing.LogLines(time.Time{}) {
-		when := line.When.Format("2006-01-02 15:04:05.000")
+// writeLogLines writes lines the log handler recorded, redacted
+func writeLogLines(to io.Writer, lines []syncthing.LogLine) error {
+	for _, line := range lines {
+		when := line.When.Format("2006-01-02 15:04:05.000 -0700")
 		if _, err := fmt.Fprintln(to, when, line.Level, redactLog(line.Message)); err != nil {
 			return err
 		}
