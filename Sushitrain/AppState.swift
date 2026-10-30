@@ -72,6 +72,10 @@ class SushitrainDelegate: NSObject {
 	@AppStorage("browserViewFilter") var defaultBrowserViewFilterAvailability: BrowserViewFilterAvailability = .all
 	@AppStorage("browserGridColumns") var browserGridColumns: Int = 3
 	@AppStorage("loggingEnabled") var loggingToFileEnabled: Bool = false
+	// Whether the app restores the levels of log facilities the user changed when it starts, and those levels (in the
+	// format of STTRACE)
+	@AppStorage("keepLogLevels") var keepLogLevels: Bool = false
+	@AppStorage("keptLogLevels") var keptLogLevels: String = ""
 	@AppStorage("dotFilesHidden") var dotFilesHidden: Bool = true
 	@AppStorage("hideHiddenFolders") var hideHiddenFolders: Bool = false
 	@AppStorage("lingeringEnabled") var lingeringEnabled: Bool = true

@@ -118,30 +118,243 @@ extension AppState {
 	}
 }
 
+/// A log level, as the core reports it (slog's numbers)
+enum LogLevel: Int, CaseIterable, Identifiable {
+	case debug = -4
+	case info = 0
+	case warning = 4
+	case error = 8
+
+	var id: Int { self.rawValue }
+
+	/// The named level that includes any other number, as Syncthing labels it
+	init(slogLevel: Int) {
+		switch slogLevel {
+		case ..<0: self = .debug
+		case ..<4: self = .info
+		case ..<8: self = .warning
+		default: self = .error
+		}
+	}
+
+	var label: LocalizedStringKey {
+		switch self {
+		case .debug: return "Debug"
+		case .info: return "Info"
+		case .warning: return "Warning"
+		case .error: return "Error"
+		}
+	}
+
+	/// As Syncthing writes it in log lines
+	var abbreviation: String {
+		switch self {
+		case .debug: return "DBG"
+		case .info: return "INF"
+		case .warning: return "WRN"
+		case .error: return "ERR"
+		}
+	}
+}
+
+/// A package whose log level can be set on its own, as `SushitrainClient.logFacilitiesJSON` returns it
+private struct LogFacility: Decodable, Identifiable {
+	let name: String
+	let description: String
+	let level: Int
+
+	var id: String { self.name }
+}
+
+/// A logged message, as `SushitrainClient.logLinesJSON` returns it
+private struct LogLine: Decodable, Equatable {
+	let when: Int64  // milliseconds since 1970
+	let level: Int
+	let facility: String
+	let message: String
+
+	private static let timeFormatter: DateFormatter = {
+		let formatter = DateFormatter()
+		formatter.locale = Locale(identifier: "en_US_POSIX")
+		formatter.dateFormat = "HH:mm:ss.SSS"
+		return formatter
+	}()
+
+	var formatted: String {
+		let date = Date(timeIntervalSince1970: Double(self.when) / 1000.0)
+		return "\(Self.timeFormatter.string(from: date)) \(LogLevel(slogLevel: self.level).abbreviation) \(self.message)"
+	}
+}
+
+extension SushitrainClient {
+	fileprivate func logFacilities() -> [LogFacility] {
+		do {
+			return try JSONDecoder().decode([LogFacility].self, from: self.logFacilitiesJSON())
+		}
+		catch {
+			Log.warn("Cannot read log facilities: \(error.localizedDescription)")
+			return []
+		}
+	}
+
+	fileprivate func logLines() -> [LogLine] {
+		do {
+			return try JSONDecoder().decode([LogLine].self, from: self.logLinesJSON())
+		}
+		catch {
+			Log.warn("Cannot read log lines: \(error.localizedDescription)")
+			return []
+		}
+	}
+}
+
 private struct LogView: View {
 	@Environment(AppState.self) private var appState
-	@State private var lines: String = ""
+	@State private var lines: [LogLine] = []
+	@State private var facilityNames: [String] = []
+	@State private var facility: String? = nil
+
+	private var shownLines: String {
+		self.lines.filter { self.facility == nil || $0.facility == self.facility }
+			.map(\.formatted)
+			.joined(separator: "\n")
+	}
 
 	var body: some View {
+		let shownLines = self.shownLines
 		ScrollView {
-			Text(self.lines)
-				.textSelection(.enabled)
-				.multilineTextAlignment(.leading)
-				.lineLimit(nil)
-				.monospaced()
-				.padding()
-				.fixedSize(horizontal: false, vertical: true)
+			if shownLines.isEmpty {
+				ContentUnavailableView("No log messages", systemImage: "heart.text.clipboard")
+			}
+			else {
+				Text(shownLines)
+					.textSelection(.enabled)
+					.multilineTextAlignment(.leading)
+					.lineLimit(nil)
+					.monospaced()
+					.padding()
+					.fixedSize(horizontal: false, vertical: true)
+			}
 		}
+		.defaultScrollAnchor(.bottom)
 		.navigationTitle("Log")
 		#if os(iOS)
 			.navigationBarTitleDisplayMode(.inline)
 		#endif
-		.task {
-			Task {
-				var error: NSError? = nil
-				self.lines = appState.client.getLastLogLines(&error)
+		.toolbar {
+			ToolbarItem {
+				Picker("Facility", selection: $facility) {
+					Text("All facilities").tag(String?.none)
+					ForEach(self.facilityNames, id: \.self) { name in
+						Text(name).tag(String?.some(name))
+					}
+				}
+				.pickerStyle(.menu)
 			}
 		}
+		.task {
+			// Show new messages as they are logged
+			while !Task.isCancelled {
+				self.update()
+				try? await Task.sleep(for: .seconds(2))
+			}
+		}
+	}
+
+	private func update() {
+		let lines = appState.client.logLines()
+		if lines != self.lines {
+			self.lines = lines
+		}
+
+		// Registered facilities, and any other that logged
+		var names = Set(appState.client.logFacilities().map(\.name))
+		names.formUnion(lines.map(\.facility).filter { !$0.isEmpty })
+		let facilityNames = names.sorted()
+		if facilityNames != self.facilityNames {
+			self.facilityNames = facilityNames
+		}
+	}
+}
+
+/// Shows the level of each log facility, which the user can change while the app runs
+private struct LogLevelsView: View {
+	@ObservedObject var userSettings: AppUserSettings
+	@Environment(AppState.self) private var appState
+	@State private var facilities: [LogFacility] = []
+
+	private var hasChangedLevels: Bool {
+		let defaultLevel = appState.client.defaultLogLevel()
+		return self.facilities.contains { $0.level != defaultLevel }
+	}
+
+	var body: some View {
+		Form {
+			Section {
+				ForEach(self.facilities) { facility in
+					Picker(selection: self.levelBinding(facility)) {
+						ForEach(LogLevel.allCases) { level in
+							Text(level.label).tag(level)
+						}
+					} label: {
+						VStack(alignment: .leading) {
+							Text(facility.name)
+							Text(facility.description).font(.caption).foregroundStyle(.secondary)
+						}
+					}
+				}
+			} footer: {
+				Text(
+					"Each facility logs messages at its level and above. A change takes effect at once, and the messages show in the log. Debug messages slow down the app and use more battery."
+				)
+			}
+
+			Section {
+				Toggle("Keep levels after restarting", isOn: userSettings.$keepLogLevels)
+
+				Button("Reset to defaults") {
+					appState.client.resetLogLevels()
+					self.update()
+				}
+				.disabled(!self.hasChangedLevels)
+				#if os(macOS)
+					.buttonStyle(.link)
+				#endif
+			} footer: {
+				Text("Unless you keep them, levels return to their defaults when the app restarts.")
+			}
+		}
+		#if os(macOS)
+			.formStyle(.grouped)
+		#endif
+		.navigationTitle("Log levels")
+		#if os(iOS)
+			.navigationBarTitleDisplayMode(.inline)
+		#endif
+		.task {
+			self.update()
+		}
+		.onChange(of: userSettings.keepLogLevels) { _, _ in
+			self.saveKeptLevels()
+		}
+	}
+
+	private func levelBinding(_ facility: LogFacility) -> Binding<LogLevel> {
+		return Binding(
+			get: { LogLevel(slogLevel: facility.level) },
+			set: { level in
+				appState.client.setLogLevel(facility.name, level: level.rawValue)
+				self.update()
+			})
+	}
+
+	private func update() {
+		self.facilities = appState.client.logFacilities()
+		self.saveKeptLevels()
+	}
+
+	private func saveKeptLevels() {
+		userSettings.keptLogLevels = userSettings.keepLogLevels ? appState.client.changedLogLevels() : ""
 	}
 }
 
@@ -385,6 +598,7 @@ struct TroubleshootingView: View {
 	@State private var showCacheCleared = false
 	@State private var showTempCleared = false
 	@State private var showLog = false
+	@State private var showLogLevels = false
 	@State private var showAllBookmarksRemoved = false
 	@State private var showResetDeviceIdentity = false
 	@State private var showMaintenance = false
@@ -430,6 +644,27 @@ struct TroubleshootingView: View {
 				}.sheet(isPresented: $showLog) {
 					NavigationStack {
 						LogView()
+							.toolbar {
+								SheetButton(role: .done) {
+									showLog = false
+								}
+							}
+					}
+				}
+				#if os(macOS)
+					.buttonStyle(.link)
+				#endif
+
+				Button("Log levels", systemImage: "slider.horizontal.3") {
+					showLogLevels = true
+				}.sheet(isPresented: $showLogLevels) {
+					NavigationStack {
+						LogLevelsView(userSettings: userSettings)
+							.toolbar {
+								SheetButton(role: .done) {
+									showLogLevels = false
+								}
+							}
 					}
 				}
 				#if os(macOS)

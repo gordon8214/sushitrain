@@ -67,6 +67,12 @@ By default, the minimum log level for messages sent to stdout is 'WARN'. When lo
 is 'INFO'. For debugging, you can use the environment variable `SUSHITRAIN_MIN_LOG_LEVEL` to override the minimum log level,
 by setting it to either `DEBUG`, `INFO`, `WARN` or `ERROR`. In XCode you can set this through 'Edit scheme'.
 
+The level applies to every log facility: each Syncthing package that logs, and Synctrain's own
+(`t-shaped.nl/sushitrain/v2/src`). `STTRACE` then sets the levels of single facilities, as for Syncthing
+(`model,protocol:WARN`). In the app, 'Troubleshooting' > 'Log levels' lists the facilities and changes their levels while
+the app runs. The changes last until the app quits, unless 'Keep levels after restarting' is on, and 'Reset to defaults'
+undoes them. 'View log messages' shows the last thousand lines logged, and can show those of a single facility.
+
 ## Formatting
 
 ```bash

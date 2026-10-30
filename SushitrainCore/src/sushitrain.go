@@ -8,7 +8,6 @@ package sushitrain
 import (
 	"archive/zip"
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -63,7 +62,7 @@ type Client struct {
 	mutex                    sync.Mutex
 	extraneousIgnored        []string
 	Measurements             *Measurements
-	logHandler               *logHandler
+	defaultLogLevel          slog.Level
 	appLock                  *flock.Flock
 	remoteManaged            *remoteManagedSet
 }
@@ -128,25 +127,7 @@ func NewClient(configPath string, filesPath string, saveLog bool) *Client {
 	} else {
 		logOutWriter = os.Stdout
 	}
-	minLevel := slog.LevelWarn
-	if envMinLevel, present := os.LookupEnv("SUSHITRAIN_MIN_LOG_LEVEL"); present {
-		switch envMinLevel {
-		case "INFO":
-			minLevel = slog.LevelInfo
-		case "WARN":
-			minLevel = slog.LevelWarn
-		case "ERROR":
-			minLevel = slog.LevelError
-		case "DEBUG":
-			minLevel = slog.LevelDebug
-		default:
-			minLevel = slog.LevelInfo
-		}
-	} else if saveLog {
-		minLevel = slog.LevelInfo
-	}
-	logHandler := newLogHandler(logOutWriter, minLevel)
-	slog.SetDefault(slog.New(logHandler))
+	defaultLogLevel := configureLogging(logOutWriter, saveLog)
 
 	// Set up default locations
 	locations.SetBaseDir(locations.DataBaseDir, configPath)
@@ -204,7 +185,7 @@ func NewClient(configPath string, filesPath string, saveLog bool) *Client {
 		ResolvedListenAddresses:    make(map[string][]string),
 		extraneousIgnored:          make([]string, 0),
 		Measurements:               nil,
-		logHandler:                 logHandler,
+		defaultLogLevel:            defaultLogLevel,
 	}
 }
 
@@ -1631,15 +1612,6 @@ func (c *Client) ClearDatabase() error {
 	return os.RemoveAll(dbPath)
 }
 
-func (c *Client) GetLastLogLines() (string, error) {
-	var buf bytes.Buffer
-	err := c.logHandler.tail.write(&buf, true)
-	if err != nil {
-		return "", err
-	}
-	return buf.String(), nil
-}
-
 func (c *Client) WriteSupportBundle(path string, appInfo []byte) error {
 	out, err := os.Create(path)
 	if err != nil {
@@ -1684,7 +1656,7 @@ func (c *Client) generateSupportBundle(writer io.Writer, appInfo []byte) error {
 		return err
 	}
 
-	if err := c.logHandler.tail.write(logTailFileWriter, true); err != nil {
+	if err := writeLogLines(logTailFileWriter); err != nil {
 		return err
 	}
 

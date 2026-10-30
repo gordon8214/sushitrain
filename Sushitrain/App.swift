@@ -55,6 +55,9 @@ struct SushitrainApp: App {
 			FileProviderStorage.configureManagedFolderBase()
 		#endif
 		let client = SushitrainNewClient(configPath, documentsPath, enableLoggingToFile)!
+		if UserDefaults.standard.bool(forKey: "keepLogLevels") {
+			client.applyLogLevels(UserDefaults.standard.string(forKey: "keptLogLevels") ?? "")
+		}
 
 		// Optionally clear v1 and/or v2 index
 		let clearV1Index = UserDefaults.standard.bool(forKey: "clearV1Index")
