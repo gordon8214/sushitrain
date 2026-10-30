@@ -839,7 +839,11 @@ struct TroubleshootingView: View {
 				Section {
 					Button("Restart app to remove v1 database") {
 						UserDefaults.standard.set(true, forKey: "clearV1Index")
-						exit(0)
+						#if os(macOS)
+							AppRelauncher.relaunch()
+						#else
+							exit(0)
+						#endif
 					}
 					#if os(macOS)
 						.buttonStyle(.link)

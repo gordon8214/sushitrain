@@ -3,6 +3,13 @@
 On a Mac, Synctrain is meant to replace Syncthing.app: one engine, configured from the app, and from its web GUI or its
 REST API where a configuration has the GUI enabled. This page records where the Mac app differs from iOS and why.
 
+The Mac app runs outside the App Sandbox (with the hardened runtime), so that it reaches folders anywhere, as Syncthing
+does; that also means it can't come from the Mac App Store. Its share extension stays sandboxed, as macOS requires of
+extensions, and shares the app's group container (both are signed by the same team). macOS still asks before the app
+reaches the Desktop, Documents and Downloads folders, external disks and network volumes, the first time a folder there
+is synchronized; places that only Full Disk Access opens (such as other apps' data) are allowed in System Settings,
+under Privacy & Security. Earlier versions were sandboxed; the app tells whether it is by its own entitlement.
+
 ## Engine settings
 
 The app relies on some engine options and folder defaults: frequent progress updates, quick relay reconnects, a
@@ -49,8 +56,9 @@ migrated, and a database a newer Syncthing wrote is refused.
 Outside the App Sandbox, the Mac app keeps the engine's configuration, keys and database in
 `~/Library/Application Support/Synctrain` (or the configuration folder chosen in the settings), its log files in
 `~/Library/Logs/Synctrain`, and its caches (thumbnails, and the remote file service's content spool) in
-`~/Library/Caches/<bundle id>`, where they can be removed at any time. The app excludes nothing from Time Machine. A
-sandboxed build keeps the layout of earlier versions in its container, and iOS keeps everything in the app's container.
+`~/Library/Caches/<bundle id>`, where they can be removed at any time. The app excludes nothing from Time Machine. The
+sandboxed versions before kept everything in the app's container, which the first start outside it takes over (below),
+and iOS keeps everything in the app's container.
 
 Outside the sandbox the app reaches folders and files by their paths, so it keeps no security-scoped bookmarks: folder
 paths come straight from the configuration, and the configuration folder chosen in the settings (and the remote file

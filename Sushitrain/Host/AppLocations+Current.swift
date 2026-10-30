@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import Foundation
+import Security
 import SynctrainHostKit
 
 extension AppLocations {
@@ -28,14 +29,19 @@ extension AppLocations {
 	}()
 
 	/// Whether the system caches and temporary directories belong to this app alone, as they do on iOS and in the App
-	/// Sandbox, so that what earlier versions left there may be moved or removed.
-	static var systemDirectoriesArePrivate: Bool {
+	/// Sandbox, so that what earlier versions left there may be moved or removed. On macOS this is the app's own
+	/// sandbox entitlement, not an environment variable a process could inherit.
+	static let systemDirectoriesArePrivate: Bool = {
 		#if os(iOS)
 			return true
 		#else
-			return ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+			guard let task = SecTaskCreateFromSelf(nil) else {
+				return false
+			}
+			let sandboxed = SecTaskCopyValueForEntitlement(task, "com.apple.security.app-sandbox" as CFString, nil)
+			return (sandboxed as? Bool) == true
 		#endif
-	}
+	}()
 
 	/// Creates the app's directories and, in the background, removes temporary files older than a day.
 	static func prepareCurrent() {
