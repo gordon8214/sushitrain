@@ -169,7 +169,7 @@ func TestSetFolderRemoteManagedRollsBack(t *testing.T) {
 	set := loadRemoteManagedForTest(t, filepath.Join(t.TempDir(), remoteManagedFileName))
 	wrapper := wrapRemoteManaged(t, set, config.FolderConfiguration{ID: "remote", Path: t.TempDir()})
 	wrapper.Subscribe(rejectAll{})
-	clt := &Client{config: wrapper, remoteManaged: set}
+	clt := (&Client{remoteManaged: set}).withTestRun(wrapper, nil, nil)
 	if err := clt.SetFolderRemoteManaged("remote", true); err == nil {
 		t.Fatal("the configuration change did not fail")
 	}

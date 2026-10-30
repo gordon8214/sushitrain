@@ -27,7 +27,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
-	"testing"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -39,21 +38,14 @@ import (
 	"github.com/syncthing/syncthing/lib/model"
 	"github.com/syncthing/syncthing/lib/osutil"
 	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/svcutil"
 	"github.com/syncthing/syncthing/lib/syncthing"
-	"github.com/syncthing/syncthing/lib/upgrade"
 
 	"t-shaped.nl/sushitrain/v2/sthome"
 )
 
 type Client struct {
-	app                        *syncthing.App
-	cancel                     context.CancelFunc
 	cert                       *tls.Certificate
-	config                     config.Wrapper
-	ctx                        context.Context
 	Delegate                   ClientDelegate
-	evLogger                   events.Logger
 	filesPath                  string
 	IgnoreEvents               bool
 	IsUsingCustomConfiguration bool
@@ -72,8 +64,30 @@ type Client struct {
 	lockedPath               string
 	lockMutex                sync.Mutex
 	remoteManaged            *remoteManagedSet
-	configServeDone          <-chan struct{}
 	startupProblem           atomic.Value // string, one of the StartupProblem constants
+
+	// The engine, restarted in place (engine.go). lifecycle serializes loading, starting, restarting and stopping, and
+	// is never held while calling the delegate.
+	run            atomic.Pointer[engineRun]
+	lifecycle      sync.Mutex
+	stopRequested  bool
+	resetDeltaIdxs bool // for the next run that starts
+	status         atomic.Pointer[engineStatus]
+
+	// Engine states waiting to be told to the delegate, in order (engine.go)
+	notifyMutex   sync.Mutex
+	notifications []engineStatus
+	notifying     bool
+
+	// The file provider watcher follows the running engine (fileprovider_events.go)
+	watcherMutex         sync.Mutex
+	fileProviderDelegate FileProviderDelegate
+	watchedRun           *engineRun
+
+	// The remote file service serves one run; a restart stops it (gateway_mobile.go)
+	remoteMutex   sync.Mutex
+	remoteService *RemoteFileService
+	remoteClosing chan struct{} // closed once a service that did not stop in time has stopped
 }
 
 type Change struct {
@@ -105,6 +119,9 @@ type ClientDelegate interface {
 	OnListenAddressesChanged(addresses *ListOfStrings)
 	OnChange(change *Change)
 	OnMeasurementsUpdated()
+	// The engine restarted, stopped or failed (one of the EngineState constants, with an error message when it failed).
+	// Called from any thread, and not subject to IgnoreEvents.
+	OnEngineStateChanged(state string, message string)
 }
 
 var (
@@ -183,19 +200,9 @@ func NewClient(configPath string, filesPath string, saveLog bool) *Client {
 		}
 	}
 
-	// Set up logging
-	ctx, cancel := context.WithCancel(context.Background())
-	evLogger := events.NewLogger()
-	go evLogger.Serve(ctx)
-
 	return &Client{
 		Delegate:                   nil,
 		cert:                       nil,
-		config:                     nil,
-		cancel:                     cancel,
-		ctx:                        ctx,
-		app:                        nil,
-		evLogger:                   evLogger,
 		Server:                     nil,
 		foldersDownloading:         make(map[string]bool, 0),
 		connectedDeviceAddresses:   make(map[string]string, 0),
@@ -203,6 +210,7 @@ func NewClient(configPath string, filesPath string, saveLog bool) *Client {
 		filesPath:                  filesPath,
 		IgnoreEvents:               false,
 		uploadProgress:             make(map[string]map[string]map[string]int),
+		downloadProgress:           make(map[string]map[string]*model.PullerProgress),
 		ResolvedListenAddresses:    make(map[string][]string),
 		extraneousIgnored:          make([]string, 0),
 		Measurements:               nil,
@@ -323,7 +331,7 @@ func (clt *Client) SetConfigurationAside() (string, error) {
 }
 
 func (clt *Client) ExportConfigurationFile() error {
-	cfg := clt.config.RawCopy()
+	cfg := clt.cfg().RawCopy()
 	homeDir := locations.GetBaseDir(locations.UserHomeBaseDir)
 	customConfigFilePath := path.Join(homeDir, ExportConfigFileName)
 	fd, err := osutil.CreateAtomic(customConfigFilePath)
@@ -340,12 +348,6 @@ func (clt *Client) ExportConfigurationFile() error {
 		return err
 	}
 	return nil
-}
-
-func (clt *Client) Stop() {
-	clt.app.Stop(svcutil.ExitSuccess)
-	clt.cancel()
-	clt.app.Wait()
 }
 
 func (clt *Client) handleEvent(evt events.Event) {
@@ -508,15 +510,20 @@ func (clt *Client) handleEvent(evt events.Event) {
 	}
 }
 
-func (clt *Client) startEventListener() {
-	sub := clt.evLogger.Subscribe(events.AllEvents)
+// listenToEvents handles a run's events until the run ends
+func (clt *Client) listenToEvents(r *engineRun, sub events.Subscription) {
+	defer close(r.listenDone)
 	defer sub.Unsubscribe()
 
 	for {
 		select {
-		case <-clt.ctx.Done():
+		case <-r.ctx.Done():
 			return
-		case evt := <-sub.C():
+		case evt, ok := <-sub.C():
+			// An event that arrives as the run ends is not handled, as the state it would change is reset
+			if !ok || r.ctx.Err() != nil {
+				return
+			}
 			clt.handleEvent(evt)
 		}
 	}
@@ -656,21 +663,16 @@ func (clt *Client) HasMigratedLegacyDatabase() bool {
 	return true
 }
 
-// This method loads and migrates the Syncthing database. It also starts the streaming web
-// server. This method can take a while to complete and should only ever be called once.
-func (clt *Client) Load(resetDeltaIdxs bool) (err error) {
-	clt.mutex.Lock()
-	defer clt.mutex.Unlock()
+// Load loads the identity and the configuration, and opens and migrates the database, so that the configuration can be
+// read and changed before the engine starts. This can take a while, and is done once; Start starts the engine.
+func (clt *Client) Load(resetDeltaIdxs bool) error {
+	clt.lifecycle.Lock()
+	defer clt.lifecycle.Unlock()
 
-	if clt.app != nil || clt.Server != nil {
-		return errors.New("client already started")
+	if clt.run.Load() != nil {
+		return errors.New("client already loaded")
 	}
 	clt.startupProblem.Store("")
-	defer func() {
-		if err != nil {
-			clt.cancel()
-		}
-	}()
 
 	// Some early chores
 	osutil.MaximizeOpenFileLimit()
@@ -704,115 +706,83 @@ func (clt *Client) Load(resetDeltaIdxs bool) (err error) {
 		return err
 	}
 	clt.remoteManaged = remoteManaged
-	cfg, err := loadEngineConfig(locations.Get(locations.ConfigFile), cert, clt.evLogger, clt.filesPath,
-		clt.remoteManaged, build.IsIOS)
-	if err != nil {
-		if errors.Is(err, sthome.ErrConfiguration) {
-			clt.startupProblem.Store(StartupProblemDamagedConfiguration)
-		} else if errors.Is(err, sthome.ErrNewerConfiguration) {
-			clt.startupProblem.Store(StartupProblemNewerConfiguration)
-		}
-		return err
-	}
 
-	// Refuse a database a newer Syncthing wrote, which this one would not migrate back
-	dbPath := locations.Get(locations.Database)
-	if err := sthome.CheckSchema(dbPath); err != nil {
-		return err
-	}
-
-	// Default retention interval taken from Syncthing's CLI default
-	// See here: https://github.com/syncthing/syncthing/blob/94c3c1cdef718d568686620cbff268eeaaf2c87d/cmd/syncthing/main.go#L158
-	// and here: https://github.com/syncthing/syncthing/commit/7a76685d7ef277d2a4aaccf9685d55323ad1d6de
-	dbDeleteRetentionInterval := time.Duration(10920) * time.Hour
-	// It really wants to set up a temporary API while migrating...
-	if err := syncthing.TryMigrateDatabase(clt.ctx, dbDeleteRetentionInterval); err != nil {
-		slog.Warn("failed to migrate legacy database", "cause", err)
-		return err
-	}
-
-	// The app is updated as a whole; self-upgrade is also compiled out (the noupgrade tag), which is what blocks the REST
-	// API's upgrade request
-	if !upgrade.DisabledByCompilation && !testing.Testing() {
-		slog.Error("This build can upgrade the engine through the REST API; build it with the noupgrade tag")
-	}
-	appOpts := syncthing.Options{
-		NoUpgrade:      true,
-		ProfilerAddr:   "",
-		ResetDeltaIdxs: resetDeltaIdxs,
-
-		// Disable periodic database maintenance, we will schedule it ourselves at a convenient time
-		DBMaintenanceInterval: 0,
-	}
-
-	// Load database
-	sdb, err := syncthing.OpenDatabase(dbPath, dbDeleteRetentionInterval)
+	clt.resetRunState()
+	clt.resetDeltaIdxs = resetDeltaIdxs
+	r, err := clt.prepareRun()
 	if err != nil {
 		return err
 	}
-
-	app, err := syncthing.New(cfg, sdb, clt.evLogger, *clt.cert, appOpts)
-	if err != nil {
-		sdb.Close()
-		return err
-	}
-
-	// Only now serve the configuration, which saves it when it stops: a failed load leaves the file as it was
-	serveDone := make(chan struct{})
-	go func() {
-		defer close(serveDone)
-		_ = cfg.Serve(clt.ctx)
-	}()
-	clt.config = cfg
-	clt.configServeDone = serveDone
-	clt.app = app
-
+	clt.run.Store(r)
+	clt.setStatus(EngineStateLoaded, "", false)
 	return nil
 }
 
+// Start starts the engine that Load prepared, and the streaming server
 func (clt *Client) Start() error {
-	if clt.app == nil {
+	clt.lifecycle.Lock()
+	r := clt.run.Load()
+	if r == nil || clt.EngineState() != EngineStateLoaded {
+		clt.lifecycle.Unlock()
 		return errors.New("call Client.Load first")
 	}
 
-	clt.Measurements = NewMeasurements(clt)
-
-	// Set up streaming server
-	server, err := NewServer(clt.app, clt.Measurements, clt.ctx)
-	if err != nil {
-		return err
+	// These stay across restarts: the streaming server's port and URLs remain valid
+	if clt.Measurements == nil {
+		clt.Measurements = NewMeasurements(clt)
 	}
-	server.client = clt
-	clt.Server = server
-
-	// Subscribe to events
-	go clt.startEventListener()
-
-	if err := clt.app.Start(); err != nil {
-		return err
+	if clt.Server == nil {
+		server, err := NewServer(clt.Measurements)
+		if err != nil {
+			clt.lifecycle.Unlock()
+			return err
+		}
+		server.client = clt
+		clt.Server = server
 	}
 
+	defer clt.lifecycle.Unlock()
+	if err := clt.startRun(r); err != nil {
+		clt.setStatus(EngineStateFailed, err.Error(), true)
+		return err
+	}
+	// The app goes on starting itself; it hears of later changes
+	clt.setStatus(EngineStateRunning, "", false)
 	return nil
 }
 
 func (clt *Client) PerformMaintenanceBlocking() error {
-	return <-clt.app.StartMaintenance()
+	r := clt.currentRun()
+	if r == nil || r.internals.Load() == nil {
+		return ErrStillLoading
+	}
+	if r.isClosed() {
+		return clt.errNotRunning()
+	}
+	// The database service drops the request when it has stopped (or is busy), and then never answers
+	select {
+	case err := <-r.app.StartMaintenance():
+		return err
+	case <-r.ctx.Done():
+		return clt.errNotRunning()
+	}
 }
 
 func (clt *Client) LastMaintenanceTime() *Date {
-	if clt.app == nil {
+	r := clt.currentRun()
+	if r == nil || r.internals.Load() == nil {
 		return nil
 	}
 
-	t := clt.app.LastMaintenanceTime()
+	t := r.app.LastMaintenanceTime()
 	if t.IsZero() {
 		return nil
 	}
 	return &Date{time: t}
 }
 
-func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) {
-	clt.changeConfiguration(func(cfg *config.Configuration) {
+func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) error {
+	return clt.changeConfiguration(func(cfg *config.Configuration) {
 		for _, fc := range cfg.Folders {
 			fc.FSWatcherEnabled = enabled
 			cfg.SetFolder(fc)
@@ -956,21 +926,21 @@ func (clt *Client) deviceID() protocol.DeviceID {
 }
 
 func (clt *Client) Folders() *ListOfStrings {
-	if clt.config == nil {
+	if clt.cfg() == nil {
 		return nil
 	}
 
-	return List(Map(clt.config.FolderList(), func(folder config.FolderConfiguration) string {
+	return List(Map(clt.cfg().FolderList(), func(folder config.FolderConfiguration) string {
 		return folder.ID
 	}))
 }
 
 func (clt *Client) FolderWithID(id string) *Folder {
-	if clt.config == nil {
+	if clt.cfg() == nil {
 		return nil
 	}
 
-	fi, ok := clt.config.Folders()[id]
+	fi, ok := clt.cfg().Folders()[id]
 	if !ok {
 		return nil // Folder with this ID does not exist
 	}
@@ -982,21 +952,21 @@ func (clt *Client) FolderWithID(id string) *Folder {
 }
 
 func (clt *Client) ConnectedPeerCount() int {
-	if clt.app == nil || clt.app.Internals == nil {
+	if clt.internals() == nil {
 		return 0
 	}
 
-	if clt.config == nil || clt.app == nil || clt.app.Internals == nil {
+	if clt.cfg() == nil || clt.internals() == nil {
 		return 0
 	}
 
-	devIDs := clt.config.Devices()
+	devIDs := clt.cfg().Devices()
 	connected := 0
 	for devID := range devIDs {
 		if devID == clt.deviceID() {
 			continue
 		}
-		if clt.app.Internals.IsConnectedTo(devID) {
+		if clt.internals().IsConnectedTo(devID) {
 			connected++
 		}
 	}
@@ -1004,11 +974,11 @@ func (clt *Client) ConnectedPeerCount() int {
 }
 
 func (clt *Client) Peers() *ListOfStrings {
-	if clt.config == nil {
+	if clt.cfg() == nil {
 		return nil
 	}
 
-	return List(Map(clt.config.DeviceList(), func(device config.DeviceConfiguration) string {
+	return List(Map(clt.cfg().DeviceList(), func(device config.DeviceConfiguration) string {
 		return device.DeviceID.String()
 	}))
 }
@@ -1027,7 +997,7 @@ func (clt *Client) PeerWithID(deviceID string) *Peer {
 }
 
 func (clt *Client) PeerWithShortID(shortID string) *Peer {
-	for _, dc := range clt.config.DeviceList() {
+	for _, dc := range clt.cfg().DeviceList() {
 		if dc.DeviceID.Short().String() == shortID {
 			return &Peer{
 				client:   clt,
@@ -1042,8 +1012,8 @@ func (clt *Client) PeerWithShortID(shortID string) *Peer {
 func (clt *Client) SetDevicesPaused(peers *ListOfStrings, pause bool) error {
 	ids := peers.data
 
-	clt.changeConfiguration(func(cfg *config.Configuration) {
-		for _, dc := range clt.config.DeviceList() {
+	return clt.changeConfiguration(func(cfg *config.Configuration) {
+		for _, dc := range cfg.Devices {
 			listed := slices.ContainsFunc(ids, func(v string) bool {
 				did, err := protocol.DeviceIDFromString(v)
 				return err == nil && dc.DeviceID.Equals(did)
@@ -1060,18 +1030,27 @@ func (clt *Client) SetDevicesPaused(peers *ListOfStrings, pause bool) error {
 			}
 		}
 	})
-	return nil
 }
 
 func (clt *Client) changeConfiguration(block config.ModifyFunction) error {
-	waiter, err := clt.config.Modify(block)
+	r := clt.currentRun()
+	if r == nil {
+		return ErrStillLoading
+	}
+	// A configuration that is no longer served would never apply the change
+	r.writes.RLock()
+	defer r.writes.RUnlock()
+	if r.closed {
+		return clt.errNotRunning()
+	}
+
+	waiter, err := r.config.Modify(block)
 	if err != nil {
 		return err
 	}
 	waiter.Wait()
 
-	err = clt.config.Save()
-	return err
+	return r.config.Save()
 }
 
 func (clt *Client) AddPeer(deviceID string) error {
@@ -1080,7 +1059,7 @@ func (clt *Client) AddPeer(deviceID string) error {
 		return err
 	}
 
-	deviceConfig := clt.config.DefaultDevice()
+	deviceConfig := clt.cfg().DefaultDevice()
 	deviceConfig.DeviceID = addedDevice
 
 	return clt.changeConfiguration(func(cfg *config.Configuration) {
@@ -1089,14 +1068,14 @@ func (clt *Client) AddPeer(deviceID string) error {
 }
 
 func (clt *Client) AddSpecialFolder(folderID string, fsType string, folderPath string, folderType string) error {
-	if clt.app == nil || clt.app.Internals == nil {
+	if clt.internals() == nil {
 		return ErrStillLoading
 	}
 
 	ft := config.FolderTypeSendReceive
 	ft.UnmarshalText([]byte(folderType))
 
-	folderConfig := clt.config.DefaultFolder()
+	folderConfig := clt.cfg().DefaultFolder()
 	folderConfig.ID = folderID
 	folderConfig.FilesystemType = config.FilesystemType(fsType)
 	folderConfig.Type = ft
@@ -1117,7 +1096,7 @@ func (clt *Client) AddSpecialFolder(folderID string, fsType string, folderPath s
 
 // Leave path empty to add folder at default location
 func (clt *Client) AddFolder(folderID string, folderPath string, createAsOnDemand bool, createAsReceiveEncrypted bool) error {
-	if clt.app == nil || clt.app.Internals == nil {
+	if clt.internals() == nil {
 		return ErrStillLoading
 	}
 
@@ -1126,7 +1105,7 @@ func (clt *Client) AddFolder(folderID string, folderPath string, createAsOnDeman
 		panic("invalid combination of createAsReceiveEncrypted and createAsOnDemand specified")
 	}
 
-	folderConfig := clt.config.DefaultFolder()
+	folderConfig := clt.cfg().DefaultFolder()
 	folderConfig.ID = folderID
 	folderConfig.Label = folderID
 	if len(folderPath) == 0 {
@@ -1155,10 +1134,10 @@ func (clt *Client) AddFolder(folderID string, folderPath string, createAsOnDeman
 	if !createAsReceiveEncrypted {
 		// Set default ignores for on-demand sync
 		if createAsOnDemand {
-			return clt.app.Internals.SetIgnores(folderID, []string{"*"})
+			return clt.internals().SetIgnores(folderID, []string{"*"})
 		} else {
 			// Create empty .stignore anyway because there may be an old one lingering around
-			return clt.app.Internals.SetIgnores(folderID, []string{})
+			return clt.internals().SetIgnores(folderID, []string{})
 		}
 	} else {
 		return nil
@@ -1172,7 +1151,7 @@ func (clt *Client) SetNATEnabled(enabled bool) error {
 }
 
 func (clt *Client) IsNATEnabled() bool {
-	return clt.config.Options().NATEnabled
+	return clt.cfg().Options().NATEnabled
 }
 
 func (clt *Client) SetSTUNEnabled(enabled bool) error {
@@ -1186,7 +1165,7 @@ func (clt *Client) SetSTUNEnabled(enabled bool) error {
 }
 
 func (clt *Client) IsSTUNEnabled() bool {
-	return clt.config.Options().StunKeepaliveMinS > 0
+	return clt.cfg().Options().StunKeepaliveMinS > 0
 }
 
 func (clt *Client) SetRelaysEnabled(enabled bool) error {
@@ -1196,7 +1175,7 @@ func (clt *Client) SetRelaysEnabled(enabled bool) error {
 }
 
 func (clt *Client) IsRelaysEnabled() bool {
-	return clt.config.Options().RelaysEnabled
+	return clt.cfg().Options().RelaysEnabled
 }
 
 func (clt *Client) SetLocalAnnounceEnabled(enabled bool) error {
@@ -1206,7 +1185,7 @@ func (clt *Client) SetLocalAnnounceEnabled(enabled bool) error {
 }
 
 func (clt *Client) IsLocalAnnounceEnabled() bool {
-	return clt.config.Options().LocalAnnEnabled
+	return clt.cfg().Options().LocalAnnEnabled
 }
 
 func (clt *Client) SetGlobalAnnounceEnabled(enabled bool) error {
@@ -1216,7 +1195,7 @@ func (clt *Client) SetGlobalAnnounceEnabled(enabled bool) error {
 }
 
 func (clt *Client) IsGlobalAnnounceEnabled() bool {
-	return clt.config.Options().GlobalAnnEnabled
+	return clt.cfg().Options().GlobalAnnEnabled
 }
 
 func (clt *Client) SetAnnounceLANAddresses(enabled bool) error {
@@ -1226,11 +1205,11 @@ func (clt *Client) SetAnnounceLANAddresses(enabled bool) error {
 }
 
 func (clt *Client) IsAnnounceLANAddressesEnabled() bool {
-	return clt.config.Options().AnnounceLANAddresses
+	return clt.cfg().Options().AnnounceLANAddresses
 }
 
 func (clt *Client) IsBandwidthLimitedInLAN() bool {
-	return clt.config.Options().LimitBandwidthInLan
+	return clt.cfg().Options().LimitBandwidthInLan
 }
 
 func (clt *Client) SetBandwidthLimitedInLAN(enabled bool) error {
@@ -1258,11 +1237,11 @@ func mbitsPerSecondToKiBPerSecond(mbits int) int {
 }
 
 func (clt *Client) GetBandwidthLimitUpMbitsPerSec() int {
-	return kibPerSecondToMbitsPerSecond(clt.config.Options().MaxSendKbps)
+	return kibPerSecondToMbitsPerSecond(clt.cfg().Options().MaxSendKbps)
 }
 
 func (clt *Client) GetBandwidthLimitDownMbitsPerSec() int {
-	return kibPerSecondToMbitsPerSecond(clt.config.Options().MaxRecvKbps)
+	return kibPerSecondToMbitsPerSecond(clt.cfg().Options().MaxRecvKbps)
 }
 
 func (clt *Client) SetBandwidthLimitsMbitsPerSec(down int, up int) error {
@@ -1295,7 +1274,7 @@ func (clt *Client) UploadProgressForPeerFolderPath(deviceID string, folderID str
 	if uploads, ok := clt.uploadProgress[deviceID]; ok {
 		if files, ok := uploads[folderID]; ok {
 			if blocksTransferred, ok := files[path]; ok {
-				info, ok, err := clt.app.Internals.GlobalFileInfo(folderID, path)
+				info, ok, err := clt.internals().GlobalFileInfo(folderID, path)
 				if !ok || err != nil {
 					return nil
 				}
@@ -1333,7 +1312,7 @@ func (clt *Client) GetTotalUploadProgress() *Progress {
 	for _, info := range clt.uploadProgress {
 		for folderID, finfo := range info {
 			for path, blocksTransferred := range finfo {
-				info, ok, err := clt.app.Internals.GlobalFileInfo(folderID, path)
+				info, ok, err := clt.internals().GlobalFileInfo(folderID, path)
 				if !ok || err != nil {
 					continue
 				}
@@ -1414,7 +1393,7 @@ func (clt *Client) GetDownloadProgressForFile(path string, folder string) *Progr
 func (clt *Client) GetName() (string, error) {
 	devID := clt.deviceID()
 
-	selfConfig, ok := clt.config.Devices()[devID]
+	selfConfig, ok := clt.cfg().Devices()[devID]
 	if !ok {
 		return "", errors.New("cannot find myself")
 	}
@@ -1424,7 +1403,7 @@ func (clt *Client) GetName() (string, error) {
 func (clt *Client) SetName(name string) error {
 	devID := clt.deviceID()
 
-	selfConfig, ok := clt.config.Devices()[devID]
+	selfConfig, ok := clt.cfg().Devices()[devID]
 	if !ok {
 		return errors.New("cannot find myself")
 	}
@@ -1436,19 +1415,19 @@ func (clt *Client) SetName(name string) error {
 }
 
 func (clt *Client) Statistics() (*FolderStats, error) {
-	if clt.app == nil || clt.app.Internals == nil {
+	if clt.internals() == nil {
 		return nil, ErrStillLoading
 	}
 
 	globalTotal := FolderCounts{}
 	localTotal := FolderCounts{}
 
-	for _, folder := range clt.config.FolderList() {
-		globalFolderSize, err := clt.app.Internals.GlobalSize(folder.ID)
+	for _, folder := range clt.cfg().FolderList() {
+		globalFolderSize, err := clt.internals().GlobalSize(folder.ID)
 		if err != nil {
 			return nil, err
 		}
-		localFolderSize, err := clt.app.Internals.LocalSize(folder.ID)
+		localFolderSize, err := clt.internals().LocalSize(folder.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -1489,14 +1468,14 @@ func zipError[T any](it iter.Seq[T], errFn func() error) iter.Seq2[T, error] {
 particular order, unless/until the delegate returns true from IsCancelled. Set maxResults to <=0 to collect all results.
 */
 func (clt *Client) Search(text string, delegate SearchResultDelegate, maxResults int, folderID string, prefix string) error {
-	if clt.app == nil || clt.app.Internals == nil {
+	if clt.internals() == nil {
 		return ErrStillLoading
 	}
 
 	text = strings.ToLower(text)
 	resultCount := 0
 
-	for _, folder := range clt.config.FolderList() {
+	for _, folder := range clt.cfg().FolderList() {
 		if delegate.IsCancelled() {
 			return nil
 		}
@@ -1509,7 +1488,7 @@ func (clt *Client) Search(text string, delegate SearchResultDelegate, maxResults
 			FolderID: folder.ID,
 		}
 
-		for f, err := range zipError(clt.app.Internals.AllGlobalFiles(folder.ID)) {
+		for f, err := range zipError(clt.internals().AllGlobalFiles(folder.ID)) {
 			if err != nil {
 				return err
 			}
@@ -1542,7 +1521,7 @@ func (clt *Client) Search(text string, delegate SearchResultDelegate, maxResults
 }
 
 func (clt *Client) GetEnoughConnections() int {
-	return clt.config.Options().ConnectionLimitEnough
+	return clt.cfg().Options().ConnectionLimitEnough
 }
 
 func (clt *Client) SetEnoughConnections(enough int) error {
@@ -1558,7 +1537,7 @@ const (
 )
 
 func (clt *Client) IsListening() bool {
-	addrs := clt.config.Options().ListenAddresses()
+	addrs := clt.cfg().Options().ListenAddresses()
 	return len(addrs) > 0 && addrs[0] != NoListenAddress
 }
 
@@ -1574,15 +1553,15 @@ func (clt *Client) SetListening(listening bool) error {
 
 /** Returns true if any device is currently offering the folder with the specified ID as encrypted folder. */
 func (clt *Client) IsPendingFolderOfferedReceiveEncrypted(folderID string) (isOffered bool, err error) {
-	if clt.app == nil || clt.app.Internals == nil {
+	if clt.internals() == nil {
 		return false, ErrStillLoading
 	}
 
 	var anyOffers = false
 	var anyOfferReceiveEncrypted = false
-	peers := clt.config.DeviceList()
+	peers := clt.cfg().DeviceList()
 	for _, peer := range peers {
-		peerPendingFolderIDs, err := clt.app.Internals.PendingFolders(peer.DeviceID)
+		peerPendingFolderIDs, err := clt.internals().PendingFolders(peer.DeviceID)
 		if err != nil {
 			continue
 		}
@@ -1606,14 +1585,14 @@ func (clt *Client) IsPendingFolderOfferedReceiveEncrypted(folderID string) (isOf
 }
 
 func (clt *Client) pendingFolders() (map[string][]string, error) {
-	if clt.app == nil || clt.app.Internals == nil {
+	if clt.internals() == nil {
 		return nil, ErrStillLoading
 	}
 
-	peers := clt.config.DeviceList()
+	peers := clt.cfg().DeviceList()
 	fids := map[string][]string{}
 	for _, peer := range peers {
-		peerFids, err := clt.app.Internals.PendingFolders(peer.DeviceID)
+		peerFids, err := clt.internals().PendingFolders(peer.DeviceID)
 		if err != nil {
 			return nil, err
 		}
@@ -1628,7 +1607,7 @@ func (clt *Client) pendingFolders() (map[string][]string, error) {
 }
 
 func (clt *Client) PendingFolderIDs() (*ListOfStrings, error) {
-	if clt.app == nil || clt.app.Internals == nil {
+	if clt.internals() == nil {
 		return nil, ErrStillLoading
 	}
 
@@ -1640,7 +1619,7 @@ func (clt *Client) PendingFolderIDs() (*ListOfStrings, error) {
 }
 
 func (clt *Client) DevicesPendingFolder(folderID string) (*ListOfStrings, error) {
-	if clt.app == nil || clt.app.Internals == nil {
+	if clt.internals() == nil {
 		return nil, ErrStillLoading
 	}
 
@@ -1663,7 +1642,7 @@ func (clt *Client) SetReconnectIntervalS(secs int) error {
 }
 
 func (clt *Client) ListenAddresses() *ListOfStrings {
-	return List(clt.config.Options().RawListenAddresses)
+	return List(clt.cfg().Options().RawListenAddresses)
 }
 
 func (clt *Client) SetListenAddresses(addrs *ListOfStrings) error {
@@ -1673,7 +1652,7 @@ func (clt *Client) SetListenAddresses(addrs *ListOfStrings) error {
 }
 
 func (clt *Client) DiscoveryAddresses() *ListOfStrings {
-	return List(clt.config.Options().RawGlobalAnnServers)
+	return List(clt.cfg().Options().RawGlobalAnnServers)
 }
 
 func (clt *Client) SetDiscoveryAddresses(addrs *ListOfStrings) error {
@@ -1691,10 +1670,10 @@ func (clt *Client) SetDiscoveryAddresses(addrs *ListOfStrings) error {
 }
 
 func (clt *Client) StunAddresses() *ListOfStrings {
-	if clt.config.Options().StunKeepaliveMinS < 1 {
+	if clt.cfg().Options().StunKeepaliveMinS < 1 {
 		return List(make([]string, 0))
 	}
-	return List(clt.config.Options().RawStunServers)
+	return List(clt.cfg().Options().RawStunServers)
 }
 
 func (clt *Client) SetStunAddresses(addrs *ListOfStrings) error {
@@ -1712,7 +1691,7 @@ func (clt *Client) SetStunAddresses(addrs *ListOfStrings) error {
 }
 
 func (clt *Client) IsDiskSpaceSufficient() bool {
-	if minFree := clt.config.Options().MinHomeDiskFree; minFree.Value > 0 {
+	if minFree := clt.cfg().Options().MinHomeDiskFree; minFree.Value > 0 {
 		dbPath := locations.Get(locations.Database)
 		if usage, err := fs.NewFilesystem(fs.FilesystemTypeBasic, dbPath).Usage("."); err == nil {
 			if err = config.CheckFreeSpace(minFree, usage); err != nil {
@@ -1902,7 +1881,7 @@ func (c *Client) generateSupportBundle(writer io.Writer, appInfo []byte) error {
 }
 
 func (c *Client) getRedactedConfigFile() config.Configuration {
-	rawConf := c.config.RawCopy()
+	rawConf := c.cfg().RawCopy()
 	rawConf.GUI.APIKey = "•••"
 	if rawConf.GUI.Password != "" {
 		rawConf.GUI.Password = "•••"
@@ -1924,7 +1903,7 @@ func (c *Client) getRedactedConfigFile() config.Configuration {
 }
 
 func (clt *Client) IsNetworkTrafficLowPriority() bool {
-	return clt.config.Options().TrafficClass == 4
+	return clt.cfg().Options().TrafficClass == 4
 }
 
 func (clt *Client) SetNetworkTrafficLowPriority(lowPrio bool) error {
@@ -1968,6 +1947,13 @@ func NewMeasurements(clt *Client) *Measurements {
 	}
 }
 
+// reset forgets the measurements of an engine run that stopped
+func (m *Measurements) reset() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.measurements = make(map[string]Measurement, 0)
+}
+
 func (m *Measurements) LatencyFor(deviceID string) float64 {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -1982,25 +1968,31 @@ func (m *Measurements) LatencyFor(deviceID string) float64 {
 
 func (m *Measurements) actuallyMeasure() {
 	ctx := context.Background()
-	devices := m.client.config.DeviceList()
+	internals, cfg := m.client.internals(), m.client.cfg()
+	if internals == nil || cfg == nil {
+		return
+	}
+	devices := cfg.DeviceList()
 	latencies := make(map[string]Measurement, 0)
 	for _, device := range devices {
-		if m.client.app.Internals.IsConnectedTo(device.DeviceID) {
+		if internals.IsConnectedTo(device.DeviceID) {
 			start := time.Now()
-			pingContext, _ := context.WithTimeout(ctx, time.Second*1)
+			pingContext, cancel := context.WithTimeout(ctx, time.Second*1)
 
 			// Make a faux request. This is expected to return a 'generic error' but we are not actually interested in the
 			// requested block anyway, just in the time it takes to respond.
 			fakeHash := [32]byte{}
-			_, _ = m.client.app.Internals.DownloadBlock(pingContext, device.DeviceID, "__fake_folder", "__fake_file_name_for_ping", 0, protocol.BlockInfo{Size: 1, Offset: 0, Hash: fakeHash[:]}, false)
-			if pingContext.Err() == nil {
+			_, _ = internals.DownloadBlock(pingContext, device.DeviceID, "__fake_folder", "__fake_file_name_for_ping", 0, protocol.BlockInfo{Size: 1, Offset: 0, Hash: fakeHash[:]}, false)
+			pingErr := pingContext.Err()
+			cancel()
+			if pingErr == nil {
 				duration := time.Since(start)
 				latencies[device.DeviceID.String()] = Measurement{
 					latency: duration.Seconds(),
 					when:    time.Now(),
 				}
 			} else {
-				slog.Info("ping error", "cause", pingContext.Err())
+				slog.Info("ping error", "cause", pingErr)
 			}
 		}
 	}

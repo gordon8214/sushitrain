@@ -368,7 +368,13 @@ private struct DeviceAddressesView: View {
 	private func write() {
 		let addresses = self.addresses
 		Task.detached {
-			try! device.setAddresses(SushitrainListOfStrings.from(addresses))
+			// Fails while the engine restarts
+			do {
+				try device.setAddresses(SushitrainListOfStrings.from(addresses))
+			}
+			catch {
+				Log.warn("Could not save the device's addresses: \(error.localizedDescription)")
+			}
 		}
 	}
 }

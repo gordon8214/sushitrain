@@ -288,7 +288,7 @@ func newTrashTestFolder(t *testing.T) *Folder {
 		_ = wrapper.Serve(ctx)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	return &Folder{client: &Client{config: wrapper}, FolderID: "test"}
+	return &Folder{client: (&Client{}).withTestRun(wrapper, nil, nil), FolderID: "test"}
 }
 
 func TestTrashFolderConfiguration(t *testing.T) {
@@ -309,7 +309,7 @@ func TestTrashFolderConfiguration(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Configuration serialization must recreate the appropriate filesystem.
-		file, err := os.Open(folder.client.config.ConfigPath())
+		file, err := os.Open(folder.client.cfg().ConfigPath())
 		if err != nil {
 			t.Fatal(err)
 		}

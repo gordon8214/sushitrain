@@ -34,15 +34,11 @@ func (date *Date) UnixMilliseconds() int64 {
 }
 
 func (peer *Peer) LastSeen() *Date {
-	if peer.client.app == nil {
+	if peer.client.internals() == nil {
 		return nil
 	}
 
-	if peer.client.app.Internals == nil {
-		return nil
-	}
-
-	stats, err := peer.client.app.Internals.DeviceStatistics()
+	stats, err := peer.client.internals().DeviceStatistics()
 	if err != nil {
 		return nil
 	}
@@ -50,7 +46,7 @@ func (peer *Peer) LastSeen() *Date {
 }
 
 func (peer *Peer) deviceConfiguration() *config.DeviceConfiguration {
-	devs := peer.client.config.Devices()
+	devs := peer.client.cfg().Devices()
 	dev, ok := devs[peer.deviceID]
 	if !ok {
 		return nil
@@ -84,14 +80,11 @@ func (peer *Peer) Addresses() *ListOfStrings {
 }
 
 func (peer *Peer) IsConnected() bool {
-	if peer.client.app == nil {
-		return false
-	}
-	if peer.client.app.Internals == nil {
+	if peer.client.internals() == nil {
 		return false
 	}
 
-	return peer.client.app.Internals.IsConnectedTo(peer.deviceID)
+	return peer.client.internals().IsConnectedTo(peer.deviceID)
 }
 
 func (peer *Peer) SetPaused(paused bool) error {
@@ -192,7 +185,7 @@ func (peer *Peer) IsFolderShared(folderID string) bool {
 }
 
 func (peer *Peer) SharedFolderIDs() *ListOfStrings {
-	folders := peer.client.config.Folders()
+	folders := peer.client.cfg().Folders()
 	sharedWith := make([]string, 0)
 
 	for fid, folder := range folders {
@@ -208,7 +201,7 @@ func (peer *Peer) SharedFolderIDs() *ListOfStrings {
 }
 
 func (peer *Peer) PendingFolderIDs() (*ListOfStrings, error) {
-	pfs, err := peer.client.app.Internals.PendingFolders(peer.deviceID)
+	pfs, err := peer.client.internals().PendingFolders(peer.deviceID)
 	if err != nil {
 		return nil, err
 	}

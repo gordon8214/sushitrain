@@ -874,6 +874,18 @@ struct TroubleshootingView: View {
 				.errorAlert($errorMessage)
 			}
 
+			Section {
+				Button("Restart Syncthing", systemImage: "arrow.clockwise") {
+					appState.restartEngine()
+				}
+				.disabled(
+					(appState.startupState != .started && !appState.engineCanRestart) || appState.isEngineRestarting)
+			} footer: {
+				Text(
+					"Stops synchronization and starts it again, with the configuration as it is saved. The app stays open."
+				)
+			}
+
 			Section("Cache directory") {
 				LabeledContent("Cache directory size") {
 					if let size = self.cacheSize {

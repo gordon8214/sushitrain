@@ -24,7 +24,8 @@ var blockCache, _ = lru.New[string, []byte](64)
 type miniPuller struct {
 	measurements *Measurements
 	experiences  *experiences
-	internals    *syncthing.Internals
+	// The engine's model, looked up for each attempt: after a restart, the new engine's peers provide the blocks
+	model func() *syncthing.Internals
 }
 
 func ClearBlockCache() {
@@ -33,7 +34,7 @@ func ClearBlockCache() {
 }
 
 // Download a range. Will retry until cancelled, and fail if there is no way a peer will come online to provide us the range
-func (mp *miniPuller) downloadRange(ctx context.Context, m *syncthing.Internals, folderID string, file protocol.FileInfo, dest []byte, offset int64) (n int64, e error) {
+func (mp *miniPuller) downloadRange(ctx context.Context, folderID string, file protocol.FileInfo, dest []byte, offset int64) (n int64, e error) {
 	if len(dest) == 0 {
 		return 0, nil
 	}
@@ -120,7 +121,11 @@ func (mp *miniPuller) downloadBlock(ctx context.Context, folderID string, blockI
 		return cached, nil
 	}
 
-	availables, err := mp.internals.BlockAvailability(folderID, file, block)
+	m := mp.model()
+	if m == nil {
+		return nil, ErrStillLoading
+	}
+	availables, err := m.BlockAvailability(folderID, file, block)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +159,7 @@ func (mp *miniPuller) downloadBlock(ctx context.Context, folderID string, blockI
 	for {
 		attempt += 1
 		slog.Debug("downloadBlock", "attempt", attempt)
+		m = mp.model()
 
 		for _, available := range availables {
 			// Check if we were cancelled
@@ -163,13 +169,13 @@ func (mp *miniPuller) downloadBlock(ctx context.Context, folderID string, blockI
 
 			if exp, ok := mp.experiences.get(available.ID); ok && exp {
 				// Skip devices we're not connected to
-				if !mp.internals.IsConnectedTo(available.ID) {
+				if !m.IsConnectedTo(available.ID) {
 					continue
 				}
 
 				downloadBlockCtx, cancelDownloadBlock := context.WithTimeout(ctx, mp.timeoutFor(&block))
 				slog.Debug("downloadBlock fetch good", "blockIndex", blockIndex, "from", available.ID)
-				buf, err := mp.internals.DownloadBlock(downloadBlockCtx, available.ID, folderID, file.Name, int(blockIndex), block, available.FromTemporary)
+				buf, err := m.DownloadBlock(downloadBlockCtx, available.ID, folderID, file.Name, int(blockIndex), block, available.FromTemporary)
 				cancelDownloadBlock()
 				// Remember our experience with this peer for next time (if the whole operation wasn't cancelled, which
 				// would cause this call to be cancelled as well and fail with err == context.Canceled)
@@ -195,13 +201,13 @@ func (mp *miniPuller) downloadBlock(ctx context.Context, folderID string, blockI
 
 			if _, ok := mp.experiences.get(available.ID); !ok {
 				// Skip devices we're not connected to
-				if !mp.internals.IsConnectedTo(available.ID) {
+				if !m.IsConnectedTo(available.ID) {
 					continue
 				}
 
 				downloadBlockCtx, cancelDownloadBlock := context.WithTimeout(ctx, mp.timeoutFor(&block))
 				slog.Debug("downloadBlock fetch new", "blockIndex", blockIndex, "from", available.ID)
-				buf, err := mp.internals.DownloadBlock(downloadBlockCtx, available.ID, folderID, file.Name, int(blockIndex), block, available.FromTemporary)
+				buf, err := m.DownloadBlock(downloadBlockCtx, available.ID, folderID, file.Name, int(blockIndex), block, available.FromTemporary)
 				cancelDownloadBlock()
 
 				// Remember our experience with this peer for next time (if the whole operation wasn't cancelled, which
@@ -228,13 +234,13 @@ func (mp *miniPuller) downloadBlock(ctx context.Context, folderID string, blockI
 
 			if exp, ok := mp.experiences.get(available.ID); ok && !exp {
 				// Skip devices we're not connected to
-				if !mp.internals.IsConnectedTo(available.ID) {
+				if !m.IsConnectedTo(available.ID) {
 					continue
 				}
 
 				downloadBlockCtx, cancelDownloadBlock := context.WithTimeout(ctx, mp.timeoutFor(&block))
 				slog.Debug("downloadBlock fetch bad", "blockIndex", blockIndex, "from", available.ID)
-				buf, err := mp.internals.DownloadBlock(downloadBlockCtx, available.ID, folderID, file.Name, int(blockIndex), block, available.FromTemporary)
+				buf, err := m.DownloadBlock(downloadBlockCtx, available.ID, folderID, file.Name, int(blockIndex), block, available.FromTemporary)
 				cancelDownloadBlock()
 
 				// Remember our experience with this peer for next time (if the whole operation wasn't cancelled, which
@@ -262,11 +268,11 @@ func (mp *miniPuller) downloadBlock(ctx context.Context, folderID string, blockI
 	}
 }
 
-func newMiniPuller(measurements *Measurements, internals *syncthing.Internals) *miniPuller {
+func newMiniPuller(measurements *Measurements, model func() *syncthing.Internals) *miniPuller {
 	return &miniPuller{
 		experiences:  newExperiences(),
 		measurements: measurements,
-		internals:    internals,
+		model:        model,
 	}
 }
 

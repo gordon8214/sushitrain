@@ -41,6 +41,14 @@ struct StartupErrorView: View {
 					confirmNewConfiguration = true
 				}
 			}
+			if appState.isEngineRestarting {
+				ProgressView()
+			}
+			else if appState.engineCanRestart {
+				Button("Restart Syncthing") {
+					appState.restartEngine()
+				}
+			}
 			if problem == SushitrainStartupProblemDamagedIdentity {
 				Button("Reset device identity", role: .destructive) {
 					confirmNewIdentity = true

@@ -68,12 +68,45 @@ type folderDigest struct {
 	contents string
 }
 
-// Starts delivering file provider notifications to the delegate. Pass nil to stop.
+// Starts delivering file provider notifications to the delegate. Pass nil to stop. The notifications continue after the
+// engine restarts. The delegate must not wait for the engine to stop, restart or change its configuration, as the engine
+// waits for a notification in progress before it stops.
 func (clt *Client) SetFileProviderDelegate(delegate FileProviderDelegate) {
+	clt.watcherMutex.Lock()
+	defer clt.watcherMutex.Unlock()
+	clt.fileProviderDelegate = delegate
+	run := clt.watchedRun
+	if run == nil {
+		// Before the engine starts, or after it stopped: the configuration's run, which a later start follows
+		run = clt.currentRun()
+	}
+	clt.attachFileProviderWatcherLocked(run)
+}
+
+// followWithFileProviderWatcher points the file provider watcher at a run that starts, or at none when a run stops
+func (clt *Client) followWithFileProviderWatcher(r *engineRun) {
+	clt.watcherMutex.Lock()
+	defer clt.watcherMutex.Unlock()
+	clt.watchedRun = r
+	clt.attachFileProviderWatcherLocked(r)
+}
+
+// attachFileProviderWatcherLocked replaces the watcher with one that watches r for the delegate, if there is a delegate
+// and a run. After a restart it reports every folder as changed once. The caller holds watcherMutex.
+func (clt *Client) attachFileProviderWatcherLocked(r *engineRun) {
+	// The old watcher watches another run (or this one, for an older delegate); stopping it waits for a delivery in
+	// progress, so it happens before the run's lock is taken
 	if existing, ok := fileProviderWatchers.LoadAndDelete(clt); ok {
 		existing.(*fileProviderWatcher).stop()
 	}
-	if delegate == nil {
+	delegate := clt.fileProviderDelegate
+	if delegate == nil || r == nil {
+		return
+	}
+	// A run being torn down has, or will soon have, a stopped event logger, whose subscriptions never deliver
+	r.writes.RLock()
+	defer r.writes.RUnlock()
+	if r.closed {
 		return
 	}
 
@@ -88,12 +121,17 @@ func (clt *Client) SetFileProviderDelegate(delegate FileProviderDelegate) {
 		}
 		return matcher.Hash()
 	})
-	if clt.config != nil {
-		// The watcher also records the ignore patterns of these folders when it starts
-		w.folderDigests = folderConfigurationDigests(clt.config.RawCopy())
+	// The watcher also records the ignore patterns of these folders when it starts
+	w.folderDigests = folderConfigurationDigests(r.config.RawCopy())
+	if !r.firstRun {
+		// Changes around a restart may not have been told: report every folder once
+		for folderID := range w.folderDigests {
+			w.dirty[folderID] = true
+		}
+		w.configChanged = true
 	}
+	w.start(r.ctx, r.evLogger.Subscribe(fileProviderEventMask))
 	fileProviderWatchers.Store(clt, w)
-	w.start(clt.ctx, clt.evLogger.Subscribe(fileProviderEventMask))
 }
 
 func newFileProviderWatcher(delegate FileProviderDelegate, ignoreHash func(string) string) *fileProviderWatcher {
@@ -118,6 +156,10 @@ func (w *fileProviderWatcher) start(parent context.Context, sub events.Subscript
 
 	w.mutex.Lock()
 	seedFolderIDs := KeysOf(w.folderDigests)
+	pending := len(w.dirty) > 0 || w.configChanged
+	if pending {
+		w.firstDirtyAt = time.Now()
+	}
 	w.mutex.Unlock()
 
 	// Events are read in one goroutine and delivered in another, so a slow delegate never makes us miss events
@@ -126,6 +168,9 @@ func (w *fileProviderWatcher) start(parent context.Context, sub events.Subscript
 		defer sub.Unsubscribe()
 		timer := time.NewTimer(time.Hour)
 		timer.Stop()
+		if pending {
+			timer.Reset(w.trailingDelay)
+		}
 
 		for {
 			select {

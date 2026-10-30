@@ -86,7 +86,7 @@ func newIntegrationClient(t *testing.T) (*Client, string) {
 		<-served
 	})
 
-	clt := &Client{app: app, config: wrapper, ctx: ctx, cancel: cancel, evLogger: evLogger, filesPath: dir}
+	clt := (&Client{filesPath: dir}).withTestRun(wrapper, app, evLogger)
 	return clt, folderPath
 }
 
@@ -185,7 +185,7 @@ func TestIntegrationSelectionChangesWaitForSelectionLock(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("one"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := clt.app.Internals.SetIgnores("test", []string{"*"}); err != nil {
+	if err := clt.internals().SetIgnores("test", []string{"*"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := folder.ScanPaths(List([]string{""})); err != nil {

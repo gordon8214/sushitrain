@@ -48,7 +48,7 @@ func (e *Entry) IsArchive() bool {
 }
 
 func (e *Entry) Archive() Archive {
-	puller := newMiniPuller(e.Folder.client.Measurements, e.Folder.client.app.Internals)
+	puller := newMiniPuller(e.Folder.client.Measurements, e.Folder.client.internals)
 
 	mimeType := e.MIMEType()
 	if slices.Contains(zipArchiveMIMETypes, mimeType) {

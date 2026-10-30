@@ -52,7 +52,7 @@ type Folder struct {
 }
 
 func (fld *Folder) folderConfiguration() *config.FolderConfiguration {
-	folders := fld.client.config.Folders()
+	folders := fld.client.cfg().Folders()
 	folderInfo, ok := folders[fld.FolderID]
 	if !ok {
 		return nil
@@ -63,7 +63,7 @@ func (fld *Folder) folderConfiguration() *config.FolderConfiguration {
 func (fld *Folder) RescanSubdirectory(path string) error {
 	go func() {
 		slog.Info("rescan folder", "folderID", fld.FolderID, "subdirectory", path)
-		fld.client.app.Internals.ScanFolderSubdirs(fld.FolderID, []string{path})
+		fld.client.scanFolderSubdirs(fld.FolderID, []string{path})
 	}()
 	return nil
 }
@@ -71,7 +71,7 @@ func (fld *Folder) RescanSubdirectory(path string) error {
 func (fld *Folder) Rescan() error {
 	go func() {
 		slog.Info("rescan", "folder", fld.FolderID)
-		fld.client.app.Internals.ScanFolderSubdirs(fld.FolderID, nil)
+		fld.client.scanFolderSubdirs(fld.FolderID, nil)
 	}()
 	return nil
 }
@@ -308,22 +308,17 @@ func (fld *Folder) SetVersioning(versioningType string, keep int, cleanoutDays i
 }
 
 func (fld *Folder) State() (string, error) {
-	if fld.client.app == nil {
-		return "", nil
-	}
-	if fld.client.app.Internals == nil {
+	if fld.client.internals() == nil {
 		return "", nil
 	}
 
-	state, _, err := fld.client.app.Internals.FolderState(fld.FolderID)
+	state, _, err := fld.client.internals().FolderState(fld.FolderID)
 	return state, err
 }
 
 func (fld *Folder) GetFileInformation(path string) (*Entry, error) {
-	if fld.client.app == nil {
-		return nil, nil
-	}
-	if fld.client.app.Internals == nil {
+	m := fld.client.internals()
+	if m == nil {
 		return nil, nil
 	}
 
@@ -336,7 +331,7 @@ func (fld *Folder) GetFileInformation(path string) (*Entry, error) {
 		path = path[1:]
 	}
 
-	info, ok, err := fld.client.app.Internals.GlobalFileInfo(fld.FolderID, path)
+	info, ok, err := m.GlobalFileInfo(fld.FolderID, path)
 	if err != nil {
 		return nil, err
 	}
@@ -350,11 +345,7 @@ func (fld *Folder) GetFileInformation(path string) (*Entry, error) {
 }
 
 func (fld *Folder) listEntries(prefix string, directories bool, recurse bool) ([]*model.TreeEntry, error) {
-	if fld.client.app == nil {
-		return nil, nil
-	}
-
-	if fld.client.app.Internals == nil {
+	if fld.client.internals() == nil {
 		return nil, nil
 	}
 
@@ -363,7 +354,7 @@ func (fld *Folder) listEntries(prefix string, directories bool, recurse bool) ([
 		levels = -1
 	}
 
-	return fld.client.app.Internals.GlobalTree(fld.FolderID, prefix, levels, directories)
+	return fld.client.internals().GlobalTree(fld.FolderID, prefix, levels, directories)
 }
 
 func flatten(entries []*model.TreeEntry, recurse bool, prefix string) []string {
@@ -507,7 +498,7 @@ func (fld *Folder) ConnectedPeerCount() int {
 		if devID == fld.client.deviceID() {
 			continue
 		}
-		if fld.client.app.Internals.IsConnectedTo(devID) {
+		if fld.client.internals().IsConnectedTo(devID) {
 			connected++
 		}
 	}
@@ -554,14 +545,19 @@ func (fld *Folder) whilePaused(block func() error) error {
 		if err != nil {
 			return err
 		}
-		defer fld.SetPaused(pausedBefore)
+		// The folder must not stay paused unnoticed, as when the engine restarted meanwhile
+		blockErr := block()
+		if err := fld.SetPaused(pausedBefore); err != nil {
+			return errors.Join(blockErr, fmt.Errorf("the folder could not be resumed: %w", err))
+		}
+		return blockErr
 	}
 	return block()
 }
 
 func (fld *Folder) SetSelective(selective bool) error {
 	slog.Info("SetSelective", "folder", fld.FolderID, "selective", selective)
-	if fld.client.app == nil || fld.client.app.Internals == nil {
+	if fld.client.internals() == nil {
 		return errNoClient
 	}
 	fld.cachedIgnore.matcher = nil // Purge our cache
@@ -601,11 +597,11 @@ func (fld *Folder) SelectedPaths(onlyExisting bool) (*ListOfStrings, error) {
 		return nil, errors.New("folder does not exist")
 	}
 
-	if fld.client.app == nil || fld.client.app.Internals == nil {
+	if fld.client.internals() == nil {
 		return nil, errNoClient
 	}
 
-	lines, _, err := fld.client.app.Internals.Ignores(fld.FolderID)
+	lines, _, err := fld.client.internals().Ignores(fld.FolderID)
 	if err != nil {
 		return nil, err
 	}
@@ -705,7 +701,7 @@ func (fld *Folder) SetFolderType(folderType string) error {
 
 // IsSelective reports whether the folder is selective, or an error if its mode is unknown.
 func (fld *Folder) IsSelective() (bool, error) {
-	if fld.client == nil || fld.client.app == nil || fld.client.app.Internals == nil {
+	if fld.client == nil || fld.client.internals() == nil {
 		return false, errNoClient
 	}
 	fc := fld.folderConfiguration()
@@ -888,7 +884,7 @@ func (clt *Client) extraneousFiles(ffs fs.Filesystem, ignores *ignore.Matcher, m
 func (fld *Folder) CleanSelection(keepLastCopy bool) error {
 	return fld.whilePaused(func() error {
 		// Make sure the initial scan has finished (ScanFolders is blocking)
-		fld.client.app.Internals.ScanFolderSubdirs(fld.FolderID, []string{""})
+		fld.client.scanFolderSubdirs(fld.FolderID, []string{""})
 
 		cfg := fld.folderConfiguration()
 		if cfg == nil {
@@ -1020,12 +1016,20 @@ func (fld *Folder) RemoveSuperfluousSelectionEntries() error {
 
 	ffs := fc.Filesystem()
 
-	// Enumerate selection entries, find out if we need them
+	// Enumerate selection entries, find out if we need them. An entry that can't be looked up (as when the engine
+	// restarts) is kept, and nothing is saved.
+	var lookupErr error
 	selection.filterSelectedPaths(func(path string) bool {
-		// Find entry
+		if lookupErr != nil {
+			return true
+		}
 		entry, err := fld.GetFileInformation(path)
-		if err != nil || entry == nil {
-			slog.Info("entry not found", "path", path, "cause", err)
+		if err != nil {
+			lookupErr = err
+			return true
+		}
+		if entry == nil {
+			slog.Info("entry not found", "path", path)
 			return false
 		}
 
@@ -1043,8 +1047,12 @@ func (fld *Folder) RemoveSuperfluousSelectionEntries() error {
 		return keep
 	})
 
+	if lookupErr != nil {
+		return lookupErr
+	}
+
 	// Save new ignores (this triggers a reload of ignores and eventually a scan)
-	err = fld.client.app.Internals.SetIgnores(fld.FolderID, selection.patterns())
+	err = fld.client.internals().SetIgnores(fld.FolderID, selection.patterns())
 	if err != nil {
 		return err
 	}
@@ -1195,7 +1203,7 @@ func (fld *Folder) reloadIgnores() error {
 
 		// Force a (minimal) scan. The current implementation also reloads the ignore file here (regardless of the path that is scanned)
 		// Note, this could potentially take a while
-		err = fld.client.app.Internals.ScanFolderSubdirs(fld.FolderID, []string{ignoreFileName})
+		err = fld.client.scanFolderSubdirs(fld.FolderID, []string{ignoreFileName})
 		if err != nil {
 			return err
 		}
@@ -1245,7 +1253,7 @@ func (fld *Folder) SetIgnoreLines(lines *ListOfStrings) error {
 	}
 
 	// Save new ignores (this triggers a reload of ignores and eventually a scan)
-	err = fld.client.app.Internals.SetIgnores(fld.FolderID, lines.data)
+	err = fld.client.internals().SetIgnores(fld.FolderID, lines.data)
 	if err != nil {
 		return err
 	}
@@ -1303,7 +1311,7 @@ func (fld *Folder) changeSelectionLocked(block func(sel *selection) error) (*ign
 	}
 
 	// Save new ignores (this triggers a reload of ignores and eventually a scan)
-	err = fld.client.app.Internals.SetIgnores(fld.FolderID, selection.patterns())
+	err = fld.client.internals().SetIgnores(fld.FolderID, selection.patterns())
 	if err != nil {
 		return nil, err
 	}
@@ -1413,11 +1421,11 @@ func (fld *Folder) SetLocalFileExplicitlySelected(path string, toggle bool) erro
 }
 
 func (fld *Folder) Statistics() (*FolderStats, error) {
-	if fld.client.app == nil || fld.client.app.Internals == nil {
+	if fld.client.internals() == nil {
 		return nil, ErrStillLoading
 	}
 
-	internals := fld.client.app.Internals
+	internals := fld.client.internals()
 	globalSize, err := internals.GlobalSize(fld.FolderID)
 	if err != nil {
 		return nil, err
@@ -1451,7 +1459,7 @@ type Completion struct {
 }
 
 func (fld *Folder) CompletionForDevice(deviceID string) (*Completion, error) {
-	if fld.client.app == nil || fld.client.app.Internals == nil {
+	if fld.client.internals() == nil {
 		return nil, ErrStillLoading
 	}
 
@@ -1460,7 +1468,7 @@ func (fld *Folder) CompletionForDevice(deviceID string) (*Completion, error) {
 		return nil, err
 	}
 
-	completion, err := fld.client.app.Internals.Completion(devID, fld.FolderID)
+	completion, err := fld.client.internals().Completion(devID, fld.FolderID)
 	if err != nil {
 		return nil, err
 	}
@@ -1485,7 +1493,7 @@ func (fld *Folder) FilesNeeded() (*ListOfStrings, error) {
 	perPage := 512
 	for {
 		// Three different statuses are reported, throw all on a big list for now
-		progress, queued, rest, err := fld.client.app.Internals.NeedFolderFiles(fld.FolderID, page, perPage)
+		progress, queued, rest, err := fld.client.internals().NeedFolderFiles(fld.FolderID, page, perPage)
 		if err != nil {
 			return nil, err
 		}
@@ -1518,7 +1526,7 @@ func (fld *Folder) FilesNeededBy(peer string) (*ListOfStrings, error) {
 	page := 1
 	perPage := 512
 	for {
-		batch, err := fld.client.app.Internals.RemoteNeedFolderFiles(fld.FolderID, devID, page, perPage)
+		batch, err := fld.client.internals().RemoteNeedFolderFiles(fld.FolderID, devID, page, perPage)
 		if err != nil {
 			return nil, err
 		}
@@ -1540,10 +1548,10 @@ func (fld *Folder) FilesNeededBy(peer string) (*ListOfStrings, error) {
 // LocalSequence is the sequence of this device's latest change to the folder's index. Unlike FilesNeededBy it also
 // answers for a paused folder, which Syncthing no longer runs.
 func (fld *Folder) LocalSequence() (int64, error) {
-	if fld.client.app == nil || fld.client.app.Internals == nil {
+	if fld.client.internals() == nil {
 		return 0, ErrStillLoading
 	}
-	return fld.client.app.Internals.LocalSequence(fld.FolderID)
+	return fld.client.internals().LocalSequence(fld.FolderID)
 }
 
 func (fld *Folder) IsDiskSpaceSufficient() bool {

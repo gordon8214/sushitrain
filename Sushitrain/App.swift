@@ -331,6 +331,12 @@ struct SushitrainApp: App {
 				Button("Decrypt a folder...") {
 					openWindow(id: "decrypter")
 				}
+
+				Button("Restart Syncthing") {
+					appState.restartEngine()
+				}
+				.disabled(
+					(appState.startupState != .started && !appState.engineCanRestart) || appState.isEngineRestarting)
 			}
 		#endif
 	}
@@ -410,6 +416,13 @@ struct SushitrainApp: App {
 						openWindow(id: "stats")
 						NSApplication.shared.activate()
 					}
+				}
+
+				if appState.startupState == .started || appState.engineCanRestart {
+					Button("Restart Syncthing", systemImage: "arrow.clockwise") {
+						appState.restartEngine()
+					}
+					.disabled(appState.isEngineRestarting)
 				}
 
 				Button("About...", systemImage: "info.circle") {

@@ -108,6 +108,18 @@
 			}
 		}
 
+		/// The engine stopped the service it served, as when the engine failed
+		func engineStopped() {
+			certificateRefresh?.cancel()
+			certificateRefresh = nil
+			guard service != nil else {
+				return
+			}
+			service = nil
+			state = .stopped
+			endActivity()
+		}
+
 		/// Starts the service again, as after a change of settings or certificate
 		func restart() {
 			guard isEnabled else {
@@ -287,31 +299,27 @@
 			await refresh()
 		}
 
-		/// For the app delegate's applicationShouldTerminate: stops the service before the app quits, without blocking
-		/// the main thread. The app quits once the service stopped, or after terminationTimeout. Changes the service
-		/// could not finish are completed from its journal at the next start.
-		func terminationReply() -> NSApplication.TerminateReply {
+		/// For the app delegate's applicationShouldTerminate: stops the service before the app quits (and before the
+		/// engine stops), without blocking the main thread, waiting at most terminationTimeout. Changes the service could
+		/// not finish are completed from its journal at the next start.
+		func stopBeforeQuitting() async {
 			certificateRefresh?.cancel()
 			certificateRefresh = nil
 			guard let service else {
-				return .terminateNow
+				return
 			}
 			self.service = nil
 			state = .stopped
-			Task {
-				let stopped = await Self.stop(service, within: Self.terminationTimeout)
-				if !stopped {
-					Log.warn("The remote file service did not stop in time")
-				}
-				endActivity()
-				NSApplication.shared.reply(toApplicationShouldTerminate: true)
+			let stopped = await Self.stop(service, within: Self.terminationTimeout)
+			if !stopped {
+				Log.warn("The remote file service did not stop in time")
 			}
-			return .terminateLater
+			endActivity()
 		}
 
 		/// Stops the service when the app quits, waiting a little for it to finish what it is doing. Changes it could
 		/// not finish are completed from its journal at the next start. Only does something when the app quits without
-		/// asking terminationReply first.
+		/// asking stopBeforeQuitting first.
 		private func stopForTermination() {
 			certificateRefresh?.cancel()
 			guard let service else {

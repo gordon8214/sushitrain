@@ -6,7 +6,6 @@
 package sushitrain
 
 import (
-	"context"
 	"crypto/tls"
 	"database/sql"
 	"errors"
@@ -147,15 +146,9 @@ func newLoadTestClient(t *testing.T) (*Client, string) {
 			t.Fatal(err)
 		}
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	evLogger := events.NewLogger()
-	go evLogger.Serve(ctx)
-	clt := &Client{ctx: ctx, cancel: cancel, evLogger: evLogger, filesPath: t.TempDir()}
+	clt := &Client{filesPath: t.TempDir()}
 	t.Cleanup(func() {
-		cancel()
-		if clt.configServeDone != nil {
-			<-clt.configServeDone
-		}
+		clt.Stop()
 		if clt.appLock != nil {
 			_ = clt.appLock.Unlock()
 		}
@@ -314,7 +307,7 @@ func TestLoadFailingAfterTheConfigurationLeavesItAlone(t *testing.T) {
 	if err := clt.Load(false); err == nil {
 		t.Fatal("loaded a newer database")
 	}
-	clt.cancel()
+	clt.Stop()
 	if after := stateOf(t, path); after != before {
 		t.Fatal("the configuration was written")
 	}
@@ -328,7 +321,7 @@ func TestLoadServesTheConfiguration(t *testing.T) {
 	if err := clt.changeConfiguration(func(cfg *config.Configuration) { cfg.Options.MaxSendKbps = 7 }); err != nil {
 		t.Fatal(err)
 	}
-	if clt.config.Options().MaxSendKbps != 7 {
+	if clt.cfg().Options().MaxSendKbps != 7 {
 		t.Fatal("the change was not applied")
 	}
 }

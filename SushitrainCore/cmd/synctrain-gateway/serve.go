@@ -193,7 +193,19 @@ func run(ctx context.Context, opts serveOptions) (restart bool, err error) {
 		slog.Warn("No Syncthing configuration in the home; created a new one (to take over an existing Syncthing, "+
 			"stop and pass its home with --home)", "path", configFile)
 	}
-	go func() { _ = cfg.Serve(runCtx) }()
+	// The configuration saves itself when it stops being served, which must be done before the next run loads it, and
+	// while the event logger still runs (the save logs an event)
+	cfgCtx, stopCfg := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		_ = cfg.Serve(cfgCtx)
+	}()
+	defer func() {
+		stopCfg()
+		<-served
+		cancel()
+	}()
 
 	if err := syncthing.TryMigrateDatabase(ctx, opts.deleteRetention); err != nil {
 		if ctx.Err() != nil {

@@ -30,9 +30,15 @@ type fakeFileProviderBackend struct {
 	files     map[string]protocol.FileInfo
 	blocks    map[string][][]byte
 	available bool
+	// The engine restarts or stopped
+	stopped bool
 
 	mutex   sync.Mutex
 	fetches int
+}
+
+func (b *fakeFileProviderBackend) running() bool {
+	return !b.stopped
 }
 
 func (b *fakeFileProviderBackend) folderInfo(folderID string) (fileProviderFolder, bool) {
@@ -464,5 +470,14 @@ func TestBlockFetchTimeout(t *testing.T) {
 		if got := blockFetchTimeout(fileProviderBlockTimeout, c.size); got != c.want {
 			t.Errorf("blockFetchTimeout(%d) = %v, want %v", c.size, got, c.want)
 		}
+	}
+}
+
+// While the engine restarts, files are not found but unavailable for a while, which the extension retries
+func TestFileProviderServerAnswersUnavailableWhileTheEngineIsDown(t *testing.T) {
+	server := startTestFileProviderServer(t, &fakeFileProviderBackend{stopped: true})
+	res, _ := fileProviderRequest(t, server, http.MethodGet, "/file?folder=folder&path=a.txt", nil)
+	if res.StatusCode != http.StatusServiceUnavailable || res.Header.Get("Retry-After") == "" {
+		t.Fatalf("status %d, Retry-After %q", res.StatusCode, res.Header.Get("Retry-After"))
 	}
 }

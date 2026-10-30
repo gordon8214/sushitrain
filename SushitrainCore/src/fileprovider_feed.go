@@ -78,7 +78,7 @@ type internalsGlobalIndex struct {
 }
 
 func (idx internalsGlobalIndex) allGlobalFiles(folderID string, yield func(globalFileMeta) bool) error {
-	files, errFn := idx.client.app.Internals.AllGlobalFiles(folderID)
+	files, errFn := idx.client.internals().AllGlobalFiles(folderID)
 	for meta := range files {
 		if !yield(globalFileMeta{
 			name:       meta.Name,
@@ -96,11 +96,11 @@ func (idx internalsGlobalIndex) allGlobalFiles(folderID string, yield func(globa
 }
 
 func (idx internalsGlobalIndex) globalFileInfo(folderID string, path string) (protocol.FileInfo, bool, error) {
-	return idx.client.app.Internals.GlobalFileInfo(folderID, path)
+	return idx.client.internals().GlobalFileInfo(folderID, path)
 }
 
 func (fld *Folder) globalIndex() (globalIndex, error) {
-	if fld.client.app == nil || fld.client.app.Internals == nil {
+	if fld.client.internals() == nil {
 		return nil, ErrStillLoading
 	}
 	return internalsGlobalIndex{client: fld.client}, nil

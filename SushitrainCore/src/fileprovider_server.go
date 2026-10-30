@@ -57,6 +57,8 @@ type fileProviderFolder struct {
 
 // What the file provider server needs from the client, so it can be tested without a running Syncthing instance
 type fileProviderBackend interface {
+	// Whether the engine runs; while it restarts, requests are answered with a retryable 503
+	running() bool
 	folderInfo(folderID string) (fileProviderFolder, bool)
 	globalFileInfo(folderID string, path string) (protocol.FileInfo, bool, error)
 	// Whether a connected device can provide the given block
@@ -225,6 +227,11 @@ func (s *FileProviderServer) serveFile(w http.ResponseWriter, r *http.Request) {
 	query, err := parseFileProviderQuery(r.URL.RawQuery)
 	if err != nil {
 		http.Error(w, "malformed query", http.StatusBadRequest)
+		return
+	}
+	if !s.backend.running() {
+		w.Header().Set("Retry-After", "5")
+		http.Error(w, "the engine is not running", http.StatusServiceUnavailable)
 		return
 	}
 	folderID := query["folder"]
@@ -424,9 +431,13 @@ type clientFileProviderBackend struct {
 	client *Client
 }
 
+func (b *clientFileProviderBackend) running() bool {
+	return b.client.EngineState() == EngineStateRunning
+}
+
 func (b *clientFileProviderBackend) folderInfo(folderID string) (fileProviderFolder, bool) {
 	// Measurements are only available once the client has started
-	if b.client.app == nil || b.client.app.Internals == nil || b.client.Measurements == nil {
+	if b.client.internals() == nil || b.client.Measurements == nil {
 		return fileProviderFolder{}, false
 	}
 	folder := b.client.FolderWithID(folderID)
@@ -447,11 +458,11 @@ func (b *clientFileProviderBackend) folderInfo(folderID string) (fileProviderFol
 }
 
 func (b *clientFileProviderBackend) globalFileInfo(folderID string, path string) (protocol.FileInfo, bool, error) {
-	return b.client.app.Internals.GlobalFileInfo(folderID, path)
+	return b.client.internals().GlobalFileInfo(folderID, path)
 }
 
 func (b *clientFileProviderBackend) isAvailable(folderID string, file protocol.FileInfo, blockIndex int) (bool, error) {
-	internals := b.client.app.Internals
+	internals := b.client.internals()
 	availables, err := internals.BlockAvailability(folderID, file, file.Blocks[blockIndex])
 	if err != nil {
 		return false, err
@@ -465,6 +476,6 @@ func (b *clientFileProviderBackend) isAvailable(folderID string, file protocol.F
 }
 
 func (b *clientFileProviderBackend) fetchBlock(ctx context.Context, folderID string, file protocol.FileInfo, blockIndex int) ([]byte, error) {
-	puller := newMiniPuller(b.client.Measurements, b.client.app.Internals)
+	puller := newMiniPuller(b.client.Measurements, b.client.internals)
 	return puller.downloadBlock(ctx, folderID, blockIndex, file)
 }

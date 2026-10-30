@@ -190,6 +190,14 @@ struct SyncState: Equatable {
 	// Client.Load holds the core mutex until database loading/migration finishes.
 	// Keep startup callbacks from querying the partially initialized core.
 	@ObservationIgnored private var hasLoadedClient = false
+
+	/// Whether the engine is restarting, after Restart Syncthing or a restart from the web GUI or the REST API
+	private(set) var isEngineRestarting = false
+	/// Whether the engine can be started again (Restart Syncthing) after it failed or was shut down
+	private(set) var engineCanRestart = false
+	@ObservationIgnored private var hasFinishedStarting = false
+	/// Set when the app is about to quit, so that a failure to start isn't shown anymore
+	@ObservationIgnored var isQuitting = false
 	private(set) var isMigratedToNewDatabase: Bool = false
 	private(set) var syncState: SyncState = SyncState(isDownloading: false, isUploading: false, connectedPeerCount: 0)
 	private(set) var launchedAt = Date.now
@@ -433,50 +441,60 @@ struct SyncState: Equatable {
 				try client.start()
 				Log.info("Client started")
 			}.value
-
-			// Check to see if we have migrated
-			self.isMigratedToNewDatabase = !client.hasLegacyDatabase()
-			Log.info("Performing app migrations...")
-			self.performMigrations()
-
-			Log.info("Configuring the user interface...")
-			self.applySettings()
-			self.update()
-			Task {
-				await self.updateBadge()
-			}
-			self.protectFiles()
-			self.startNetworkMonitor()
-			#if os(iOS)
-				FileProviderCoordinator.shared.start(client: client)
-				RemoteCoordinator.shared.start(client: client)
-			#elseif os(macOS)
-				GatewayController.shared.start(client: client)
-			#endif
-
-			#if os(macOS)
-				// Add observers for device sleep/wake
-				NSWorkspace.shared.notificationCenter.addObserver(
-					self, selector: #selector(self.deviceWakeListener), name: NSWorkspace.didWakeNotification, object: nil)
-				NSWorkspace.shared.notificationCenter.addObserver(
-					self, selector: #selector(self.deviceSleepListener), name: NSWorkspace.willSleepNotification, object: nil)
-			#endif
-
-			self.startupState = .started
-			Log.info("Ready to go")
-
-			#if os(macOS)
-				self.maintenanceManager.scheduleDatabaseMaintenance()
-			#endif
+			self.finishStarting()
 		}
 		catch let error {
 			Log.warn("Could not start: \(error.localizedDescription)")
 			self.startupState = .error(error.localizedDescription)
 
 			#if os(macOS)
-				self.alert(message: error.localizedDescription)
+				if !self.isQuitting {
+					self.alert(message: error.localizedDescription)
+				}
 			#endif
 		}
+	}
+
+	/// What follows the engine's first start, also when it first starts after a failed start (Restart Syncthing)
+	private func finishStarting() {
+		guard !hasFinishedStarting else { return }
+		hasFinishedStarting = true
+		let client = self.client
+
+		// Check to see if we have migrated
+		self.isMigratedToNewDatabase = !client.hasLegacyDatabase()
+		Log.info("Performing app migrations...")
+		self.performMigrations()
+
+		Log.info("Configuring the user interface...")
+		self.applySettings()
+		self.update()
+		Task {
+			await self.updateBadge()
+		}
+		self.protectFiles()
+		self.startNetworkMonitor()
+		#if os(iOS)
+			FileProviderCoordinator.shared.start(client: client)
+			RemoteCoordinator.shared.start(client: client)
+		#elseif os(macOS)
+			GatewayController.shared.start(client: client)
+		#endif
+
+		#if os(macOS)
+			// Add observers for device sleep/wake
+			NSWorkspace.shared.notificationCenter.addObserver(
+				self, selector: #selector(self.deviceWakeListener), name: NSWorkspace.didWakeNotification, object: nil)
+			NSWorkspace.shared.notificationCenter.addObserver(
+				self, selector: #selector(self.deviceSleepListener), name: NSWorkspace.willSleepNotification, object: nil)
+		#endif
+
+		self.startupState = .started
+		Log.info("Ready to go")
+
+		#if os(macOS)
+			self.maintenanceManager.scheduleDatabaseMaintenance()
+		#endif
 	}
 
 	@MainActor private func stopNetworkMonitor() {
@@ -638,6 +656,85 @@ struct SyncState: Equatable {
 		}
 	}
 
+	/// Stops the engine and starts it again, in the app's process, or starts it again after it failed or was shut down
+	func restartEngine() {
+		guard !isEngineRestarting else { return }
+		isEngineRestarting = true
+		let client = self.client
+		Task {
+			do {
+				// It returns once the engine runs again, which can take a while
+				try await goBlocking { try client.restartEngine() }
+			}
+			catch {
+				Log.warn("Could not restart the engine: \(error.localizedDescription)")
+				// When it failed to start, the state change says so
+				self.isEngineRestarting = client.engineState() == SushitrainEngineStateRestarting
+				self.engineCanRestart = client.engineCanRestart()
+			}
+		}
+	}
+
+	/// The engine restarted, stopped or failed (see ClientDelegate.OnEngineStateChanged). The client tells these in the
+	/// order they happen.
+	func engineStateChanged(_ state: String, message: String) {
+		engineCanRestart = client.engineCanRestart()
+		switch state {
+		case SushitrainEngineStateRestarting:
+			isEngineRestarting = true
+
+		case SushitrainEngineStateRunning:
+			Log.info("The engine is running again")
+			isEngineRestarting = false
+			if !hasFinishedStarting {
+				// It first started after a failed start
+				finishStarting()
+				return
+			}
+			if case .error = startupState {
+				// Restarted after it had failed
+				startupState = .started
+			}
+			applySettings()
+			update()
+			Task {
+				await self.updateDeviceSuspension()
+			}
+			#if os(iOS)
+				// Changes made while it restarted were refused
+				let reconnectIntervalS = self.isSuspended ? 60 : 1
+				let client = self.client
+				Task {
+					try? await goTask { try client.setReconnectIntervalS(reconnectIntervalS) }
+				}
+			#elseif os(macOS)
+				// The engine stopped the remote file service it served
+				GatewayController.shared.restart()
+			#endif
+
+		case SushitrainEngineStateShutdownRequested:
+			isEngineRestarting = false
+			// The web GUI or the REST API asked Syncthing to shut down, which for the app means quitting
+			Log.info("The engine was shut down; quitting")
+			#if os(macOS)
+				NSApplication.shared.terminate(nil)
+			#else
+				startupState = .error(String(localized: "Synchronization was stopped."))
+			#endif
+
+		case SushitrainEngineStateFailed:
+			Log.warn("The engine failed: \(message)")
+			isEngineRestarting = false
+			startupState = .error(message)
+			#if os(macOS)
+				GatewayController.shared.engineStopped()
+			#endif
+
+		default:
+			break
+		}
+	}
+
 	func alert(message: String, type: AlertType = .error) {
 		Self.modalAlert(message: message, type: type)
 	}
@@ -708,12 +805,8 @@ struct SyncState: Equatable {
 	nonisolated func folders() async -> [SushitrainFolder] {
 		let client = self.client
 		let folderIDs = client.folders()?.asArray() ?? []
-		var folderInfos: [SushitrainFolder] = []
-		for fid in folderIDs {
-			let folderInfo = client.folder(withID: fid)!
-			folderInfos.append(folderInfo)
-		}
-		return folderInfos
+		// A folder can disappear in between, such as while the engine restarts
+		return folderIDs.compactMap { client.folder(withID: $0) }
 	}
 
 	// Perform several changes we need to do between versions
@@ -735,7 +828,7 @@ struct SyncState: Equatable {
 				// From build 26 onwards, FS watching is supported on iOS, but it should not be enabled by default
 				if lastRunBuild <= 26 {
 					Log.info("Disabling FS watching for all folders")
-					self.client.setFSWatchingEnabledForAllFolders(false)
+					try? self.client.setFSWatchingEnabledForAllFolders(false)
 				}
 			#endif
 		}
@@ -782,14 +875,9 @@ struct SyncState: Equatable {
 
 	nonisolated func peers() async -> [SushitrainPeer] {
 		let client = self.client
-		let peerIDs = client.peers()!.asArray()
-
-		var peers: [SushitrainPeer] = []
-		for peerID in peerIDs {
-			let peerInfo = client.peer(withID: peerID)!
-			peers.append(peerInfo)
-		}
-		return peers
+		let peerIDs = client.peers()?.asArray() ?? []
+		// A device can disappear in between, such as while the engine restarts
+		return peerIDs.compactMap { client.peer(withID: $0) }
 	}
 
 	func updateBadge() async {
@@ -1195,6 +1283,13 @@ extension SushitrainDelegate: SushitrainClientDelegateProtocol {
 		let appState = self.appState
 		DispatchQueue.main.async {
 			appState.changePublisher.send()
+		}
+	}
+
+	func onEngineStateChanged(_ state: String?, message: String?) {
+		let appState = self.appState
+		DispatchQueue.main.async {
+			appState.engineStateChanged(state ?? "", message: message ?? "")
 		}
 	}
 }

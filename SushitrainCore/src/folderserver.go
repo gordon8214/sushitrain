@@ -246,7 +246,7 @@ func (srv *FolderServer) handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-type", mime)
 
 	// Obtain global file info
-	m := srv.client.app.Internals
+	m := srv.client.internals()
 	info, ok, err := m.GlobalFileInfo(srv.folderID, pathInFolder)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -258,7 +258,7 @@ func (srv *FolderServer) handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Actually send the file
-	serveEntry(w, r, srv.folderID, stEntry, info, srv.client.app.Internals, srv.client.Measurements, nil)
+	serveEntry(w, r, srv.folderID, stEntry, info, srv.client.internals, srv.client.Measurements, nil)
 }
 
 func (srv *FolderServer) port() int {

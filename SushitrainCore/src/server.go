@@ -111,7 +111,7 @@ func (srv *StreamingServer) Listen() error {
 	return nil
 }
 
-func NewServer(app *syncthing.App, measurements *Measurements, ctx context.Context) (*StreamingServer, error) {
+func NewServer(measurements *Measurements) (*StreamingServer, error) {
 	// Generate a private key to sign URLs with
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -152,7 +152,11 @@ func NewServer(app *syncthing.App, measurements *Measurements, ctx context.Conte
 			return
 		}
 
-		m := app.Internals
+		m := server.client.internals()
+		if m == nil {
+			w.WriteHeader(503)
+			return
+		}
 		info, ok, err := m.GlobalFileInfo(folder, path)
 		if err != nil {
 			slog.Warn("request global file information failed", "cause", err, "method", r.Method, "folder", folder, "path", path)
@@ -196,7 +200,7 @@ func NewServer(app *syncthing.App, measurements *Measurements, ctx context.Conte
 		}
 
 		// Send file contents to the client
-		serveEntry(w, r, folder, stEntry, info, m, measurements, callback)
+		serveEntry(w, r, folder, stEntry, info, server.client.internals, measurements, callback)
 	}))
 
 	if err := server.Listen(); err != nil {
@@ -332,7 +336,7 @@ var _ io.ReadSeeker = &entryReadSeeker{}
 
 type serveCallback func(bytesSent int64, bytesRequested int64)
 
-func serveEntry(w http.ResponseWriter, r *http.Request, folderID string, entry *Entry, info protocol.FileInfo, m *syncthing.Internals, measurements *Measurements, callback serveCallback) {
+func serveEntry(w http.ResponseWriter, r *http.Request, folderID string, entry *Entry, info protocol.FileInfo, model func() *syncthing.Internals, measurements *Measurements, callback serveCallback) {
 	// Disable caching
 	w.Header().Add("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Add("Pragma", "no-cache")
@@ -343,7 +347,7 @@ func serveEntry(w http.ResponseWriter, r *http.Request, folderID string, entry *
 		return
 	}
 
-	mp := newMiniPuller(measurements, m)
+	mp := newMiniPuller(measurements, model)
 	readSeeker := newEntryReadSeeker(info, mp, entry, r.Context(), callback)
 	http.ServeContent(w, r, entry.info.Name, entry.info.ModTime(), readSeeker)
 }

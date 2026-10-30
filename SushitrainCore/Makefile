@@ -7,7 +7,7 @@ PATH := $(shell pwd):/opt/homebrew/bin:$(HOME)/go/bin:$(PATH)
 SHELL := env PATH="$(PATH)" /bin/bash
 GO_VERSION := $(shell go version)
 
-.PHONY: clean install deps test gateway-linux gateway-test-linux
+.PHONY: clean install deps test test-engine gateway-linux gateway-test-linux
 
 build: build/SushitrainCore.xcframework
 
@@ -33,6 +33,10 @@ clean:
 
 test:
 	go test ./... -tags noassets -timeout 300s
+
+# Starts and restarts the engine; about 30 seconds with the race detector
+test-engine:
+	go test -tags noassets,engineintegration -race -count=1 -timeout 600s -run Engine ./src
 
 # The remote file service as a headless executable for Linux hosts, with Syncthing's web GUI
 GATEWAY_VERSION ?= $(shell git describe --always --dirty 2>/dev/null)

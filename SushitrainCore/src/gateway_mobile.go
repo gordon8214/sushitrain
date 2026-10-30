@@ -35,6 +35,9 @@ type RemoteFileService struct {
 	svc        *gateway.Service
 	publicHost string
 	publicPort int
+
+	stopMutex sync.Mutex
+	stopped   bool
 }
 
 type remoteFileServiceSettings struct {
@@ -101,8 +104,26 @@ func (clt *Client) StartRemoteFileService(settingsJSON []byte) (*RemoteFileServi
 	if build.IsIOS {
 		return nil, errors.New("the remote file service is not available on iOS")
 	}
-	if clt.app == nil || clt.app.Internals == nil || clt.Measurements == nil {
+	r := clt.currentRun()
+	if r == nil || r.internals.Load() == nil || clt.Measurements == nil {
 		return nil, ErrStillLoading
+	}
+	// A service that did not stop in time may still be running the operations a new one would recover from the journal
+	clt.remoteMutex.Lock()
+	closing := clt.remoteClosing
+	clt.remoteMutex.Unlock()
+	if closing != nil {
+		select {
+		case <-closing:
+		case <-time.After(remoteServiceStopTimeout):
+			return nil, errors.New("the remote file service is still stopping; try again later")
+		}
+	}
+	// The service serves this run; a restart stops it (and the app starts it again)
+	r.writes.RLock()
+	defer r.writes.RUnlock()
+	if r.closed {
+		return nil, clt.errNotRunning()
 	}
 	var settings remoteFileServiceSettings
 	if err := json.Unmarshal(settingsJSON, &settings); err != nil {
@@ -117,12 +138,12 @@ func (clt *Client) StartRemoteFileService(settingsJSON []byte) (*RemoteFileServi
 
 	id := protocol.NewDeviceID(clt.cert.Certificate[0])
 	backend := &gateway.EngineBackend{
-		App:    clt.app,
-		Config: clt.config,
-		Events: clt.evLogger,
+		App:    r.app,
+		Config: r.config,
+		Events: r.evLogger,
 		ID:     id,
 		Fetch: func(ctx context.Context, folder string, file protocol.FileInfo, index int) ([]byte, error) {
-			data, err := newMiniPuller(clt.Measurements, clt.app.Internals).downloadBlock(ctx, folder, index, file)
+			data, err := newMiniPuller(clt.Measurements, r.internals.Load).downloadBlock(ctx, folder, index, file)
 			if err == nil && verifyBlockHash(data, file.Blocks[index]) != nil {
 				// Never keep a block that failed verification in the shared cache
 				blockCache.Remove(base64.StdEncoding.EncodeToString(file.Blocks[index].Hash))
@@ -163,7 +184,38 @@ func (clt *Client) StartRemoteFileService(settingsJSON []byte) (*RemoteFileServi
 		svc.Close()
 		return nil, err
 	}
-	return &RemoteFileService{client: clt, svc: svc, publicHost: settings.PublicHost, publicPort: settings.PublicPort}, nil
+	service := &RemoteFileService{client: clt, svc: svc, publicHost: settings.PublicHost, publicPort: settings.PublicPort}
+	clt.remoteMutex.Lock()
+	clt.remoteService = service
+	clt.remoteClosing = nil
+	clt.remoteMutex.Unlock()
+	return service, nil
+}
+
+// stopRemoteService stops the remote file service before the engine it serves stops, waiting a little for it to finish
+// what it is doing. What it could not finish is completed from its journal at its next start, which waits for this
+// service to have stopped.
+func (clt *Client) stopRemoteService() {
+	clt.remoteMutex.Lock()
+	service := clt.remoteService
+	clt.remoteService = nil
+	clt.remoteMutex.Unlock()
+	if service == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = service.Stop()
+	}()
+	select {
+	case <-done:
+	case <-time.After(remoteServiceStopTimeout):
+		slog.Warn("The remote file service did not stop in time; its operations continue at the next start")
+		clt.remoteMutex.Lock()
+		clt.remoteClosing = done
+		clt.remoteMutex.Unlock()
+	}
 }
 
 func verifyBlockHash(data []byte, block protocol.BlockInfo) error {
@@ -174,7 +226,14 @@ func verifyBlockHash(data []byte, block protocol.BlockInfo) error {
 	return nil
 }
 
+// Stop stops the service. Calling it again does nothing.
 func (r *RemoteFileService) Stop() error {
+	r.stopMutex.Lock()
+	defer r.stopMutex.Unlock()
+	if r.stopped {
+		return nil
+	}
+	r.stopped = true
 	return r.svc.Close()
 }
 

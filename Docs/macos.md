@@ -43,3 +43,18 @@ unreadable or from a newer version, or a certificate without its key, stops the 
 says why and offers what helps (for a damaged configuration, setting it aside and starting with a new one that keeps
 the device identity). A configuration from an older Syncthing is archived as `config.xml.v<version>` before it is
 migrated, and a database a newer Syncthing wrote is refused.
+
+## Restarting and shutting down
+
+Restarting Syncthing (from the web GUI or the REST API's `/rest/system/restart`, from Troubleshooting in the app's
+settings, or on macOS from the app menu or the menu bar menu) restarts the engine inside the app. It stops the remote
+file service (paired devices reconnect once it is back) and Syncthing, loads the saved configuration again, and starts
+a new engine with the same lock, device identity and streaming server, and the remote file service again. The app's
+screens stay open; changes made while it restarts fail with a message that it is restarting, and the File Provider
+hears of every folder once afterwards. If the new engine can't start, the app says why and offers to try again (also
+from the menu bar menu on macOS).
+
+A shutdown from the web GUI or the REST API's `/rest/system/shutdown` quits the Mac app, rather than leaving it open
+with the engine stopped (on iOS, which has no web GUI, Restart Syncthing starts it again). Quitting the app stops the
+remote file service and then the engine, waiting for each a limited time; what they could not finish is recovered at
+the next start.

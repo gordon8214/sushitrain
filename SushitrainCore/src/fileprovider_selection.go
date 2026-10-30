@@ -22,11 +22,11 @@ func lockSelection(folderID string) func() {
 
 // Scans the given paths (relative to the folder root) and waits for the scan to complete
 func (fld *Folder) ScanPaths(paths *ListOfStrings) error {
-	if fld.client.app == nil || fld.client.app.Internals == nil {
+	if fld.client.internals() == nil {
 		return ErrStillLoading
 	}
 	if paths == nil || len(paths.data) == 0 {
 		return nil
 	}
-	return fld.client.app.Internals.ScanFolderSubdirs(fld.FolderID, paths.data)
+	return fld.client.scanFolderSubdirs(fld.FolderID, paths.data)
 }

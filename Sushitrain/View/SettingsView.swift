@@ -235,7 +235,13 @@ struct AdvancedSettingsView: View {
 							return appState.client.getEnoughConnections() == 1
 						},
 						set: { enough in
-							try! appState.client.setEnoughConnections(enough ? 1 : 0)
+							// Fails while the engine restarts
+							do {
+								try appState.client.setEnoughConnections(enough ? 1 : 0)
+							}
+							catch {
+								Log.warn("Could not change the connection setting: \(error.localizedDescription)")
+							}
 						}))
 			} footer: {
 				Text(
@@ -764,8 +770,14 @@ private struct BandwidthSettingsView: View {
 	}
 
 	private func save() {
-		try! appState.client.setBandwidthLimitsMbitsPerSec(downLimitMbitsPerSec, up: upLimitMbitsPerSec)
-		try! appState.client.setNetworkTrafficLowPriority(self.isNetworkTrafficLowPriority)
+		// Fails while the engine restarts
+		do {
+			try appState.client.setBandwidthLimitsMbitsPerSec(downLimitMbitsPerSec, up: upLimitMbitsPerSec)
+			try appState.client.setNetworkTrafficLowPriority(self.isNetworkTrafficLowPriority)
+		}
+		catch {
+			Log.warn("Could not save the bandwidth settings: \(error.localizedDescription)")
+		}
 	}
 
 	var body: some View {

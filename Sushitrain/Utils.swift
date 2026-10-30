@@ -927,6 +927,16 @@ func writeTextToPasteboard(_ text: String) {
 }
 
 // Run a possibly blocking task in the background (for calls into Go code)
+/// Runs a Go call that can block for a long time (such as stopping or restarting the engine) on a thread of its own,
+/// rather than one of the cooperative thread pool's
+func goBlocking(_ work: @Sendable @escaping () throws -> Void) async throws {
+	try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+		DispatchQueue.global(qos: .userInitiated).async {
+			continuation.resume(with: Result { try work() })
+		}
+	}
+}
+
 func goTask(_ block: @Sendable @escaping () async throws -> Void) async throws {
 	try await Task { @concurrent in
 		dispatchPrecondition(condition: .notOnQueue(.main))

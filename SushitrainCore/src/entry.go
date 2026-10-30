@@ -242,7 +242,7 @@ func (entry *Entry) IsSelected() bool {
 
 // IsExplicitlySelected returns an error when the selection cannot be determined.
 func (entry *Entry) IsExplicitlySelected() (bool, error) {
-	lines, _, err := entry.Folder.client.app.Internals.Ignores(entry.Folder.FolderID)
+	lines, _, err := entry.Folder.client.internals().Ignores(entry.Folder.FolderID)
 	if err != nil {
 		return false, err
 	}
@@ -371,7 +371,7 @@ func (entry *Entry) PeersWithFullCopy() (*ListOfStrings, error) {
 }
 
 func (entry *Entry) availabilityPerDevice() (map[protocol.DeviceID]int, int, error) {
-	m := entry.Folder.client.app.Internals
+	m := entry.Folder.client.internals()
 	folderID := entry.Folder.FolderID
 
 	info, ok, err := m.GlobalFileInfo(folderID, entry.info.FileName())
@@ -538,7 +538,7 @@ var _ DownloadDelegate = &subDownloadDelegate{}
 /** Download this file to the specific location (should be outside the synced folder!) **/
 func (entry *Entry) downloadFile(toPath string, delegate DownloadDelegate) {
 	context := context.WithoutCancel(context.Background())
-	m := entry.Folder.client.app.Internals
+	m := entry.Folder.client.internals()
 	folderID := entry.Folder.FolderID
 	info, ok, err := m.GlobalFileInfo(folderID, entry.info.FileName())
 	if err != nil {
@@ -565,7 +565,7 @@ func (entry *Entry) downloadFile(toPath string, delegate DownloadDelegate) {
 	}()
 
 	delegate.OnProgress(0.0)
-	mp := newMiniPuller(entry.Folder.client.Measurements, m)
+	mp := newMiniPuller(entry.Folder.client.Measurements, entry.Folder.client.internals)
 	pw := progressWriter{
 		out:      outFile,
 		delegate: delegate,

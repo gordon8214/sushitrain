@@ -137,10 +137,8 @@ func TestIsSelectiveRootRecovery(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "volume")
 	cfg := config.New(protocol.EmptyDeviceID)
 	cfg.Folders = []config.FolderConfiguration{{ID: "test", Path: root, FilesystemType: config.FilesystemTypeBasic}}
-	client := &Client{
-		config: config.Wrap("", cfg, protocol.EmptyDeviceID, events.NoopLogger),
-		app:    &syncthing.App{Internals: &syncthing.Internals{}},
-	}
+	client := (&Client{}).withTestRun(config.Wrap("", cfg, protocol.EmptyDeviceID, events.NoopLogger),
+		&syncthing.App{Internals: &syncthing.Internals{}}, nil)
 	folder := &Folder{client: client, FolderID: "test"}
 	if mode, err := folder.IsSelective(); mode != false || err == nil {
 		t.Fatalf("missing root: got %v, %v", mode, err)
@@ -179,10 +177,9 @@ func TestIsSelectiveUnsupportedFolderTypes(t *testing.T) {
 	for _, folderType := range []config.FolderType{config.FolderTypeSendOnly, config.FolderTypeReceiveEncrypted} {
 		cfg := config.New(protocol.EmptyDeviceID)
 		cfg.Folders = []config.FolderConfiguration{{ID: "test", Path: filepath.Join(t.TempDir(), "absent"), Type: folderType, FilesystemType: config.FilesystemTypeBasic}}
-		folder := &Folder{FolderID: "test", client: &Client{
-			config: config.Wrap("", cfg, protocol.EmptyDeviceID, events.NoopLogger),
-			app:    &syncthing.App{Internals: &syncthing.Internals{}},
-		}}
+		folder := &Folder{FolderID: "test", client: (&Client{}).withTestRun(
+			config.Wrap("", cfg, protocol.EmptyDeviceID, events.NoopLogger),
+			&syncthing.App{Internals: &syncthing.Internals{}}, nil)}
 		if mode, err := folder.IsSelective(); mode != false || err != nil {
 			t.Fatalf("type %v: got %v, %v", folderType, mode, err)
 		}

@@ -47,7 +47,7 @@ func TestSetBandwidthLimitsKeepsUnchangedLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	opts := clt.config.Options()
+	opts := clt.cfg().Options()
 	if opts.MaxSendKbps != 500 {
 		t.Errorf("unchanged send limit became %d KiB/s, want 500", opts.MaxSendKbps)
 	}

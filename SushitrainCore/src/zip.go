@@ -140,7 +140,7 @@ func (ea *zipArchive) ReadAt(p []byte, off int64) (n int, err error) {
 		return len(buffer), nil
 	}
 
-	xn, err := ea.puller.downloadRange(context.Background(), ea.entry.Folder.client.app.Internals, ea.entry.Folder.FolderID, ea.entry.info, p, off)
+	xn, err := ea.puller.downloadRange(context.Background(), ea.entry.Folder.FolderID, ea.entry.info, p, off)
 	return int(xn), err
 }
 

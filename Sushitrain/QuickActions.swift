@@ -7,9 +7,11 @@
 	import UIKit
 #elseif os(macOS)
 	import AppKit
+	import os
 #endif
 
 import SwiftUI
+@preconcurrency import SushitrainCore
 
 class QuickActionService: ObservableObject {
 	@MainActor static let shared = QuickActionService()
@@ -61,9 +63,52 @@ class QuickActionService: ObservableObject {
 			NSApplication.shared.activate()
 		}
 
+		/// The longest the app waits for the engine to stop when quitting; what doesn't finish is recovered at the next start
+		private static let engineStopTimeout: TimeInterval = 20
+		private var isTerminating = false
+
 		func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-			// The remote file service stops first, off the main thread
-			GatewayController.shared.terminationReply()
+			if isTerminating {
+				return .terminateLater
+			}
+			isTerminating = true
+			appState?.isQuitting = true
+			// The remote file service stops first, then the engine, off the main thread. Both are time-limited; what they
+			// could not finish is recovered at the next start.
+			let client = appState?.client
+			Task {
+				await GatewayController.shared.stopBeforeQuitting()
+				if let client {
+					if !(await Self.stop(client, within: Self.engineStopTimeout)) {
+						Log.warn("The engine did not stop in time")
+					}
+				}
+				NSApplication.shared.reply(toApplicationShouldTerminate: true)
+			}
+			return .terminateLater
+		}
+
+		/// Stops the engine on a thread of its own, and reports whether it stopped within the time given
+		@concurrent nonisolated private static func stop(_ client: SushitrainClient, within timeout: TimeInterval) async
+			-> Bool
+		{
+			await withCheckedContinuation { continuation in
+				let pending = OSAllocatedUnfairLock<CheckedContinuation<Bool, Never>?>(initialState: continuation)
+				let finish: @Sendable (Bool) -> Void = { stopped in
+					let waiting = pending.withLock { value in
+						defer { value = nil }
+						return value
+					}
+					waiting?.resume(returning: stopped)
+				}
+				DispatchQueue.global(qos: .userInitiated).async {
+					client.stop()
+					finish(true)
+				}
+				DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeout) {
+					finish(false)
+				}
+			}
 		}
 
 		func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {

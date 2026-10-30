@@ -50,7 +50,7 @@ func newFolderBaseTestFolderWithID(t *testing.T, folderID string, folderPath str
 		_ = wrapper.Serve(ctx)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	return &Folder{client: &Client{config: wrapper, filesPath: filesPath}, FolderID: folderID}
+	return &Folder{client: (&Client{filesPath: filesPath}).withTestRun(wrapper, nil, nil), FolderID: folderID}
 }
 
 func writeFolderWithMarker(t *testing.T, folderPath string) {
