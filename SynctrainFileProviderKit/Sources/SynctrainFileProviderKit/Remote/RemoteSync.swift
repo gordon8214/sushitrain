@@ -90,7 +90,7 @@ public struct RemoteSync: Sendable {
 		}
 		try stored { () throws(IndexError) in
 			for binding in try store.remoteBindings()
-			where binding.isRemote && binding.serviceID == client.endpoint.serviceID {
+			where binding.serviceID == client.endpoint.serviceID {
 				let remote = folders.first { $0.id == binding.remoteFolderID }
 				let permissions = remote?.permissions ?? RemotePermissions(read: false, write: false)
 				if permissions != binding.permissions {
@@ -108,7 +108,7 @@ public struct RemoteSync: Sendable {
 	@discardableResult
 	public func refresh(folderID: String, wait: Int? = nil) async throws(RemoteError) -> Bool {
 		guard let binding = try stored({ () throws(IndexError) in try store.remoteBinding(folderID: folderID) }),
-			binding.isRemote, binding.serviceID == client.endpoint.serviceID, let remoteFolderID = binding.remoteFolderID
+			binding.serviceID == client.endpoint.serviceID
 		else {
 			throw .store(.notAllowed("folder \(folderID) is not accessed through this gateway"))
 		}
@@ -147,7 +147,7 @@ public struct RemoteSync: Sendable {
 					let page: ChangesPage
 					do {
 						page = try await metadata { () async throws(RemoteError) -> ChangesPage in
-							try await client.changes(folderID: remoteFolderID, cursor: catchUpCursor, limit: pageLimit)
+							try await client.changes(folderID: binding.remoteFolderID, cursor: catchUpCursor, limit: pageLimit)
 						}
 					}
 					catch .cursorExpired {
@@ -174,7 +174,7 @@ public struct RemoteSync: Sendable {
 				do {
 					page = try await metadata { () async throws(RemoteError) -> SnapshotPage in
 						try await client.snapshotPage(
-							folderID: remoteFolderID, snapshot: session.snapshotID, page: session.nextPage,
+							folderID: binding.remoteFolderID, snapshot: session.snapshotID, page: session.nextPage,
 							limit: pageLimit)
 					}
 				}
@@ -207,7 +207,7 @@ public struct RemoteSync: Sendable {
 				// A long poll waits in a slot of its own, so that it does not hold back other metadata requests
 				page = try await metadata((longPoll ?? 0) > 0 ? .longPoll : .metadata) {
 					() async throws(RemoteError) -> ChangesPage in
-					try await client.changes(folderID: remoteFolderID, cursor: cursor, limit: pageLimit, wait: longPoll)
+					try await client.changes(folderID: binding.remoteFolderID, cursor: cursor, limit: pageLimit, wait: longPoll)
 				}
 			}
 			catch .cursorExpired {
@@ -238,7 +238,7 @@ public struct RemoteSync: Sendable {
 		let bindings = try stored { () throws(IndexError) in try store.remoteBindings() }
 		var changed: [String] = []
 		for binding in bindings
-		where binding.isRemote && binding.serviceID == client.endpoint.serviceID && binding.permissions.read {
+		where binding.serviceID == client.endpoint.serviceID && binding.permissions.read {
 			if try await refresh(folderID: binding.folderID) {
 				changed.append(binding.folderID)
 			}

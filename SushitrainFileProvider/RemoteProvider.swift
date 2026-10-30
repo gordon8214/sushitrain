@@ -16,10 +16,8 @@ private struct DomainReference: @unchecked Sendable {
 	let domain: NSFileProviderDomain
 }
 
-/// Serves the folders accessed through a gateway's remote file API (`RemoteAccessMode.remoteAPI`). Their metadata is
-/// projected into the index like that of other folders, so items and enumeration work as for those; contents and
-/// changes go to the gateway over HTTPS. Nothing here uses the folder tree of the Syncthing engine on this device, its
-/// work queue, or the app's local server.
+/// Serves the folders on gateways through their remote file API. Their metadata is projected into the index, which
+/// items and enumeration work from; contents and changes go to the gateway over HTTPS.
 ///
 /// - Contents: a staged local change (the newest version) or a verified cached copy is cloned for the system; otherwise
 ///   the file is downloaded into the cache first, every block verified.
@@ -147,7 +145,7 @@ final class RemoteProvider: Sendable {
 	/// gateway answers. Only errors this path reported are signaled: signaling one it did not report would lift what
 	/// the folders this device synchronizes itself reported (such as a pause while the app does not run).
 	func start() {
-		guard let bindings = try? context.store.remoteBindings().filter(\.isRemote), !bindings.isEmpty else {
+		guard let bindings = try? context.store.remoteBindings(), !bindings.isEmpty else {
 			return
 		}
 		reconnectBackgroundSession()
@@ -159,9 +157,7 @@ final class RemoteProvider: Sendable {
 			}
 		}
 		for binding in bindings {
-			guard let serviceID = binding.serviceID else {
-				continue
-			}
+			let serviceID = binding.serviceID
 			// Changes that wait for their gateway were reported as such (or the system has not made them yet)
 			if (try? context.store.hasUnresolvedMutations(folderID: binding.folderID)) == true {
 				reported[serviceID, default: []].formUnion([
@@ -254,7 +250,7 @@ final class RemoteProvider: Sendable {
 	}
 
 	/// The binding of the folder of an item the system deletes: the item's folder, or (once its row is removed, while
-	/// the deletion is not confirmed) that of its overlay. Nil for folders that Syncthing on this device synchronizes.
+	/// the deletion is not confirmed) that of its overlay. Nil for items this device no longer has.
 	func binding(ofDeleted identifier: NSFileProviderItemIdentifier) throws(IndexError) -> RemoteFolderBinding? {
 		guard let id = identifier.itemID else {
 			return nil
@@ -269,7 +265,7 @@ final class RemoteProvider: Sendable {
 	}
 
 	func gatewayName(_ binding: RemoteFolderBinding) -> String {
-		RemoteFailure.gatewayName(binding.serviceID.flatMap { try? context.store.remoteEndpoint(serviceID: $0) })
+		RemoteFailure.gatewayName(try? context.store.remoteEndpoint(serviceID: binding.serviceID))
 	}
 
 	var outbox: Outbox {
@@ -410,6 +406,7 @@ final class RemoteProvider: Sendable {
 
 	/// Tells the system to fetch changes, for items it does not learn about from the call it made
 	func signalWorkingSet() {
+		SharedNotification.indexChanged.post()
 		manager?.signalEnumerator(for: .workingSet) { error in
 			if let error {
 				log.warning("Could not signal the working set: \(error.localizedDescription)")
@@ -465,7 +462,7 @@ final class RemoteProvider: Sendable {
 	/// 30 seconds per folder, and tells the system when something it shows changed. It never waits for the gateway,
 	/// and nothing is inferred from requests that fail.
 	func refreshSoon(folderIDs: [String]? = nil) {
-		guard let readable = try? context.store.remoteBindings().filter({ $0.isRemote && $0.permissions.read }) else {
+		guard let readable = try? context.store.remoteBindings().filter(\.permissions.read) else {
 			return
 		}
 		let bindings = folderIDs.map { folderIDs in readable.filter { folderIDs.contains($0.folderID) } } ?? readable
@@ -560,6 +557,7 @@ final class RemoteProvider: Sendable {
 			return nil
 		}
 		if let url = storage.cachedContentURL(contentID), Self.exists(url) {
+			storage.markContentUsed(url)
 			return url
 		}
 		if let path = try context.store.stagedFile(contentID: contentID) {
@@ -593,14 +591,66 @@ final class RemoteProvider: Sendable {
 	static func handOut(_ source: URL, to destination: URL) throws {
 		let target = destination.path(percentEncoded: false)
 		guard copyfile(source.path(percentEncoded: false), target, nil, copyfile_flags_t(COPYFILE_CLONE)) == 0 else {
-			throw LocalWriter.posixError()
+			throw posixError()
 		}
 		guard chmod(target, 0o644) == 0 else {
-			let error = LocalWriter.posixError()
+			let error = posixError()
 			unlink(target)
 			throw error
 		}
-		LocalWriter.removeFileProviderAttributes(destination)
+		removeFileProviderAttributes(destination)
+	}
+
+	/// The system's attributes of an item, which must not travel with the contents to another one
+	private static func removeFileProviderAttributes(_ url: URL) {
+		let path = url.path(percentEncoded: false)
+		let size = listxattr(path, nil, 0, XATTR_NOFOLLOW)
+		guard size > 0 else {
+			return
+		}
+		var buffer = [CChar](repeating: 0, count: size)
+		guard listxattr(path, &buffer, size, XATTR_NOFOLLOW) == size else {
+			return
+		}
+		for name in buffer.split(separator: 0).map({ String(decoding: $0.map { UInt8(bitPattern: $0) }, as: UTF8.self) })
+		where name.hasPrefix("com.apple.fileprovider") {
+			removexattr(path, name, XATTR_NOFOLLOW)
+		}
+	}
+
+	/// The current POSIX error as an error the framework accepts (it only takes Cocoa and File Provider errors)
+	private static func posixError(_ code: Int32 = errno) -> Error {
+		switch code {
+		case ENOSPC, EDQUOT:
+			return CocoaError(.fileWriteOutOfSpace)
+		case EACCES, EPERM:
+			return CocoaError(.fileWriteNoPermission)
+		case ENOENT:
+			return CocoaError(.fileNoSuchFile)
+		case ENAMETOOLONG, EINVAL, ENOTDIR, ELOOP, EISDIR:
+			// Trying again would not help
+			return RemoteFailure.cannotSynchronize(
+				POSIXError(POSIXErrorCode(rawValue: code) ?? .EINVAL).localizedDescription)
+		default:
+			return NSError(
+				domain: NSCocoaErrorDomain, code: NSXPCConnectionReplyInvalid,
+				userInfo: [NSUnderlyingErrorKey: POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)])
+		}
+	}
+
+	/// When the system reimports, it asks about the folders themselves; nothing else can be added at the top
+	func existingFolderRoot(for template: NSFileProviderItem, options: NSFileProviderCreateItemOptions) throws
+		-> IndexItem
+	{
+		let key = FileNames.collisionKey(template.filename)
+		if options.contains(.mayAlreadyExist),
+			let root = try context.store.children(of: nil, limit: ExtensionContext.maximumPageSize).first(where: {
+				FileNames.collisionKey($0.name) == key
+			})
+		{
+			return root
+		}
+		throw RemoteFailure.cannotSynchronize(String(localized: "Items can only be added inside a folder."))
 	}
 
 	/// Whether the file has the same bytes as a staged file (the SHA-256 of the whole file is its `digest`)
@@ -648,38 +698,14 @@ final class RemoteProvider: Sendable {
 
 	// MARK: - Contents
 
-	/// What the system gets for a file
-	private enum ContentSource {
-		/// A local change the gateway has not confirmed: its staged file is the newest version
-		case staged(URL)
-		/// The gateway's version
-		case remote(RemoteItemState)
-
-		/// Equal for the same contents
-		var version: String {
-			switch self {
-			case .staged(let url): return "staged " + url.path(percentEncoded: false)
-			case .remote(let state): return "remote " + (state.contentID?.rawValue ?? "")
-			}
-		}
-	}
-
-	/// The version of the file the item's row shows. Retryable errors when it is not known yet (such as before the first
-	/// snapshot completed, or while a local rename holds the row): a missing item is never assumed to be gone.
-	private func contentSource(of item: IndexItem) throws -> ContentSource {
-		if let path = try context.store.remoteOverlay(itemID: item.id)?.stagedPath {
-			let url = storage.url(relativePath: path)
-			if Self.exists(url) {
-				return .staged(url)
-			}
-		}
-		guard let state = try context.store.remoteItem(itemID: item.id), state.kind == .file, !state.isDeleted,
-			state.contentID?.rawValue == item.blocksHash
-		else {
+	/// The version of the file the item's row shows. Retryable errors when it is not known yet: a missing item is never
+	/// assumed to be gone.
+	private func contentSource(of item: IndexItem) throws -> RemoteContentSource {
+		guard let source = try context.store.contentSource(of: item, storage: storage) else {
 			refreshSoon(folderIDs: [item.folderID])
 			throw RemoteFailure.versionChanged
 		}
-		return .remote(state)
+		return source
 	}
 
 	func fetchContents(
@@ -760,9 +786,7 @@ final class RemoteProvider: Sendable {
 	func download(_ state: RemoteItemState, binding: RemoteFolderBinding, progress: Progress)
 		async throws(RemoteError) -> URL
 	{
-		guard let serviceID = binding.serviceID, let client = client(serviceID: serviceID),
-			let request = RemoteDownloader.Request(state)
-		else {
+		guard let client = client(serviceID: binding.serviceID), let request = RemoteDownloader.Request(state) else {
 			throw .unauthenticated
 		}
 		let downloader = RemoteDownloader(
@@ -772,7 +796,7 @@ final class RemoteProvider: Sendable {
 			progress.totalUnitCount = max(total, 1)
 			progress.completedUnitCount = verified
 		}
-		reached(serviceID: serviceID)
+		reached(serviceID: binding.serviceID)
 		return url
 	}
 
@@ -783,9 +807,7 @@ final class RemoteProvider: Sendable {
 		if progress.isCancelled {
 			return CocoaError(.userCancelled)
 		}
-		if let serviceID = binding.serviceID {
-			noteFailure(failure, serviceID: serviceID)
-		}
+		noteFailure(failure, serviceID: binding.serviceID)
 		switch failure {
 		case .notFound:
 			// The gateway says the item is gone; the index learns it from the next refresh
@@ -794,9 +816,9 @@ final class RemoteProvider: Sendable {
 				withIdentifier: NSFileProviderItemIdentifier(itemID: item.id))
 		case .revisionMismatch(let current):
 			// A newer version: store it, so that the system learns about it and asks again
-			if let current, let serviceID = binding.serviceID,
+			if let current,
 				(try? context.store.applyRemoteItems(
-					[current], serviceID: serviceID, knownRevisions: requested.map { [current.id: $0] } ?? [:]))?
+					[current], serviceID: binding.serviceID, knownRevisions: requested.map { [current.id: $0] } ?? [:]))?
 					.changed ?? 0 > 0
 			{
 				signalWorkingSet()
@@ -821,7 +843,8 @@ final class RemoteProvider: Sendable {
 	func gatewayThumbnail(of item: IndexItem, binding: RemoteFolderBinding, type: UTType, maximumPixels: CGFloat)
 		async throws -> Data?
 	{
-		guard item.pending == .none, let serviceID = binding.serviceID, let feature = Self.thumbnailFeature(for: type),
+		let serviceID = binding.serviceID
+		guard item.pending == .none, let feature = Capabilities.thumbnailFeature(for: type),
 			let state = try context.store.remoteItem(itemID: item.id), state.kind == .file, !state.isDeleted,
 			state.contentID?.rawValue == item.blocksHash
 		else {
@@ -861,19 +884,6 @@ final class RemoteProvider: Sendable {
 			return nil
 		}
 		return try Data(contentsOf: destination)
-	}
-
-	private static func thumbnailFeature(for type: UTType) -> Capabilities.Feature? {
-		if type.conforms(to: .image) {
-			return .imageThumbnails
-		}
-		if type.conforms(to: .movie) {
-			return .videoThumbnails
-		}
-		if type.conforms(to: .pdf) {
-			return .pdfThumbnails
-		}
-		return nil
 	}
 
 	// MARK: - Actions

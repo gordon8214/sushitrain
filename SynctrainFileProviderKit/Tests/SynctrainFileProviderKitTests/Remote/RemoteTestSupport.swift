@@ -35,9 +35,9 @@ func makeRemoteStore(write: Bool = true) throws -> IndexStore {
 	try store.saveRemoteEndpoint(testEndpoint)
 	try store.bindRemoteFolder(
 		RemoteFolderBinding(
-			folderID: "docs", accessMode: .remoteAPI, serviceID: testServiceID, remoteFolderID: testRemoteFolder,
+			folderID: "docs", serviceID: testServiceID, remoteFolderID: testRemoteFolder,
 			permissions: RemotePermissions(read: true, write: write)),
-		folder: FolderDescription(folderID: "docs", label: "Documents", folderType: "sendrecieve", isSelective: true),
+		folder: FolderDescription(folderID: "docs", label: "Documents"),
 		rootGatewayID: testRootGatewayID)
 	return store
 }

@@ -632,7 +632,7 @@ extension IndexStore {
 		-> OperationRequest
 	{
 		guard let kind = record.kind.remoteKind,
-			let binding = try remoteBinding(connection, folderID: record.folderID), let remoteFolderID = binding.remoteFolderID
+			let remoteFolderID = try remoteBinding(connection, folderID: record.folderID)?.remoteFolderID
 		else {
 			throw .notAllowed("the folder is not accessed through a gateway")
 		}
@@ -848,17 +848,11 @@ final class RemoteMutationRecorder {
 
 	/// The binding of a folder that is accessed through a gateway and may be changed
 	private func writableBinding(_ folderID: String) throws(IndexError) -> RemoteFolderBinding {
-		guard let binding = try IndexStore.remoteBinding(connection, folderID: folderID), binding.isRemote,
-			binding.serviceID != nil
-		else {
+		guard let binding = try IndexStore.remoteBinding(connection, folderID: folderID) else {
 			throw .notAllowed("the folder is not accessed through a gateway")
 		}
 		guard binding.permissions.write else {
 			throw .notAllowed("the folder is read-only on its gateway")
-		}
-		// Checked in the transaction that records the edit, so no edit slips in while the folder is being switched
-		if try IndexStore.isRemoteMigrationFenced(connection, folderID: folderID) {
-			throw .notAllowed("the folder is being switched to another way of access; try again when that is done")
 		}
 		return binding
 	}
@@ -872,7 +866,7 @@ final class RemoteMutationRecorder {
 	}
 
 	private func checkNameIsFree(_ name: String, in parentID: Int64, except itemID: Int64? = nil) throws(IndexError) {
-		if let existing = try LocalChangeRecorder.child(connection, of: parentID, named: name), existing.id != itemID {
+		if let existing = try IndexPaths.child(connection, of: parentID, named: name), existing.id != itemID {
 			throw .nameCollision(existing: existing.id)
 		}
 	}
@@ -1032,14 +1026,12 @@ final class RemoteMutationRecorder {
 		let size = kind == .file ? stagedFile?.size ?? 0 : 0
 		try connection.run(
 			"""
-			INSERT INTO items (folder_id, path, parent_id, name, name_key, kind, size, mod_ns, changed_seq, selected,
-				pending, pending_size, pending_mod_ns)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO items (folder_id, path, parent_id, name, name_key, kind, size, mod_ns, changed_seq, pending)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			""",
 			[
 				folderID, path, parent.id, name, FileNames.collisionKey(name), kind.rawValue, size, modifiedNanoseconds,
-				projector.nextChangeSequence(), parent.isSelected, PendingChange.create.rawValue, size,
-				modifiedNanoseconds,
+				projector.nextChangeSequence(), PendingChange.create.rawValue,
 			])
 		let itemID = connection.lastInsertRowID
 		let operationID = try insertMutation(
@@ -1105,13 +1097,12 @@ final class RemoteMutationRecorder {
 			stagedPath: stagedFile.relativePath)
 		try connection.run(
 			"""
-			UPDATE items SET size = ?, mod_ns = ?, pending = ?, pending_size = ?, pending_mod_ns = ?,
-				content_rev = content_rev + 1, meta_rev = meta_rev + 1, changed_seq = ?
+			UPDATE items SET size = ?, mod_ns = ?, pending = ?, content_rev = content_rev + 1, meta_rev = meta_rev + 1,
+				changed_seq = ?
 			WHERE id = ?
 			""",
 			[
-				stagedFile.size, modifiedNanoseconds, pending.rawValue, stagedFile.size, modifiedNanoseconds,
-				projector.nextChangeSequence(), itemID,
+				stagedFile.size, modifiedNanoseconds, pending.rawValue, projector.nextChangeSequence(), itemID,
 			])
 		projector.countVisibleChange()
 		return RemoteMutationResult(
@@ -1204,7 +1195,7 @@ final class RemoteMutationRecorder {
 				projector.nextChangeSequence(), itemID,
 			])
 		if moving.kind.isContainer {
-			let (lower, upper) = LocalChangeRecorder.descendantRange(of: moving.path)
+			let (lower, upper) = IndexPaths.descendantRange(of: moving.path)
 			try connection.run(
 				"""
 				UPDATE items SET folder_id = ?, path = ? || substr(path, ?)
@@ -1226,7 +1217,7 @@ final class RemoteMutationRecorder {
 			throw .notAllowed("folder roots cannot be deleted")
 		}
 		let binding = try writableBinding(current.folderID)
-		let (subtree, subtreeValues) = LocalChangeRecorder.subtree(below: current.path)
+		let (subtree, subtreeValues) = IndexPaths.subtree(below: current.path)
 		let scope = current.kind.isContainer ? "(id = ? OR (folder_id = ? AND deleted = 0 AND \(subtree)))" : "id = ?"
 		let scopeValues: [any SQLBindable] =
 			current.kind.isContainer ? [itemID, current.folderID] + subtreeValues : [itemID]
@@ -1261,8 +1252,7 @@ final class RemoteMutationRecorder {
 			let start = try projector.sequencesByID()
 			try connection.run(
 				"""
-				UPDATE items SET deleted = 1, deleted_at = ?, pending = 0, pending_size = NULL, pending_mod_ns = NULL,
-					meta_rev = meta_rev + 1, changed_seq = ? + id
+				UPDATE items SET deleted = 1, deleted_at = ?, pending = 0, meta_rev = meta_rev + 1, changed_seq = ? + id
 				WHERE \(scope)
 				""", [now, start] + scopeValues)
 			projector.countVisibleChange()
@@ -1714,15 +1704,14 @@ final class RemoteMutationRecorder {
 			{
 				try projector.reproject(gatewayID)
 				try connection.run(
-					"UPDATE items SET pending = 0, pending_size = NULL, pending_mod_ns = NULL WHERE id = ? AND deleted = 1",
-					[entry.itemID])
+					"UPDATE items SET pending = 0 WHERE id = ? AND deleted = 1", [entry.itemID])
 			}
 			else {
 				// Never on the gateway (a canceled or rejected creation)
 				try connection.run(
 					"""
-					UPDATE items SET deleted = 1, deleted_at = COALESCE(deleted_at, ?), pending = 0, pending_size = NULL,
-						pending_mod_ns = NULL, meta_rev = meta_rev + CASE WHEN deleted = 0 THEN 1 ELSE 0 END,
+					UPDATE items SET deleted = 1, deleted_at = COALESCE(deleted_at, ?), pending = 0,
+						meta_rev = meta_rev + CASE WHEN deleted = 0 THEN 1 ELSE 0 END,
 						changed_seq = CASE WHEN deleted = 0 THEN ? ELSE changed_seq END
 					WHERE id = ?
 					""", [now, projector.nextChangeSequence(), entry.itemID])

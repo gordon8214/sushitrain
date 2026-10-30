@@ -253,7 +253,7 @@ final class RemoteProjector {
 				connection, serviceID: serviceID, remoteFolderID: remoteFolderID),
 			let binding = try IndexStore.remoteBinding(connection, folderID: destination)
 		{
-			reads = binding.isRemote && binding.permissions.read
+			reads = binding.permissions.read
 		}
 		readableFolders[key] = reads
 		return reads
@@ -267,7 +267,7 @@ final class RemoteProjector {
 		else {
 			return
 		}
-		let (lower, upper) = LocalChangeRecorder.descendantRange(of: row.path)
+		let (lower, upper) = IndexPaths.descendantRange(of: row.path)
 		let below = "SELECT id FROM items WHERE folder_id = ?1 AND deleted = 0 AND path >= ?2 AND path < ?3"
 		try connection.run(
 			"UPDATE remote_items SET folder_id = ?1 WHERE folder_id != ?1 AND item_id IN (\(below))",
@@ -424,8 +424,7 @@ final class RemoteProjector {
 				try connection.run(
 					"""
 					UPDATE items SET folder_id = ?, path = ?, parent_id = ?, name = ?, name_key = ?, size = ?, mod_ns = ?,
-						blocks_hash = ?, modified_by = NULL, deleted = 0, deleted_at = NULL, implied = 0, pending = 0,
-						pending_path = NULL, pending_size = NULL, pending_mod_ns = NULL,
+						blocks_hash = ?, deleted = 0, deleted_at = NULL, pending = 0,
 						content_rev = content_rev + ?, meta_rev = meta_rev + 1, changed_seq = ?
 					WHERE id = ?
 					""",
@@ -435,7 +434,7 @@ final class RemoteProjector {
 					])
 				if moved, kind == .directory, !row.deleted {
 					// Everything below moves along; the rows keep their parents, so the system needs no change
-					let (lower, upper) = LocalChangeRecorder.descendantRange(of: row.path)
+					let (lower, upper) = IndexPaths.descendantRange(of: row.path)
 					try connection.run(
 						"""
 						UPDATE items SET folder_id = ?, path = ? || substr(path, ?)
@@ -450,13 +449,12 @@ final class RemoteProjector {
 
 		try connection.run(
 			"""
-			INSERT INTO items (folder_id, path, parent_id, name, name_key, kind, size, mod_ns, blocks_hash, changed_seq,
-				selected)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT selected FROM items WHERE id = ?))
+			INSERT INTO items (folder_id, path, parent_id, name, name_key, kind, size, mod_ns, blocks_hash, changed_seq)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			""",
 			[
 				parent.folderID, path, parent.id, name, FileNames.collisionKey(name), kind.rawValue, size,
-				remote.modifiedNs, contentID, allocateSequence(), parent.id,
+				remote.modifiedNs, contentID, allocateSequence(),
 			])
 		try setPlaced(gatewayID, itemID: connection.lastInsertRowID)
 		visibleChanges += 1
@@ -497,7 +495,7 @@ final class RemoteProjector {
 		guard row.kind.isContainer else {
 			return false
 		}
-		let (condition, values) = LocalChangeRecorder.subtree(below: row.path)
+		let (condition, values) = IndexPaths.subtree(below: row.path)
 		return try connection.queryOne(
 			"""
 			SELECT EXISTS (
@@ -510,7 +508,7 @@ final class RemoteProjector {
 	/// `unplace`, the gateway items of the removed rows wait to be placed again (they were displaced, not deleted).
 	private func removeRow(_ row: LocalRow, unplace: Bool) throws(IndexError) {
 		if row.kind.isContainer {
-			let (condition, values) = LocalChangeRecorder.subtree(below: row.path)
+			let (condition, values) = IndexPaths.subtree(below: row.path)
 			let start = try allocateSequencesByID()
 			let scope = """
 				folder_id = ? AND deleted = 0 AND \(condition)
@@ -523,8 +521,7 @@ final class RemoteProjector {
 			}
 			try connection.run(
 				"""
-				UPDATE items SET deleted = 1, deleted_at = ?, pending = 0, pending_path = NULL, pending_size = NULL,
-					pending_mod_ns = NULL, meta_rev = meta_rev + 1, changed_seq = ? + id
+				UPDATE items SET deleted = 1, deleted_at = ?, pending = 0, meta_rev = meta_rev + 1, changed_seq = ? + id
 				WHERE \(scope)
 				""", [now, start, row.folderID] + values)
 			visibleChanges += connection.changes
@@ -538,8 +535,7 @@ final class RemoteProjector {
 		}
 		try connection.run(
 			"""
-			UPDATE items SET deleted = 1, deleted_at = ?, pending = 0, pending_path = NULL, pending_size = NULL,
-				pending_mod_ns = NULL, meta_rev = meta_rev + 1, changed_seq = ?
+			UPDATE items SET deleted = 1, deleted_at = ?, pending = 0, meta_rev = meta_rev + 1, changed_seq = ?
 			WHERE id = ? AND deleted = 0
 			""", [now, allocateSequence(), row.id])
 		visibleChanges += connection.changes

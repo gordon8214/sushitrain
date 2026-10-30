@@ -7,30 +7,30 @@
 </p>
 
 <p align="center" width="100%">
-Securely synchronize files on-demand using Syncthing on iOS and macOS.
+Securely synchronize files with Syncthing on macOS, and open them from iOS through a gateway.
 </p>
 
 [Download on the App Store](https://apps.apple.com/nl/app/synctrain/id6553985316) | [Test beta versions through TestFlight](https://testflight.apple.com/join/2f54I4CM)
 
 These are for iOS. The Mac app runs outside the App Sandbox, so it isn't in the App Store: get the notarized disk image from the [releases](https://github.com/gordon8214/sushitrain/releases).
 
-Sushitrain brings Syncthing to iOS and macOS. In addition to the very powerful file synchronization features offered by Syncthing, this app has some extra tricks up it
-sleeve:
+On macOS, Sushitrain runs Syncthing, and has some extra tricks up its sleeve:
 
 - **Selective file synchronization**: only keep specific files or subdirectories from a larger folder on your device.
 - **On-demand access to files**: download or stream files that are not available locally from another peer through the Syncthing protocol. This allows access to your files, from your own devices, without setting up a VPN.
 - [**Remote thumbnails**](./Docs/thumbnails.md): the app can generate thumbnails for files on other devices (images or videos). You can even synchronize thumbnails between devices, so previews can be generated on a device that has all the files for use on other devices.
-- [**Files app integration**](./Docs/file-provider.md) (iOS and iPadOS): browse, open, edit and add files in your folders from the Files app, including files that are only on your other devices.
 - **Photo back-up** (automatically export photos from the system album to a folder) as well as [**photo folders**](./Docs/photo-fs.md) (directly synchronize a system photo album as a send-only folder, without exporting).
-- **Tight iOS/macOS integration** to enable background synchronization (to the extent possible), as well as Shortcuts integration and Continuity support.
+- **Tight macOS integration**: Shortcuts, Continuity, and a [gateway](./Docs/gateway.md) for your phone.
+
+On iOS and iPadOS, Synctrain is a [client of gateways](./Docs/file-provider.md): it runs no Syncthing itself. Choose folders from a Mac running Synctrain or a server running `synctrain-gateway`, then browse, search and play them in the app, and open, edit and add files from the Files app.
 
 ## Building
 
-The app consists of a framework in Go and front-end code in Swift.
+The Mac app consists of a framework in Go and front-end code in Swift (the `Synctrain` target). The iOS app is Swift only (the `SynctrainMobile` target, with the two File Provider extensions), and shares the gateway client in `SynctrainFileProviderKit`.
 
 To build the app, you need a macOS computer with the following:
 
-- XCode with the iOS 17.5 or higher SDK installed
+- XCode with the iOS 27 SDK installed
 - Developer certificates
 - Go (see [go.mod](./SushitrainCore/go.mod) for the version used)
 
@@ -56,77 +56,19 @@ Release builds for the Mac sign with a Developer ID certificate. See [Signing an
 for what that takes, and for how to notarize a release.
 
 The project doesn't request the `com.apple.developer.device-information.user-assigned-device-name` entitlement, which
-lets the app use the device's actual hostname as its Syncthing device name and is only granted by Apple, for distributed
-apps. Without it, iOS reports `localhost` as the host name, and the app uses that as its device name on first startup.
-You can change the device name from the settings screen or in the configuration.
+is only granted by Apple, for distributed apps. Without it, iOS reports a generic name, so the pairing screen lets you
+give the device the name gateways should list it under.
 
-Note that XCode will, by default, invoke the aforementioned Makefile for the Go framework as part of the build process. In
-development it may be easier to build the framework by hand to be able to easily see any compiler output (a subsequent make
-invocation from XCode should be rather quick if nothing changed since the manual invocation).
-
-## Debugging
-
-### Logging
-
-By default, the minimum log level is 'WARN', for messages written to stdout as well as the log file, the log viewer
-and support bundles. When logging to file is enabled, the minimum level is 'INFO'. For debugging, you can use the
-environment variable `SUSHITRAIN_MIN_LOG_LEVEL` to override the minimum log level, by setting it to either `DEBUG`,
-`INFO`, `WARN` or `ERROR`. In XCode you can set this through 'Edit scheme'.
-
-The level applies to every log facility: each Syncthing package that logs, and Synctrain's own
-(`t-shaped.nl/sushitrain/v2/src`, and the remote file service, `t-shaped.nl/sushitrain/v2/gateway`). `STTRACE` then sets
-the levels of single facilities, as for Syncthing (`model,protocol:WARN`, where a facility named without a level logs at
-`DEBUG`). In the app, 'Troubleshooting' > 'Log levels' lists the facilities and changes their levels while the app runs.
-The changes last until the app quits, unless 'Keep levels after restarting' is on, and 'Reset to defaults' undoes them.
-Only levels set on that screen are kept, not those from `STTRACE` or the web GUI, and `STTRACE` wins over a kept level
-for the facilities it names. 'View log messages' shows the last thousand lines logged, and can show those of a single
-facility. A support bundle has those lines, and the last thousand warnings and errors apart from them, which debug output
-can't push out.
-
-## Formatting
-
-```bash
-brew install swift-format
-swift format lint -r .
-swift format -r -i .
-```
-
-## Translations
-
-To translate using ChatGPT, use the [localize.mjs](./localize.mjs) script as follows:
-
-```bash
-OPENAI_KEY=sk-xxxx node ./localize.mjs
-```
-
-The script will invoke ChatGPT for strings for which one or more translations are missing. Edit the script to set the supported
-locales. After running the script, open the `Localizable.xcstrings` file in XCode and save once to maintain the XCode-specific
-JSON formatting and not pollute the commit diff with whitespace changes.
-
-## Updating Syncthing core
-
-To select a specific version:
-
-1. Update the version number in [go.mod](./go.mod)
-2. Run `go get -u ./...` in the `SushitrainCore` directory
-3. Run `go mod tidy`
-4. Update version number in [sushitrain.go](./SushitrainCore/src/sushitrain.go)
-
-To use the `main` branch, run `go get -u github.com/syncthing/syncthing@main` in the `SushitrainCore` directory.
-
-### Using a local version of Syncthing
-
-Edit `go.mod`:
-
-```
-replace github.com/syncthing/syncthing => /local/path/to/syncthing
-```
+Note that XCode builds the Go framework as part of the `Synctrain` scheme's Run action, but not when archiving: `make mac`
+and `make mac-release` run `make core` first. In development it may be easier to build the framework by hand to be able to
+easily see any compiler output (a subsequent make invocation from XCode should be rather quick if nothing changed since
+the manual invocation). The iOS app doesn't use it.
 
 Then, run `go mod tidy`.
 
 ## Architecture
 
-The Sushitrain app is written in Swift and uses SwiftUI. It embeds a framework called SushitrainCore, which is written
+The Mac app is written in Swift and uses SwiftUI. It embeds a framework called SushitrainCore, which is written
 in Go. This framework embeds the Syncthing code and provides an interface that is usable from the Swift side.
 
 The Go and Swift sides are bridged by a tool/framework called 'gomobile'. This tool generated bindings for Go code to be
@@ -145,12 +87,14 @@ which is used for a lot of functionality in the app).
 
 Technically the app runs a full-blown Syncthing node in-process. This means it supports all the synchronization features
 of Syncthing, as well as features around e.g. discovery, ignore files, et cetera. Not all features are exposed, however, for
-ease of use and/or because they do not make sense on iOS.
+ease of use.
+
+The iOS app embeds none of this. It is a SwiftUI client of the gateway API, in `SynctrainMobile`, on top of the index,
+outbox and transfers in `SynctrainFileProviderKit`, which the File Provider extension shares with it.
 
 ## Features
 
-As Sushitrain is intended to be used on a mobile device, it provides several affordances that regular Syncthing clients
-typically do not. The most important features are (1) on-demand download and (2) selective synchronisation.
+Sushitrain provides several affordances that regular Syncthing clients typically do not. The most important features are (1) on-demand download and (2) selective synchronisation.
 
 ### Selective synchronisation
 
@@ -220,13 +164,8 @@ remote peer.
 
 ### Custom configurations
 
-By default, the app will create a device identity and default configuration on first launch, and store it in the
-'Library/Application Support'-directory. Synced folders will end up in the `Documents` directory, where they will be visible from
-the iOS 'Files' app.
-
-A custom configuration can be loaded by placing `config.xml` in the `Documents` folder and restarting the app. This will
-show a warning on startup. By placing `cert.pem` and `key.pem` (both) in the `Documents` folder, a custom device identity
-can be loaded as well. This feature is useful for testing the app.
+By default, the Mac app creates a device identity and default configuration on first launch. See
+[Docs/macos.md](./Docs/macos.md) for where it keeps them, and how it takes over an existing Syncthing setup.
 
 ### Thumbnails
 

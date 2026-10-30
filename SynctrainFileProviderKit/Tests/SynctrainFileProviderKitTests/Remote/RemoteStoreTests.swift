@@ -9,57 +9,6 @@ import Testing
 @testable import SynctrainFileProviderKit
 
 @Suite struct RemoteStoreTests {
-	/// A database as version 4 left it, with items of a Syncthing folder
-	@Test func migratesVersion4Database() throws {
-		let store = try makeStore()
-		let connection = try SQLiteConnection(url: store.url)
-		try IndexStore.migrate(connection, to: 4)
-		try connection.execute(
-			"""
-			INSERT INTO meta VALUES ('next_seq', '5') ON CONFLICT(key) DO UPDATE SET value = '5';
-			INSERT INTO folders VALUES ('docs', 1, 'Documents', 'sendrecieve', 1, 7);
-			INSERT INTO items (id, folder_id, path, parent_id, name, name_key, kind, changed_seq)
-				VALUES (1, 'docs', '', NULL, 'Documents', 'documents', 3, 1),
-					(2, 'docs', 'Taxes', 1, 'Taxes', 'taxes', 1, 2),
-					(3, 'docs', 'Taxes/report.pdf', 2, 'report.pdf', 'report.pdf', 0, 3);
-			INSERT INTO item_attributes VALUES (3, 'dGFn', 5, NULL);
-			""")
-		#expect(try connection.userVersion == 4)
-		let generation = try IndexStore.generation(connection)
-
-		let anchor = try store.currentAnchor()
-		#expect(anchor.generation == generation && anchor.sequence == 4)
-		try store.withConnection { connection throws(IndexError) in
-			#expect(try connection.userVersion == IndexStore.schemaVersion)
-			let tables = Set(try connection.query("SELECT name FROM sqlite_master WHERE type = 'table'") { $0.text(0) })
-			for table in [
-				"remote_endpoints", "remote_bindings", "remote_items", "remote_overlays", "remote_cursors",
-				"remote_snapshots", "remote_outbox", "remote_transfers", "remote_transfer_slots", "remote_staged_files",
-				"remote_migrations",
-			] {
-				#expect(tables.contains(table), "\(table)")
-			}
-		}
-		let clientID = try store.remoteClientID()
-		#expect(UUID(uuidString: clientID) != nil && clientID == clientID.lowercased())
-		#expect(try store.remoteClientID() == clientID)
-		#expect(try store.item(id: 3)?.path == "Taxes/report.pdf")
-		#expect(try store.attributes(of: [3])[3]?.favoriteRank == 5)
-
-		// Binding the folder keeps the rows; the first snapshot adopts them by path
-		try store.saveRemoteEndpoint(testEndpoint)
-		try store.bindRemoteFolder(
-			RemoteFolderBinding(
-				folderID: "docs", accessMode: .remoteAPI, serviceID: testServiceID, remoteFolderID: testRemoteFolder,
-				permissions: RemotePermissions(read: true, write: true)), rootGatewayID: testRootGatewayID)
-		let page: SnapshotPage = try fixture("snapshot-page.json")
-		try store.snapshot(page.items)
-		#expect(try store.remoteItem(itemID: 3)?.gatewayID == "itm_hF6RgxMZ6JxNZWvbgMJ4rA")
-		#expect(try store.remoteItem(itemID: 2)?.gatewayID == "itm_wG3IzBclHqTA5RCcjR2j2g")
-		#expect(try store.item(id: 3)?.blocksHash == "c1.0PQuLA1Ythwbj9UtAT7Ozmyq4hWb4yL8x0Mr5i8QwRI.266240")
-		#expect(try store.attributes(of: [3])[3]?.favoriteRank == 5, "tags and favorites stay with the item")
-	}
-
 	@Test func snapshotAndChangesProjectIntoItems() throws {
 		let store = try makeRemoteStore()
 		let start = try store.currentAnchor()
@@ -217,130 +166,16 @@ import Testing
 		#expect(try store.releasableStagedFiles().isEmpty)
 	}
 
-	@Test func syncthingRecordsDoNotApplyToRemoteFolders() throws {
-		let store = try makeRemoteStore()
-		try store.snapshot([remoteRoot, remoteFile("itm_a", "a.txt")])
-		try store.write { writer throws(IndexError) in
-			#expect(writer.isRemoteManaged(folderID: "docs"))
-			let result = try writer.apply([file("b.txt", seq: 1)], folderID: "docs")
-			#expect(result.changed == 0)
-			try writer.removeFolder(folderID: "docs")
-		}
-		#expect(try store.item(folderID: "docs", path: "b.txt") == nil)
-		#expect(try store.folder(id: "docs") != nil && store.item(folderID: "docs", path: "a.txt") != nil)
-	}
-
 	@Test func resetKeepsRemoteFoldersAndIsRefusedWhilePending() throws {
 		let store = try makeRemoteStore()
 		try store.snapshot([remoteRoot, remoteFile("itm_a", "a.txt")])
-		try store.applying([file("x.txt", seq: 1)])
 		let a = try #require(try store.item(folderID: "docs", path: "a.txt"))
 		let edit = try store.recordRemoteContentChange(itemID: a.id, modifiedNanoseconds: 1, stagedFile: staged("r"))
 		#expect(throws: IndexError.self) { try store.reset() }
 		_ = try store.discardMutation(operationID: try #require(edit.mutation?.operationID))
 		try store.reset()
 		#expect(try store.item(id: a.id)?.path == "a.txt", "the remote folder keeps its rows and identifiers")
-		#expect(try store.item(folderID: "f1", path: "x.txt") == nil)
 		#expect(try store.remoteItem(itemID: a.id)?.gatewayID == "itm_a")
-	}
-
-	/// A database as version 5 left it, with an operation in the outbox
-	@Test func migratesVersion5Outbox() throws {
-		let store = try makeStore()
-		let connection = try SQLiteConnection(url: store.url)
-		try IndexStore.migrate(connection, to: 5)
-		try connection.execute(
-			"""
-			INSERT INTO remote_outbox (operation_id, folder_id, kind, state, created_at, updated_at)
-				VALUES ('op1', 'docs', 'replace', 'staged', 1, 1);
-			""")
-		#expect(try store.mutation(operationID: "op1")?.conflictPolicy == nil, "kept as a conflict copy")
-		try store.withConnection { connection throws(IndexError) in
-			#expect(try connection.userVersion == IndexStore.schemaVersion)
-			let columns = try connection.query("PRAGMA table_info(remote_outbox)") { $0.text(1) }
-			#expect(columns.contains("on_conflict"))
-		}
-	}
-
-	/// A database as version 6 left it (as a phone runs it), with pending creations: one the system made, a conflict
-	/// copy the extension made, and the copy of a cross-host move; and an edit of an existing file
-	@Test func migratesVersion6Overlays() throws {
-		let store = try makeStore()
-		let connection = try SQLiteConnection(url: store.url)
-		try IndexStore.migrate(connection, to: 6)
-		let copyName = "a.sync-conflict-20261027-101010-ABCDEFG.txt"
-		try connection.execute(
-			"""
-			INSERT INTO meta VALUES ('next_seq', '10') ON CONFLICT(key) DO UPDATE SET value = '10';
-			INSERT INTO folders VALUES ('docs', 1, 'Documents', 'sendreceive', 0, 0);
-			INSERT INTO remote_endpoints (service_id, host, port, display_name, updated_at)
-				VALUES ('\(testServiceID)', 'gateway.test', 20920, 'truenas', 1);
-			INSERT INTO remote_bindings (folder_id, access_mode, service_id, remote_folder_id, root_gateway_id, can_read,
-				can_write, updated_at)
-				VALUES ('docs', 'remoteAPI', '\(testServiceID)', '\(testRemoteFolder)', '\(testRootGatewayID)', 1, 1, 1);
-			INSERT INTO items (id, folder_id, path, parent_id, name, name_key, kind, size, changed_seq, pending)
-				VALUES (1, 'docs', '', NULL, 'Documents', 'documents', 3, 0, 1, 0),
-					(2, 'docs', 'new.txt', 1, 'new.txt', 'new.txt', 0, 6, 2, 1),
-					(3, 'docs', '\(copyName)', 1, '\(copyName)', '\(FileNames.collisionKey(copyName))', 0, 6, 3, 1),
-					(4, 'docs', 'moved.txt', 1, 'moved.txt', 'moved.txt', 0, 6, 4, 1),
-					(5, 'docs', 'b.txt', 1, 'b.txt', 'b.txt', 0, 6, 5, 2);
-			INSERT INTO remote_items (gateway_id, item_id, folder_id, parent_gateway_id, path, name, kind, revision,
-				placed, updated_at)
-				VALUES ('itm_b', 5, 'docs', '\(testRootGatewayID)', 'b.txt', 'b.txt', 'file', 'r1.b', 1, 1);
-			INSERT INTO remote_outbox (operation_id, folder_id, service_id, item_id, kind, target_parent_id, target_name,
-				item_kind, staged_path, upload_digest, upload_length, state, parent_operation_id, step, created_at,
-				updated_at)
-				VALUES ('op-new', 'docs', '\(testServiceID)', 2, 'create', 1, 'new.txt', 0, 'Staged/new', 'digest-new', 6,
-						'staged', NULL, NULL, 1, 1),
-					('op-copy', 'docs', '\(testServiceID)', 3, 'create', 1, '\(copyName)', 0, 'Staged/copy', 'digest-copy',
-						6, 'staged', NULL, NULL, 2, 2),
-					('op-move', 'other', 'svc_other', 4, 'crossHostMove', 1, 'moved.txt', 0, 'Staged/move', NULL, NULL,
-						'staged', NULL, NULL, 3, 3),
-					('op-move-1', 'docs', '\(testServiceID)', 4, 'create', 1, 'moved.txt', 0, 'Staged/move', 'digest-move',
-						6, 'staged', 'op-move', 1, 3, 3),
-					('op-edit', 'docs', '\(testServiceID)', 5, 'replace', NULL, NULL, 0, 'Staged/edit', 'digest-edit', 6,
-						'failed', NULL, NULL, 4, 4);
-			INSERT INTO remote_overlays (item_id, folder_id, kind, operation_id, staged_path, created_at)
-				VALUES (2, 'docs', 1, 'op-new', 'Staged/new', 1), (3, 'docs', 1, 'op-copy', 'Staged/copy', 2),
-					(4, 'docs', 1, 'op-move', 'Staged/move', 3), (5, 'docs', 2, 'op-edit', 'Staged/edit', 4);
-			""")
-		#expect(try connection.userVersion == 6)
-
-		// Opening the store migrates it
-		#expect(try store.remoteOverlay(itemID: 2)?.origin == .system)
-		#expect(try store.remoteOverlay(itemID: 3)?.origin == .provider)
-		#expect(try store.remoteOverlay(itemID: 4)?.origin == nil, "a row the system knows")
-		#expect(try store.remoteOverlay(itemID: 5)?.origin == nil)
-		try store.withConnection { connection throws(IndexError) in
-			#expect(try connection.userVersion == 7)
-			let tables = Set(try connection.query("SELECT name FROM sqlite_master WHERE type = 'table'") { $0.text(0) })
-			#expect(tables.contains("remote_discards"))
-			#expect(try connection.query("PRAGMA table_info(remote_outbox)") { $0.text(1) }.contains("template_identifier"))
-			#expect(try connection.query("PRAGMA table_info(remote_overlays)") { $0.text(1) }.contains("origin"))
-		}
-		let content = try store.remoteLocalContent(of: [2, 3, 4, 5])
-		#expect(content[2]?.overlayOrigin == .system && content[3]?.overlayOrigin == .provider)
-		#expect(content[4]?.overlayOrigin == nil && content[5]?.overlayOrigin == nil)
-		#expect(try store.mutation(operationID: "op-new")?.templateIdentifier == nil)
-		#expect(try store.mutation(operationID: "op-edit")?.state == .failed)
-
-		// A creation recorded before the system's identifier was kept is recognized by its place and contents once
-		// discarded; a discarded edit by its item
-		_ = try store.discardMutation(operationID: "op-new")
-		#expect(try store.item(id: 2) == nil)
-		let discard = try #require(
-			try store.consumeDiscardedCreation(
-				templateIdentifier: "template-1", parentItemID: 1, name: "new.txt", kind: .file, digest: "digest-new"))
-		#expect(discard.templateIdentifier == nil && discard.operationID == "op-new")
-		_ = try store.discardMutation(operationID: "op-edit")
-		#expect(try store.consumeDiscardedEdit(itemID: 5, digest: "digest-edit")?.operationID == "op-edit")
-		#expect(try store.remoteDiscards().isEmpty)
-
-		// Creations from now on keep the system's identifier
-		let created = try store.recordRemoteCreation(
-			folderID: "docs", parentItemID: 1, name: "next.txt", kind: .file, modifiedNanoseconds: 1,
-			stagedFile: staged("next"), templateIdentifier: "template-2")
-		#expect(try store.remoteCreation(templateIdentifier: "template-2")?.itemID == created.item?.id)
 	}
 
 	/// An item fetched outside the change feed (here: the current item of a `412`) may predate a change the feed
@@ -365,36 +200,6 @@ import Testing
 			[remoteFile("itm_a", "a.txt", rev: "4", size: 4, content: "four")], serviceID: testServiceID,
 			knownRevisions: ["itm_a": revision("3")])
 		#expect(try current.changed == 1 && store.remoteItem(itemID: a.id)?.revision == revision("4"))
-	}
-
-	/// A switch away from the gateway waits for rejected edits too (they are shown until exported or discarded), and
-	/// leaves no overlay behind
-	@Test func switchingBackWaitsForRejectedEdits() throws {
-		let store = try makeRemoteStore()
-		try store.snapshot([remoteRoot, remoteFile("itm_a", "a.txt")])
-		let a = try #require(try store.item(folderID: "docs", path: "a.txt"))
-		let edit = try store.recordRemoteContentChange(itemID: a.id, modifiedNanoseconds: 1, stagedFile: staged("e1"))
-		let claim = try #require(try store.claimMutation(owner: "app", duration: 60))
-		_ = try store.recordRejection(claim, error: "forbidden", currentItem: nil)
-		#expect(try store.mutation(operationID: try #require(edit.mutation?.operationID))?.state == .failed)
-		let syncthing = RemoteFolderBinding(
-			folderID: "docs", accessMode: .syncthing, serviceID: nil, remoteFolderID: nil,
-			permissions: RemotePermissions(read: true, write: true))
-		#expect(throws: IndexError.notAllowed("changes to this folder were not resolved with its gateway")) {
-			try store.bindRemoteFolder(syncthing)
-		}
-		_ = try store.discardMutation(operationID: claim.operationID)
-		// An overlay that outlived its operation
-		try store.withConnection { connection throws(IndexError) in
-			try connection.run(
-				"""
-				INSERT INTO remote_overlays (item_id, folder_id, kind, operation_id, staged_path, created_at)
-				VALUES (?, 'docs', ?, 'gone', NULL, 0)
-				""", [a.id, PendingChange.modify.rawValue])
-		}
-		try store.bindRemoteFolder(syncthing)
-		#expect(try store.remoteOverlay(itemID: a.id) == nil)
-		#expect(try store.remoteBinding(folderID: "docs")?.isRemote == false)
 	}
 
 	/// Another process's snapshot in progress is kept, not replaced
@@ -428,41 +233,6 @@ import Testing
 		_ = try store.recordRejection(submitted, error: "revision_mismatch", currentItem: nil)
 		#expect(try store.item(id: d.id)?.path == "d")
 		#expect(try store.item(id: x.id)?.path == "d/x.txt", "the same row comes back")
-	}
-
-	@Test func resetIsRefusedWhileAFolderIsSwitched() throws {
-		let store = try makeStore()
-		try store.write { writer throws(IndexError) in
-			try writer.upsertFolder(
-				FolderDescription(folderID: "music", label: "Music", folderType: "sendrecieve", isSelective: false))
-		}
-		try store.beginRemoteMigration(
-			folderID: "music",
-			journal: RemoteMigration.Journal(direction: .toGateway, serviceID: testServiceID, remoteFolderID: "Music"))
-		#expect(throws: IndexError.notAllowed("a folder is being switched between Syncthing and a gateway")) {
-			try store.reset()
-		}
-		try store.finishRemoteMigration(folderID: "music")
-		try store.reset()
-	}
-
-	/// Edits of a folder accessed through a gateway go to its outbox, never to the Syncthing path
-	@Test func syncthingEditsAreRefusedForRemoteFolders() throws {
-		let store = try makeRemoteStore()
-		try store.snapshot([remoteRoot, remoteFile("itm_a", "a.txt")])
-		let root = try #require(try store.folder(id: "docs")).rootItemID
-		let a = try #require(try store.item(folderID: "docs", path: "a.txt"))
-		#expect(throws: IndexError.self) {
-			try store.recordLocalChanges { recorder throws(IndexError) in
-				_ = try recorder.recordCreation(
-					folderID: "docs", parentID: root, path: "b.txt", kind: .file, size: 1, modifiedNanoseconds: 1,
-					isSelected: true)
-			}
-		}
-		#expect(throws: IndexError.self) {
-			try store.recordLocalChanges { recorder throws(IndexError) in try recorder.recordDeletion(a) }
-		}
-		#expect(try store.item(id: a.id) != nil && store.item(folderID: "docs", path: "b.txt") == nil)
 	}
 
 	/// The items below a directory that is not shown wait (without being tried again and again), and are shown with it

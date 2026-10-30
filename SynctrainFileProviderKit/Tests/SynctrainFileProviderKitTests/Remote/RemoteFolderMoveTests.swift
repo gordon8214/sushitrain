@@ -26,9 +26,9 @@ private let picturesRoot = RemoteItem(
 		if bindPictures {
 			try store.bindRemoteFolder(
 				RemoteFolderBinding(
-					folderID: "pics", accessMode: .remoteAPI, serviceID: testServiceID,
+					folderID: "pics", serviceID: testServiceID,
 					remoteFolderID: picturesFolder, permissions: RemotePermissions(read: readPictures, write: true)),
-				folder: FolderDescription(folderID: "pics", label: "Pictures", folderType: "sendreceive", isSelective: false),
+				folder: FolderDescription(folderID: "pics", label: "Pictures"),
 				rootGatewayID: picturesRootID)
 			try store.snapshot([picturesRoot] + pictures, folderID: "pics")
 		}

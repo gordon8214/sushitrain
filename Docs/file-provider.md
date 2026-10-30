@@ -1,57 +1,26 @@
 # Files app integration
 
-On iOS and iPadOS, Synctrain adds a **Synctrain** location to the Files app. Every folder stored in the app appears in
-it as a directory (unless **Hide folder** is on in its settings), including the files that are only on other devices. Files can be opened, edited, added, renamed, moved
-and deleted there (and from any app that opens documents through Files), and the changes are synchronized like any
-other change.
+On iOS and iPadOS, Synctrain is a client of [gateways](gateway.md): Macs running Synctrain, or servers running
+`synctrain-gateway`, that synchronize folders with Syncthing. Nothing runs Syncthing on the phone. The folders you choose
+from a paired gateway appear in the app and in a **Synctrain** location in the Files app. Files can be opened, edited,
+added, renamed, moved and deleted there (and from any app that opens documents through Files), and the changes go to the
+gateway, which synchronizes them like any other change.
 
-External folders, photo folders and receive-encrypted folders are not part of the location.
+The Synctrain location exists while a gateway is paired: it is added with the first pairing, and removed when the last
+gateway is forgotten. On macOS there is no location: Synctrain runs Syncthing itself there.
 
 ## Using it
 
-Turn the location on in Files (Browse, then tap Synctrain under Locations). The **Files app** page in Synctrain's
-settings shows whether it is on and lists files that need attention.
+Turn the location on in Files (Browse, then tap Synctrain under Locations). Settings › Gateways shows whether it is on.
 
-What works depends on whether Synctrain is running, because only the app runs Syncthing:
+Everything goes through the gateway over HTTPS, whether or not Synctrain is running:
 
-- **Always**: browsing, opening files that are on this device, and adding, editing, renaming, moving and deleting them.
-  Changes are written to the folder right away; Syncthing picks them up the next time Synctrain runs (it scans the
-  changed paths, and selects new items in on-demand folders).
-- **While Synctrain runs** (on the screen, or for about half a minute after leaving it when **Briefly after leaving
-  app** is on): opening files that are only on other devices. These are fetched from another device through the app. When a file is opened while Synctrain is
-  not running, Files says so and Synctrain lists it under **Requested downloads**, with a button to show it in Files.
-- **Keep on This Device** and **Stop Keeping on This Device** (in on-demand folders) are carried out when Synctrain
-  runs. Stopping only happens when another connected device has all of the item; otherwise Synctrain keeps it and says
-  why on the Files app page. Files' own downloaded copy is removed as well; while it is still in use (for instance
-  shown in Files), Synctrain tries again for a day, and **Remove Download** in Files removes it right away.
-
-Saving a file that is only on other devices first downloads it (Files shows the save as waiting until Synctrain has the
-file); the edit is then an ordinary change of that version, not a second, conflicting one.
-
-Items kept on this device in on-demand folders have a checkmark badge, and conflict copies a warning badge. Files get
-thumbnails (images, videos, PDFs and other documents the system can preview) from the file on this device. While
-Synctrain runs, files that are only on other devices get them too: videos are streamed (only the parts needed for the
-first frame are fetched), other files are fetched up to 16 MB.
-
-Deleting removes the item on all devices. Only items kept on this device can be renamed, moved or deleted; in on-demand
-folders, a directory can only be renamed or moved when it is kept on this device as a whole. Items can also be moved to
-another folder, which other devices see as a removal from one folder and an addition to the other.
-
-### Folders on a gateway
-
-A folder can instead be accessed through a gateway: a Mac running Synctrain or a Linux server that runs Syncthing and
-Synctrain's remote file service (see [gateway.md](gateway.md)). Files then opens, saves, renames, moves and deletes
-items through the gateway over HTTPS, whether or not Synctrain is running, and the phone's own Syncthing leaves the
-folder alone (it stays paused and cannot be resumed until the folder is switched back).
-
-- **Pairing**: Settings › Remote folders › Pair, then scan the gateway's code (or paste its link) and approve the
-  phone on the gateway.
-- **Adding a folder**: a gateway folder this phone doesn't have can be added to Files. A Syncthing folder this phone
-  shares with the gateway can be switched to the gateway (**Switch…** in the gateway's folder list, or the folder's
-  settings). Switching is refused (try again later) until Syncthing has picked up all changes made on this phone and
-  the gateway has every version that only this phone had; it keeps the folder's files on this device and the items'
-  Files identifiers, tags and favorites. **Switch Back** returns it to Syncthing; the folder then stays paused until
-  you resume it.
+- **Pairing**: on first launch, or Settings › Gateways › Pair with a Gateway, scan the gateway's code (or paste its
+  link) and approve the phone on the gateway.
+- **Choosing folders**: Settings › Folders lists what each gateway lets this phone access. **Add** brings a folder to
+  this phone, in the app and in Files; **Remove from This Device** takes it away again, and it stays on the gateway.
+  Removing is refused until the folder's edits are sent, exported or discarded, and asks first when Files holds changes
+  it hasn't handed over.
 - **Saving**: an edit is reported as saved only once the gateway has committed it. While the gateway can't be reached,
   Files keeps the edit and tries again; Synctrain sends it as well when it runs. A large edit still being sent after a
   minute (or when Synctrain is about to be suspended) is sent on in the background, also while neither Files nor
@@ -62,8 +31,6 @@ folder alone (it stays paused and cannot be resumed until the folder is switched
 - **Opening**: files are downloaded from the gateway in verified parts and kept as long as the system keeps them.
   **Keep on This Device** downloads an item, **Stop Keeping on This Device** removes the downloaded copy (never one
   with an edit that wasn't sent). Thumbnails come from the gateway.
-- **In Synctrain**: the folder lists what Files shows (Syncthing on this phone leaves it paused, so it can't list it).
-  Tapping a file, or **Open in Files app** for a directory, shows it in Files.
 - **Moving** a file to a folder on another gateway copies it there and then deletes the original; directories can't
   be moved between gateways (copy them, then delete them).
 - **Previous Versions…** (in a file's menu in Files) lists the versions the folder's Syncthing versioning keeps on the
@@ -83,77 +50,70 @@ folder alone (it stays paused and cannot be resumed until the folder is switched
 The gateway must be reachable (on the local network, a VPN or a public address you set up) for files that are not
 on the phone to open, and for edits to complete.
 
-### Limitations
+The gateway must be reachable (on the local network, a VPN or a public address you set up) for files that are not
+on the phone to open, and for edits to complete.
 
-- Receive-only folders are read-only. Symbolic links are not shown.
-- Tags, favorites and the order in Recents are kept on this device only; Syncthing does not synchronize them.
-- Files that are only on other devices get no thumbnail while Synctrain is not running, nor when they are larger than
-  16 MB (except videos).
-- Work left by the Files app while Synctrain is not running (scans, selections, keeping and stopping) is carried out
-  when Synctrain next runs, which includes its background refreshes.
+## Viewing files in the app
+
+The Folders tab browses the same index Files uses, so it also works offline, and follows changes as they arrive. Search
+finds files and directories by name in the folders on the phone. It doesn't look inside files, and a folder is searchable
+once its first listing has finished.
+
+Tapping a file shows it in Quick Look, or plays it. Audio and video play from the phone once downloaded; files of 64 MB
+or more that aren't on the phone yet play from the gateway while they stay there, and can be seeked in. Thumbnails come
+from the gateway, and stay available offline once shown. Viewing is read-only: edits go through Files, and **Show in
+Files** (in a file's menu) takes you there.
+
+Files opened in the app go into the same cache the extension uses. Settings sets how much space it may take (5 GB by
+default), and removes what was used longest ago beyond that. Files you chose to keep in Files are the system's copies, and
+aren't affected.
+
+## Limitations
+
+- Tags, favorites and the order in Recents are kept on this device only; gateways don't know about them.
+- Symbolic links are not shown. Folders the gateway only lets this phone read are read-only in Files too.
 - There is no macOS version yet.
 
 ## How it works
 
-The extension is a replicated File Provider extension. It does not run Syncthing: File Provider extensions on iOS may
-use about 20 MB of memory and only run while the system needs them, and the app keeps running Syncthing on its own.
+The extension is a replicated File Provider extension that talks to gateways itself, so Files works while the app isn't
+running. File Provider extensions on iOS may use about 20 MB of memory and only run while the system needs them. The app
+and the extension share the app group container, and don't depend on each other at run time.
 
 ### Shared container
 
-Internal folders are stored in the app group container (`Synctrain/Folders/<folder ID>`), so both the app and the
-extension can reach them. Folders in the app's documents directory are moved there once (a rename on the same volume;
-nothing is downloaded again), whether or not the location is turned on; they are then no longer under On My iPhone ›
-Synctrain or in Finder's file sharing. Folders whose ID is not a plain name (such as one containing `/`) are not moved.
-The container also holds:
-
-- `FileProvider/index.sqlite`: a mirror of Syncthing's global index for the exposed folders, which the extension serves
-  items from, and a queue of work the extension leaves for the app.
-- `FileProvider/heartbeat.json`: the port and token of the app's loopback file server, and until when the app is awake.
-- `Synctrain/Staging`: where the extension writes files before moving them into place.
+- `FileProvider/gateway.sqlite`: the index the extension serves items from and the app lists, with each folder's gateway
+  metadata and the outbox of edits.
+- `FileProvider/Remote/Content`: verified cached files, named after their content identity.
+- `FileProvider/Remote/Staged`: immutable staged edits, until the gateway has committed them.
+- `FileProvider/Remote/Transfers`: partial downloads, with their manifests and verified ranges.
 
 ### Index
 
-The app updates the mirror from Syncthing's database sequence, driven by index events (debounced) and full passes. Each
-row has a change sequence; the system's sync anchor is the index generation plus that sequence. Item identifiers are row
-IDs, and stay the same when Syncthing reports a file that was deleted and created again.
-
-A change made through the Files app is recorded as *pending* together with the folder's Syncthing sequence at that time.
-Index records from before the change cannot undo it; the record Syncthing produces when it scans the change is adopted
-without counting as a new version, and any other newer record (for instance after Syncthing resolved a conflict)
-replaces it.
+Gateway metadata is projected into `items`, with a stable row ID as each item's identifier. Each row has a change
+sequence, and the system's sync anchor is the index generation plus that sequence. Items that are gone stay as tombstones
+for 30 days, for what the system hasn't asked about yet.
 
 ### Changes from the Files app
 
-The extension writes into the folder with atomic renames (`RENAME_EXCL` to add, `RENAME_SWAP` to replace), so Syncthing
-never sees a partial file, and queues work for the app: scan the changed paths, and select new items in on-demand
-folders. When Synctrain is not running, the work waits until it does.
+Contents are staged immutably, the change is recorded in the outbox, and the extension drives it to the gateway's commit
+inside the call. A change the gateway hasn't committed is reported as not synchronized, and the system's next attempt
+continues the same operation. A row with an unconfirmed change keeps showing it, as an overlay, until the gateway answers.
 
-When an edit is based on a version that has changed on another device since, it is kept as a conflict copy named the
-way Syncthing names them (or rejected when the system asks for that, from iOS 26).
-
-In an on-demand folder, Syncthing ignores a path until it is selected, and would treat a plain rename as a deletion. A
-rename there links the new name instead (a directory is cloned, which takes no extra space); the app selects it, removes
-the old name and has both scanned. What arrived at the old name from another device in the meantime (created after the
-rename) is moved over first: it replaces an unchanged file at the new name, and is kept as a conflict copy next to one
-that was changed too. The old name stays selected, because Syncthing marks the entries of newly ignored paths as
-invalid, and other devices disregard those. Until the app has finished a rename, the item (and anything inside it or at
-its old name) cannot be renamed, moved or deleted again; Files tries again once Synctrain has run. Renaming a file back
-to its old name is the exception: that just removes the new name, as long as it was not edited in the meantime.
-
-Moving an item to another folder is a rename on disk (both folders are on the same volume). The item keeps its
-identifier; the index leaves tombstones in the old folder so that its records from before the move do not bring it back,
-and the new folder selects (if on-demand) and scans it.
+When an edit is based on a version that has changed on the gateway since, it is kept as a conflict copy named the way
+Syncthing names them (or rejected when the system asks for that). Conflict copies carry the start of this device's
+client ID, where Syncthing would put a device ID.
 
 ### Opening files
 
-Files on this device are cloned into the system's copy (`fclonefileat`, so they take no extra space). Other files are
-fetched through the app's loopback server (`127.0.0.1`, protected by a token that changes on every start), which reads
-them from the local copy if it is current and otherwise from connected devices, block by block. The server supports
-range requests, so video thumbnails only fetch the blocks AVFoundation reads; as AVFoundation cannot set the
-authorization header, the token may also be passed as a `token` query parameter.
+A staged edit, or a verified cached copy, is cloned into the system's copy, which takes no extra space. Other files are
+downloaded through a read lease, every block verified against the lease's manifest, and published to the cache with an
+atomic rename. As files there are immutable and named after their contents, the app and the extension can share the cache
+without coordinating; `remote_transfers` keeps them from downloading the same file twice.
 
-Synctrain does not hand requested files to the system as background downloads: the system runs those later, usually
-while the app is suspended again, and while they wait or fail Files shows the location as paused.
+`AVPlayer` can't send the credential or apply the gateway's pinned key, and credentials never go into URLs, so streamed
+media reaches the player through an `AVAssetResourceLoader`, reading through the gateway client up to 1 MiB at a time
+(`RemoteContentStream`). Streamed bytes aren't verified block by block, so they are never stored in the cache.
 
 ## Debugging
 
@@ -165,6 +125,6 @@ xcrun devicectl device copy from --device <device> --domain-type appGroupDataCon
   --domain-identifier <app group> --source Library/Caches/FileProviderExtension.log --destination .
 ```
 
-**Rebuild Synctrain location** on the Files app page removes the location and sets it up again from a new index. Files
-in the folders are not affected, but changes made in Files that have not reached Synctrain yet (such as a save that waits
-for a download) are discarded; Synctrain asks before doing that.
+**Rebuild Synctrain location** under Settings › Gateways removes the location and sets it up again, starting a new index
+generation. Files on gateways are not affected, but changes made in Files that have not reached Synctrain yet are
+discarded; Synctrain asks before doing that, and refuses while edits are unresolved.

@@ -8,8 +8,10 @@ import Foundation
 /// Notifications sent between the app and the extension. Darwin notifications carry no payload and are only delivered
 /// to processes that are running; anything that must not be lost is also written to the shared index.
 public enum SharedNotification: String, Sendable, CaseIterable {
-	/// The extension queued work for the app
+	/// The extension recorded an edit for the gateway
 	case workQueued = "nl.t-shaped.sushitrain.fileprovider.work-queued"
+	/// The extension changed what the index shows
+	case indexChanged = "nl.t-shaped.sushitrain.fileprovider.index-changed"
 
 	public func post() {
 		CFNotificationCenterPostNotification(

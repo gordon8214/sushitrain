@@ -215,7 +215,6 @@ extension RemoteProvider {
 			guard binding.permissions.write else {
 				throw RemoteFailure.readOnly(gateway: gatewayName(binding))
 			}
-			try checkNotSwitching(parent.folderID)
 			earlier = try earlierCreation(for: template, kind: kind, binding: binding)
 			if let earlier, let file = staged,
 				try store.consumeDiscardedEdit(itemID: earlier.row.id, digest: file.digest) != nil
@@ -542,7 +541,6 @@ extension RemoteProvider {
 		guard binding.permissions.write else {
 			throw RemoteFailure.readOnly(gateway: gatewayName(binding))
 		}
-		try checkNotSwitching(item.folderID)
 
 		var current = item
 		var move: String?
@@ -666,7 +664,7 @@ extension RemoteProvider {
 			// meanwhile. Sending them would only change the file's modification time on the gateway.
 			return ContentRecording(operationID: nil, consumedStaged: false)
 		}
-		if LocalWriter.revision(baseContentVersion) != item.contentRevision {
+		if FileProviderItem.revision(from: baseContentVersion) != item.contentRevision {
 			// The file changed on the gateway since the system's version
 			if failOnConflict, #available(iOS 26.0, macOS 26.0, *) {
 				throw NSFileProviderError(.localVersionConflictingWithServer)
@@ -687,7 +685,7 @@ extension RemoteProvider {
 		guard let parentID = item.parentID else {
 			throw NSFileProviderError(.noSuchItem)
 		}
-		let shortID = ((try? context.store.localShortDeviceID()) ?? nil) ?? "LOCAL"
+		let shortID = String(try context.store.remoteClientID().prefix(7)).uppercased()
 		var date = Date()
 		for attempt in 0...5 {
 			let name = FileNames.conflictCopyName(for: item.name, date: date, shortDeviceID: shortID)
@@ -782,14 +780,14 @@ extension RemoteProvider {
 	) async throws -> MoveRecording {
 		let store = context.store
 		guard item.kind != .folderRoot else {
-			throw Rejection.cannotSynchronize(String(localized: "Folders shared with Syncthing cannot be renamed here."))
+			throw RemoteFailure.cannotSynchronize(String(localized: "Folders cannot be renamed here."))
 		}
 		guard let parentID = parentIdentifier.itemID, let parent = try store.item(id: parentID) else {
 			// The system creates the parent first
 			throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: parentIdentifier)
 		}
 		guard parent.kind.isContainer else {
-			throw Rejection.cannotSynchronize(String(localized: "Items can only be moved into a folder."))
+			throw RemoteFailure.cannotSynchronize(String(localized: "Items can only be moved into a folder."))
 		}
 		let name = FileNames.normalized(rawName)
 		guard FileNames.isValid(name), !FileNames.isReserved(name) else {
@@ -805,11 +803,10 @@ extension RemoteProvider {
 		if item.kind.isContainer, parent.folderID == item.folderID,
 			FileNames.isSelfOrDescendant(parent.path, of: item.path)
 		{
-			throw Rejection.cannotSynchronize(String(localized: "A folder cannot be moved into itself."))
+			throw RemoteFailure.cannotSynchronize(String(localized: "A folder cannot be moved into itself."))
 		}
 		guard let target = try context.remoteBinding(folderID: parent.folderID) else {
-			// A folder that Syncthing on this device synchronizes
-			throw RemoteFailure.acrossEngines
+			throw NSFileProviderError(.noSuchItem)
 		}
 		guard target.permissions.write else {
 			throw RemoteFailure.readOnly(gateway: gatewayName(target))
@@ -933,10 +930,11 @@ extension RemoteProvider {
 		guard item.kind != .folderRoot, binding.permissions.write else {
 			throw NSFileProviderError(.deletionRejected)
 		}
-		try checkNotSwitching(item.folderID)
 		// Deleting removes the file on all devices, so only the version the user saw may be deleted. While the row shows a
 		// local change, the system cannot have seen another one.
-		if item.kind == .file, item.pending == .none, LocalWriter.revision(baseContentVersion) != item.contentRevision {
+		if item.kind == .file, item.pending == .none,
+			FileProviderItem.revision(from: baseContentVersion) != item.contentRevision
+		{
 			throw NSFileProviderError(.deletionRejected)
 		}
 		let hasDescendants = item.kind.isContainer ? try store.hasDescendants(of: item) : false
@@ -1107,15 +1105,6 @@ extension RemoteProvider {
 		return try RemoteUploader.stage(empty, in: storage, modifiedNs: modifiedNs)
 	}
 
-	/// New changes wait while the folder is switched between Syncthing on this device and its gateway (the system tries
-	/// them again on its own)
-	private func checkNotSwitching(_ folderID: String) throws {
-		if try context.store.isRemoteMigrationFenced(folderID: folderID) {
-			throw RemoteFailure.transient(
-				String(localized: "Synctrain is switching how this folder is synchronized. It tries again shortly."))
-		}
-	}
-
 	static func nanoseconds(_ date: Date) -> Int64 {
 		Int64((date.timeIntervalSince1970 * 1_000_000_000).rounded())
 	}
@@ -1148,7 +1137,7 @@ extension RemoteProvider {
 				return RemoteFailure.notAuthenticated(gateway: gateway)
 			case .unreachable, .unavailable, .overloaded:
 				reported(.cannotSynchronize, serviceID: binding.serviceID)
-				return Rejection.cannotSynchronize(
+				return RemoteFailure.cannotSynchronize(
 					String(localized: "Synctrain makes this change once \(gateway) can be reached."))
 			default:
 				return RemoteFailure.transient(

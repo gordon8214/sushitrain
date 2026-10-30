@@ -75,10 +75,10 @@ struct RemoteEndToEndTests {
 			"no writable folder")
 		try store.bindRemoteFolder(
 			RemoteFolderBinding(
-				folderID: "e2e", accessMode: .remoteAPI, serviceID: serviceID, remoteFolderID: folder.id,
+				folderID: "e2e", serviceID: serviceID, remoteFolderID: folder.id,
 				permissions: folder.permissions),
 			folder: FolderDescription(
-				folderID: "e2e", label: folder.label, folderType: folder.type.rawValue, isSelective: true),
+				folderID: "e2e", label: folder.label),
 			rootGatewayID: folder.rootItemID)
 		try await sync.refresh(folderID: "e2e")
 		#expect(try store.remoteSyncState(folderID: "e2e").cursor != nil, "the snapshot completed")

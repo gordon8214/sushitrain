@@ -47,6 +47,10 @@ jobs:
           cache: false
           check-latest: true
 
+      - name: Test core
+        run: |
+          make -C SushitrainCore test
+
       - name: Build core
         run: |
           make core
@@ -103,11 +107,6 @@ jobs:
           sudo /usr/bin/xcode-select -switch /Applications/Xcode_27.0.app
           xcrun simctl list > /dev/null
           /usr/bin/xcodebuild -version
-
-      # The Go framework has slices for iOS as well
-      - name: Install iOS platform
-        run: |
-          xcodebuild -downloadPlatform iOS
 
       - name: Check out repository
         uses: actions/checkout@v3

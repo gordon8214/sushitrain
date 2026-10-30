@@ -214,19 +214,6 @@ import Testing
 		#expect(try store.remoteDiscards().isEmpty)
 	}
 
-	@Test func rebindingForgetsTheFoldersDiscards() throws {
-		let store = try makeRemoteStore()
-		try store.snapshot([remoteRoot, remoteFile("itm_a", "a.txt")])
-		let a = try #require(try store.item(folderID: "docs", path: "a.txt"))
-		let edit = try store.recordRemoteContentChange(itemID: a.id, modifiedNanoseconds: 2, stagedFile: staged("e1"))
-		_ = try store.discardMutation(operationID: try #require(edit.mutation?.operationID))
-		try store.bindRemoteFolder(
-			RemoteFolderBinding(
-				folderID: "docs", accessMode: .syncthing, serviceID: nil, remoteFolderID: nil,
-				permissions: RemotePermissions(read: true, write: true)))
-		#expect(try store.remoteDiscards().isEmpty)
-	}
-
 	// MARK: - Origins
 
 	/// Rows the system created are hidden while their creation is pending (the system shows its own item); conflict

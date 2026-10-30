@@ -4,7 +4,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
 .PHONY: lint format test core mac mac-release ios clean build
-# Both platforms archive the same scheme into the same derived data, which Xcode can't do concurrently
+# Both platforms archive into the same derived data, which Xcode can't do concurrently
 .NOTPARALLEL:
 
 build: mac ios
@@ -53,9 +53,9 @@ mac-release: core
 		clean archive
 	Scripts/notarize-mac.sh "$(BUILD_DIR)/synctrain-macos-release.xcarchive" "$(BUILD_DIR)/release"
 
-ios: core
+ios:
 	# Build archive
-	xcodebuild -scheme "Synctrain release" \
+	xcodebuild -scheme SynctrainMobile \
 		-archivePath "$(BUILD_DIR)/synctrain-ios.xcarchive" \
 		-sdk iphoneos \
 		-configuration Release \

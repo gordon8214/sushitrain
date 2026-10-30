@@ -78,8 +78,8 @@ public struct RemoteSyncState: Sendable, Hashable {
 extension IndexStore {
 	// MARK: - Schema
 
-	/// Version 5: tables for folders accessed through a gateway. Remote metadata is projected into `items` (see
-	/// `RemoteProjector`), so the enumerators, sync anchors, attributes and item identifiers work unchanged.
+	/// Tables for the folders on gateways. Remote metadata is projected into `items` (see `RemoteProjector`), which the
+	/// enumerators, sync anchors, attributes and item identifiers work from.
 	static func createRemoteSchema(_ connection: SQLiteConnection) throws(IndexError) {
 		try connection.execute(
 			"""
@@ -95,9 +95,8 @@ extension IndexStore {
 			);
 			CREATE TABLE IF NOT EXISTS remote_bindings (
 				folder_id TEXT PRIMARY KEY,
-				access_mode TEXT NOT NULL,
-				service_id TEXT,
-				remote_folder_id TEXT,
+				service_id TEXT NOT NULL,
+				remote_folder_id TEXT NOT NULL,
 				root_gateway_id TEXT,
 				can_read INTEGER NOT NULL DEFAULT 0,
 				can_write INTEGER NOT NULL DEFAULT 0,
@@ -134,7 +133,8 @@ extension IndexStore {
 				kind INTEGER NOT NULL,
 				operation_id TEXT NOT NULL,
 				staged_path TEXT,
-				created_at REAL NOT NULL
+				created_at REAL NOT NULL,
+				origin TEXT
 			);
 			CREATE TABLE IF NOT EXISTS remote_cursors (
 				folder_id TEXT PRIMARY KEY,
@@ -188,7 +188,9 @@ extension IndexStore {
 				parent_operation_id TEXT,
 				step INTEGER,
 				created_at REAL NOT NULL,
-				updated_at REAL NOT NULL
+				updated_at REAL NOT NULL,
+				on_conflict TEXT,
+				template_identifier TEXT
 			);
 			CREATE INDEX IF NOT EXISTS remote_outbox_state ON remote_outbox(state, created_at);
 			CREATE INDEX IF NOT EXISTS remote_outbox_item ON remote_outbox(item_id);
@@ -243,32 +245,6 @@ extension IndexStore {
 			);
 			CREATE INDEX IF NOT EXISTS remote_staged_content ON remote_staged_files(content_id)
 				WHERE content_id IS NOT NULL;
-			CREATE TABLE IF NOT EXISTS remote_migrations (
-				folder_id TEXT PRIMARY KEY,
-				state TEXT NOT NULL,
-				journal TEXT,
-				updated_at REAL NOT NULL
-			);
-			""")
-		// The stable client identity, kept across credential rotation and re-pairing (and rebuilds of the location)
-		try connection.run(
-			"INSERT OR IGNORE INTO meta (key, value) VALUES ('client_id', ?)", [UUID().uuidString.lowercased()])
-	}
-
-	/// Version 6: what a replace does when the file changed since its base revision (`OperationRequest.onConflict`),
-	/// for edits the system asks to have rejected rather than kept as a conflict copy
-	static func addOutboxConflictPolicy(_ connection: SQLiteConnection) throws(IndexError) {
-		try connection.execute("ALTER TABLE remote_outbox ADD COLUMN on_conflict TEXT")
-	}
-
-	/// Version 7: who made the rows that local changes created (`RemoteChangeOrigin`: only those the system made are
-	/// left out of enumerations while their creation is pending), the identifier the system gave the pending item of a
-	/// creation, and the changes the user discarded (`RemoteDiscard`), which the system may still try to make again
-	static func addOriginsAndDiscards(_ connection: SQLiteConnection) throws(IndexError) {
-		try connection.execute(
-			"""
-			ALTER TABLE remote_overlays ADD COLUMN origin TEXT;
-			ALTER TABLE remote_outbox ADD COLUMN template_identifier TEXT;
 			CREATE INDEX IF NOT EXISTS remote_outbox_template ON remote_outbox(template_identifier)
 				WHERE template_identifier IS NOT NULL;
 			CREATE TABLE IF NOT EXISTS remote_discards (
@@ -289,28 +265,9 @@ extension IndexStore {
 			CREATE INDEX IF NOT EXISTS remote_discards_template ON remote_discards(template_identifier)
 				WHERE kind = 'create';
 			""")
-		// Pending creations recorded before: the system made them, except the conflict copies the extension made (named
-		// like Syncthing's) and the copies of cross-host moves (rows the system knows, which keep no origin)
+		// The stable client identity, kept across credential rotation and re-pairing (and rebuilds of the location)
 		try connection.run(
-			"""
-			UPDATE remote_overlays SET origin = '\(RemoteChangeOrigin.system.rawValue)'
-			WHERE kind = \(PendingChange.create.rawValue) AND EXISTS (
-				SELECT 1 FROM remote_outbox AS m
-				WHERE m.item_id = remote_overlays.item_id AND m.kind = 'create' AND m.parent_operation_id IS NULL)
-			""")
-		try connection.run(
-			"""
-			UPDATE remote_overlays SET origin = '\(RemoteChangeOrigin.provider.rawValue)'
-			WHERE origin IS NOT NULL AND EXISTS (
-				SELECT 1 FROM items AS i WHERE i.id = remote_overlays.item_id AND instr(i.name, '.sync-conflict-') > 0)
-			""")
-	}
-
-	static func remoteManagedFolderIDs(_ connection: SQLiteConnection) throws(IndexError) -> Set<String> {
-		Set(
-			try connection.query(
-				"SELECT folder_id FROM remote_bindings WHERE access_mode = ?", [RemoteAccessMode.remoteAPI.rawValue]
-			) { $0.text(0) })
+			"INSERT OR IGNORE INTO meta (key, value) VALUES ('client_id', ?)", [UUID().uuidString.lowercased()])
 	}
 
 	static func hasUnresolvedRemoteMutations(_ connection: SQLiteConnection) throws(IndexError) -> Bool {
@@ -401,8 +358,7 @@ extension IndexStore {
 	public func removeRemoteEndpoint(serviceID: String) throws(IndexError) {
 		try transaction { connection throws(IndexError) in
 			if try connection.queryOne(
-				"SELECT EXISTS (SELECT 1 FROM remote_bindings WHERE service_id = ? AND access_mode = ?)",
-				[serviceID, RemoteAccessMode.remoteAPI.rawValue], { $0.bool(0) }) == true
+				"SELECT EXISTS (SELECT 1 FROM remote_bindings WHERE service_id = ?)", [serviceID], { $0.bool(0) }) == true
 			{
 				throw .notAllowed("folders are still accessed through this gateway")
 			}
@@ -448,81 +404,61 @@ extension IndexStore {
 
 	// MARK: - Bindings
 
-	static let bindingColumns = "folder_id, access_mode, service_id, remote_folder_id, can_read, can_write"
+	static let bindingColumns = "folder_id, service_id, remote_folder_id, can_read, can_write"
 
 	static func binding(from row: SQLiteStatement) -> RemoteFolderBinding {
 		RemoteFolderBinding(
-			folderID: row.text(0), accessMode: RemoteAccessMode(rawValue: row.text(1)) ?? .syncthing,
-			serviceID: row.optionalText(2), remoteFolderID: row.optionalText(3),
-			permissions: RemotePermissions(read: row.bool(4), write: row.bool(5)))
+			folderID: row.text(0), serviceID: row.text(1), remoteFolderID: row.text(2),
+			permissions: RemotePermissions(read: row.bool(3), write: row.bool(4)))
 	}
 
-	/// Binds a local folder to a folder on a gateway, or changes how it is accessed. For `remoteAPI`, the folder's
-	/// rows are projected from the gateway's metadata from now on: the next refresh takes a snapshot, which keeps the
-	/// identifiers of existing rows at the same paths. The folder (and its root item) is added to the index when it is
-	/// not there yet. Switching a folder back to `syncthing` (or to another gateway folder) is refused while its remote
-	/// operations are unresolved: not done, of unknown outcome, or rejected edits that were neither exported nor
-	/// discarded.
-	public func bindRemoteFolder(
+	/// Binds a local folder to a folder on a gateway. The folder (and its root item) is added to the index when it is
+	/// not there yet. The next refresh takes a snapshot, which fills in its items.
+	func bindRemoteFolder(
 		_ binding: RemoteFolderBinding, folder: FolderDescription? = nil, rootGatewayID: String? = nil
 	) throws(IndexError) {
 		try transaction { connection throws(IndexError) in
-			let existing = try connection.queryOne(
-				"SELECT \(Self.bindingColumns) FROM remote_bindings WHERE folder_id = ?", [binding.folderID],
-				Self.binding)
-			if existing?.isRemote == true,
-				!binding.isRemote || existing?.serviceID != binding.serviceID
-					|| existing?.remoteFolderID != binding.remoteFolderID
-			{
-				if try connection.queryOne(
-					"SELECT EXISTS (SELECT 1 FROM remote_outbox WHERE folder_id = ? AND \(Self.unresolvedCondition))",
-					[binding.folderID], { $0.bool(0) }) == true
-				{
-					throw .notAllowed("changes to this folder were not resolved with its gateway")
-				}
-			}
 			if let folder {
 				let writer = try IndexWriter(connection: connection)
 				try writer.upsertFolder(folder)
 				try writer.finish()
 			}
-			try connection.run(
-				"""
-				INSERT INTO remote_bindings (folder_id, access_mode, service_id, remote_folder_id, root_gateway_id,
-					can_read, can_write, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-				ON CONFLICT(folder_id) DO UPDATE SET access_mode = excluded.access_mode,
-					service_id = excluded.service_id, remote_folder_id = excluded.remote_folder_id,
-					root_gateway_id = COALESCE(excluded.root_gateway_id, root_gateway_id),
-					can_read = excluded.can_read, can_write = excluded.can_write, updated_at = excluded.updated_at
-				""",
-				[
-					binding.folderID, binding.accessMode.rawValue, binding.serviceID, binding.remoteFolderID,
-					rootGatewayID, binding.permissions.read, binding.permissions.write, Date().timeIntervalSince1970,
-				])
-			if existing?.accessMode != binding.accessMode || existing?.serviceID != binding.serviceID
-				|| existing?.remoteFolderID != binding.remoteFolderID
-			{
-				// Another source of metadata: start over with a snapshot
-				try connection.run("DELETE FROM remote_cursors WHERE folder_id = ?", [binding.folderID])
-				try connection.run("DELETE FROM remote_snapshots WHERE folder_id = ?", [binding.folderID])
-				if existing?.isRemote == true {
-					try connection.run("DELETE FROM remote_items WHERE folder_id = ?", [binding.folderID])
-					// Every operation is resolved: an overlay left over would hide the rows' new source
-					try connection.run("DELETE FROM remote_overlays WHERE folder_id = ?", [binding.folderID])
-					// What the system may still try to make again is for the new source to judge
-					try connection.run("DELETE FROM remote_discards WHERE folder_id = ?", [binding.folderID])
-				}
-			}
+			try Self.insertBinding(connection, binding, rootGatewayID: rootGatewayID)
 		}
 	}
 
-	/// Updates a remote folder's effective permissions (from `GET /v1/folders`)
+	static func insertBinding(_ connection: SQLiteConnection, _ binding: RemoteFolderBinding, rootGatewayID: String?)
+		throws(IndexError)
+	{
+		try connection.run(
+			"""
+			INSERT INTO remote_bindings (folder_id, service_id, remote_folder_id, root_gateway_id, can_read, can_write,
+				updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(folder_id) DO UPDATE SET service_id = excluded.service_id,
+				remote_folder_id = excluded.remote_folder_id,
+				root_gateway_id = COALESCE(excluded.root_gateway_id, root_gateway_id),
+				can_read = excluded.can_read, can_write = excluded.can_write, updated_at = excluded.updated_at
+			""",
+			[
+				binding.folderID, binding.serviceID, binding.remoteFolderID, rootGatewayID, binding.permissions.read,
+				binding.permissions.write, Date().timeIntervalSince1970,
+			])
+	}
+
+	/// Updates a remote folder's effective permissions (from `GET /v1/folders`). What can be done with its items follows
+	/// from them, so when writing is allowed or forbidden from now on, the system reads the items again.
 	public func updateRemotePermissions(_ permissions: RemotePermissions, folderID: String) throws(IndexError) {
-		try withConnection { connection throws(IndexError) in
+		try transaction { connection throws(IndexError) in
+			let previous = try Self.remoteBinding(connection, folderID: folderID)?.permissions
 			try connection.run(
 				"UPDATE remote_bindings SET can_read = ?, can_write = ?, updated_at = ? WHERE folder_id = ?",
 				[permissions.read, permissions.write, Date().timeIntervalSince1970, folderID])
+			if let previous, previous.write != permissions.write {
+				let writer = try IndexWriter(connection: connection)
+				try writer.touchItems(folderID: folderID)
+				try writer.finish()
+			}
 		}
 	}
 
@@ -563,9 +499,8 @@ extension IndexStore {
 		throws(IndexError) -> String?
 	{
 		try connection.queryOne(
-			"""
-			SELECT folder_id FROM remote_bindings WHERE service_id = ? AND remote_folder_id = ? AND access_mode = ?
-			""", [serviceID, remoteFolderID, RemoteAccessMode.remoteAPI.rawValue], { $0.text(0) })
+			"SELECT folder_id FROM remote_bindings WHERE service_id = ? AND remote_folder_id = ?",
+			[serviceID, remoteFolderID], { $0.text(0) })
 	}
 
 	// MARK: - Sync state

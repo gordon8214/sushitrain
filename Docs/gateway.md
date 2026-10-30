@@ -1,7 +1,7 @@
 # Remote file service (gateway)
 
-The remote file service lets Synctrain on iOS browse, open and edit a folder in the Files app without running
-Syncthing on the phone. A host that runs Syncthing anyway (a Mac running Synctrain, or a Linux server) serves the
+The remote file service is how Synctrain on iOS reaches folders at all: the phone runs no Syncthing, and browses,
+opens and edits them in the app and the Files app. A host that runs Syncthing anyway (a Mac running Synctrain, or a Linux server) serves the
 folder over HTTPS; the phone becomes a client of that host, and the host's Syncthing engine keeps synchronizing with
 all other devices as usual. Design: [remote-file-provider-plan.md](remote-file-provider-plan.md). API contract:
 [remote-api](remote-api/openapi.yaml).
@@ -29,7 +29,7 @@ Pairing creates one credential per phone, with access to the folders you grant (
 includes the folder's previous versions).
 
 1. On the gateway, start pairing. It shows a QR code and a `synctrain+pair://…` link that works once, for ten minutes.
-2. In Synctrain on the phone, scan it (Settings › Remote folders › Pair).
+2. In Synctrain on the phone, scan it (on first launch, or Settings › Gateways › Pair with a Gateway).
 3. Approve the request on the gateway, choosing the folders.
 
 Revoke a phone's credential on the gateway at any time; its edits that haven't been sent stay on the phone and can be
@@ -114,8 +114,8 @@ devices see no change. Before switching:
 3. Start `synctrain-gateway serve` with the same home.
 
 To return to the stock Syncthing, stop the gateway and start the stock Syncthing on the same home (with a version no
-older than the gateway's engine). `<home>/synctrain-gateway/` can be removed; phones then show their remote folders as
-unreachable until they are switched back to Syncthing or paired with another gateway.
+older than the gateway's engine). `<home>/synctrain-gateway/` can be removed; phones then show their folders as unreachable
+until they are removed or paired with another gateway.
 
 ### Container example
 

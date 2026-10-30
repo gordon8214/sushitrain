@@ -6,11 +6,11 @@
 @preconcurrency import FileProvider
 import SynctrainFileProviderKit
 
-/// Shared state of the extension: where the index and the folder contents are
+/// Shared state of the extension: where the index and the contents of files are
 struct ExtensionContext: Sendable {
 	let container: SharedContainer
 	let store: IndexStore
-	/// The contents of folders accessed through a gateway: staged edits and verified cached copies
+	/// Staged edits and verified cached copies
 	let storage: RemoteStorage
 
 	static let maximumPageSize = 500
@@ -24,46 +24,23 @@ struct ExtensionContext: Sendable {
 		self.storage = RemoteStorage(container: container)
 	}
 
-	/// The binding of a folder accessed through a gateway; nil for folders that Syncthing on this device synchronizes
+	/// The binding of the folder; nil for a folder this device no longer has
 	func remoteBinding(folderID: String) throws(IndexError) -> RemoteFolderBinding? {
-		guard let binding = try store.remoteBinding(folderID: folderID), binding.isRemote else {
-			return nil
-		}
-		return binding
+		try store.remoteBinding(folderID: folderID)
 	}
 
-	/// The bindings of the folders accessed through a gateway, by folder ID
+	/// The bindings of the folders, by folder ID
 	private func remoteBindings() throws(IndexError) -> [String: RemoteFolderBinding] {
 		var bindings: [String: RemoteFolderBinding] = [:]
-		for binding in try store.remoteBindings() where binding.isRemote {
+		for binding in try store.remoteBindings() {
 			bindings[binding.folderID] = binding
 		}
 		return bindings
 	}
 
-	func localURL(for item: IndexItem) -> URL {
-		container.fileURL(folderID: item.folderID, path: item.path)
-	}
-
-	/// Whether the version of the file in the index is on this device
-	func isOnDevice(_ item: IndexItem) -> Bool {
-		switch item.kind {
-		case .folderRoot, .directory:
-			return FileFingerprint(path: localURL(for: item).path(percentEncoded: false))?.isDirectory == true
-		case .symlink:
-			return false
-		case .file:
-			// Changes made through the File Provider are recorded with what they wrote, so this holds for them as well
-			guard let fingerprint = FileFingerprint(path: localURL(for: item).path(percentEncoded: false)) else {
-				return false
-			}
-			return fingerprint.matches(size: item.size, modifiedNanoseconds: item.modifiedNanoseconds)
-		}
-	}
-
-	/// For an item of a folder accessed through a gateway: whether this device holds the contents the row shows (its
-	/// staged local change, or a verified copy of the gateway's version). The Syncthing folder tree plays no part.
-	func isOnDevice(remote item: IndexItem, content: RemoteLocalContent?) -> Bool {
+	/// Whether this device holds the contents the row shows: its staged local change, or a verified copy of the gateway's
+	/// version
+	func isOnDevice(_ item: IndexItem, content: RemoteLocalContent?) -> Bool {
 		guard item.kind == .file else {
 			return false
 		}
@@ -87,65 +64,41 @@ struct ExtensionContext: Sendable {
 
 	func makeItems(_ items: [IndexItem]) throws(IndexError) -> [NSFileProviderItem] {
 		let bindings = try remoteBindings()
-		let remoteIDs = bindings.isEmpty ? [] : items.filter { bindings[$0.folderID] != nil }.map(\.id)
-		let content = remoteIDs.isEmpty ? [:] : try store.remoteLocalContent(of: remoteIDs)
-		// An item the system created in a folder accessed through a gateway is listed once the gateway committed it: until
-		// then the system shows its own pending item, and listing ours too would look like a second item with the same
-		// name. What Synctrain made itself (the conflict copy of an edit) is listed right away: the system has no item for
-		// it, and learns about it only from enumerations.
-		let items =
-			content.isEmpty
-			? items : items.filter { !($0.pending == .create && content[$0.id]?.overlayOrigin == .system) }
-		let folders = Dictionary(uniqueKeysWithValues: try store.folders().map { ($0.folderID, $0) })
-		let attributes = try store.attributes(of: items.map(\.id))
-		return items.map {
-			makeItem(
-				$0, folder: folders[$0.folderID], attributes: attributes[$0.id], remote: bindings[$0.folderID],
-				content: content[$0.id])
+		let known = items.filter { bindings[$0.folderID] != nil }
+		let content = known.isEmpty ? [:] : try store.remoteLocalContent(of: known.map(\.id))
+		// An item the system created is listed once the gateway committed it: until then the system shows its own pending
+		// item, and listing ours too would look like a second item with the same name. What Synctrain made itself (the
+		// conflict copy of an edit) is listed right away: the system has no item for it, and learns about it only from
+		// enumerations.
+		let shown = known.filter { !($0.pending == .create && content[$0.id]?.overlayOrigin == .system) }
+		let attributes = try store.attributes(of: shown.map(\.id))
+		return shown.compactMap { item in
+			bindings[item.folderID].map {
+				makeItem(item, attributes: attributes[item.id], remote: $0, content: content[item.id])
+			}
 		}
 	}
 
 	func makeItem(_ item: IndexItem) throws(IndexError) -> NSFileProviderItem {
-		let remote = try remoteBinding(folderID: item.folderID)
+		guard let remote = try remoteBinding(folderID: item.folderID) else {
+			throw .notFound
+		}
 		return makeItem(
-			item, folder: try store.folder(id: item.folderID), attributes: try store.attributes(of: [item.id])[item.id],
-			remote: remote, content: remote == nil ? nil : try store.remoteLocalContent(of: [item.id])[item.id])
+			item, attributes: try store.attributes(of: [item.id])[item.id], remote: remote,
+			content: try store.remoteLocalContent(of: [item.id])[item.id])
 	}
 
-	/// The item to return with its contents, which must not be missing (without the folder's details if they cannot be
-	/// read). Items of a folder accessed through a gateway pass its binding, which then still applies.
-	func makeItemForContents(_ item: IndexItem, remote: RemoteFolderBinding? = nil) -> NSFileProviderItem {
-		(try? makeItem(item)) ?? makeItem(item, folder: nil, attributes: nil, remote: remote, content: nil)
+	/// The item to return with its contents, which must not be missing (without its details if they cannot be read)
+	func makeItemForContents(_ item: IndexItem, remote: RemoteFolderBinding) -> NSFileProviderItem {
+		(try? makeItem(item)) ?? makeItem(item, attributes: nil, remote: remote, content: nil)
 	}
 
 	private func makeItem(
-		_ item: IndexItem, folder: IndexFolder?, attributes: ItemAttributes?, remote: RemoteFolderBinding?,
-		content: RemoteLocalContent?
+		_ item: IndexItem, attributes: ItemAttributes?, remote: RemoteFolderBinding, content: RemoteLocalContent?
 	) -> NSFileProviderItem {
-		if let remote {
-			return FileProviderItem(
-				item: item, folder: folder, isOnDevice: isOnDevice(remote: item, content: content),
-				attributes: attributes ?? ItemAttributes(), remote: remote)
-		}
-		return FileProviderItem(
-			item: item, folder: folder, isOnDevice: isOnDevice(item),
-			fallbackDate: item.modificationDate == nil ? localModificationDate(item) : nil,
-			attributes: attributes ?? ItemAttributes())
-	}
-
-	/// Stores the attributes only the system keeps (tags, favorite rank, last used date) that are among the fields
-	func saveAttributes(of template: NSFileProviderItem, fields: NSFileProviderItemFields, itemID: Int64)
-		throws(IndexError)
-	{
-		try saveAttributes(ItemTemplate(template), fields: fields, itemID: itemID)
-	}
-
-	/// The modification time of the item on this device
-	private func localModificationDate(_ item: IndexItem) -> Date? {
-		guard let fingerprint = FileFingerprint(path: localURL(for: item).path(percentEncoded: false)) else {
-			return nil
-		}
-		return Date(timeIntervalSince1970: Double(fingerprint.modifiedNanoseconds) / 1_000_000_000)
+		FileProviderItem(
+			item: item, isOnDevice: isOnDevice(item, content: content), attributes: attributes ?? ItemAttributes(),
+			remote: remote)
 	}
 
 	static func pageSize(_ suggested: Int) -> Int {
@@ -178,7 +131,7 @@ extension IndexError {
 	}
 }
 
-/// Lists the children of a container. The root container lists the Syncthing folders.
+/// Lists the children of a container. The root container lists the folders.
 final class ContainerEnumerator: NSObject, NSFileProviderEnumerator {
 	private let context: ExtensionContext
 	private let parentID: Int64?
@@ -255,7 +208,7 @@ final class WorkingSetEnumerator: NSObject, NSFileProviderEnumerator {
 	}
 
 	/// Reports changes since the anchor. With a container, only changes to its direct children are reported (a parent
-	/// ID of 0 selects the Syncthing folders, which are the children of the root container).
+	/// ID of 0 selects the folders, which are the children of the root container).
 	static func enumerateChanges(
 		context: ExtensionContext, observer: NSFileProviderChangeObserver, from anchorData: NSFileProviderSyncAnchor,
 		onlyChildrenOf parentID: Int64?

@@ -1,7 +1,7 @@
 # Receiving files
 
 Synctrain registers as an alternate viewer for files and directories. Opening a file
-with Synctrain (including a macOS Dock drop or an iOS file-based Open In action)
+with Synctrain on macOS (including a Dock drop)
 queues the URL in the main window. The import sheet waits for startup to finish,
 then lets the user choose a synchronized folder and an existing subdirectory.
 Cancel releases access without copying anything to that destination.
@@ -15,9 +15,7 @@ app removes once its files are imported or the import is cancelled; folders
 left behind are removed at launch after a day. Remove temporary files keeps
 the folders of files still waiting to be imported.
 
-On iOS, this uses file-based Open In sharing, not a Share extension. Source apps
-must offer a file handoff; sharing arbitrary Photos selections, text, or web links
-through an extension is outside this flow.
+The iOS app, a client of gateways, has none of this: new files reach a folder through the Files app.
 
 `FileImport.copy` is also used by the existing browser import/drop handlers. It
 materializes selective subdirectories, copies files without replacing existing

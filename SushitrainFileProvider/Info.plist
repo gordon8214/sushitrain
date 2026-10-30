@@ -19,7 +19,7 @@
 				<key>NSExtensionFileProviderActionName</key>
 				<string>Keep on This Device</string>
 				<key>NSExtensionFileProviderActionActivationRule</key>
-				<string>fileproviderItems.@count &gt; 0 AND SUBQUERY(fileproviderItems, $fileproviderItem, ($fileproviderItem.userInfo.selective == YES AND $fileproviderItem.userInfo.selected == NO AND $fileproviderItem.userInfo.folderRoot == NO) OR ($fileproviderItem.userInfo.remoteFile == YES AND $fileproviderItem.userInfo.onDevice == NO)).@count == fileproviderItems.@count</string>
+				<string>fileproviderItems.@count &gt; 0 AND SUBQUERY(fileproviderItems, $fileproviderItem, $fileproviderItem.userInfo.remoteFile == YES AND $fileproviderItem.userInfo.onDevice == NO).@count == fileproviderItems.@count</string>
 			</dict>
 			<dict>
 				<key>NSExtensionFileProviderActionIdentifier</key>
@@ -27,21 +27,11 @@
 				<key>NSExtensionFileProviderActionName</key>
 				<string>Stop Keeping on This Device</string>
 				<key>NSExtensionFileProviderActionActivationRule</key>
-				<string>fileproviderItems.@count &gt; 0 AND SUBQUERY(fileproviderItems, $fileproviderItem, ($fileproviderItem.userInfo.selective == YES AND $fileproviderItem.userInfo.selected == YES AND $fileproviderItem.userInfo.folderRoot == NO) OR ($fileproviderItem.userInfo.remoteFile == YES AND $fileproviderItem.userInfo.onDevice == YES AND $fileproviderItem.userInfo.localChange == NO)).@count == fileproviderItems.@count</string>
+				<string>fileproviderItems.@count &gt; 0 AND SUBQUERY(fileproviderItems, $fileproviderItem, $fileproviderItem.userInfo.remoteFile == YES AND $fileproviderItem.userInfo.onDevice == YES AND $fileproviderItem.userInfo.localChange == NO).@count == fileproviderItems.@count</string>
 			</dict>
 		</array>
 		<key>NSFileProviderDecorations</key>
 		<array>
-			<dict>
-				<key>Identifier</key>
-				<string>$(PRODUCT_BUNDLE_IDENTIFIER).kept</string>
-				<key>BadgeImageType</key>
-				<string>com.apple.icon-decoration.badge.checkmark</string>
-				<key>Category</key>
-				<string>Badge</string>
-				<key>Label</key>
-				<string>Kept on This Device</string>
-			</dict>
 			<dict>
 				<key>Identifier</key>
 				<string>$(PRODUCT_BUNDLE_IDENTIFIER).conflict</string>

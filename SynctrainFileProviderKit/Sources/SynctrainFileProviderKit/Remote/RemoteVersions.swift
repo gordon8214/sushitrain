@@ -63,12 +63,14 @@ public struct RemoteVersionBrowser: Sendable {
 		do {
 			row = try store.item(id: itemID)
 			binding = try row.flatMap { item throws(IndexError) in try store.remoteBinding(folderID: item.folderID) }
-			endpoint = try binding?.serviceID.flatMap { id throws(IndexError) in try store.remoteEndpoint(serviceID: id) }
+			endpoint = try binding.flatMap { binding throws(IndexError) in
+				try store.remoteEndpoint(serviceID: binding.serviceID)
+			}
 		}
 		catch {
 			throw .store(error)
 		}
-		guard let row, row.kind == .file, let binding, binding.isRemote, binding.remoteFolderID != nil else {
+		guard let row, row.kind == .file, let binding else {
 			throw .notAvailable
 		}
 		guard let endpoint else {
@@ -209,7 +211,7 @@ public struct RemoteVersionBrowser: Sendable {
 		}
 		return try await perform(
 			.restore(
-				id: Self.newOperationID(), folderID: try remoteFolderID(), itemID: file.remote.gatewayID,
+				id: Self.newOperationID(), folderID: binding.remoteFolderID, itemID: file.remote.gatewayID,
 				baseRevision: file.remote.revision, version: version.id))
 	}
 
@@ -235,7 +237,7 @@ public struct RemoteVersionBrowser: Sendable {
 			do {
 				return try await perform(
 					.copyVersion(
-						id: Self.newOperationID(), folderID: try remoteFolderID(), parentID: parentID, name: name,
+						id: Self.newOperationID(), folderID: binding.remoteFolderID, parentID: parentID, name: name,
 						sourceItemID: file.remote.gatewayID, version: version.id))
 			}
 			catch .remote(.nameConflict) {
@@ -372,29 +374,11 @@ public struct RemoteVersionBrowser: Sendable {
 		}
 	}
 
-	/// Refuses writes this device may not make: in folders it may only read, or that are being switched between
-	/// Syncthing and the gateway
+	/// Refuses writes in folders this device may only read
 	private func checkWritable() throws(Failure) {
 		guard canWrite else {
 			throw .readOnly
 		}
-		let fenced: Bool
-		do {
-			fenced = try store.isRemoteMigrationFenced(folderID: binding.folderID)
-		}
-		catch {
-			throw .store(error)
-		}
-		if fenced {
-			throw .notAvailable
-		}
-	}
-
-	private func remoteFolderID() throws(Failure) -> String {
-		guard let id = binding.remoteFolderID else {
-			throw .notAvailable
-		}
-		return id
 	}
 
 	private func siblingNames(of parentID: Int64?) throws(Failure) -> Set<String> {

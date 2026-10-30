@@ -885,37 +885,22 @@ public struct RemoteEndpoint: Codable, Hashable, Sendable {
 	}
 }
 
-/// How a local folder's contents are accessed
-public enum RemoteAccessMode: String, Codable, Hashable, Sendable {
-	/// Through the Syncthing engine on this device (the existing integration)
-	case syncthing
-	/// Through a gateway's remote file API
-	case remoteAPI
-}
-
 /// Ties a local folder (and its rows in the index) to a folder on a gateway
 public struct RemoteFolderBinding: Codable, Hashable, Sendable {
 	/// The local folder ID (`items.folder_id`)
 	public var folderID: String
-	public var accessMode: RemoteAccessMode
 	/// The endpoint, by service ID
-	public var serviceID: String?
+	public var serviceID: String
 	/// The folder ID on the gateway
-	public var remoteFolderID: String?
+	public var remoteFolderID: String
 	public var permissions: RemotePermissions
 
-	public init(
-		folderID: String, accessMode: RemoteAccessMode, serviceID: String?, remoteFolderID: String?,
-		permissions: RemotePermissions
-	) {
+	public init(folderID: String, serviceID: String, remoteFolderID: String, permissions: RemotePermissions) {
 		self.folderID = folderID
-		self.accessMode = accessMode
 		self.serviceID = serviceID
 		self.remoteFolderID = remoteFolderID
 		self.permissions = permissions
 	}
-
-	public var isRemote: Bool { accessMode == .remoteAPI }
 }
 
 /// The confirmed remote metadata of a local item

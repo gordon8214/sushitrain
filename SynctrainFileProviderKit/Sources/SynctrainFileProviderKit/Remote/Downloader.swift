@@ -158,6 +158,7 @@ public struct RemoteDownloader: Sendable {
 		if let url = storage.cachedContentURL(contentID),
 			FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
 		{
+			storage.markContentUsed(url)
 			return url
 		}
 		if let staged = try stored({ () throws(IndexError) in try store.stagedFile(contentID: contentID) }) {

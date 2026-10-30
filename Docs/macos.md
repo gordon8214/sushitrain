@@ -1,7 +1,10 @@
 # Synctrain on macOS
 
 On a Mac, Synctrain is meant to replace Syncthing.app: one engine, configured from the app, and from its web GUI or its
-REST API where a configuration has the GUI enabled. This page records where the Mac app differs from iOS and why.
+REST API where a configuration has the GUI enabled. Since October 30, 2026 the iOS app no longer runs Syncthing: it is a
+[client of gateways](file-provider.md) with a target of its own, `SynctrainMobile`, and `Synctrain` builds for macOS only.
+The Go framework has only a macOS slice. iOS code still in the shared Go and Swift sources is unused, so where this page
+compares the Mac app with iOS, it describes how the iOS app used to work and why the Mac differs from that.
 
 The Mac app runs outside the App Sandbox (with the hardened runtime), so that it reaches folders anywhere, as Syncthing
 does; that also means it can't come from the Mac App Store, and comes as a notarized disk image instead (see

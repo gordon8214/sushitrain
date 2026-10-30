@@ -1,5 +1,10 @@
 # Remote file access for the Files extension
 
+**Superseded in part, October 30, 2026:** iOS is now a client of gateways only. The Syncthing engine, local folders and
+everything below about keeping them next to gateway folders (access modes, switching a folder between Syncthing and a
+gateway, fences, migrations) are gone from iOS, and the app has its own viewer. See [file-provider.md](file-provider.md).
+This plan is kept as the record of the design of the gateway, the API and the extension's remote path.
+
 Status: implementation plan, October 27, 2026. This replaces the proposed native iOS synchronization-engine rewrite.
 Implemented on the `file-provider` branch: the API contract in [remote-api](remote-api/openapi.yaml), the service in
 `SushitrainCore/gateway` (Linux host `SushitrainCore/cmd/synctrain-gateway`, macOS host in `Sushitrain/Gateway`), the

@@ -196,8 +196,11 @@ public final class RemoteFileClient: Sendable {
 
 	/// Sends a request whose answer is a bounded body, and checks its origin. Errors are thrown for statuses of `400` and
 	/// above.
-	func send(_ request: URLRequest, gone: RemoteError? = nil) async throws(RemoteError) -> (Data, HTTPURLResponse) {
-		let delegate = BoundedBodyDelegate(trust: RemoteTrustDelegate(endpoint: endpoint), limit: maxControlBodyBytes)
+	func send(_ request: URLRequest, gone: RemoteError? = nil, limit: Int? = nil) async throws(RemoteError) -> (
+		Data, HTTPURLResponse
+	) {
+		let delegate = BoundedBodyDelegate(
+			trust: RemoteTrustDelegate(endpoint: endpoint), limit: limit ?? maxControlBodyBytes)
 		let body: Data
 		let response: URLResponse
 		do {
@@ -413,6 +416,24 @@ public final class RemoteFileClient: Sendable {
 			throw .protocolViolation("the gateway answered with another range")
 		}
 		return response
+	}
+
+	/// Reads a byte range of the lease's content into memory. A request answered with anything but that range is a
+	/// protocol violation: its bytes are discarded.
+	public func readContent(leaseID: String, range: ClosedRange<Int64>, ifRange: String? = nil)
+		async throws(RemoteError) -> (data: Data, entityTag: String?)
+	{
+		let request = try contentRequest(leaseID: leaseID, range: range, ifRange: ifRange, token: nil)
+		let length = Int(range.upperBound - range.lowerBound + 1)
+		let (data, response) = try await send(request, gone: .leaseExpired, limit: length)
+		guard response.statusCode == 206 else {
+			throw .protocolViolation("the gateway answered a range request with status \(response.statusCode)")
+		}
+		let contentRange = response.value(forHTTPHeaderField: "Content-Range").flatMap(Self.parseContentRange)
+		guard contentRange?.start == range.lowerBound, data.count <= length else {
+			throw .protocolViolation("the gateway answered with another range")
+		}
+		return (data, response.value(forHTTPHeaderField: "ETag"))
 	}
 
 	/// The thumbnail of an exact content revision, as a JPEG file

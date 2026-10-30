@@ -54,30 +54,32 @@ enum RemoteFailure {
 
 	// MARK: - Changes
 
+	/// A change that cannot be made. The system does not retry these (it retries any other error).
+	static func cannotSynchronize(_ reason: String) -> Error {
+		NSError(
+			domain: NSFileProviderErrorDomain, code: NSFileProviderError.cannotSynchronize.rawValue,
+			userInfo: [NSLocalizedDescriptionKey: reason])
+	}
+
 	static func readOnly(gateway: String) -> Error {
-		Rejection.cannotSynchronize(String(localized: "\(gateway) only allows reading this folder."))
+		cannotSynchronize(String(localized: "\(gateway) only allows reading this folder."))
 	}
 
 	static func needsReview(gateway: String) -> Error {
-		Rejection.cannotSynchronize(
+		cannotSynchronize(
 			String(localized: "An earlier change of this item was not accepted by \(gateway). Open Synctrain to review it."))
 	}
 
 	static func notAccepted(gateway: String) -> Error {
-		Rejection.cannotSynchronize(String(localized: "\(gateway) did not accept this change."))
+		cannotSynchronize(String(localized: "\(gateway) did not accept this change."))
 	}
 
 	static var crossHostDirectory: Error {
-		Rejection.cannotSynchronize(
+		cannotSynchronize(
 			String(
 				localized:
 					"Folders cannot be moved to a folder that another computer shares. Copy the folder there, then delete it here."
 			))
-	}
-
-	static var acrossEngines: Error {
-		Rejection.cannotSynchronize(
-			String(localized: "Items cannot be moved between these folders. Copy the item, then delete the original."))
 	}
 
 	/// For a change that is recorded but not committed. `cannotSynchronize` keeps browsing available and makes the
@@ -139,8 +141,9 @@ enum RemoteFailure {
 	// MARK: - Contents
 
 	static var versionChanged: Error {
-		let description = FetchError.versionChanged.errorDescription ?? ""
-		return error(NSCocoaErrorDomain, NSFileReadUnknownError, description)
+		error(
+			NSCocoaErrorDomain, NSFileReadUnknownError,
+			String(localized: "This file just changed on another device. Try again in a moment."))
 	}
 
 	/// For a download (`fetchContents`). The gateway being unreachable is reported as `serverUnreachable` only when the

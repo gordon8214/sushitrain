@@ -239,9 +239,9 @@ import Testing
 		try store.saveRemoteEndpoint(other)
 		try store.bindRemoteFolder(
 			RemoteFolderBinding(
-				folderID: "music", accessMode: .remoteAPI, serviceID: "svc_other", remoteFolderID: "Music",
+				folderID: "music", serviceID: "svc_other", remoteFolderID: "Music",
 				permissions: RemotePermissions(read: true, write: true)),
-			folder: FolderDescription(folderID: "music", label: "Music", folderType: "sendrecieve", isSelective: true),
+			folder: FolderDescription(folderID: "music", label: "Music"),
 			rootGatewayID: "itm_musicroot")
 		try store.snapshot([remoteRoot, remoteFile("itm_a", "a.txt")])
 		let musicRoot = try #require(try store.folder(id: "music")).rootItemID
@@ -416,9 +416,9 @@ import Testing
 		let store = try makeRemoteStore()
 		try store.bindRemoteFolder(
 			RemoteFolderBinding(
-				folderID: "music", accessMode: .remoteAPI, serviceID: testServiceID, remoteFolderID: "Music",
+				folderID: "music", serviceID: testServiceID, remoteFolderID: "Music",
 				permissions: RemotePermissions(read: true, write: true)),
-			folder: FolderDescription(folderID: "music", label: "Music", folderType: "sendrecieve", isSelective: true),
+			folder: FolderDescription(folderID: "music", label: "Music"),
 			rootGatewayID: "itm_musicroot")
 		try store.snapshot([remoteRoot])
 		let root = try #require(try store.folder(id: "docs")).rootItemID
@@ -499,9 +499,9 @@ import Testing
 		try store.saveRemoteEndpoint(RemoteEndpoint(serviceID: "svc_other", host: "other.test", port: 443, displayName: "o"))
 		try store.bindRemoteFolder(
 			RemoteFolderBinding(
-				folderID: "music", accessMode: .remoteAPI, serviceID: "svc_other", remoteFolderID: "Music",
+				folderID: "music", serviceID: "svc_other", remoteFolderID: "Music",
 				permissions: RemotePermissions(read: true, write: true)),
-			folder: FolderDescription(folderID: "music", label: "Music", folderType: "sendrecieve", isSelective: true),
+			folder: FolderDescription(folderID: "music", label: "Music"),
 			rootGatewayID: "itm_musicroot")
 		try store.snapshot([remoteRoot, remoteFile("itm_a", "a.txt")])
 		try store.recordAuthorityGeneration(3, serviceID: testServiceID)
@@ -553,9 +553,9 @@ import Testing
 		try store.saveRemoteEndpoint(RemoteEndpoint(serviceID: "svc_other", host: "other.test", port: 443, displayName: "o"))
 		try store.bindRemoteFolder(
 			RemoteFolderBinding(
-				folderID: "music", accessMode: .remoteAPI, serviceID: "svc_other", remoteFolderID: "Music",
+				folderID: "music", serviceID: "svc_other", remoteFolderID: "Music",
 				permissions: RemotePermissions(read: true, write: true)),
-			folder: FolderDescription(folderID: "music", label: "Music", folderType: "sendrecieve", isSelective: true),
+			folder: FolderDescription(folderID: "music", label: "Music"),
 			rootGatewayID: "itm_musicroot")
 		try store.snapshot([remoteRoot, remoteFile("itm_a", "a.txt")])
 		let a = try #require(try store.item(folderID: "docs", path: "a.txt"))

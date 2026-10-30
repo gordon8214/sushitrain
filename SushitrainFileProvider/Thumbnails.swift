@@ -3,27 +3,18 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
-@preconcurrency import AVFoundation
 @preconcurrency import FileProvider
 import ImageIO
-@preconcurrency import QuickLookThumbnailing
 import SynctrainFileProviderKit
 import UniformTypeIdentifiers
 
-/// Thumbnails made without the system downloading files into its own copy first. Files on this device are read where
-/// they are in the folder. Files that are only on other devices are fetched through the app while it is awake: videos
-/// are streamed (only the frames needed are transferred), other files are downloaded up to a size. Items without a
-/// thumbnail get the icon for their type. In folders accessed through a gateway, thumbnails come from the gateway
-/// when it renders the type; otherwise only images this device holds are decoded here.
+/// Thumbnails made without the system downloading files into its own copy first: the gateway's, when it renders the
+/// type, otherwise decoded here from an image this device holds. Items without a thumbnail get the icon for their type.
 extension FileProviderExtension: NSFileProviderThumbnailing {
 	private static let defaultThumbnailSize: CGFloat = 256
-	/// Larger files (other than videos) that are only on other devices get no thumbnail (fetching them takes too long)
-	private static let maximumRemoteFileSize: Int64 = 16 * 1_048_576
 	/// Larger images are left to the system's thumbnail service, which runs in its own process: decoding them here
 	/// would take much of the memory the extension may use
 	private static let maximumDecodedPixels = 20_000_000
-	/// How long a thumbnail of a file on another device may take
-	private static let remoteTimeout: Duration = .seconds(20)
 	/// How long a gateway's thumbnail may take. A gateway that does not answer in time is not asked again for a while.
 	private static let gatewayTimeout: Duration = .seconds(5)
 
@@ -33,18 +24,15 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 		completionHandler: @escaping ((any Error)?) -> Void
 	) -> Progress {
 		let progress = Progress(totalUnitCount: Int64(itemIdentifiers.count))
-		guard let context else {
+		guard let context, let remoteProvider = remote else {
 			completionHandler(nil)
 			return progress
 		}
 		let maximumPixels = max(size.width, size.height) > 0 ? max(size.width, size.height) : Self.defaultThumbnailSize
 		let perThumbnail = Completion(call: perThumbnailCompletionHandler)
 		let completion = Completion(call: completionHandler)
-		let fetcher = self.fetcher
-		let remoteProvider = self.remote
 
 		let task = Task.detached(priority: .utility) {
-			var remote: RemoteFiles? = nil
 			for identifier in itemIdentifiers {
 				if progress.isCancelled {
 					break
@@ -52,30 +40,13 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 				var data: Data? = nil
 				var error: (any Error)? = nil
 				do {
-					if let id = identifier.itemID, let item = try context.store.item(id: id), item.kind == .file {
+					if let id = identifier.itemID, let item = try context.store.item(id: id), item.kind == .file,
+						let binding = try context.remoteBinding(folderID: item.folderID)
+					{
 						let type = UTType(filenameExtension: (item.name as NSString).pathExtension) ?? .data
-						if let remoteProvider, let binding = try context.remoteBinding(folderID: item.folderID) {
-							// Waiting for the gateway takes no memory: only what is decoded here waits for the queue
-							data = try await Self.remoteThumbnail(
-								of: item, binding: binding, provider: remoteProvider, type: type,
-								maximumPixels: maximumPixels)
-						}
-						else {
-							// One at a time, also across requests: the extension has little memory to spare
-							data = try await Self.oneAtATime {
-								if context.isOnDevice(item) {
-									return await Self.thumbnail(
-										of: context.localURL(for: item), type: type, maximumPixels: maximumPixels)
-								}
-								guard let fetcher else {
-									return nil
-								}
-								if remote == nil {
-									remote = await RemoteFiles(fetcher: fetcher)
-								}
-								return try await remote?.thumbnail(of: item, type: type, maximumPixels: maximumPixels)
-							}
-						}
+						// Waiting for the gateway takes no memory: only what is decoded here waits for the queue
+						data = try await Self.remoteThumbnail(
+							of: item, binding: binding, provider: remoteProvider, type: type, maximumPixels: maximumPixels)
 					}
 				}
 				catch let failure {
@@ -92,49 +63,7 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 		return progress
 	}
 
-	/// Fetches files that are only on other devices through the app, when it is awake
-	private struct RemoteFiles {
-		let fetcher: ContentFetcher
-		let heartbeat: Heartbeat?
-
-		init(fetcher: ContentFetcher) async {
-			self.fetcher = fetcher
-			if let heartbeat = fetcher.awakeApp(), await fetcher.ping(heartbeat) {
-				self.heartbeat = heartbeat
-			}
-			else {
-				self.heartbeat = nil
-			}
-		}
-
-		/// Throws when the file cannot be fetched now (such as while the app is not running)
-		func thumbnail(of item: IndexItem, type: UTType, maximumPixels: CGFloat) async throws -> Data? {
-			guard let heartbeat else {
-				throw FetchError.appNotRunning
-			}
-			let fetcher = self.fetcher
-			if type.conforms(to: .movie) {
-				return try await FileProviderExtension.withTimeout(FileProviderExtension.remoteTimeout) {
-					await FileProviderExtension.videoThumbnail(
-						of: fetcher.streamingURL(for: item, from: heartbeat), type: type, maximumPixels: maximumPixels)
-				}
-			}
-			guard item.size <= FileProviderExtension.maximumRemoteFileSize else {
-				return nil
-			}
-			// Keep the name: the thumbnail service recognizes files by their extension
-			let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-			defer { try? FileManager.default.removeItem(at: directory) }
-			let temporary = directory.appending(path: item.name)
-			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-			try await FileProviderExtension.withTimeout(FileProviderExtension.remoteTimeout) {
-				_ = try await fetcher.download(item, from: heartbeat, to: temporary, progress: Progress())
-			}
-			return await FileProviderExtension.thumbnail(of: temporary, type: type, maximumPixels: maximumPixels)
-		}
-	}
-
-	/// A thumbnail of a file in a folder accessed through a gateway: the gateway's, when it renders the type (for the
+	/// The gateway's thumbnail of a file, when it renders the type (for the
 	/// exact revision), else one decoded here from an image this device holds. Videos are never streamed and files are
 	/// never downloaded for it.
 	private static func remoteThumbnail(
@@ -150,9 +79,9 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 			}
 		}
 		catch {
-			if error is CancellationError, !Task.isCancelled, let serviceID = binding.serviceID {
+			if error is CancellationError, !Task.isCancelled {
 				// Too slow: the next thumbnails do not wait for it again
-				provider.noteUnresponsive(serviceID: serviceID)
+				provider.noteUnresponsive(serviceID: binding.serviceID)
 			}
 			// Unreachable, or too slow: an image this device holds still does
 			guard decodable, try provider.localCopy(of: item) != nil else {
@@ -180,7 +109,7 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 	}
 
 	/// Runs the work, cancelling it when it takes longer than the timeout
-	fileprivate static func withTimeout<T: Sendable>(
+	private static func withTimeout<T: Sendable>(
 		_ timeout: Duration, _ work: @escaping @Sendable () async throws -> T
 	) async throws -> T {
 		try await withThrowingTaskGroup(of: T.self) { group in
@@ -195,38 +124,6 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 			}
 			return result
 		}
-	}
-
-	/// A thumbnail of a file on disk: images are decoded here (cheap), other types by the system's thumbnail service
-	fileprivate static func thumbnail(of url: URL, type: UTType, maximumPixels: CGFloat) async -> Data? {
-		if type.conforms(to: .image) && !type.conforms(to: .rawImage),
-			let data = autoreleasepool(invoking: { imageThumbnail(of: url, maximumPixels: maximumPixels) })
-		{
-			return data
-		}
-		let request = QLThumbnailGenerator.Request(
-			fileAt: url, size: CGSize(width: maximumPixels, height: maximumPixels), scale: 1,
-			representationTypes: .thumbnail)
-		guard let representation = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
-		else {
-			return nil
-		}
-		return encoded(representation.cgImage)
-	}
-
-	/// A frame from the start of a video. Over HTTP, only the parts of the file needed for it are transferred.
-	fileprivate static func videoThumbnail(of url: URL, type: UTType, maximumPixels: CGFloat) async -> Data? {
-		var options: [String: Any] = [:]
-		if let mimeType = type.preferredMIMEType {
-			options[AVURLAssetOverrideMIMETypeKey] = mimeType
-		}
-		let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url, options: options))
-		generator.appliesPreferredTrackTransform = true
-		generator.maximumSize = CGSize(width: maximumPixels, height: maximumPixels)
-		guard let (image, _) = try? await generator.image(at: .zero) else {
-			return nil
-		}
-		return encoded(image)
 	}
 
 	/// A thumbnail decoded here, for images that are not too large (others return nil)

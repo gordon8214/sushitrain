@@ -1,6 +1,7 @@
 # Photo folders
 
-Synctrain provides two mechanisms for synchronizing photos from the iOS photo library through Syncthing:
+On macOS, Synctrain provides two mechanisms for synchronizing photos from the system photo library through Syncthing (the
+iOS app, a client of gateways, has neither):
 
 - The **photo back-up** feature automatically and periodically exports photos, videos and live photos from the library to
   a specific location inside a (synchronized) folder. This feature is useful for backing up photos to other devices; using

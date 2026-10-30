@@ -24,7 +24,7 @@ notices.html: notices.template.html go.mod go.sum
 	go tool go-licenses report ./... --template=./notices.template.html > notices.html
 
 build/SushitrainCore.xcframework: src/*.go gateway/*.go sthome/*.go Makefile go.mod go.sum notices.html
-	go tool gomobile bind -target ios,iossimulator,macos -iosversion=15 -tags noassets,noupgrade -o ./build/SushitrainCore.xcframework ./src
+	go tool gomobile bind -target macos -tags noassets,noupgrade -o ./build/SushitrainCore.xcframework ./src
 
 install: build
 
