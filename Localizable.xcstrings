@@ -14832,6 +14832,98 @@
         }
       }
     },
+    "Start with a new configuration" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit einer neuen Konfiguration beginnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar con una configuración nueva"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizia con una nuova configurazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新しい設定で開始"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beginnen met een nieuwe configuratie"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почати з нової конфігурації"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用新配置启动"
+          }
+        }
+      }
+    },
+    "Start with a new configuration?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit einer neuen Konfiguration beginnen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Empezar con una configuración nueva?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniziare con una nuova configurazione?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新しい設定で開始しますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beginnen met een nieuwe configuratie?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почати з нової конфігурації?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要使用新配置启动吗？"
+          }
+        }
+      }
+    },
     "Starting…" : {
       "localizations" : {
         "de" : {
@@ -16714,6 +16806,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "共享此文件夹的电脑"
+          }
+        }
+      }
+    },
+    "The configuration file is renamed and kept next to the new one. The app then closes; when you open it again, it starts with a new configuration that keeps this device's identity but has no folders or devices." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Konfigurationsdatei wird umbenannt und neben der neuen aufbewahrt. Danach wird die App geschlossen; wenn Sie sie wieder öffnen, beginnt sie mit einer neuen Konfiguration, die die Identität dieses Geräts behält, aber keine Ordner oder Geräte enthält."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo de configuración se renombra y se conserva junto al nuevo. Después, la app se cierra; cuando vuelvas a abrirla, empezará con una configuración nueva que conserva la identidad de este dispositivo, pero sin carpetas ni dispositivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il file di configurazione viene rinominato e conservato accanto a quello nuovo. Poi l'app si chiude; quando la riapri, inizia con una nuova configurazione che mantiene l'identità di questo dispositivo, ma senza cartelle né dispositivi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定ファイルは名前を変更して新しいファイルの隣に保管されます。その後アプリは終了します。次に開くと、このデバイスのIDはそのままで、フォルダやデバイスのない新しい設定で開始します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het configuratiebestand krijgt een nieuwe naam en blijft naast het nieuwe bewaard. Daarna sluit de app; als je hem weer opent, begint hij met een nieuwe configuratie die de identiteit van dit apparaat behoudt, maar zonder mappen of apparaten."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл конфігурації буде перейменовано та збережено поруч із новим. Потім додаток закриється; коли ви відкриєте його знову, він почне з нової конфігурації, яка зберігає ідентичність цього пристрою, але не містить папок чи пристроїв."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配置文件将被重命名并保留在新配置文件旁边。随后应用会关闭；再次打开时，它会以新的配置启动，保留此设备的身份，但不包含任何文件夹或设备。"
           }
         }
       }

@@ -19,11 +19,13 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"reflect"
 	"runtime"
 	"runtime/pprof"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -38,6 +40,8 @@ import (
 	"github.com/syncthing/syncthing/lib/protocol"
 	"github.com/syncthing/syncthing/lib/svcutil"
 	"github.com/syncthing/syncthing/lib/syncthing"
+
+	"t-shaped.nl/sushitrain/v2/sthome"
 )
 
 type Client struct {
@@ -63,7 +67,11 @@ type Client struct {
 	Measurements             *Measurements
 	defaultLogLevel          slog.Level
 	appLock                  *flock.Flock
+	lockedPath               string
+	lockMutex                sync.Mutex
 	remoteManaged            *remoteManagedSet
+	configServeDone          <-chan struct{}
+	startupProblem           atomic.Value // string, one of the StartupProblem constants
 }
 
 type Change struct {
@@ -99,6 +107,19 @@ type ClientDelegate interface {
 
 var (
 	ErrStillLoading = errors.New("still loading")
+
+	// ErrInstanceRunning means another Syncthing (or another copy of the app) uses the configuration directory
+	ErrInstanceRunning = errors.New("The app cannot be started, as it appears it is already running. If this error persists, try restarting your device.")
+)
+
+// Why the engine could not start, when the user can do something about it (see Client.StartupProblem)
+const (
+	// The configuration file can't be parsed; it can be set aside (Client.SetConfigurationAside)
+	StartupProblemDamagedConfiguration = "damaged-configuration"
+	// The configuration file is from a newer Syncthing
+	StartupProblemNewerConfiguration = "newer-configuration"
+	// The device certificate or key is missing or damaged; only a new identity (Client.ClearIdentity) gets past it
+	StartupProblemDamagedIdentity = "damaged-identity"
 )
 
 const (
@@ -215,16 +236,88 @@ func (clt *Client) CurrentConfigDirectory() string {
 	return locations.GetBaseDir(locations.ConfigBaseDir)
 }
 
+// ConfigurationFilePath is the path of the configuration file the engine loads
+func (clt *Client) ConfigurationFilePath() string {
+	return locations.Get(locations.ConfigFile)
+}
+
 func (c *Client) ClearIdentity() error {
+	if err := c.acquireLock(); err != nil {
+		return err
+	}
+	// Either file may be gone already, from an earlier attempt that removed only the other
 	certPath := locations.Get(locations.CertFile)
 	slog.Warn("Removing certificate", "path", certPath)
-	if err := os.Remove(certPath); err != nil {
+	if err := os.Remove(certPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 
 	keyPath := locations.Get(locations.KeyFile)
 	slog.Warn("Removing key", "path", keyPath)
-	return os.Remove(keyPath)
+	if err := os.Remove(keyPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// acquireLock takes the instance lock in the data directory, once per process, and keeps it until the process ends.
+// Nothing in the directory may be changed without it: another Syncthing using the directory would be working with it.
+func (clt *Client) acquireLock() error {
+	clt.lockMutex.Lock()
+	defer clt.lockMutex.Unlock()
+	lockPath := locations.Get(locations.LockFile)
+	if clt.appLock != nil {
+		if lockPath != clt.lockedPath {
+			return fmt.Errorf("the configuration directory changed from %s to %s; restart the app", clt.lockedPath,
+				lockPath)
+		}
+		return nil
+	}
+
+	if err := os.MkdirAll(path.Dir(lockPath), 0o700); err != nil {
+		return err
+	}
+	slog.Info("Attempting to obtain application lock at", "path", lockPath)
+	lock := flock.New(lockPath)
+	locked, err := lock.TryLock()
+	if err != nil {
+		return fmt.Errorf("failed to obtain lock: %w", err)
+	} else if !locked {
+		return ErrInstanceRunning
+	}
+	clt.appLock = lock
+	clt.lockedPath = lockPath
+	return nil
+}
+
+// StartupProblem says why the last Load failed, when the user can do something about it: one of the StartupProblem
+// constants, or empty. The files involved are left as they were.
+func (clt *Client) StartupProblem() string {
+	problem, _ := clt.startupProblem.Load().(string)
+	return problem
+}
+
+// SetConfigurationAside renames a damaged configuration file to config.xml.broken-<time>, so that the next start
+// creates a new configuration with the same device identity. Returns the new name of the file. Only possible after Load
+// failed on a damaged configuration of the app's own (not one placed in the files directory).
+func (clt *Client) SetConfigurationAside() (string, error) {
+	if clt.StartupProblem() != StartupProblemDamagedConfiguration || clt.IsUsingCustomConfiguration {
+		return "", errors.New("only a damaged configuration of the app's own can be set aside")
+	}
+	if err := clt.acquireLock(); err != nil {
+		return "", err
+	}
+	configPath := locations.Get(locations.ConfigFile)
+	asidePath := configPath + ".broken-" + time.Now().UTC().Format("20060102-150405")
+	slog.Warn("Setting the configuration aside", "path", configPath, "newPath", asidePath)
+	// A link and a removal rather than a rename, which would replace an earlier copy set aside in the same second
+	if err := os.Link(configPath, asidePath); err != nil {
+		return "", err
+	}
+	if err := os.Remove(configPath); err != nil {
+		return "", err
+	}
+	return asidePath, nil
 }
 
 func (clt *Client) ExportConfigurationFile() error {
@@ -563,13 +656,19 @@ func (clt *Client) HasMigratedLegacyDatabase() bool {
 
 // This method loads and migrates the Syncthing database. It also starts the streaming web
 // server. This method can take a while to complete and should only ever be called once.
-func (clt *Client) Load(resetDeltaIdxs bool) error {
+func (clt *Client) Load(resetDeltaIdxs bool) (err error) {
 	clt.mutex.Lock()
 	defer clt.mutex.Unlock()
 
 	if clt.app != nil || clt.Server != nil {
 		return errors.New("client already started")
 	}
+	clt.startupProblem.Store("")
+	defer func() {
+		if err != nil {
+			clt.cancel()
+		}
+	}()
 
 	// Some early chores
 	osutil.MaximizeOpenFileLimit()
@@ -578,41 +677,46 @@ func (clt *Client) Load(resetDeltaIdxs bool) error {
 	slog.Info("config", "path", locations.Get(locations.ConfigFile))
 	slog.Info("cert", "publicPath", locations.Get(locations.CertFile), "keyPath", locations.Get(locations.KeyFile))
 
-	// Ensure that we have a certificate and key.
-	cert, err := syncthing.LoadOrGenerateCertificate(
-		locations.Get(locations.CertFile),
-		locations.Get(locations.KeyFile),
-	)
-	if err != nil {
-		clt.cancel()
+	// Check if we are the only instance running, before reading or writing anything else
+	if err := clt.acquireLock(); err != nil {
 		return err
+	}
+
+	// Ensure that we have a certificate and key; only create them when neither exists
+	cert, created, err := sthome.LoadIdentity(locations.Get(locations.CertFile), locations.Get(locations.KeyFile))
+	if err != nil {
+		if errors.Is(err, sthome.ErrIdentity) {
+			clt.startupProblem.Store(StartupProblemDamagedIdentity)
+		}
+		return err
+	}
+	if created {
+		slog.Warn("Created a new device identity", "path", locations.Get(locations.CertFile))
 	}
 	clt.cert = &cert
 
 	// Load or create the config
-	devID := protocol.NewDeviceID(cert.Certificate[0])
 	slog.Info("loading config file", "path", locations.Get(locations.ConfigFile))
 	remoteManaged, err := loadRemoteManaged(remoteManagedPath())
 	if err != nil {
-		clt.cancel()
 		return err
 	}
 	clt.remoteManaged = remoteManaged
-	config, err := loadOrDefaultConfig(devID, clt.ctx, clt.evLogger, clt.filesPath, clt.remoteManaged)
+	cfg, err := loadEngineConfig(locations.Get(locations.ConfigFile), cert, clt.evLogger, clt.filesPath,
+		clt.remoteManaged)
 	if err != nil {
-		clt.cancel()
+		if errors.Is(err, sthome.ErrConfiguration) {
+			clt.startupProblem.Store(StartupProblemDamagedConfiguration)
+		} else if errors.Is(err, sthome.ErrNewerConfiguration) {
+			clt.startupProblem.Store(StartupProblemNewerConfiguration)
+		}
 		return err
 	}
-	clt.config = config
 
-	// Check if we are the only instance running
-	clt.appLock = flock.New(locations.Get(locations.LockFile))
-	slog.Info("Attempting to obtain application lock at", "path", locations.Get(locations.LockFile))
-	locked, err := clt.appLock.TryLock()
-	if err != nil {
-		return fmt.Errorf("failed to obtain lock: %w", err)
-	} else if !locked {
-		return fmt.Errorf("The app cannot be started, as it appears it is already running. If this error persists, try restarting your device.")
+	// Refuse a database a newer Syncthing wrote, which this one would not migrate back
+	dbPath := locations.Get(locations.Database)
+	if err := sthome.CheckSchema(dbPath); err != nil {
+		return err
 	}
 
 	// Default retention interval taken from Syncthing's CLI default
@@ -635,17 +739,25 @@ func (clt *Client) Load(resetDeltaIdxs bool) error {
 	}
 
 	// Load database
-	dbPath := locations.Get(locations.Database)
-
 	sdb, err := syncthing.OpenDatabase(dbPath, dbDeleteRetentionInterval)
 	if err != nil {
 		return err
 	}
 
-	app, err := syncthing.New(clt.config, sdb, clt.evLogger, *clt.cert, appOpts)
+	app, err := syncthing.New(cfg, sdb, clt.evLogger, *clt.cert, appOpts)
 	if err != nil {
+		sdb.Close()
 		return err
 	}
+
+	// Only now serve the configuration, which saves it when it stops: a failed load leaves the file as it was
+	serveDone := make(chan struct{})
+	go func() {
+		defer close(serveDone)
+		_ = cfg.Serve(clt.ctx)
+	}()
+	clt.config = cfg
+	clt.configServeDone = serveDone
 	clt.app = app
 
 	return nil
@@ -701,20 +813,35 @@ func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) {
 	})
 }
 
-func loadOrDefaultConfig(devID protocol.DeviceID, ctx context.Context, logger events.Logger, filesPath string,
+// loadEngineConfig loads the configuration, or creates one when the file doesn't exist, and applies the settings the app
+// relies on. A file that exists but can't be used is never replaced: the error wraps sthome.ErrConfiguration,
+// sthome.ErrNewerConfiguration or sthome.ErrUnreadableConfiguration. The settings are applied to a copy first, and the
+// file is written only when they changed it. The caller serves the returned configuration.
+func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger, filesPath string,
 	remoteManaged *remoteManagedSet) (config.Wrapper, error) {
-	cfgFile := locations.Get(locations.ConfigFile)
-	cfg, _, err := config.Load(cfgFile, devID, logger)
+	cfg, _, err := sthome.LoadConfig(cfgFile, cert, logger, false, func(conf *config.Configuration) {
+		conf.GUI.Enabled = false // Don't need the web UI, we have our own :-)
+	})
 	if err != nil {
-		newCfg := config.New(devID)
-		newCfg.GUI.Enabled = false // Don't need the web UI, we have our own :-)
-		cfg = config.Wrap(cfgFile, newCfg, devID, logger)
+		return nil, err
 	}
 
-	go cfg.Serve(ctx)
+	// A configuration with no path is never saved, also not when it stops being served
+	myID := protocol.NewDeviceID(cert.Certificate[0])
+	staging := config.Wrap("", cfg.RawCopy(), myID, events.NoopLogger)
+	stagingCtx, stopStaging := context.WithCancel(context.Background())
+	stagingDone := make(chan struct{})
+	go func() {
+		defer close(stagingDone)
+		_ = staging.Serve(stagingCtx)
+	}()
+	defer func() {
+		stopStaging()
+		<-stagingDone
+	}()
 
 	// Always override the following options in config
-	waiter, err := cfg.Modify(func(conf *config.Configuration) {
+	waiter, err := staging.Modify(func(conf *config.Configuration) {
 		conf.Options.CREnabled = false                       // No crash reporting for now
 		conf.Options.URAccepted = -1                         // No usage reporting for now
 		conf.Options.ProgressUpdateIntervalS = 1             // We want to update the user often, it improves the experience and is worth the compute cost
@@ -771,14 +898,17 @@ func loadOrDefaultConfig(devID protocol.DeviceID, ctx context.Context, logger ev
 	}
 	waiter.Wait()
 
-	err = cfg.Save()
-	if err != nil {
-		return nil, err
+	// Write the file only when something changed
+	if applied := staging.RawCopy(); !reflect.DeepEqual(applied, cfg.RawCopy()) {
+		cfg = config.Wrap(cfgFile, applied, myID, logger)
+		if err := cfg.Save(); err != nil {
+			return nil, err
+		}
 	}
 
 	// From now on, no change may resume them
 	cfg.Subscribe(remoteManaged)
-	return cfg, err
+	return cfg, nil
 }
 
 /** Returns our node's device ID */
@@ -1593,18 +1723,27 @@ func (c *Client) migratedLegacyDatabasePath() string {
 }
 
 func (c *Client) ClearMigratedLegacyDatabase() error {
+	if err := c.acquireLock(); err != nil {
+		return err
+	}
 	dbPath := c.migratedLegacyDatabasePath()
 	slog.Warn("Removing v1 index", "path", dbPath)
 	return os.RemoveAll(dbPath)
 }
 
 func (c *Client) ClearLegacyDatabase() error {
+	if err := c.acquireLock(); err != nil {
+		return err
+	}
 	dbPath := locations.Get(locations.LegacyDatabase)
 	slog.Warn("Removing v1 index", "path", dbPath)
 	return os.RemoveAll(dbPath)
 }
 
 func (c *Client) ClearDatabase() error {
+	if err := c.acquireLock(); err != nil {
+		return err
+	}
 	dbPath := locations.Get(locations.Database)
 	slog.Warn("Removing v2 index", "path", dbPath)
 	return os.RemoveAll(dbPath)

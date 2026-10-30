@@ -928,8 +928,13 @@ struct TroubleshootingView: View {
 				}
 				.alert("Read this carefully", isPresented: $showResetDeviceIdentity) {
 					Button("Reset device identity", role: .destructive) {
-						try? self.appState.client.clearIdentity()
-						exit(0)
+						do {
+							try self.appState.client.clearIdentity()
+							exit(0)
+						}
+						catch {
+							self.errorMessage = ErrorMessage(error)
+						}
 					}
 				} message: {
 					Text(

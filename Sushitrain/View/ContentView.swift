@@ -11,7 +11,6 @@ struct MainView: View {
 	@Environment(AppState.self) private var appState
 	@State var topLevelRoute: Route? = .start
 	var initialColumnVisibility: NavigationSplitViewVisibility = .doubleColumn
-	@Environment(\.openURL) private var openURL
 
 	var body: some View {
 		switch appState.startupState {
@@ -22,14 +21,7 @@ struct MainView: View {
 			OnboardingView(allowSkip: false)
 
 		case .error(let e):
-			ContentUnavailableView {
-				Label("Cannot start the app", systemImage: "exclamationmark.triangle.fill")
-			} description: {
-				Text(e)
-				Button("What do I do now?") {
-					openURL(URL(string: "https://t-shaped.nl/synctrain-support#cannot-start")!)
-				}
-			}
+			StartupErrorView(message: e)
 		case .started:
 			ContentView(topLevelRoute: topLevelRoute, initialColumnVisibility: initialColumnVisibility)
 				.showsToast()  // Back-up

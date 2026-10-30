@@ -9,13 +9,11 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -36,11 +34,8 @@ import (
 	"github.com/syncthing/syncthing/lib/syncthing"
 
 	"t-shaped.nl/sushitrain/v2/gateway"
+	"t-shaped.nl/sushitrain/v2/sthome"
 )
-
-// The newest database schema the pinned engine knows (internal/db/sqlite currentSchemaVersion). A database
-// written by a newer Syncthing is refused rather than opened: the engine would not migrate it back.
-const supportedSchemaVersion = 6
 
 // Database maintenance and retention of deleted items, as stock Syncthing defaults them
 const (
@@ -133,10 +128,8 @@ func serve(args []string) error {
 	if !locked {
 		return errors.New("another Syncthing instance is using " + dataDir + "; stop it first")
 	}
-	defer func() {
-		_ = lock.Unlock()
-		_ = os.Remove(locations.Get(locations.LockFile))
-	}()
+	// The lock file stays: removing it after unlocking would let two processes each lock a different file
+	defer func() { _ = lock.Unlock() }()
 
 	serviceName := *name
 	if serviceName == "" {
@@ -176,7 +169,7 @@ func serve(args []string) error {
 // run starts Syncthing and the service, and runs them until ctx is done or Syncthing stops. It reports whether
 // Syncthing stopped to be restarted (from its web GUI or REST API).
 func run(ctx context.Context, opts serveOptions) (restart bool, err error) {
-	if err := checkSchema(locations.Get(locations.Database)); err != nil {
+	if err := sthome.CheckSchema(locations.Get(locations.Database)); err != nil {
 		return false, err
 	}
 	slog.Info(versionString(), "engine", build.LongVersion)
@@ -192,13 +185,13 @@ func run(ctx context.Context, opts serveOptions) (restart bool, err error) {
 	evLogger := events.NewLogger()
 	go evLogger.Serve(runCtx)
 	configFile := locations.Get(locations.ConfigFile)
-	if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
-		slog.Warn("No Syncthing configuration in the home; creating a new one (to take over an existing Syncthing, "+
-			"stop and pass its home with --home)", "path", configFile)
-	}
-	cfg, err := syncthing.LoadConfigAtStartup(configFile, cert, evLogger, false, false)
+	cfg, created, err := sthome.LoadConfig(configFile, cert, evLogger, true, nil)
 	if err != nil {
 		return false, fmt.Errorf("loading the configuration: %w", err)
+	}
+	if created {
+		slog.Warn("No Syncthing configuration in the home; created a new one (to take over an existing Syncthing, "+
+			"stop and pass its home with --home)", "path", configFile)
 	}
 	go func() { _ = cfg.Serve(runCtx) }()
 
@@ -347,66 +340,15 @@ func stopOnSignal() (context.Context, context.CancelFunc) {
 	}
 }
 
-// loadIdentity loads the device certificate, or creates a new device identity when the home has none. A certificate
-// or key that exists but can't be loaded is an error: a new identity would make this a different device to all others.
+// loadIdentity loads the device certificate, or creates a new device identity when the home has none
 func loadIdentity() (tls.Certificate, error) {
 	certFile, keyFile := locations.Get(locations.CertFile), locations.Get(locations.KeyFile)
-	_, certErr := os.Stat(certFile)
-	_, keyErr := os.Stat(keyFile)
-	if errors.Is(certErr, os.ErrNotExist) && errors.Is(keyErr, os.ErrNotExist) {
-		slog.Warn("No device certificate in the home; creating a new device identity (to take over an existing "+
-			"Syncthing, stop and pass its home with --home)", "path", certFile)
-		return syncthing.GenerateCertificate(certFile, keyFile)
+	cert, created, err := sthome.LoadIdentity(certFile, keyFile)
+	if created {
+		slog.Warn("Created a new device identity (to take over an existing Syncthing, stop and pass its home with --home)",
+			"path", certFile)
 	}
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("loading the device certificate (%s, %s): %w", certFile, keyFile, err)
-	}
-	return cert, nil
-}
-
-// checkSchema refuses databases a newer Syncthing wrote
-func checkSchema(dbDir string) error {
-	entries, err := os.ReadDir(dbDir)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if !strings.HasSuffix(entry.Name(), ".db") {
-			continue
-		}
-		version, err := schemaVersion(filepath.Join(dbDir, entry.Name()))
-		if err != nil {
-			return fmt.Errorf("reading the schema of %s: %w", entry.Name(), err)
-		}
-		if version > supportedSchemaVersion {
-			return fmt.Errorf("%s has database schema %d, newer than this engine supports (%d); use a matching Syncthing version",
-				entry.Name(), version, supportedSchemaVersion)
-		}
-	}
-	return nil
-}
-
-func schemaVersion(path string) (int, error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return 0, err
-	}
-	uri := url.URL{Scheme: "file", Path: abs, RawQuery: "mode=ro"}
-	db, err := sql.Open(gateway.SQLiteDriver, uri.String())
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-	var version sql.NullInt64
-	err = db.QueryRow(`SELECT MAX(schema_version) FROM schemamigrations`).Scan(&version)
-	if err != nil && strings.Contains(err.Error(), "no such table") {
-		return 0, nil
-	}
-	return int(version.Int64), err
+	return cert, err
 }
 
 func envInt(name string, fallback int) int {

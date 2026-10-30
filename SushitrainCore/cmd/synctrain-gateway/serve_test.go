@@ -7,50 +7,11 @@
 package main
 
 import (
-	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/syncthing/syncthing/lib/syncthing"
-
-	"t-shaped.nl/sushitrain/v2/gateway"
 )
-
-// The schema check must know the pinned engine's schema version: this fails when an engine upgrade changes it
-func TestSchemaCheckMatchesEngine(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "index-v2")
-	sdb, err := syncthing.OpenDatabase(dir, time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sdb.Close()
-	version, err := schemaVersion(filepath.Join(dir, "main.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if version != supportedSchemaVersion {
-		t.Fatalf("the engine writes schema %d; update supportedSchemaVersion (%d)", version, supportedSchemaVersion)
-	}
-	if err := checkSchema(dir); err != nil {
-		t.Fatal(err)
-	}
-
-	db, err := sql.Open(gateway.SQLiteDriver, "file:"+filepath.Join(dir, "main.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO schemamigrations (schema_version, applied_at, syncthing_version) VALUES (?, 0, 'v9')`,
-		supportedSchemaVersion+1); err != nil {
-		t.Fatal(err)
-	}
-	db.Close()
-	if err := checkSchema(dir); err == nil {
-		t.Fatal("a newer schema was accepted")
-	}
-}
 
 func TestPairingAddress(t *testing.T) {
 	if host, port, err := pairingAddress("truenas.example.org", 0, ":20920"); err != nil || host != "truenas.example.org" || port != 20920 {

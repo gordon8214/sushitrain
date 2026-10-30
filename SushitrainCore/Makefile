@@ -23,7 +23,7 @@ notices.html: notices.template.html go.mod go.sum
 	go get -tool github.com/google/go-licenses@latest
 	go tool go-licenses report ./... --template=./notices.template.html > notices.html
 
-build/SushitrainCore.xcframework: src/*.go gateway/*.go Makefile go.mod go.sum notices.html
+build/SushitrainCore.xcframework: src/*.go gateway/*.go sthome/*.go Makefile go.mod go.sum notices.html
 	go tool gomobile bind -target ios,iossimulator,macos -iosversion=15 -tags noassets -o ./build/SushitrainCore.xcframework ./src
 
 install: build
@@ -49,3 +49,4 @@ gateway-linux:
 gateway-test-linux:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -c -tags noassets,gwintegration -o build/linux-amd64/gateway.test ./gateway
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -c -o build/linux-amd64/synctrain-gateway.test ./cmd/synctrain-gateway
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -c -tags noassets -o build/linux-amd64/sthome.test ./sthome
