@@ -13,9 +13,11 @@
 package sushitrain
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,6 +25,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -443,5 +446,97 @@ func TestEngineServesTheRESTAPI(t *testing.T) {
 	}
 	if _, err := get("rest/system/status", "X-API-Key", clt.GUIAPIKey()); err == nil {
 		t.Fatal("still listening after a restart with the GUI off")
+	}
+}
+
+func TestEngineChangesGUISettingsWithoutRestarting(t *testing.T) {
+	address := freeGUIAddress(t)
+	clt, recorder, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.GUI.Enabled = true
+		cfg.GUI.RawAddress = address
+		protectGUI(&cfg.GUI)
+	})
+	states := recorder.history()
+	clt.guiNotice.Store("The web GUI and REST API are on another port.")
+
+	// The service listens again in the background; a certificate of its own makes the client skip checks
+	client := &http.Client{
+		Timeout:   2 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, DisableKeepAlives: true},
+	}
+	status := func(url, key string) (int, error) {
+		request, err := http.NewRequest(http.MethodGet, url+"rest/system/status", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("X-API-Key", key)
+		response, err := client.Do(request)
+		if err != nil {
+			return 0, err
+		}
+		response.Body.Close()
+		return response.StatusCode, nil
+	}
+	waitForStatus := func(url, key string, want int) {
+		t.Helper()
+		var got int
+		var err error
+		for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+			if got, err = status(url, key); err == nil && got == want {
+				return
+			}
+		}
+		t.Fatalf("%s: wanted %d, got %d (%v)", url, want, got, err)
+	}
+	oldURL := clt.GUIURL()
+	waitForStatus(oldURL, clt.GUIAPIKey(), http.StatusOK)
+
+	settings := clt.GUISettings()
+	settings.Address = freeGUIAddress(t)
+	settings.UseTLS = true
+	if err := clt.SetGUISettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	if clt.GUIAddress() != settings.Address || !strings.HasPrefix(clt.GUIURL(), "https://") {
+		t.Fatalf("at %s", clt.GUIURL())
+	}
+	waitForStatus(clt.GUIURL(), clt.GUIAPIKey(), http.StatusOK)
+	if _, err := status(oldURL, clt.GUIAPIKey()); err == nil {
+		t.Fatal("still listening on the old address")
+	}
+	if notice := clt.GUIStatusMessage(); notice != "" {
+		t.Fatalf("still says %q", notice)
+	}
+
+	// An address in use is refused while the GUI stays where it is
+	taken, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer taken.Close()
+	settings = clt.GUISettings()
+	current := settings.Address
+	settings.Address = taken.Addr().String()
+	if err := clt.SetGUISettings(settings); !errors.Is(err, syscall.EADDRINUSE) {
+		t.Fatalf("in use: %v", err)
+	}
+	if clt.GUIAddress() != current {
+		t.Fatalf("at %s", clt.GUIAddress())
+	}
+
+	oldKey := clt.GUIAPIKey()
+	if err := clt.RegenerateGUIAPIKey(); err != nil {
+		t.Fatal(err)
+	}
+	if clt.GUIAPIKey() == oldKey || clt.GUIAPIKey() == "" {
+		t.Fatalf("key %q", clt.GUIAPIKey())
+	}
+	waitForStatus(clt.GUIURL(), clt.GUIAPIKey(), http.StatusOK)
+	if got, err := status(clt.GUIURL(), oldKey); err != nil || got == http.StatusOK {
+		t.Fatalf("the old key got %d (%v)", got, err)
+	}
+
+	if !slices.Equal(recorder.history(), states) {
+		t.Fatalf("the engine changed state: %v, then %v", states, recorder.history())
 	}
 }

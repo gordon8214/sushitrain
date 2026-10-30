@@ -17,6 +17,7 @@
 		@State private var apiKey = ""
 		@State private var status = ""
 		@State private var showAPIKey = false
+		@State private var confirmRegenerateAPIKey = false
 		@State private var errorMessage: ErrorMessage? = nil
 
 		var body: some View {
@@ -65,7 +66,25 @@
 						.labelStyle(.iconOnly)
 						.buttonStyle(.borderless)
 						.help("Copy API key")
+						Button("Regenerate API key", systemImage: "arrow.clockwise") {
+							confirmRegenerateAPIKey = true
+						}
+						.labelStyle(.iconOnly)
+						.buttonStyle(.borderless)
+						.help("Regenerate API key")
+						.confirmationDialog(
+							"Regenerate the API key?", isPresented: $confirmRegenerateAPIKey, titleVisibility: .visible
+						) {
+							Button("Regenerate API key", role: .destructive) {
+								self.regenerateAPIKey()
+							}
+						} message: {
+							Text("Tools and scripts that use the current key lose access until they are given the new one.")
+						}
 					}
+				}
+				NavigationLink("Web GUI and REST API settings") {
+					GUISettingsView()
 				}
 			} header: {
 				Text("Engine access")
@@ -79,11 +98,28 @@
 					}
 				}
 			}
-			// Again after the engine restarted, which is when they change
+			// Again after the engine restarted, and when the app or the REST API saved the configuration
 			.task(id: appState.isEngineRestarting) {
 				self.update()
 			}
+			.onChange(of: appState.eventCounter) {
+				self.update()
+			}
 			.errorAlert($errorMessage)
+		}
+
+		private func regenerateAPIKey() {
+			let client = appState.client
+			Task {
+				do {
+					// It waits for the service to listen again
+					try await goBlocking { try client.regenerateGUIAPIKey() }
+				}
+				catch {
+					errorMessage = ErrorMessage(error)
+				}
+				self.update()
+			}
 		}
 
 		private func update() {

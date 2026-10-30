@@ -10,12 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/syncthing/syncthing/lib/build"
 	"github.com/syncthing/syncthing/lib/config"
@@ -36,7 +38,20 @@ const guiUser = "synctrain"
 // The GUI's own address in a new configuration, as in Syncthing
 const defaultGUIAddress = "127.0.0.1:8384"
 
-var ErrGUINotAvailable = errors.New("the web GUI and REST API are not available on iOS")
+// Beyond this many seconds, Syncthing's calculation of when a session ends overflows
+const maxGUISessionS = math.MaxInt64 / int64(time.Second)
+
+var (
+	ErrGUINotAvailable         = errors.New("the web GUI and REST API are not available on iOS")
+	ErrGUIAddressRequired      = errors.New("enter an address for the web GUI and REST API")
+	ErrGUIPortRequired         = errors.New("enter a port other than 0 for the web GUI and REST API")
+	ErrGUIUserRequired         = errors.New("enter a user name to go with the password")
+	ErrGUIPasswordRequired     = errors.New("enter a password to go with the user name")
+	ErrGUISessionTooLong       = errors.New("the session cookie lifetime is too long")
+	ErrGUILDAPAddressRequired  = errors.New("enter the address of the LDAP server, as host:port")
+	ErrGUILDAPBindDNRequired   = errors.New("enter the bind DN for the LDAP server")
+	ErrGUILDAPSearchIncomplete = errors.New("enter both the search base DN and the search filter, or neither")
+)
 
 // What the marker records
 type guiMarker struct {
@@ -129,7 +144,15 @@ func prepareGUI(conf *config.Configuration, configDir string) (*guiMarker, strin
 				conf.GUI.Address())
 		}
 	}
-	if !conf.GUI.Enabled || conf.GUI.Network() != "tcp" || os.Getenv("STGUIADDRESS") != "" {
+	if !conf.GUI.Enabled || os.Getenv("STGUIADDRESS") != "" {
+		return result(), notice
+	}
+	if conf.GUI.Network() == "unix" {
+		if err := startableSocket(conf.GUI.Address()); err != nil {
+			slog.Warn("the web GUI can't listen on its socket; turning it off", "address", conf.GUI.Address(), "cause", err)
+			conf.GUI.Enabled = false
+			notice = fmt.Sprintf("The web GUI and REST API were turned off, as they can't listen on %s (%v).", conf.GUI.Address(), err)
+		}
 		return result(), notice
 	}
 
@@ -180,6 +203,29 @@ func listenable(address string) error {
 		return err
 	}
 	return listener.Close()
+}
+
+// listenableSocket tries listening on a Unix socket at a path where nothing is. The GUI service would remove whatever
+// is there, without asking.
+func listenableSocket(path string) error {
+	if _, err := os.Lstat(path); err == nil {
+		return fmt.Errorf("%s already exists", path)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		return err
+	}
+	return listener.Close()
+}
+
+// startableSocket is listenableSocket at a start, where a socket at the path is what an earlier run left
+func startableSocket(path string) error {
+	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSocket != 0 {
+		return nil
+	}
+	return listenableSocket(path)
 }
 
 // freeAddress is an address on host with a port nothing listens on now
@@ -246,4 +292,260 @@ func (clt *Client) SetGUIEnabled(enabled bool) error {
 			protectGUI(&cfg.GUI)
 		}
 	})
+}
+
+// GUISettings are the web GUI's and REST API's settings, which the app shows and saves together: each change makes the
+// running GUI service listen again. Whether they are on is apart, as that takes an engine restart (SetGUIEnabled).
+type GUISettings struct {
+	Address string
+	UseTLS  bool
+
+	// "static" or "ldap"
+	AuthMode string
+	User     string
+	// Whether there is a password, which the app never sees, even hashed
+	HasPassword bool
+	// The password to set; when empty, the password stays as it is
+	Password string
+
+	LDAPAddress string
+	LDAPBindDN  string
+	// "plain", "tls" or "starttls"
+	LDAPTransport          string
+	LDAPInsecureSkipVerify bool
+	LDAPSearchBaseDN       string
+	LDAPSearchFilter       string
+
+	Theme               string
+	MetricsWithoutAuth  bool
+	SendBasicAuthPrompt bool
+	// 0 is Syncthing's default of a week, and below 0 the session doesn't expire
+	SessionCookieDurationS int
+	SessionCookiePath      string
+
+	InsecureAdminAccess       bool
+	InsecureSkipHostCheck     bool
+	InsecureAllowFrameLoading bool
+}
+
+func newGUISettings(gui config.GUIConfiguration, ldap config.LDAPConfiguration) *GUISettings {
+	return &GUISettings{
+		Address:                   gui.RawAddress,
+		UseTLS:                    gui.RawUseTLS,
+		AuthMode:                  gui.AuthMode.String(),
+		User:                      gui.User,
+		HasPassword:               gui.Password != "",
+		LDAPAddress:               ldap.Address,
+		LDAPBindDN:                ldap.BindDN,
+		LDAPTransport:             ldap.Transport.String(),
+		LDAPInsecureSkipVerify:    ldap.InsecureSkipVerify,
+		LDAPSearchBaseDN:          ldap.SearchBaseDN,
+		LDAPSearchFilter:          ldap.SearchFilter,
+		Theme:                     gui.Theme,
+		MetricsWithoutAuth:        gui.MetricsWithoutAuth,
+		SendBasicAuthPrompt:       gui.SendBasicAuthPrompt,
+		SessionCookieDurationS:    gui.SessionCookieDurationS,
+		SessionCookiePath:         gui.SessionCookiePath,
+		InsecureAdminAccess:       gui.InsecureAdminAccess,
+		InsecureSkipHostCheck:     gui.InsecureSkipHostCheck,
+		InsecureAllowFrameLoading: gui.InsecureAllowFrameLoading,
+	}
+}
+
+// Equal reports whether both hold the same settings
+func (s *GUISettings) Equal(other *GUISettings) bool {
+	return *s == *other
+}
+
+// IsUnprotected reports whether, with these settings, nobody has to sign in: whoever reaches the GUI can then use all of
+// it through its web pages' CSRF token, without the API key
+func (s *GUISettings) IsUnprotected() bool {
+	authenticated := s.AuthMode == config.AuthModeLDAP.String() || (s.User != "" && (s.HasPassword || s.Password != ""))
+	return !authenticated
+}
+
+// IsExposed reports whether, with these settings, more than this computer can reach an unprotected GUI
+func (s *GUISettings) IsExposed() bool {
+	gui := config.GUIConfiguration{RawAddress: strings.TrimSpace(s.Address), InsecureSkipHostCheck: s.InsecureSkipHostCheck}
+	return s.IsUnprotected() && !guiIsLocalOnly(gui)
+}
+
+// NeedsEngineRestart reports whether saving these settings over saved takes an engine restart: the GUI service reads
+// the LDAP settings when it starts listening, and only a change to its own settings makes it listen again. A change of
+// mode is such a change.
+func (s *GUISettings) NeedsEngineRestart(saved *GUISettings) bool {
+	ldap := config.AuthModeLDAP.String()
+	return s.AuthMode == ldap && saved.AuthMode == ldap && s.ldapConfiguration() != saved.ldapConfiguration()
+}
+
+func (s *GUISettings) ldapConfiguration() config.LDAPConfiguration {
+	ldap := config.LDAPConfiguration{
+		Address:            strings.TrimSpace(s.LDAPAddress),
+		BindDN:             s.LDAPBindDN,
+		InsecureSkipVerify: s.LDAPInsecureSkipVerify,
+		SearchBaseDN:       s.LDAPSearchBaseDN,
+		SearchFilter:       s.LDAPSearchFilter,
+	}
+	_ = ldap.Transport.UnmarshalText([]byte(s.LDAPTransport))
+	return ldap
+}
+
+// applyTo checks the settings and puts them in gui and ldap, which are copies to throw away if that fails
+func (s *GUISettings) applyTo(gui *config.GUIConfiguration, ldap *config.LDAPConfiguration) error {
+	running := gui.RawAddress
+	gui.RawAddress = strings.TrimSpace(s.Address)
+	if gui.RawAddress == "" {
+		return ErrGUIAddressRequired
+	}
+	if gui.RawAddress != running && !gui.IsOverridden() {
+		if err := checkGUIAddress(gui, running); err != nil {
+			return err
+		}
+	}
+	gui.RawUseTLS = s.UseTLS
+
+	_ = gui.AuthMode.UnmarshalText([]byte(s.AuthMode))
+	*ldap = s.ldapConfiguration()
+	if gui.AuthMode == config.AuthModeLDAP {
+		if err := checkLDAP(*ldap); err != nil {
+			return err
+		}
+	} else if err := s.applyCredentials(gui); err != nil {
+		return err
+	}
+
+	if duration := int64(s.SessionCookieDurationS); duration > maxGUISessionS || duration < -maxGUISessionS {
+		return ErrGUISessionTooLong
+	}
+	gui.Theme = s.Theme
+	gui.MetricsWithoutAuth = s.MetricsWithoutAuth
+	gui.SendBasicAuthPrompt = s.SendBasicAuthPrompt
+	gui.SessionCookieDurationS = s.SessionCookieDurationS
+	gui.SessionCookiePath = s.SessionCookiePath
+	gui.InsecureAdminAccess = s.InsecureAdminAccess
+	gui.InsecureSkipHostCheck = s.InsecureSkipHostCheck
+	gui.InsecureAllowFrameLoading = s.InsecureAllowFrameLoading
+	return nil
+}
+
+// checkGUIAddress reports what keeps the GUI from moving to the address in gui from the one it runs on. Unchecked, the
+// service would fail to listen with no way to tell the user. If the GUI is off, prepareGUI checks when it starts.
+func checkGUIAddress(gui *config.GUIConfiguration, running string) error {
+	isSocket := gui.Network() == "unix"
+	if !isSocket {
+		if _, port, err := net.SplitHostPort(gui.RawAddress); err == nil && port == "0" {
+			return ErrGUIPortRequired
+		}
+	}
+	if !gui.Enabled {
+		return nil
+	}
+	var err error
+	if isSocket {
+		err = listenableSocket(gui.RawAddress)
+	} else if !sameTCPAddress(gui.RawAddress, running) {
+		err = listenable(gui.RawAddress)
+	}
+	if err != nil {
+		return fmt.Errorf("the web GUI and REST API can't listen there: %w", err)
+	}
+	return nil
+}
+
+// checkLDAP reports what would make every sign-in fail, or leave it to the server's policy on anonymous binds
+func checkLDAP(ldap config.LDAPConfiguration) error {
+	if _, _, err := net.SplitHostPort(ldap.Address); err != nil {
+		return ErrGUILDAPAddressRequired
+	}
+	if ldap.BindDN == "" {
+		return ErrGUILDAPBindDNRequired
+	}
+	if (ldap.SearchBaseDN == "") != (ldap.SearchFilter == "") {
+		return ErrGUILDAPSearchIncomplete
+	}
+	return nil
+}
+
+// applyCredentials sets the user and password. Without a user there is no signing in, and no password either: one left
+// behind would start to work for whichever user comes next.
+func (s *GUISettings) applyCredentials(gui *config.GUIConfiguration) error {
+	if s.User == "" {
+		if s.Password != "" {
+			return ErrGUIUserRequired
+		}
+		gui.User, gui.Password = "", ""
+		return nil
+	}
+	gui.User = s.User
+	if s.Password != "" {
+		return gui.SetPassword(s.Password)
+	}
+	if gui.Password == "" {
+		return ErrGUIPasswordRequired
+	}
+	return nil
+}
+
+// sameTCPAddress reports whether two addresses are one place to listen on, such as localhost and 127.0.0.1 on one port
+func sameTCPAddress(a, b string) bool {
+	first, err := net.ResolveTCPAddr("tcp", a)
+	if err != nil {
+		return false
+	}
+	second, err := net.ResolveTCPAddr("tcp", b)
+	return err == nil && first.IP.Equal(second.IP) && first.Port == second.Port
+}
+
+// GUISettings are the settings of the web GUI and REST API; nil while the configuration is not loaded
+func (clt *Client) GUISettings() *GUISettings {
+	cfg := clt.cfg()
+	if cfg == nil {
+		return nil
+	}
+	return newGUISettings(cfg.GUI(), cfg.LDAP())
+}
+
+// SetGUISettings changes the settings of the web GUI and REST API. A running GUI service listens again with them at
+// once, with the engine left running, except for what NeedsEngineRestart says.
+func (clt *Client) SetGUISettings(settings *GUISettings) error {
+	if build.IsIOS {
+		return ErrGUINotAvailable
+	}
+	var invalid error
+	moved := false
+	err := clt.changeConfiguration(func(cfg *config.Configuration) {
+		gui, ldap := cfg.GUI, cfg.LDAP
+		if invalid = settings.applyTo(&gui, &ldap); invalid != nil {
+			return
+		}
+		moved = gui.RawAddress != cfg.GUI.RawAddress
+		cfg.GUI, cfg.LDAP = gui, ldap
+	})
+	if invalid != nil {
+		return invalid
+	}
+	if err != nil {
+		return err
+	}
+	if moved {
+		// What the last start said about the address is no longer true, and no load will replace it
+		clt.guiNotice.Store("")
+	}
+	return nil
+}
+
+// RegenerateGUIAPIKey replaces the API key, at once: whatever uses the old one loses access
+func (clt *Client) RegenerateGUIAPIKey() error {
+	if build.IsIOS {
+		return ErrGUINotAvailable
+	}
+	return clt.changeConfiguration(func(cfg *config.Configuration) {
+		cfg.GUI.APIKey = rand.String(32)
+	})
+}
+
+// IsGUIAddressOverridden reports whether STGUIADDRESS sets the address and TLS, whatever the configuration says
+func (clt *Client) IsGUIAddressOverridden() bool {
+	cfg := clt.cfg()
+	return cfg != nil && cfg.GUI().IsOverridden()
 }

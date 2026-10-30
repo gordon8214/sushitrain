@@ -6918,6 +6918,98 @@
         }
       }
     },
+    "Allow loading in frames" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laden in Frames erlauben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permitir la carga en marcos"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consenti il caricamento nei frame"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フレーム内での読み込みを許可"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laden in frames toestaan"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дозволити завантаження у фреймах"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "允许在框架中加载"
+          }
+        }
+      }
+    },
+    "Allow metrics without signing in" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metriken ohne Anmeldung erlauben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permitir métricas sin iniciar sesión"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consenti le metriche senza accesso"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サインインなしでメトリクスを許可"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metrics toestaan zonder aanmelden"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дозволити метрики без входу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "允许无需登录访问指标"
+          }
+        }
+      }
+    },
     "An earlier change of this item was not accepted by %@. Open Synctrain to review it." : {
       "localizations" : {
         "de" : {
@@ -7332,6 +7424,52 @@
         }
       }
     },
+    "Authentication" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authentifizierung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autenticación"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autenticazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "認証"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authenticatie"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автентифікація"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "身份验证"
+          }
+        }
+      }
+    },
     "Authority generation" : {
       "localizations" : {
         "de" : {
@@ -7466,6 +7604,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在网关上保存"
+          }
+        }
+      }
+    },
+    "Bind DN" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bind-DN"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DN de enlace"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bind DN"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バインドDN"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bind-DN"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bind DN"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "绑定 DN"
+          }
+        }
+      }
+    },
+    "Black" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schwarz"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Negro"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nero"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブラック"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zwart"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чорна"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "黑色"
           }
         }
       }
@@ -8850,6 +9080,52 @@
         }
       }
     },
+    "Dark" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dunkel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oscuro"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scuro"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ダーク"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Donker"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Темна"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "深色"
+          }
+        }
+      }
+    },
     "Debug" : {
       "localizations" : {
         "de" : {
@@ -8892,6 +9168,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "调试"
+          }
+        }
+      }
+    },
+    "Default" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Predeterminado"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Predefinito"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デフォルト"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standaard"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стандартна"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认"
           }
         }
       }
@@ -11012,6 +11334,98 @@
         }
       }
     },
+    "Insecure admin access" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unsicherer Administratorzugriff"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acceso de administrador inseguro"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accesso amministrativo non sicuro"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安全でない管理者アクセス"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onveilige beheerderstoegang"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Небезпечний доступ адміністратора"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不安全的管理员访问"
+          }
+        }
+      }
+    },
+    "Insecure settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unsichere Einstellungen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajustes inseguros"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impostazioni non sicure"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安全でない設定"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onveilige instellingen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Небезпечні налаштування"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不安全设置"
+          }
+        }
+      }
+    },
     "Items cannot be moved between these folders. Copy the item, then delete the original." : {
       "localizations" : {
         "de" : {
@@ -11242,6 +11656,98 @@
         }
       }
     },
+    "LDAP server" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LDAP-Server"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servidor LDAP"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server LDAP"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LDAPサーバー"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LDAP-server"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сервер LDAP"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LDAP 服务器"
+          }
+        }
+      }
+    },
+    "Leave the password empty to keep it. A configuration the app made has a random password nobody knows: set one to sign in to the web GUI. Without a user name, nobody has to sign in. Tools and scripts use the API key either way." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lassen Sie das Passwort leer, um es beizubehalten. Eine von der App erstellte Konfiguration hat ein zufälliges Passwort, das niemand kennt: Legen Sie eines fest, um sich bei der Web-GUI anzumelden. Ohne Benutzernamen muss sich niemand anmelden. Werkzeuge und Skripte verwenden in jedem Fall den API-Schlüssel."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deja la contraseña vacía para conservarla. Una configuración creada por la app tiene una contraseña aleatoria que nadie conoce: establece una para iniciar sesión en la interfaz web. Sin nombre de usuario, nadie tiene que iniciar sesión. Las herramientas y los scripts usan la clave de API en cualquier caso."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lascia vuota la password per mantenerla. Una configurazione creata dall'app ha una password casuale che nessuno conosce: impostane una per accedere all'interfaccia web. Senza nome utente, nessuno deve accedere. Strumenti e script usano comunque la chiave API."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パスワードを空欄にすると変更されません。アプリが作成した構成には誰も知らないランダムなパスワードが設定されています。Web GUIにサインインするにはパスワードを設定してください。ユーザー名がない場合は、サインインは不要です。ツールやスクリプトはいずれの場合もAPIキーを使用します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laat het wachtwoord leeg om het te behouden. Een configuratie die de app heeft gemaakt, heeft een willekeurig wachtwoord dat niemand kent: stel er een in om u aan te melden bij de webinterface. Zonder gebruikersnaam hoeft niemand zich aan te melden. Hulpmiddelen en scripts gebruiken hoe dan ook de API-sleutel."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Залиште пароль порожнім, щоб зберегти його. Конфігурація, створена застосунком, має випадковий пароль, якого ніхто не знає: задайте власний, щоб входити у веб-інтерфейс. Без імені користувача ніхто не мусить входити. Інструменти та скрипти в будь-якому разі використовують ключ API."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将密码留空即可保留原密码。应用创建的配置使用无人知晓的随机密码：如需登录 Web 界面，请设置一个密码。没有用户名时，任何人都无需登录。工具和脚本始终使用 API 密钥。"
+          }
+        }
+      }
+    },
     "Lets Synctrain on your iPhone or iPad browse, open and edit folders of this Mac in the Files app, without keeping copies of the folders on the device." : {
       "localizations" : {
         "de" : {
@@ -11284,6 +11790,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "让你 iPhone 或 iPad 上的 Synctrain 在文件应用中浏览、打开和编辑此 Mac 上的文件夹，而无需在设备上保留文件夹副本。"
+          }
+        }
+      }
+    },
+    "Light" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hell"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claro"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiaro"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライト"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Licht"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Світла"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浅色"
           }
         }
       }
@@ -11790,6 +12342,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新项目"
+          }
+        }
+      }
+    },
+    "New password" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neues Passwort"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nueva contraseña"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuova password"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新しいパスワード"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nieuw wachtwoord"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новий пароль"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新密码"
           }
         }
       }
@@ -12802,6 +13400,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录时打开 Synctrain"
+          }
+        }
+      }
+    },
+    "Other websites can show the web GUI in a frame, and trick you into clicking in it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere Websites können die Web-GUI in einem Frame anzeigen und Sie dazu verleiten, darin zu klicken."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otros sitios web pueden mostrar la interfaz web en un marco y engañarte para que hagas clic en ella."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altri siti web possono mostrare l'interfaccia web in un frame e indurti a fare clic al suo interno."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "他のWebサイトがフレーム内にWeb GUIを表示し、クリックさせるよう誘導できるようになります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere websites kunnen de webinterface in een frame tonen en u ertoe verleiden erin te klikken."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Інші вебсайти можуть показувати веб-інтерфейс у фреймі й обманом змусити вас натиснути в ньому."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他网站可以在框架中显示 Web 界面，并诱骗你点击其中的内容。"
+          }
+        }
+      }
+    },
+    "Others can reach the web GUI and REST API without signing in, and control this device's synchronization." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere können die Web-GUI und die REST-API ohne Anmeldung erreichen und die Synchronisierung dieses Geräts steuern."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otros pueden acceder a la interfaz web y a la API REST sin iniciar sesión, y controlar la sincronización de este dispositivo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altri possono raggiungere l'interfaccia web e l'API REST senza accedere e controllare la sincronizzazione di questo dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "他の人がサインインせずにWeb GUIとREST APIにアクセスし、このデバイスの同期を操作できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anderen kunnen de webinterface en REST-API bereiken zonder aan te melden, en de synchronisatie van dit apparaat beheren."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Інші можуть отримати доступ до веб-інтерфейсу й REST API без входу та керувати синхронізацією цього пристрою."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他人无需登录即可访问 Web 界面和 REST API，并控制此设备的同步。"
           }
         }
       }
@@ -14044,6 +14734,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "只读"
+          }
+        }
+      }
+    },
+    "Regenerate API key" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-Schlüssel neu erzeugen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regenerar clave de API"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rigenera chiave API"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APIキーを再生成"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-sleutel opnieuw genereren"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Створити ключ API заново"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新生成 API 密钥"
+          }
+        }
+      }
+    },
+    "Regenerate the API key?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-Schlüssel neu erzeugen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Regenerar la clave de API?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rigenerare la chiave API?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APIキーを再生成しますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-sleutel opnieuw genereren?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Створити ключ API заново?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要重新生成 API 密钥吗？"
           }
         }
       }
@@ -15337,6 +16119,52 @@
         }
       }
     },
+    "Saved changes take effect right away, without restarting the engine. The address can also be the path of a Unix socket." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeicherte Änderungen werden sofort wirksam, ohne dass die Engine neu gestartet wird. Die Adresse kann auch der Pfad eines Unix-Sockets sein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los cambios guardados se aplican de inmediato, sin reiniciar el motor. La dirección también puede ser la ruta de un socket Unix."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le modifiche salvate hanno effetto subito, senza riavviare il motore. L'indirizzo può anche essere il percorso di un socket Unix."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存した変更はエンジンを再起動せずにすぐに反映されます。アドレスにはUnixソケットのパスも指定できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opgeslagen wijzigingen gaan meteen in, zonder de engine opnieuw te starten. Het adres kan ook het pad van een Unix-socket zijn."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Збережені зміни набирають чинності одразу, без перезапуску рушія. Адресою також може бути шлях до сокета Unix."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存的更改会立即生效，无需重启引擎。地址也可以是 Unix 套接字的路径。"
+          }
+        }
+      }
+    },
     "Saving a copy…" : {
       "comment" : "Shown while a copy of a previous version is made",
       "localizations" : {
@@ -15476,6 +16304,98 @@
         }
       }
     },
+    "Search base DN" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Such-Basis-DN"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DN base de búsqueda"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DN di base per la ricerca"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検索ベースDN"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basis-DN voor zoeken"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Базовий DN для пошуку"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索基准 DN"
+          }
+        }
+      }
+    },
+    "Search filter" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchfilter"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtro de búsqueda"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtro di ricerca"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検索フィルター"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoekfilter"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фільтр пошуку"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索过滤器"
+          }
+        }
+      }
+    },
     "Self-signed" : {
       "localizations" : {
         "de" : {
@@ -15518,6 +16438,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "自签名"
+          }
+        }
+      }
+    },
+    "Server address" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveradresse"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dirección del servidor"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indirizzo del server"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サーバーアドレス"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveradres"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Адреса сервера"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务器地址"
           }
         }
       }
@@ -15614,6 +16580,98 @@
         }
       }
     },
+    "Session cookie lifetime (seconds)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lebensdauer des Sitzungscookies (Sekunden)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duración de la cookie de sesión (segundos)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata del cookie di sessione (secondi)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セッションCookieの有効期間（秒）"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Levensduur van sessiecookie (seconden)"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тривалість cookie сеансу (секунди)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话 Cookie 有效期（秒）"
+          }
+        }
+      }
+    },
+    "Session cookie path" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pfad des Sitzungscookies"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruta de la cookie de sesión"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Percorso del cookie di sessione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セッションCookieのパス"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pad van sessiecookie"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Шлях cookie сеансу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话 Cookie 路径"
+          }
+        }
+      }
+    },
     "Shows a preview of this version" : {
       "localizations" : {
         "de" : {
@@ -15656,6 +16714,144 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示此版本的预览"
+          }
+        }
+      }
+    },
+    "Sign in with" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmelden mit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciar sesión con"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accedi con"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サインイン方法"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aanmelden met"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спосіб входу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录方式"
+          }
+        }
+      }
+    },
+    "Skip certificate verification" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zertifikatsprüfung überspringen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Omitir la verificación del certificado"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salta la verifica del certificato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "証明書の検証をスキップ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certificaatcontrole overslaan"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пропустити перевірку сертифіката"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳过证书验证"
+          }
+        }
+      }
+    },
+    "Skip host check" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Host-Prüfung überspringen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Omitir la comprobación del host"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salta il controllo dell'host"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ホストチェックをスキップ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hostcontrole overslaan"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пропустити перевірку хоста"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳过主机检查"
           }
         }
       }
@@ -21134,6 +22330,52 @@
         }
       }
     },
+    "The STGUIADDRESS environment variable sets the address and whether HTTPS is used." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Umgebungsvariable STGUIADDRESS legt die Adresse fest und ob HTTPS verwendet wird."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La variable de entorno STGUIADDRESS define la dirección y si se usa HTTPS."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La variabile d'ambiente STGUIADDRESS imposta l'indirizzo e l'uso di HTTPS."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "環境変数 STGUIADDRESS によってアドレスとHTTPSの使用が設定されています。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De omgevingsvariabele STGUIADDRESS bepaalt het adres en of HTTPS wordt gebruikt."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Змінна середовища STGUIADDRESS задає адресу та використання HTTPS."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "环境变量 STGUIADDRESS 决定地址以及是否使用 HTTPS。"
+          }
+        }
+      }
+    },
     "The Synctrain location cannot be rebuilt while edits of folders on gateways are being sent or wait for review. Wait until they are sent, or export or discard them under Remote folders, then try again." : {
       "localizations" : {
         "de" : {
@@ -21176,6 +22418,144 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当网关上文件夹的编辑正在发送或等待查看时，无法重建“Synctrain”位置。请等待它们发送完毕，或在“远程文件夹”中将其导出或丢弃，然后重试。"
+          }
+        }
+      }
+    },
+    "The web GUI asks this server to check sign-ins. Saving changes to it restarts the engine." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Web-GUI lässt Anmeldungen von diesem Server prüfen. Das Speichern von Änderungen daran startet die Engine neu."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La interfaz web pide a este servidor que compruebe los inicios de sesión. Guardar cambios en él reinicia el motor."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'interfaccia web chiede a questo server di verificare gli accessi. Salvare modifiche a questi dati riavvia il motore."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web GUIはこのサーバーにサインインの確認を依頼します。この設定の変更を保存するとエンジンが再起動します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De webinterface laat deze server aanmeldingen controleren. Wijzigingen hierin opslaan start de engine opnieuw."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Веб-інтерфейс просить цей сервер перевіряти входи. Збереження змін у ньому перезапускає рушій."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web 界面会请此服务器验证登录。保存对其的更改会重启引擎。"
+          }
+        }
+      }
+    },
+    "The web GUI no longer warns when others can reach it without signing in." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Web-GUI warnt nicht mehr, wenn andere sie ohne Anmeldung erreichen können."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La interfaz web deja de avisar cuando otros pueden acceder a ella sin iniciar sesión."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'interfaccia web non avvisa più quando altri possono raggiungerla senza accedere."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "他の人がサインインせずにアクセスできる場合でも、Web GUIは警告しなくなります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De webinterface waarschuwt niet meer als anderen hem zonder aanmelden kunnen bereiken."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Веб-інтерфейс більше не попереджає, коли інші можуть отримати до нього доступ без входу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当其他人无需登录即可访问 Web 界面时，它将不再发出警告。"
+          }
+        }
+      }
+    },
+    "Theme" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tema"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tema"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テーマ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thema"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тема"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主题"
           }
         }
       }
@@ -61442,6 +62822,52 @@
         }
       }
     },
+    "Tools and scripts that use the current key lose access until they are given the new one." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Werkzeuge und Skripte, die den aktuellen Schlüssel verwenden, verlieren den Zugriff, bis sie den neuen erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las herramientas y los scripts que usan la clave actual pierden el acceso hasta que reciban la nueva."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli strumenti e gli script che usano la chiave attuale perdono l'accesso finché non ricevono quella nuova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在のキーを使用しているツールやスクリプトは、新しいキーを設定するまでアクセスできなくなります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hulpmiddelen en scripts die de huidige sleutel gebruiken, verliezen de toegang totdat ze de nieuwe krijgen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Інструменти та скрипти, що використовують поточний ключ, втратять доступ, доки не отримають новий."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用当前密钥的工具和脚本将失去访问权限，直到它们获得新密钥。"
+          }
+        }
+      }
+    },
     "Total" : {
       "localizations" : {
         "de" : {
@@ -61668,6 +63094,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在传输文件（%@..."
+          }
+        }
+      }
+    },
+    "Transport" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transport"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transporte"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trasporto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "トランスポート"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transport"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Транспорт"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "传输方式"
           }
         }
       }
@@ -62036,6 +63508,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法加载文件"
+          }
+        }
+      }
+    },
+    "Unchanged" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unverändert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin cambios"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invariata"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "変更なし"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ongewijzigd"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Без змін"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保持不变"
           }
         }
       }
@@ -63282,6 +64800,52 @@
         }
       }
     },
+    "Use HTTPS" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTPS verwenden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar HTTPS"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa HTTPS"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTPSを使用"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTPS gebruiken"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Використовувати HTTPS"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 HTTPS"
+          }
+        }
+      }
+    },
     "Use password for device" : {
       "localizations" : {
         "de" : {
@@ -63420,6 +64984,52 @@
         }
       }
     },
+    "Use the browser's sign-in prompt" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmeldedialog des Browsers verwenden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar el aviso de inicio de sesión del navegador"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa la richiesta di accesso del browser"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブラウザのサインイン画面を使用"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aanmeldvenster van de browser gebruiken"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Використовувати запит на вхід у браузері"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用浏览器的登录提示"
+          }
+        }
+      }
+    },
     "Use the default configuration location?" : {
       "localizations" : {
         "de" : {
@@ -63554,6 +65164,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用于"
+          }
+        }
+      }
+    },
+    "User name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Benutzername"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre de usuario"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome utente"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ユーザー名"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gebruikersnaam"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ім'я користувача"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用户名"
+          }
+        }
+      }
+    },
+    "User name and password" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Benutzername und Passwort"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre de usuario y contraseña"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome utente e password"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ユーザー名とパスワード"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gebruikersnaam en wachtwoord"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ім'я користувача та пароль"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用户名和密码"
           }
         }
       }
@@ -64892,6 +66594,52 @@
         }
       }
     },
+    "Web GUI" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web-GUI"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaz web"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaccia web"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web GUI"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Webinterface"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Веб-інтерфейс"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web 界面"
+          }
+        }
+      }
+    },
     "Web GUI and REST API" : {
       "localizations" : {
         "de" : {
@@ -64938,6 +66686,52 @@
         }
       }
     },
+    "Web GUI and REST API settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungen für Web-GUI und REST-API"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajustes de la interfaz web y la API REST"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impostazioni di interfaccia web e API REST"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web GUI と REST API の設定"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instellingen voor webinterface en REST-API"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Налаштування веб-інтерфейсу й REST API"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web 界面和 REST API 设置"
+          }
+        }
+      }
+    },
     "Web page" : {
       "localizations" : {
         "de" : {
@@ -64980,6 +66774,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页"
+          }
+        }
+      }
+    },
+    "Websites you visit can reach the web GUI on a local address through DNS rebinding." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von Ihnen besuchte Websites können die Web-GUI auf einer lokalen Adresse über DNS-Rebinding erreichen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los sitios web que visitas pueden acceder a la interfaz web en una dirección local mediante DNS rebinding."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I siti web che visiti possono raggiungere l'interfaccia web su un indirizzo locale tramite DNS rebinding."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アクセスしたWebサイトが、DNSリバインディングによってローカルアドレス上のWeb GUIにアクセスできるようになります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Websites die u bezoekt, kunnen de webinterface op een lokaal adres bereiken via DNS-rebinding."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вебсайти, які ви відвідуєте, можуть дістатися веб-інтерфейсу на локальній адресі через DNS rebinding."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你访问的网站可以通过 DNS 重绑定访问本地地址上的 Web 界面。"
           }
         }
       }
@@ -66498,6 +68338,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将在后台继续"
+          }
+        }
+      }
+    },
+    "With a session cookie lifetime of 0 a session lasts a week, and below 0 it doesn't expire." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei einer Lebensdauer von 0 dauert eine Sitzung eine Woche, unter 0 läuft sie nicht ab."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con una duración de 0, una sesión dura una semana; por debajo de 0 no caduca."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con una durata di 0 una sessione dura una settimana; sotto 0 non scade."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有効期間が0の場合、セッションは1週間続きます。0未満の場合は期限切れになりません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met een levensduur van 0 duurt een sessie een week, en onder 0 verloopt ze niet."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "За тривалості 0 сеанс триває тиждень, а менше 0 — не закінчується."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有效期为 0 时，会话持续一周；小于 0 时，会话不会过期。"
+          }
+        }
+      }
+    },
+    "Without signing in, any user or program on this Mac can use the web GUI and REST API, and control this device's synchronization." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ohne Anmeldung kann jeder Benutzer und jedes Programm auf diesem Mac die Web-GUI und die REST-API verwenden und die Synchronisierung dieses Geräts steuern."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin inicio de sesión, cualquier usuario o programa de este Mac puede usar la interfaz web y la API REST, y controlar la sincronización de este dispositivo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Senza accesso, qualsiasi utente o programma su questo Mac può usare l'interfaccia web e l'API REST e controllare la sincronizzazione di questo dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サインインなしで、このMac上のどのユーザーやプログラムでもWeb GUIとREST APIを使用し、このデバイスの同期を操作できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zonder aanmelden kan elke gebruiker of elk programma op deze Mac de webinterface en REST-API gebruiken en de synchronisatie van dit apparaat beheren."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Без входу будь-який користувач або програма на цьому Mac можуть використовувати веб-інтерфейс і REST API та керувати синхронізацією цього пристрою."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无需登录，此 Mac 上的任何用户或程序都可以使用 Web 界面和 REST API，并控制此设备的同步。"
           }
         }
       }

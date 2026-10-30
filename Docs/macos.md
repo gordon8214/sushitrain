@@ -55,9 +55,20 @@ the same way:
   instead of stopping the engine, and move back once it is free again (unless their address was changed meanwhile);
   the marker records where they belong. If they can't listen on their address at all, they are turned off. Either
   way the app's settings say so. An address set with `STGUIADDRESS` is left alone.
-- Advanced settings show whether they are on, their address and the API key (shown on request, and copied so that
-  clipboard managers that honor it don't keep it). Turning them on or off restarts the engine: they start with it,
-  and one that runs keeps listening until then. Turning them on gives them a password if they have none.
+- Advanced settings show whether they are on, their address and the API key (shown on request, copied so that
+  clipboard managers that honor it don't keep it, and regenerated after a warning). Turning them on or off restarts
+  the engine: they start with it, and one that runs keeps listening until then. Turning them on gives them a password
+  if they have none, also after clearing the user name on purpose.
+- Their settings page below that has the address and TLS, the user and password or LDAP server, the theme, the session
+  cookie and metrics settings, and the insecure settings, with warnings. They are saved together, as each change makes
+  the service listen again; that happens at once, with the engine left running. The exceptions are LDAP settings while
+  in LDAP mode, as the service only reads those when it starts listening and doesn't notice a change to them alone, so
+  the app restarts the engine. An address the service can't listen on is refused rather than saved, as the service
+  could only log that it failed; so is the path of something that exists, which the service would remove to make a
+  socket there. A socket it can't use at a start turns them off, as an address does. Clearing the user name turns
+  signing in off and removes the password, and the page warns that any user or program on this Mac, or beyond it on a
+  wider address, can then control them through the web pages' CSRF token. While `STGUIADDRESS` is set, the address and
+  TLS can't be changed.
 - The web GUI's pages are not built in (the engine is built with `noassets`), so its address shows an empty page. The
   REST API works in full, for example `curl -H "X-API-Key: <key>" http://127.0.0.1:8384/rest/system/status`.
 
