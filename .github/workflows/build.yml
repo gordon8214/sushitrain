@@ -88,3 +88,79 @@ jobs:
           name: app
           path: dist/sushitrain-${{ github.sha }}.zip
           retention-days: 3
+
+  mac-release:
+    name: Sign and notarize the Mac app
+    # Tags only, in an environment of its own: this repository is public, and the Developer ID certificate and the
+    # notary key must stay out of branch and pull request builds. See Docs/macos.md for the secrets.
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: xcode-27
+    environment: mac-release
+    steps:
+      - name: Check Xcode version
+        run: |
+          sudo /usr/bin/xcode-select -switch /Applications/Xcode_27.0.app
+          xcrun simctl list > /dev/null
+          /usr/bin/xcodebuild -version
+
+      # The Go framework has slices for iOS as well
+      - name: Install iOS platform
+        run: |
+          xcodebuild -downloadPlatform iOS
+
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+          check-latest: true
+
+      - name: Install signing credentials
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(uuidgen)
+          echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary-key.p8"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -f pkcs12 \
+            -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain"
+          rm "$RUNNER_TEMP/developer-id.p12"
+
+      - name: Build, sign and notarize
+        env:
+          NOTARY_KEY_PATH: ${{ runner.temp }}/notary-key.p8
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          make mac-release
+
+      - name: Remove signing credentials
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/notary-key.p8"
+
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: Build/release/*.dmg
+
+      # The build job has created the draft release by now
+      - name: Attach disk image to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release upload "$TAG" Build/release/*.dmg --clobber

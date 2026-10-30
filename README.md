@@ -12,6 +12,8 @@ Securely synchronize files on-demand using Syncthing on iOS and macOS.
 
 [Download on the App Store](https://apps.apple.com/nl/app/synctrain/id6553985316) | [Test beta versions through TestFlight](https://testflight.apple.com/join/2f54I4CM)
 
+These are for iOS. The Mac app runs outside the App Sandbox, so it isn't in the App Store: get the notarized disk image from the [releases](https://github.com/gordon8214/sushitrain/releases).
+
 Sushitrain brings Syncthing to iOS and macOS. In addition to the very powerful file synchronization features offered by Syncthing, this app has some extra tricks up it
 sleeve:
 
@@ -49,6 +51,9 @@ When the framework is succesfully built, open XCode and follow the following ste
 1. Set up signing (change the 'team ID' in the project settings you a team or developer ID you have access to, then let
    XCode autoamtically provision certificates for you). You may have to change the bundle ID to something else.
 2. Finally, pressing Cmd-B should be all that is needed to build the app.
+
+Release builds for the Mac sign with a Developer ID certificate. See [Signing and releasing](./Docs/macos.md#signing-and-releasing)
+for what that takes, and for how to notarize a release.
 
 The project doesn't request the `com.apple.developer.device-information.user-assigned-device-name` entitlement, which
 lets the app use the device's actual hostname as its Syncthing device name and is only granted by Apple, for distributed

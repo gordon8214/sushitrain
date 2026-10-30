@@ -4,6 +4,7 @@
 /localize.sh
 /Build
 *.p12
+*.p8
 /SushitrainCore/gobind
 /SushitrainCore/gomobile
 /SushitrainCore/synctrain-gateway

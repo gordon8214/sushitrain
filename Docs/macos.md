@@ -4,7 +4,8 @@ On a Mac, Synctrain is meant to replace Syncthing.app: one engine, configured fr
 REST API where a configuration has the GUI enabled. This page records where the Mac app differs from iOS and why.
 
 The Mac app runs outside the App Sandbox (with the hardened runtime), so that it reaches folders anywhere, as Syncthing
-does; that also means it can't come from the Mac App Store. Its share extension stays sandboxed, as macOS requires of
+does; that also means it can't come from the Mac App Store, and comes as a notarized disk image instead (see
+[Signing and releasing](#signing-and-releasing)). Its share extension stays sandboxed, as macOS requires of
 extensions, and shares the app's group container (both are signed by the same team). macOS still asks before the app
 reaches the Desktop, Documents and Downloads folders, external disks and network volumes, the first time a folder there
 is synchronized; places that only Full Disk Access opens (such as other apps' data) are allowed in System Settings,
@@ -205,3 +206,79 @@ A shutdown from the web GUI or the REST API's `/rest/system/shutdown` quits the 
 with the engine stopped (on iOS, which has no web GUI, Restart Syncthing starts it again). Quitting the app stops the
 remote file service and then the engine, waiting for each a limited time; what they could not finish is recovered at
 the next start.
+
+## Signing and releasing
+
+The Mac app is distributed as a disk image, signed with Developer ID and notarized, so that Gatekeeper accepts it on any
+Mac.
+
+The Release configuration signs the app and its share extension with Developer ID Application, with the hardened runtime
+and without the `get-task-allow` entitlement. It needs no provisioning profile: neither has an entitlement that takes
+one, and macOS accepts an app group that starts with the team's ID without one, and without asking the user. Debug and
+iOS builds sign as they did. Both schemes run the Release configuration, so running the app on a Mac from Xcode takes
+the certificate too, or a scheme set to Debug; a Release run has no debugger, as it lacks `get-task-allow`. `make mac` and
+`make build` don't sign, and take no certificate.
+
+`make mac-release` archives the app and hands the archive to [`Scripts/notarize-mac.sh`](../Scripts/notarize-mac.sh),
+which leaves the stapled app and `Synctrain-<version>.<build>.dmg` in `Build/release`:
+
+1. It checks that all code in the app is signed by one team with Developer ID, with a secure timestamp and the hardened
+   runtime and without `get-task-allow`; that the app is not sandboxed and its extensions are; and that they all use one
+   app group with the team's prefix, which neither notarization nor Gatekeeper looks at.
+2. It has the app notarized and staples the ticket to it.
+3. It puts the stapled app in a disk image, signs that, has it notarized and staples the ticket to it. So the image and
+   the app copied out of it both open without a connection to Apple.
+4. It validates both tickets and has Gatekeeper assess both (`spctl`).
+
+Notarization usually takes minutes, but can take much longer on a team's first submissions, so the script waits for up
+to two hours. If it fails, the archive is still there: fix the cause and run the script again on it, without rebuilding.
+
+### Setting up
+
+1. **Certificate.** The Account Holder creates it, as *Developer ID Application*, among the account's certificates in
+   Xcode's settings or on the developer website. It stays in the login keychain of the Mac that builds releases. For CI,
+   export it from Keychain Access as a `.p12` with a password.
+2. **Notary credentials.** Create a Team key with Developer access in App Store Connect, under Users and Access,
+   Integrations. It can be downloaded once. For a build on a Mac, save it in the keychain:
+
+   ```bash
+   xcrun notarytool store-credentials synctrain-notary --key AuthKey_<id>.p8 --key-id <id> --issuer <issuer id>
+   ```
+
+   ```bash
+   NOTARY_KEYCHAIN_PROFILE=synctrain-notary make mac-release
+   ```
+
+3. **CI.** Turn workflows on in the repository's Actions tab: GitHub doesn't run them in a fork until then. Create an
+   environment named `mac-release` in the repository's settings, allow it only tags matching `v*`, and add these secrets
+   to that environment rather than to the repository, so that no branch can read them:
+
+   | Secret | Value |
+   | --- | --- |
+   | `DEVELOPER_ID_P12` | The `.p12`, as base64 (`base64 -i developer-id.p12`) |
+   | `DEVELOPER_ID_P12_PASSWORD` | Its password |
+   | `NOTARY_KEY_P8` | The `.p8` key, as base64 |
+   | `NOTARY_KEY_ID` | The key's ID |
+   | `NOTARY_ISSUER_ID` | The issuer ID shown above the keys |
+
+Neither file belongs in the repository, and Git ignores both types. The workflow keeps them in a temporary keychain and
+folder, which it removes after the build.
+
+### Releasing
+
+1. Raise `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in all targets, and commit.
+2. Push a tag named after them, such as `v2.8.86`. The `build` job creates a draft release, with the unsigned archives
+   (`sushitrain-<commit>.zip`, which are not for distribution). The `mac-release` job then attaches the disk image.
+3. On a Mac that never built the app, download the disk image and check it, then copy the app to Applications and check
+   that as well:
+
+   ```bash
+   spctl -a -vv -t open --context context:primary-signature Synctrain-*.dmg
+   ```
+
+   ```bash
+   spctl -a -vv /Applications/Synctrain.app
+   ```
+
+   Both should print `accepted` and `source=Notarized Developer ID`.
+4. Publish the draft.
