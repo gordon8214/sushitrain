@@ -11,7 +11,7 @@ replace google.golang.org/genproto v0.0.0-20220815135757-37a418bb8959 => google.
 // Syncthing v2.1.7 with Gordon's metadata history patch, extended attributes on read-only files, the generated web GUI
 // assets with a folder browser, Apple syncable-attribute policy, and the folder coordinator hook and per-file version
 // lookup the remote file service uses, and the log facility API of the app's log settings (branch synctrain/v2.1.7).
-replace github.com/syncthing/syncthing => github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261030044738-ba6fb63d2395
+replace github.com/syncthing/syncthing => github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261030161534-502c44b609fb
 
 require (
 	github.com/gobwas/glob v0.2.3

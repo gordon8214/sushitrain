@@ -22422,48 +22422,48 @@
         }
       }
     },
-    "The web GUI asks this server to check sign-ins. Saving changes to it restarts the engine." : {
+    "The web GUI asks this server to check sign-ins." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Web-GUI lässt Anmeldungen von diesem Server prüfen. Das Speichern von Änderungen daran startet die Engine neu."
+            "value" : "Die Web-GUI lässt Anmeldungen von diesem Server prüfen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La interfaz web pide a este servidor que compruebe los inicios de sesión. Guardar cambios en él reinicia el motor."
+            "value" : "La interfaz web pide a este servidor que compruebe los inicios de sesión."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L'interfaccia web chiede a questo server di verificare gli accessi. Salvare modifiche a questi dati riavvia il motore."
+            "value" : "L'interfaccia web chiede a questo server di verificare gli accessi."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Web GUIはこのサーバーにサインインの確認を依頼します。この設定の変更を保存するとエンジンが再起動します。"
+            "value" : "Web GUIはこのサーバーにサインインの確認を依頼します。"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De webinterface laat deze server aanmeldingen controleren. Wijzigingen hierin opslaan start de engine opnieuw."
+            "value" : "De webinterface laat deze server aanmeldingen controleren."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Веб-інтерфейс просить цей сервер перевіряти входи. Збереження змін у ньому перезапускає рушій."
+            "value" : "Веб-інтерфейс просить цей сервер перевіряти входи."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Web 界面会请此服务器验证登录。保存对其的更改会重启引擎。"
+            "value" : "Web 界面会请此服务器验证登录。"
           }
         }
       }

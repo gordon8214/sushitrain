@@ -475,28 +475,6 @@ func TestGUISettingsTellWhenTheGUIIsExposed(t *testing.T) {
 	}
 }
 
-func TestOnlyLDAPChangesToARunningLDAPModeTakeARestart(t *testing.T) {
-	static, ldap := config.AuthModeStatic.String(), config.AuthModeLDAP.String()
-	for _, test := range []struct {
-		settings, saved GUISettings
-		restart         bool
-	}{
-		{GUISettings{AuthMode: ldap, LDAPAddress: "a"}, GUISettings{AuthMode: ldap, LDAPAddress: "a"}, false},
-		{GUISettings{AuthMode: ldap, LDAPAddress: "a"}, GUISettings{AuthMode: ldap, LDAPAddress: "b"}, true},
-		{GUISettings{AuthMode: ldap, LDAPTransport: "tls"}, GUISettings{AuthMode: ldap, LDAPTransport: "plain"}, true},
-		{GUISettings{AuthMode: ldap, LDAPSearchFilter: "a"}, GUISettings{AuthMode: ldap}, true},
-		// The GUI's own settings change with the mode, and the service reads the LDAP settings when it listens again
-		{GUISettings{AuthMode: ldap, LDAPAddress: "a"}, GUISettings{AuthMode: static}, false},
-		// Not in use
-		{GUISettings{AuthMode: static, LDAPAddress: "a"}, GUISettings{AuthMode: static}, false},
-		{GUISettings{AuthMode: static, LDAPAddress: "a"}, GUISettings{AuthMode: ldap}, false},
-	} {
-		if test.settings.NeedsEngineRestart(&test.saved) != test.restart {
-			t.Errorf("%+v over %+v: restart %v", test.settings, test.saved, !test.restart)
-		}
-	}
-}
-
 func TestAnAddressThatCannotBeUsedTurnsTheGUIOff(t *testing.T) {
 	// Not on this computer, so nothing can listen there and the engine could not start
 	dir := t.TempDir()

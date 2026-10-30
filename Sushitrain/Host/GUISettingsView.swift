@@ -139,7 +139,7 @@
 				Text("Authentication")
 			} footer: {
 				if usesLDAP {
-					Text("The web GUI asks this server to check sign-ins. Saving changes to it restarts the engine.")
+					Text("The web GUI asks this server to check sign-ins.")
 				}
 				else {
 					Text(
@@ -207,19 +207,15 @@
 		}
 
 		private func save() {
-			guard let settings = draft?.settings, let saved else {
+			guard let settings = draft?.settings else {
 				return
 			}
 			let client = appState.client
-			let needsEngineRestart = settings.needsEngineRestart(saved) && client.isGUIEnabled()
 			isSaving = true
 			Task {
 				do {
 					// Hashing a password takes a moment, as does the service's turn to listen again
 					try await goBlocking { try client.setGUISettings(settings) }
-					if needsEngineRestart {
-						appState.restartEngine()
-					}
 					self.load()
 				}
 				catch {

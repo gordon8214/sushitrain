@@ -536,6 +536,26 @@ func TestEngineChangesGUISettingsWithoutRestarting(t *testing.T) {
 		t.Fatalf("the old key got %d (%v)", got, err)
 	}
 
+	// The service follows the LDAP settings too, also when only they change, and when changes come right after each other
+	settings = clt.GUISettings()
+	settings.AuthMode = "ldap"
+	settings.LDAPAddress = "ldap.example.com:389"
+	settings.LDAPBindDN = "cn=%s,dc=example,dc=com"
+	if err := clt.SetGUISettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	for _, address := range []string{"ldap2.example.com:389", "ldap3.example.com:389"} {
+		settings = clt.GUISettings()
+		settings.LDAPAddress = address
+		if err := clt.SetGUISettings(settings); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if saved := clt.GUISettings(); saved.AuthMode != "ldap" || saved.LDAPAddress != "ldap3.example.com:389" {
+		t.Fatalf("%s at %s", saved.AuthMode, saved.LDAPAddress)
+	}
+	waitForStatus(clt.GUIURL(), clt.GUIAPIKey(), http.StatusOK)
+
 	if !slices.Equal(recorder.history(), states) {
 		t.Fatalf("the engine changed state: %v, then %v", states, recorder.history())
 	}

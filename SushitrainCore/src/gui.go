@@ -370,14 +370,6 @@ func (s *GUISettings) IsExposed() bool {
 	return s.IsUnprotected() && !guiIsLocalOnly(gui)
 }
 
-// NeedsEngineRestart reports whether saving these settings over saved takes an engine restart: the GUI service reads
-// the LDAP settings when it starts listening, and only a change to its own settings makes it listen again. A change of
-// mode is such a change.
-func (s *GUISettings) NeedsEngineRestart(saved *GUISettings) bool {
-	ldap := config.AuthModeLDAP.String()
-	return s.AuthMode == ldap && saved.AuthMode == ldap && s.ldapConfiguration() != saved.ldapConfiguration()
-}
-
 func (s *GUISettings) ldapConfiguration() config.LDAPConfiguration {
 	ldap := config.LDAPConfiguration{
 		Address:            strings.TrimSpace(s.LDAPAddress),
@@ -506,7 +498,7 @@ func (clt *Client) GUISettings() *GUISettings {
 }
 
 // SetGUISettings changes the settings of the web GUI and REST API. A running GUI service listens again with them at
-// once, with the engine left running, except for what NeedsEngineRestart says.
+// once, with the engine left running.
 func (clt *Client) SetGUISettings(settings *GUISettings) error {
 	if build.IsIOS {
 		return ErrGUINotAvailable
