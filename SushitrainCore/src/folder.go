@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -271,7 +272,14 @@ func (fld *Folder) SetVersioning(versioningType string, keep int, cleanoutDays i
 			return
 		}
 
-		params := make(map[string]string)
+		// Keep parameters this function doesn't set (such as preservePlatformData), as the web GUI does
+		params := maps.Clone(fc.Versioning.Params)
+		if params == nil {
+			params = make(map[string]string)
+		}
+		delete(params, "keep")
+		delete(params, "cleanoutDays")
+		delete(params, "maxAge")
 		switch versioningType {
 		case VersioningTypeSimple:
 			params["keep"] = fmt.Sprintf("%d", keep)
@@ -284,11 +292,18 @@ func (fld *Folder) SetVersioning(versioningType string, keep int, cleanoutDays i
 			return
 		}
 
+		// The versioner refuses to start with platform history for any other type
+		if versioningType != VersioningTypeStaggered {
+			delete(params, "preservePlatformData")
+		}
+
 		fc.Versioning.Type = versioningType
 		fc.Versioning.Params = params
 		fc.Versioning.CleanupIntervalS = cleanupIntervalSeconds
-		fc.Versioning.FSPath = ""
-		fc.Versioning.FSType = config.FilesystemTypeBasic
+		// Keep a custom versions path
+		if fc.Versioning.FSType == "" {
+			fc.Versioning.FSType = config.FilesystemTypeBasic
+		}
 	})
 }
 

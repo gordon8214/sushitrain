@@ -784,7 +784,7 @@ private struct BandwidthSettingsView: View {
 				if downLimitMbitsPerSec > 0 {
 					Stepper(
 						"\(downLimitMbitsPerSec) Mbit/s",
-						value: $downLimitMbitsPerSec, in: 1...100)
+						value: $downLimitMbitsPerSec, in: 1...1000)
 				}
 
 				// Global up
@@ -800,7 +800,7 @@ private struct BandwidthSettingsView: View {
 				if upLimitMbitsPerSec > 0 {
 					Stepper(
 						"\(upLimitMbitsPerSec) Mbit/s",
-						value: $upLimitMbitsPerSec, in: 1...100)
+						value: $upLimitMbitsPerSec, in: 1...1000)
 				}
 
 				// LAN bandwidth limit

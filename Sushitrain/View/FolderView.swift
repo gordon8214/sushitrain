@@ -1342,18 +1342,23 @@ private struct FolderVersioningSettingsView: View {
 		case staggered = "staggered"
 	}
 
+	private struct VersioningSettings: Equatable {
+		var type = VersioningType.disabled
+		var keep = 5
+		var cleanoutDays = 0
+		var maxAgeDays = 365
+		var cleanupIntervalMinutes = 60
+	}
+
 	let folder: SushitrainFolder
 
-	@State private var versioningType = VersioningType.disabled
-	@State private var keep = 5
-	@State private var cleanoutDays = 0
-	@State private var maxAgeDays = 365
-	@State private var cleanupIntervalMinutes = 60
-	@State private var loaded = false
+	@State private var settings = VersioningSettings()
+	// What the folder configuration holds, so that showing the loaded settings doesn't write them back
+	@State private var savedSettings: VersioningSettings? = nil
 	@State private var error: ErrorMessage? = nil
 
 	private var versioningDescription: String {
-		switch versioningType {
+		switch settings.type {
 		case .disabled:
 			return String(localized: "Synctrain will not keep old copies of files for this folder.")
 		case .simple:
@@ -1385,7 +1390,7 @@ private struct FolderVersioningSettingsView: View {
 			}
 
 			Section {
-				Picker("Versioning", selection: $versioningType) {
+				Picker("Versioning", selection: $settings.type) {
 					Text("Disabled").tag(VersioningType.disabled)
 					Text("Simple").tag(VersioningType.simple)
 					Text("Trash can").tag(VersioningType.trashcan)
@@ -1396,12 +1401,12 @@ private struct FolderVersioningSettingsView: View {
 				Text(versioningDescription)
 			}
 
-			if versioningType == .simple {
+			if settings.type == .simple {
 				Section {
-					Stepper("Keep \(keep) versions", value: $keep, in: 1...999)
+					Stepper("Keep \(settings.keep) versions", value: $settings.keep, in: 1...999)
 
 					LabeledContent {
-						TextField("", value: $cleanoutDays, format: .number)
+						TextField("", value: $settings.cleanoutDays, format: .number)
 							.multilineTextAlignment(.trailing)
 					} label: {
 						Text("Maximum age (days)")
@@ -1410,10 +1415,10 @@ private struct FolderVersioningSettingsView: View {
 					Text("Set maximum age to 0 to keep versions regardless of age.")
 				}
 			}
-			else if versioningType == .trashcan {
+			else if settings.type == .trashcan {
 				Section {
 					LabeledContent {
-						TextField("", value: $cleanoutDays, format: .number)
+						TextField("", value: $settings.cleanoutDays, format: .number)
 							.multilineTextAlignment(.trailing)
 					} label: {
 						Text("Maximum age (days)")
@@ -1422,21 +1427,23 @@ private struct FolderVersioningSettingsView: View {
 					Text("Set maximum age to 0 to keep deleted files until you remove them manually.")
 				}
 			}
-			else if versioningType == .staggered {
+			else if settings.type == .staggered {
 				Section {
 					LabeledContent {
-						TextField("", value: $maxAgeDays, format: .number)
+						TextField("", value: $settings.maxAgeDays, format: .number)
 							.multilineTextAlignment(.trailing)
 					} label: {
 						Text("Maximum age (days)")
 					}
+				} footer: {
+					Text("Set maximum age to 0 to keep versions regardless of age.")
 				}
 			}
 
-			if versioningType != .disabled {
+			if settings.type != .disabled {
 				Section {
 					LabeledContent {
-						TextField("", value: $cleanupIntervalMinutes, format: .number)
+						TextField("", value: $settings.cleanupIntervalMinutes, format: .number)
 							.multilineTextAlignment(.trailing)
 					} label: {
 						Text("Cleanup interval (minutes)")
@@ -1454,22 +1461,27 @@ private struct FolderVersioningSettingsView: View {
 		.onAppear {
 			load()
 		}
-		.onChange(of: versioningType) { _, _ in saveIfLoaded() }
-		.onChange(of: keep) { _, _ in saveIfLoaded() }
-		.onChange(of: cleanoutDays) { _, _ in saveIfLoaded() }
-		.onChange(of: maxAgeDays) { _, _ in saveIfLoaded() }
-		.onChange(of: cleanupIntervalMinutes) { _, _ in saveIfLoaded() }
+		.onChange(of: settings) { _, newSettings in save(newSettings) }
 		.errorAlert($error)
 	}
 
 	private func load() {
-		let rawVersioningType = folder.versioningType()
-		versioningType = VersioningType(rawValue: rawVersioningType) ?? .disabled
-		keep = intVersioningParam("keep", defaultValue: 5)
-		cleanoutDays = intVersioningParam("cleanoutDays", defaultValue: 0)
-		maxAgeDays = max(1, intVersioningParam("maxAge", defaultValue: 365 * 24 * 60 * 60) / (24 * 60 * 60))
-		cleanupIntervalMinutes = max(1, folder.versioningCleanupIntervalSeconds() / 60)
-		loaded = true
+		var loaded = VersioningSettings()
+		// A folder without versioning shows the defaults, which enabling versioning then saves
+		if let type = VersioningType(rawValue: folder.versioningType()), type != .disabled {
+			loaded.type = type
+			loaded.keep = intVersioningParam("keep", defaultValue: loaded.keep)
+			loaded.cleanoutDays = intVersioningParam("cleanoutDays", defaultValue: loaded.cleanoutDays)
+
+			// Syncthing keeps staggered versions forever at a maximum age of 0, and doesn't clean up periodically
+			// at a cleanup interval of 0
+			let maxAgeSeconds = intVersioningParam("maxAge", defaultValue: loaded.maxAgeDays * 24 * 60 * 60)
+			loaded.maxAgeDays = maxAgeSeconds > 0 ? max(1, maxAgeSeconds / (24 * 60 * 60)) : 0
+			let cleanupIntervalSeconds = folder.versioningCleanupIntervalSeconds()
+			loaded.cleanupIntervalMinutes = cleanupIntervalSeconds > 0 ? max(1, cleanupIntervalSeconds / 60) : 0
+		}
+		savedSettings = loaded
+		settings = loaded
 	}
 
 	private func intVersioningParam(_ name: String, defaultValue: Int) -> Int {
@@ -1477,18 +1489,19 @@ private struct FolderVersioningSettingsView: View {
 		return Int(value) ?? defaultValue
 	}
 
-	private func saveIfLoaded() {
-		if !loaded {
+	private func save(_ newSettings: VersioningSettings) {
+		guard let savedSettings, newSettings != savedSettings else {
 			return
 		}
 
 		do {
 			try folder.setVersioning(
-				versioningType.rawValue,
-				keep: max(1, keep),
-				cleanoutDays: max(0, cleanoutDays),
-				maxAgeDays: max(1, maxAgeDays),
-				cleanupIntervalSeconds: max(1, cleanupIntervalMinutes) * 60)
+				newSettings.type.rawValue,
+				keep: max(1, newSettings.keep),
+				cleanoutDays: max(0, newSettings.cleanoutDays),
+				maxAgeDays: max(0, newSettings.maxAgeDays),
+				cleanupIntervalSeconds: max(0, newSettings.cleanupIntervalMinutes) * 60)
+			self.savedSettings = newSettings
 		}
 		catch {
 			self.error = ErrorMessage(error)

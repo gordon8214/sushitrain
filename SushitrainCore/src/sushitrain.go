@@ -1100,25 +1100,45 @@ func (clt *Client) SetBandwidthLimitedInLAN(enabled bool) error {
 	})
 }
 
+// Syncthing stores bandwidth limits in KiB/s (despite the 'Kbps' field names), the app shows Mbit/s
+const kibPerSecondPerMbitPerSecond = 1_000_000.0 / 8.0 / 1024.0
+
+// Rounds to whole Mbit/s, but never turns a limit into zero (which would read as 'no limit')
+func kibPerSecondToMbitsPerSecond(kib int) int {
+	if kib <= 0 {
+		return 0
+	}
+	return max(1, int(math.Round(float64(kib)/kibPerSecondPerMbitPerSecond)))
+}
+
+func mbitsPerSecondToKiBPerSecond(mbits int) int {
+	if mbits <= 0 {
+		return 0
+	}
+	return int(math.Round(float64(mbits) * kibPerSecondPerMbitPerSecond))
+}
+
 func (clt *Client) GetBandwidthLimitUpMbitsPerSec() int {
-	return clt.config.Options().MaxSendKbps / 1000
+	return kibPerSecondToMbitsPerSecond(clt.config.Options().MaxSendKbps)
 }
 
 func (clt *Client) GetBandwidthLimitDownMbitsPerSec() int {
-	return clt.config.Options().MaxRecvKbps / 1000
+	return kibPerSecondToMbitsPerSecond(clt.config.Options().MaxRecvKbps)
 }
 
 func (clt *Client) SetBandwidthLimitsMbitsPerSec(down int, up int) error {
-	if down < 0 {
-		down = 0
-	}
-	if up < 0 {
-		up = 0
-	}
+	down = max(0, down)
+	up = max(0, up)
 
 	return clt.changeConfiguration(func(cfg *config.Configuration) {
-		cfg.Options.MaxRecvKbps = down * 1000
-		cfg.Options.MaxSendKbps = up * 1000
+		// Only rewrite a limit that changed, so a limit set elsewhere that isn't a whole number of Mbit/s
+		// survives a change to the other one
+		if down != kibPerSecondToMbitsPerSecond(cfg.Options.MaxRecvKbps) {
+			cfg.Options.MaxRecvKbps = mbitsPerSecondToKiBPerSecond(down)
+		}
+		if up != kibPerSecondToMbitsPerSecond(cfg.Options.MaxSendKbps) {
+			cfg.Options.MaxSendKbps = mbitsPerSecondToKiBPerSecond(up)
+		}
 	})
 }
 
