@@ -711,7 +711,7 @@ struct BrowserView: View {
 			.foregroundColor(.red)
 
 			// Only allow removing a full folder when we are sure it is in the area managed by us
-			if folder.isRegularFolder && folder.isExternal == false {
+			if folder.isRegularFolder && folder.canRemoveFiles() {
 				Button("Remove folder", systemImage: "trash", role: .destructive) {
 					showConfirmable = .removeFolder
 				}

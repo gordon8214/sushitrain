@@ -47,6 +47,7 @@ type Client struct {
 	cert                       *tls.Certificate
 	Delegate                   ClientDelegate
 	filesPath                  string
+	folderLayout               folderLayout
 	IgnoreEvents               bool
 	IsUsingCustomConfiguration bool
 	Server                     *StreamingServer
@@ -163,8 +164,10 @@ func createLogFile(dir string, started time.Time) (*os.File, error) {
 }
 
 // NewClient creates the client of an engine that keeps its configuration and database in configPath and treats
-// filesPath as the user's home directory. When saveLog is set, the log is also saved to a file in logPath.
-func NewClient(configPath string, filesPath string, logPath string, saveLog bool) *Client {
+// filesPath as the user's home directory. When saveLog is set, the log is also saved to a file in logPath. With
+// foldersInHome (the Mac app outside the App Sandbox, where filesPath is the real home directory), folders are the
+// user's, anywhere; otherwise they are in or outside the app's container.
+func NewClient(configPath string, filesPath string, logPath string, foldersInHome bool, saveLog bool) *Client {
 	// Set version info
 	build.Version = "v2.1.7"
 	build.Host = "t-shaped.nl"
@@ -192,6 +195,10 @@ func NewClient(configPath string, filesPath string, logPath string, saveLog bool
 	slog.Info("paths", "databaseDir", configPath, "filesDir", filesPath)
 
 	isUsingCustomConfiguration := useCustomConfiguration(filesPath, build.IsIOS)
+	layout := containerFolders
+	if foldersInHome && !build.IsIOS {
+		layout = homeFolders
+	}
 
 	return &Client{
 		Delegate:                   nil,
@@ -201,6 +208,7 @@ func NewClient(configPath string, filesPath string, logPath string, saveLog bool
 		connectedDeviceAddresses:   make(map[string]string, 0),
 		IsUsingCustomConfiguration: isUsingCustomConfiguration,
 		filesPath:                  filesPath,
+		folderLayout:               layout,
 		IgnoreEvents:               false,
 		uploadProgress:             make(map[string]map[string]map[string]int),
 		downloadProgress:           make(map[string]map[string]*model.PullerProgress),
@@ -902,6 +910,9 @@ func applyAppDefaults(conf *config.Configuration, ios bool) {
 	conf.Defaults.Folder.BlockIndexing = false   // Save space by default
 	if ios {
 		conf.Defaults.Folder.IgnorePerms = true // iOS doesn't expose permissions to users
+	} else {
+		// Where the app puts new folders when this is empty; with it, the web GUI and auto-accepted folders agree
+		conf.Defaults.Folder.Path = "~/" + syncDirectoryName
 	}
 }
 
@@ -1141,14 +1152,24 @@ func (clt *Client) AddFolder(folderID string, folderPath string, createAsOnDeman
 	folderConfig := clt.cfg().DefaultFolder()
 	folderConfig.ID = folderID
 	folderConfig.Label = folderID
+	// Outside the container, a folder another device offers is named as there, as in Syncthing's web GUI
+	label := ""
+	if clt.folderLayout == homeFolders {
+		if label = clt.offeredFolderLabel(folderID); label != "" {
+			folderConfig.Label = label
+		}
+	}
 	if len(folderPath) == 0 {
-		defaultPath, err := clt.defaultFolderPath(folderID)
+		defaultPath, err := clt.defaultFolderPath(folderID, label)
 		if err != nil {
 			return err
 		}
 		folderConfig.Path = defaultPath
 	} else {
 		folderConfig.Path = folderPath
+	}
+	if overlapsEngineData(clt.expandHome(folderConfig.Path)) {
+		return ErrFolderOverlapsEngineData
 	}
 	folderConfig.Paused = false
 

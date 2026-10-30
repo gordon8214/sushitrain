@@ -65,8 +65,12 @@ func managedFolderPath(folderID string) string {
 	return path.Join(base, folderID)
 }
 
-// The path at which a new folder with the given ID is created when no path is specified
-func (clt *Client) defaultFolderPath(folderID string) (string, error) {
+// The path at which a new folder with the given ID (and label, outside the container) is created when no path is
+// specified
+func (clt *Client) defaultFolderPath(folderID string, label string) (string, error) {
+	if clt.folderLayout == homeFolders {
+		return clt.defaultHomeFolderPath(folderID, label)
+	}
 	if !isSafeFolderDirectoryName(folderID) {
 		return "", fmt.Errorf("%w: %q; choose a location for the folder", errUnsafeFolderID, folderID)
 	}

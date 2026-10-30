@@ -228,8 +228,9 @@ extension SushitrainFolder {
 
 	@MainActor
 	func removeFolderAndSettings() throws {
-		FolderSettingsManager.shared.removeSettingsFor(folderID: self.folderID)
+		// The engine may refuse to remove the files; the settings stay with the folder then
 		try self.remove()
+		FolderSettingsManager.shared.removeSettingsFor(folderID: self.folderID)
 	}
 
 	@MainActor

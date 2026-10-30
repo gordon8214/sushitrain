@@ -136,10 +136,20 @@ func (fld *Folder) filesystem() (fs.Filesystem, error) {
 	return fc.Filesystem(), nil
 }
 
+// Remove removes the folder and its files (into the Trash when the folder uses it), only when CanRemoveFiles
 func (fld *Folder) Remove() error {
-	ffs, err := fld.filesystem()
-	if err != nil {
-		return err
+	// The directory that is checked is the one that is removed: both come from this configuration
+	cfg := fld.client.cfg()
+	if cfg == nil {
+		return ErrStillLoading
+	}
+	fc, ok := cfg.Folder(fld.FolderID)
+	if !ok {
+		return errors.New("folder does not exist")
+	}
+	ffs := fc.Filesystem()
+	if !fld.client.canRemoveFiles(fc, cfg.FolderList(), ffs.URI()) {
+		return ErrFolderFilesNotRemovable
 	}
 
 	if fld.IsTrashEnabled() {
@@ -154,7 +164,7 @@ func (fld *Folder) Remove() error {
 		return fld.Unlink()
 	}
 
-	err = fld.Unlink()
+	err := fld.Unlink()
 	if err != nil {
 		return err
 	}
@@ -649,11 +659,15 @@ func (fld *Folder) FolderType() string {
 	}
 }
 
-// Returns true when this folder is 'external', i.e. some other app's folder
+// Returns true when this folder is 'external', i.e. some other app's folder. Outside the App Sandbox on macOS every
+// folder is the user's, wherever it is, so none is.
 func (fld *Folder) IsExternal() (bool, error) {
 	fc := fld.folderConfiguration()
 	if fc == nil {
 		return false, errors.New("cannot obtain folder configuration")
+	}
+	if fld.client.folderLayout == homeFolders {
+		return false, nil
 	}
 
 	return !fld.client.isInternalFolderPath(fld.FolderID, fc.Path), nil

@@ -17914,6 +17914,52 @@
         }
       }
     },
+    "The folder will be created at %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Ordner wird unter %@ erstellt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carpeta se creará en %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cartella verrà creata in %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダは%@に作成されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De map wordt aangemaakt in %@."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папку буде створено в %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹将创建于 %@。"
+          }
+        }
+      }
+    },
     "The folder's versioning on %@ has removed this version." : {
       "localizations" : {
         "de" : {
@@ -57942,6 +57988,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此位置已添加到您的书签中。可以从起始页快速访问书签位置。"
+          }
+        }
+      }
+    },
+    "This location overlaps the folder '%@'. Folders inside one another are not supported." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Ort überschneidet sich mit dem Ordner '%@'. Ineinander liegende Ordner werden nicht unterstützt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta ubicación se solapa con la carpeta '%@'. No se admiten carpetas dentro de otras."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa posizione si sovrappone alla cartella '%@'. Le cartelle una dentro l'altra non sono supportate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この場所はフォルダ '%@' と重なっています。フォルダを入れ子にすることはできません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze locatie overlapt met de map '%@'. Mappen binnen elkaar worden niet ondersteund."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Це розташування перетинається з папкою '%@'. Вкладені одна в одну папки не підтримуються."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此位置与文件夹'%@'重叠。不支持相互嵌套的文件夹。"
           }
         }
       }

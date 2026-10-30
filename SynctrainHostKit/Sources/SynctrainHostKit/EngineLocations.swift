@@ -19,6 +19,9 @@ public struct EngineLocations: Sendable, Equatable {
 		case iOS
 	}
 
+	/// The layout these locations follow
+	public let platform: Platform
+
 	/// The default configuration and database directory (on macOS the user can choose another)
 	public let configDirectory: URL
 
@@ -36,6 +39,7 @@ public struct EngineLocations: Sendable, Equatable {
 	///   - applicationSupport: the system Application Support directory
 	///   - documents: the app's Documents directory (iOS and the sandbox)
 	public init(platform: Platform, home: URL, applicationSupport: URL, documents: URL) {
+		self.platform = platform
 		switch platform {
 		case .macOS:
 			let synctrain = applicationSupport.appending(path: "Synctrain", directoryHint: .isDirectory)

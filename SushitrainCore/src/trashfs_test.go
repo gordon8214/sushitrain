@@ -278,8 +278,14 @@ func TestTrashSelectionCleanup(t *testing.T) {
 
 func newTrashTestFolder(t *testing.T) *Folder {
 	t.Helper()
+	// At the app's default location, where folders may be removed with their files
+	filesPath := t.TempDir()
+	if err := os.Mkdir(filepath.Join(filesPath, "test"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	cfg := config.New(protocol.EmptyDeviceID)
-	cfg.Folders = []config.FolderConfiguration{{ID: "test", Path: t.TempDir(), FilesystemType: config.FilesystemTypeBasic}}
+	cfg.Folders = []config.FolderConfiguration{{ID: "test", Path: filepath.Join(filesPath, "test"),
+		FilesystemType: config.FilesystemTypeBasic}}
 	wrapper := config.Wrap(filepath.Join(t.TempDir(), "config.xml"), cfg, protocol.EmptyDeviceID, events.NoopLogger)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -288,7 +294,7 @@ func newTrashTestFolder(t *testing.T) *Folder {
 		_ = wrapper.Serve(ctx)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	return &Folder{client: (&Client{}).withTestRun(wrapper, nil, nil), FolderID: "test"}
+	return &Folder{client: (&Client{filesPath: filesPath}).withTestRun(wrapper, nil, nil), FolderID: "test"}
 }
 
 func TestTrashFolderConfiguration(t *testing.T) {

@@ -55,8 +55,10 @@ struct SushitrainApp: App {
 		#if os(iOS)
 			FileProviderStorage.configureManagedFolderBase()
 		#endif
+		// Outside the sandbox on macOS, folders are the user's, anywhere in the home directory
 		let client = SushitrainNewClient(
-			configPath, filesPath, engineLocations.logs.path(percentEncoded: false), enableLoggingToFile)!
+			configPath, filesPath, engineLocations.logs.path(percentEncoded: false),
+			engineLocations.platform == .macOS, enableLoggingToFile)!
 		if UserDefaults.standard.bool(forKey: "keepLogLevels") {
 			client.applyLogLevels(UserDefaults.standard.string(forKey: "keptLogLevels") ?? "")
 		}

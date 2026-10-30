@@ -52,6 +52,9 @@ struct AddFolderView: View {
 	// Whether any device offers this folder as receive encrypted
 	@State private var isOfferedReceiveEncrypted = false
 
+	// Where a regular folder is created, when folders are in the home directory (macOS outside the sandbox)
+	@State private var defaultFolderPath: String? = nil
+
 	@FocusState private var idFieldFocus: Bool
 
 	var folderExists: Bool {
@@ -81,12 +84,13 @@ struct AddFolderView: View {
 			#if os(macOS)
 				.formStyle(.grouped)
 			#endif
-			.task {
-				await self.update()
+			.task(id: self.adding.folderID) {
+				await self.update(folderID: self.adding.folderID)
 			}
 			.toolbar {
 				SheetButton(role: .add, isDisabled: self.adding.folderID.isEmpty || folderExists) {
-					if self.folderPath != nil {
+					// In the home directory, folders are the user's own rather than another app's
+					if self.folderPath != nil && !appState.client.usesHomeFolders() {
 						self.showAlert = .addingExternalFolderWarning
 					}
 					else {
@@ -272,7 +276,26 @@ struct AddFolderView: View {
 					"A photo folder contains photos from selected albums from your photo library. Because photos are read directly from the photo album, the photo folder itself does not take up storage space on this device. Photo folders are read-only and send-only, which means that you cannot add files to the folder, nor modify or delete photos in the folder."
 				)
 			}
+			else if let folderPath = self.folderPath, appState.client.usesHomeFolders() {
+				if let overlapping = self.folderOverlapping(folderPath) {
+					Text(
+						"This location overlaps the folder '\(overlapping)'. Folders inside one another are not supported."
+					)
+				}
+			}
+			else if let defaultFolderPath = self.defaultFolderPath {
+				Text("The folder will be created at \((defaultFolderPath as NSString).abbreviatingWithTildeInPath).")
+			}
 		}
+	}
+
+	/// The name of the folder a folder at `url` would contain or be inside, if any
+	private func folderOverlapping(_ url: URL) -> String? {
+		let folderID = appState.client.overlappingFolderID(url.path(percentEncoded: false))
+		if folderID.isEmpty {
+			return nil
+		}
+		return appState.client.folder(withID: folderID)?.displayName ?? folderID
 	}
 
 	@ViewBuilder private func folderSyncTypeSection() -> some View {
@@ -297,9 +320,13 @@ struct AddFolderView: View {
 		ShareWithDevicesView(folderID: self.adding.folderID, sharedWith: $adding.sharedWithDevices)
 	}
 
-	private func update() async {
-		let appState = self.appState
-		let folderID = self.adding.folderID
+	@concurrent private func update(folderID: String) async {
+		// Typing the folder ID starts this again: wait until typing pauses
+		try? await Task.sleep(for: .milliseconds(250))
+		if Task.isCancelled {
+			return
+		}
+		let appState = await self.appState
 
 		var isOffered: ObjCBool = false
 		do {
@@ -309,8 +336,21 @@ struct AddFolderView: View {
 			isOffered = false
 		}
 
+		// Never a directory that exists, so it is shown only where it is chosen (in the home directory)
+		var defaultFolderPath: String? = nil
+		if appState.client.usesHomeFolders() && !folderID.isEmpty {
+			var error: NSError? = nil
+			let path = appState.client.defaultFolderPath(folderID, error: &error)
+			defaultFolderPath = error == nil ? path : nil
+		}
+
+		// The folder ID changed meanwhile
+		if Task.isCancelled {
+			return
+		}
 		Task { @MainActor in
 			self.isOfferedReceiveEncrypted = isOffered.boolValue
+			self.defaultFolderPath = defaultFolderPath
 		}
 	}
 

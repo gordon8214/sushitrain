@@ -44,6 +44,32 @@ says why and offers what helps (for a damaged configuration, setting it aside an
 the device identity). A configuration from an older Syncthing is archived as `config.xml.v<version>` before it is
 migrated, and a database a newer Syncthing wrote is refused.
 
+## Where things are
+
+Outside the App Sandbox, the Mac app keeps the engine's configuration, keys and database in
+`~/Library/Application Support/Synctrain` (or the configuration folder chosen in the settings), its log files in
+`~/Library/Logs/Synctrain`, and its caches (thumbnails, and the remote file service's content spool) in
+`~/Library/Caches/<bundle id>`, where they can be removed at any time. The app excludes nothing from Time Machine. A
+sandboxed build keeps the layout of earlier versions in its container, and iOS keeps everything in the app's container.
+
+Folders are the user's, anywhere (in the home directory or on another volume), as with Syncthing:
+
+- A new folder goes in a new directory named after its label (the one the offering device uses, or else its ID) in the
+  configuration's default folder path, as in the web GUI. A new configuration's default folder path is `~/Sync`, and
+  so is the place used when it is empty or relative. The name loses leading dots, path separators and invisible
+  characters, and a name that is taken gets a number. When the default folder path is a folder or inside one, or no
+  number is left, the home directory is used instead. So a new folder never takes over an existing directory, becomes a
+  hidden one, or lands inside another folder. Adding a folder shows where it will go; Existing folder picks another
+  place, with a warning when it overlaps a folder.
+- The app does not add a folder that contains, or is inside, the engine's configuration or database directory (the web
+  GUI and the REST API don't check this).
+- Remove folder, which deletes the files too, is offered only for folders inside `~/Sync` that are neither inside nor
+  around another folder; the directory Syncthing would remove, and where its links lead, must pass too. Other folders
+  are unlinked and their files removed in Finder. The home directory, its parents and the engine's own directories are
+  never removed, on iOS either.
+- No folder counts as another app's (external), and none is excluded from Time Machine. On iOS, new folders are still
+  left out of the device backup by default.
+
 ## Restarting and shutting down
 
 Restarting Syncthing (from the web GUI or the REST API's `/rest/system/restart`, from Troubleshooting in the app's

@@ -65,11 +65,11 @@ func writeFolderWithMarker(t *testing.T, folderPath string) {
 
 func TestDefaultFolderPath(t *testing.T) {
 	clt := &Client{filesPath: "/documents"}
-	if got, err := clt.defaultFolderPath("abc"); err != nil || got != "/documents/abc" {
+	if got, err := clt.defaultFolderPath("abc", ""); err != nil || got != "/documents/abc" {
 		t.Fatalf("without managed base: %q, %v", got, err)
 	}
 	base := setTestManagedBase(t)
-	if got, err := clt.defaultFolderPath("abc"); err != nil || got != filepath.Join(base, "abc") {
+	if got, err := clt.defaultFolderPath("abc", ""); err != nil || got != filepath.Join(base, "abc") {
 		t.Fatalf("with managed base: %q, %v", got, err)
 	}
 	if !clt.isInternalFolderPath("abc", "/documents/abc") || !clt.isInternalFolderPath("abc", filepath.Join(base, "abc")) {
@@ -84,7 +84,7 @@ func TestUnsafeFolderIDs(t *testing.T) {
 	clt := &Client{filesPath: "/documents"}
 	base := setTestManagedBase(t)
 	for _, id := range []string{"..", "../x", "a/b", ".", "", "a\\b", "a\x00b", "/abs", "x/.."} {
-		if path, err := clt.defaultFolderPath(id); !errors.Is(err, errUnsafeFolderID) {
+		if path, err := clt.defaultFolderPath(id, ""); !errors.Is(err, errUnsafeFolderID) {
 			t.Errorf("%q: default path %q, %v", id, path, err)
 		}
 		if managed := managedFolderPath(id); managed != "" {
