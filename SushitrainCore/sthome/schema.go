@@ -48,11 +48,21 @@ func CheckSchema(dbDir string) error {
 
 // SchemaVersion reads the schema version of one database file, without changing it
 func SchemaVersion(path string) (int, error) {
+	return schemaVersion(path, false)
+}
+
+// schemaVersion reads a database's schema version. When immutable, SQLite also creates no write-ahead log or shared
+// memory file next to it, and reads only the database file (missing what is still in a write-ahead log).
+func schemaVersion(path string, immutable bool) (int, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return 0, err
 	}
-	uri := url.URL{Scheme: "file", Path: abs, RawQuery: "mode=ro"}
+	query := "mode=ro"
+	if immutable {
+		query += "&immutable=1"
+	}
+	uri := url.URL{Scheme: "file", Path: abs, RawQuery: query}
 	db, err := sql.Open(sqliteDriver, uri.String())
 	if err != nil {
 		return 0, err

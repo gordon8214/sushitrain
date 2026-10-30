@@ -917,6 +917,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = SushitrainGlass;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
+				"AUTOMATION_APPLE_EVENTS[sdk=macosx*]" = YES;
 				CODE_SIGN_ENTITLEMENTS = Sushitrain/Sushitrain.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Sushitrain/SushitrainMac.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -946,6 +947,7 @@
 				INFOPLIST_KEY_ITSEncryptionExportComplianceCode = "c725a5cb-2954-4d01-9fe0-cb53e270346e";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Synctrain asks System Events to remove Syncthing.app's login item when it takes over Syncthing's setup.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Using the camera you can easily add devices by scanning a QR code. It is still possible to add devices manually without the camera.";
 				INFOPLIST_KEY_NSDesktopFolderUsageDescription = "Synctrain synchronizes the folders you add, including those on your desktop.";
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "Synctrain synchronizes the folders you add, including those in your Documents folder.";
@@ -992,6 +994,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = SushitrainGlass;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
+				"AUTOMATION_APPLE_EVENTS[sdk=macosx*]" = YES;
 				CODE_SIGN_ENTITLEMENTS = Sushitrain/Sushitrain.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Sushitrain/SushitrainMac.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -1021,6 +1024,7 @@
 				INFOPLIST_KEY_ITSEncryptionExportComplianceCode = "c725a5cb-2954-4d01-9fe0-cb53e270346e";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Synctrain asks System Events to remove Syncthing.app's login item when it takes over Syncthing's setup.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Using the camera you can easily add devices by scanning a QR code. It is still possible to add devices manually without the camera.";
 				INFOPLIST_KEY_NSDesktopFolderUsageDescription = "Synctrain synchronizes the folders you add, including those on your desktop.";
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "Synctrain synchronizes the folders you add, including those in your Documents folder.";

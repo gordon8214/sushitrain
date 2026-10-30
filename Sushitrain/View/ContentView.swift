@@ -17,6 +17,11 @@ struct MainView: View {
 		case .notStarted:
 			LoadingMainView(appState: appState)
 
+		#if os(macOS)
+			case .engineSetup(let decision):
+				SyncthingTakeoverView(decision: decision)
+		#endif
+
 		case .onboarding:
 			OnboardingView(allowSkip: false)
 

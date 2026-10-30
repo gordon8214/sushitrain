@@ -144,14 +144,13 @@ struct SushitrainApp: App {
 	static func configDirectoryURL() -> URL {
 		#if os(macOS)
 			var isStale = false
-			// A test run (SYNCTRAIN_TEST_ROOT) leaves the configuration folder the user chose alone
-			let chosen = EngineLocations.testRoot == nil
-			if chosen && !FolderAccess.usesSecurityScope, let path = ConfigDirectorySetting.path {
+			// A test run (SYNCTRAIN_TEST_ROOT) keeps its own choice (TestRun), and leaves the one the user made alone
+			if !FolderAccess.usesSecurityScope, let path = ConfigDirectorySetting.path {
 				// Never created here: if it can't be found (as on a disk that is not connected), the engine says so
 				Log.info("Using custom config directory: \(path)")
 				return URL(fileURLWithPath: path, isDirectory: true)
 			}
-			if chosen && FolderAccess.usesSecurityScope,
+			if EngineLocations.testRoot == nil && FolderAccess.usesSecurityScope,
 				let configDirectoryBookmark = UserDefaults.standard.data(forKey: ConfigDirectorySetting.bookmarkKey),
 				let cd = try? URL(
 					resolvingBookmarkData: configDirectoryBookmark, options: [.withSecurityScope],

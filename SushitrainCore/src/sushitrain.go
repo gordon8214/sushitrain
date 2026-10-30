@@ -64,9 +64,12 @@ type Client struct {
 	appLock                  *flock.Flock
 	lockedPath               string
 	lockMutex                sync.Mutex
-	remoteManaged            *remoteManagedSet
-	startupProblem           atomic.Value // string, one of the StartupProblem constants
-	guiNotice                atomic.Value // string, what the last load changed about the web GUI (GUIStatusMessage)
+	// The lock on Syncthing's home directory this app keeps (HoldSyncthingHome), and that directory
+	syncthingHomeLock     *os.File
+	syncthingHomeLockPath string
+	remoteManaged         *remoteManagedSet
+	startupProblem        atomic.Value // string, one of the StartupProblem constants
+	guiNotice             atomic.Value // string, what the last load changed about the web GUI (GUIStatusMessage)
 
 	// The engine, restarted in place (engine.go). lifecycle serializes loading, starting, restarting and stopping, and
 	// is never held while calling the delegate.

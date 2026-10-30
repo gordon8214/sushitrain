@@ -152,9 +152,11 @@
 			if defaults.bool(forKey: engineDataSettledKey) {
 				return
 			}
-			if EngineLocations.testRoot == nil && ConfigDirectorySetting.path != nil {
+			if ConfigDirectorySetting.path != nil {
 				self.takeOverRemoteFileService(&outcome.messages)
-				defaults.set(true, forKey: engineDataSettledKey)
+				if !TestRun.isActive {
+					defaults.set(true, forKey: engineDataSettledKey)
+				}
 				return
 			}
 			let migration = ContainerMigration(

@@ -32,6 +32,14 @@ extension AppState {
 		// Wait for app startup
 		do {
 			while self.startupState != .started {
+				#if os(macOS)
+					// Waiting for the user's choice next to Syncthing.app, or for it to quit
+					if case .engineSetup = self.startupState {
+						Log.info("The engine waits for its setup next to Syncthing; abort intent task")
+						throw IntentHandlingError.appStartupFailed(
+							String(localized: "Synctrain waits for Syncthing to be taken over or to quit."))
+					}
+				#endif
 				if case .onboarding = self.startupState {
 					Log.info("Onboarding required, cannot perform intent tasks now")
 					throw IntentHandlingError.onboardingRequired

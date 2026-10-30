@@ -18,6 +18,9 @@
 		/// The path of the folder chosen outside the sandbox, or nil for the default location. Read the preferences
 		/// migrated from the sandbox (ContainerMigration) before this, since the bookmark comes with them.
 		static var path: String? {
+			if TestRun.isActive {
+				return (TestRun.value(forKey: pathKey) as? String).flatMap { $0.isEmpty ? nil : $0 }
+			}
 			let defaults = UserDefaults.standard
 			if let path = defaults.string(forKey: pathKey) {
 				return path.isEmpty ? nil : path
@@ -37,7 +40,7 @@
 
 		/// Whether a folder other than the default location was chosen (in the sandbox, with a bookmark)
 		static var isChosen: Bool {
-			if FolderAccess.usesSecurityScope {
+			if FolderAccess.usesSecurityScope && !TestRun.isActive {
 				return UserDefaults.standard.data(forKey: bookmarkKey) != nil
 			}
 			return self.path != nil
@@ -46,6 +49,10 @@
 		/// Chooses a folder outside the sandbox, or the default location (nil), which in the sandbox removes the
 		/// bookmark
 		static func choose(_ url: URL?) {
+			if TestRun.isActive {
+				TestRun.set(url?.path(percentEncoded: false) ?? "", forKey: pathKey)
+				return
+			}
 			let defaults = UserDefaults.standard
 			if FolderAccess.usesSecurityScope {
 				precondition(url == nil, "the sandbox remembers a chosen folder with a bookmark")

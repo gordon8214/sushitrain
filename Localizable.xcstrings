@@ -7056,6 +7056,52 @@
         }
       }
     },
+    "Another Syncthing runs on this Mac. Both would compete for the same ports. Quit it, or run Synctrain alongside it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf diesem Mac läuft ein anderes Syncthing. Beide würden um dieselben Ports konkurrieren. Beenden Sie es oder lassen Sie Synctrain daneben laufen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En este Mac se ejecuta otro Syncthing. Ambos competirían por los mismos puertos. Ciérralo o ejecuta Synctrain junto a él."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su questo Mac è in esecuzione un altro Syncthing. Entrambi si contenderebbero le stesse porte. Chiudilo o esegui Synctrain accanto a esso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このMacでは別のSyncthingが動作しています。両方が同じポートを取り合うことになります。終了するか、Synctrainを並行して実行してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op deze Mac draait een andere Syncthing. Beide zouden om dezelfde poorten strijden. Sluit hem af, of laat Synctrain ernaast draaien."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На цьому Mac працює інший Syncthing. Обидва змагалися б за ті самі порти. Закрийте його або запустіть Synctrain поруч."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 Mac 上正在运行另一个 Syncthing。两者会争用相同的端口。请退出它，或让 Synctrain 与其并行运行。"
+          }
+        }
+      }
+    },
     "API compatible" : {
       "localizations" : {
         "de" : {
@@ -10736,6 +10782,52 @@
         }
       }
     },
+    "Import a copy" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Kopie importieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importar una copia"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importa una copia"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コピーを読み込む"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een kopie importeren"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпортувати копію"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入副本"
+          }
+        }
+      }
+    },
     "In Files" : {
       "localizations" : {
         "de" : {
@@ -12346,6 +12438,52 @@
         }
       }
     },
+    "Not running" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Läuft nicht"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se está ejecutando"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non in esecuzione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "実行されていません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Draait niet"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не працює"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未运行"
+          }
+        }
+      }
+    },
     "Not Uploaded Yet" : {
       "localizations" : {
         "de" : {
@@ -12618,6 +12756,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请打开 Synctrain，并将此设备重新与网关配对。"
+          }
+        }
+      }
+    },
+    "Open Synctrain at Login" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain bei der Anmeldung öffnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Synctrain al iniciar sesión"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri Synctrain all'accesso"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ログイン時にSynctrainを開く"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain openen bij inloggen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відкривати Synctrain під час входу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录时打开 Synctrain"
           }
         }
       }
@@ -13358,6 +13542,52 @@
         }
       }
     },
+    "Ports in use" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Belegte Ports"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puertos en uso"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porte in uso"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用中のポート"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poorten in gebruik"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зайняті порти"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已占用的端口"
+          }
+        }
+      }
+    },
     "Preview" : {
       "localizations" : {
         "de" : {
@@ -13538,6 +13768,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "只有 Synctrain 通过网关打开的文件夹中的文件才能显示以前的版本。"
+          }
+        }
+      }
+    },
+    "Quit Syncthing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing beenden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salir de Syncthing"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci da Syncthing"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingを終了"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing afsluiten"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закрити Syncthing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出 Syncthing"
+          }
+        }
+      }
+    },
+    "Quit Syncthing first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beenden Sie zuerst Syncthing."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cierra primero Syncthing."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi prima Syncthing."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先にSyncthingを終了してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sluit eerst Syncthing af."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спершу закрийте Syncthing."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先退出 Syncthing。"
           }
         }
       }
@@ -14044,6 +14366,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从文件应用中移除…"
+          }
+        }
+      }
+    },
+    "Remove Syncthing from Login Items" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing aus den Anmeldeobjekten entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar Syncthing de los ítems de inicio"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovi Syncthing dagli elementi login"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingをログイン項目から削除"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing verwijderen uit inlogonderdelen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вилучити Syncthing з об’єктів входу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从登录项中移除 Syncthing"
           }
         }
       }
@@ -14689,6 +15057,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤销…"
+          }
+        }
+      }
+    },
+    "Run alongside Syncthing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neben Syncthing ausführen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ejecutar junto a Syncthing"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esegui accanto a Syncthing"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingと並行して実行"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naast Syncthing draaien"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запустити поруч із Syncthing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "与 Syncthing 并行运行"
           }
         }
       }
@@ -16488,6 +16902,144 @@
         }
       }
     },
+    "Syncthing is running" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing läuft"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing se está ejecutando"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing è in esecuzione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingが動作しています"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing draait"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing працює"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing 正在运行"
+          }
+        }
+      }
+    },
+    "Syncthing is set up on this Mac" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing ist auf diesem Mac eingerichtet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing está configurado en este Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing è configurato su questo Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このMacにはSyncthingが設定されています"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing is op deze Mac ingesteld"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing налаштовано на цьому Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 Mac 上已设置 Syncthing"
+          }
+        }
+      }
+    },
+    "Syncthing is still running. Quit it yourself, then try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing läuft noch. Beenden Sie es selbst und versuchen Sie es dann erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing sigue ejecutándose. Ciérralo tú mismo y vuelve a intentarlo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing è ancora in esecuzione. Chiudilo tu, poi riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingはまだ動作しています。手動で終了してから、もう一度お試しください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing draait nog. Sluit het zelf af en probeer het opnieuw."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing досі працює. Закрийте його самостійно, а потім спробуйте ще раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing 仍在运行。请自行退出它，然后重试。"
+          }
+        }
+      }
+    },
     "Syncthing on this device does not synchronize this folder. The Files app opens and saves its files through the gateway. The files that were synchronized on this device before are kept." : {
       "localizations" : {
         "de" : {
@@ -16668,6 +17220,374 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此设备上的 Syncthing 会停止同步该文件夹，改由文件应用通过网关打开和保存其中的文件。此设备上的文件会保留。当此设备上还有网关尚未获得的更改时，将拒绝切换。"
+          }
+        }
+      }
+    },
+    "Syncthing on this Mac" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing auf diesem Mac"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing en este Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing su questo Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このMacのSyncthing"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing op deze Mac"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing на цьому Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 Mac 上的 Syncthing"
+          }
+        }
+      }
+    },
+    "Syncthing runs with this Mac's device identity, which must not run twice. Synctrain starts once Syncthing has quit." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing läuft mit der Geräteidentität dieses Macs, die nicht zweimal laufen darf. Synctrain startet, sobald Syncthing beendet wurde."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing se ejecuta con la identidad de dispositivo de este Mac, que no debe ejecutarse dos veces. Synctrain se iniciará cuando Syncthing se haya cerrado."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing è in esecuzione con l'identità del dispositivo di questo Mac, che non deve essere in esecuzione due volte. Synctrain si avvia quando Syncthing è stato chiuso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SyncthingはこのMacのデバイスIDで動作しており、同じIDを二重に動作させることはできません。Syncthingが終了するとSynctrainが起動します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing draait met de apparaatidentiteit van deze Mac, die niet twee keer mag draaien. Synctrain start zodra Syncthing is afgesloten."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing працює з ідентичністю пристрою цього Mac, яка не може працювати двічі. Synctrain запуститься, щойно Syncthing буде закрито."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing 正以此 Mac 的设备身份运行，该身份不能同时运行两次。Syncthing 退出后，Synctrain 才会启动。"
+          }
+        }
+      }
+    },
+    "Syncthing's configuration or database is from a newer version than this app's engine, which cannot use it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Konfiguration oder Datenbank von Syncthing stammt von einer neueren Version als die Engine dieser App, die sie nicht verwenden kann."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La configuración o la base de datos de Syncthing es de una versión más reciente que el motor de esta app, que no puede usarla."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La configurazione o il database di Syncthing provengono da una versione più recente del motore di questa app, che non può usarli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingの設定またはデータベースは、このアプリのエンジンより新しいバージョンのもので、エンジンでは使用できません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De configuratie of database van Syncthing is van een nieuwere versie dan de engine van deze app, die ze niet kan gebruiken."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конфігурація або база даних Syncthing походить з новішої версії, ніж рушій цього додатка, тож він не може її використати."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing 的配置或数据库来自比此应用引擎更新的版本，引擎无法使用。"
+          }
+        }
+      }
+    },
+    "Syncthing's configuration or database is from a newer version than this app's engine." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Konfiguration oder Datenbank von Syncthing stammt von einer neueren Version als die Engine dieser App."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La configuración o la base de datos de Syncthing es de una versión más reciente que el motor de esta app."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La configurazione o il database di Syncthing provengono da una versione più recente del motore di questa app."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingの設定またはデータベースは、このアプリのエンジンより新しいバージョンのものです。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De configuratie of database van Syncthing is van een nieuwere versie dan de engine van deze app."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конфігурація або база даних Syncthing походить з новішої версії, ніж рушій цього додатка."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing 的配置或数据库来自比此应用引擎更新的版本。"
+          }
+        }
+      }
+    },
+    "Syncthing's device certificate or key is missing or damaged, so its device ID can't be kept." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Gerätezertifikat oder der Schlüssel von Syncthing fehlt oder ist beschädigt, daher kann seine Geräte-ID nicht behalten werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falta el certificado o la clave del dispositivo de Syncthing, o están dañados, así que no se puede conservar su ID de dispositivo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il certificato o la chiave del dispositivo di Syncthing mancano o sono danneggiati, quindi il suo ID dispositivo non può essere mantenuto."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingのデバイス証明書または鍵が見つからないか破損しているため、デバイスIDを保持できません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het apparaatcertificaat of de sleutel van Syncthing ontbreekt of is beschadigd, dus de apparaat-ID kan niet behouden blijven."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сертифікат або ключ пристрою Syncthing відсутні чи пошкоджені, тож його ID пристрою не вдасться зберегти."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing 的设备证书或密钥缺失或已损坏，因此无法保留其设备 ID。"
+          }
+        }
+      }
+    },
+    "Syncthing.app starts its engine again unless it quits itself. Removing its login item keeps it from starting at the next login." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing.app startet seine Engine erneut, sofern es nicht selbst beendet wird. Wenn Sie sein Anmeldeobjekt entfernen, startet es bei der nächsten Anmeldung nicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing.app vuelve a iniciar su motor a menos que se cierre la propia app. Eliminar su ítem de inicio evita que se inicie la próxima vez que inicies sesión."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing.app riavvia il suo motore a meno che non venga chiusa l'app stessa. Rimuovere il suo elemento login le impedisce di avviarsi al prossimo accesso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing.appは、アプリ自体が終了しない限りエンジンを再起動します。ログイン項目を削除すると、次回ログイン時に起動しなくなります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing.app start zijn engine opnieuw, tenzij de app zelf wordt afgesloten. Door het inlogonderdeel te verwijderen start het niet bij de volgende keer inloggen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing.app знову запускає свій рушій, якщо не закрити сам застосунок. Вилучення об’єкта входу не дасть йому запуститися під час наступного входу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "除非退出 Syncthing.app 本身，否则它会再次启动其引擎。移除其登录项可防止它在下次登录时启动。"
+          }
+        }
+      }
+    },
+    "Synctrain can take over Syncthing's setup, so that this Mac keeps its device ID, folders and devices, and nothing synchronizes again. Syncthing must quit first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kann die Einrichtung von Syncthing übernehmen, sodass dieser Mac seine Geräte-ID, Ordner und Geräte behält und nichts erneut synchronisiert wird. Syncthing muss vorher beendet werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain puede asumir la configuración de Syncthing, de modo que este Mac conserve su ID de dispositivo, sus carpetas y sus dispositivos, y nada se vuelva a sincronizar. Antes hay que cerrar Syncthing."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain può subentrare alla configurazione di Syncthing, così questo Mac mantiene il suo ID dispositivo, le cartelle e i dispositivi, e nulla viene sincronizzato di nuovo. Prima bisogna chiudere Syncthing."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SynctrainはSyncthingの設定を引き継ぐことができます。これにより、このMacはデバイスID、フォルダ、デバイスを保持し、何も再同期されません。先にSyncthingを終了する必要があります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kan de instellingen van Syncthing overnemen, zodat deze Mac zijn apparaat-ID, mappen en apparaten behoudt en niets opnieuw wordt gesynchroniseerd. Syncthing moet eerst worden afgesloten."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain може перейняти налаштування Syncthing, щоб цей Mac зберіг свій ID пристрою, папки та пристрої, і нічого не синхронізувалося повторно. Спершу треба закрити Syncthing."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 可以接管 Syncthing 的设置，使此 Mac 保留其设备 ID、文件夹和设备，并且无需重新同步任何内容。需要先退出 Syncthing。"
+          }
+        }
+      }
+    },
+    "Synctrain can use the configuration of Syncthing.app on this Mac, keeping its device ID, folders and devices." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kann die Konfiguration von Syncthing.app auf diesem Mac verwenden und dabei Geräte-ID, Ordner und Geräte behalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain puede usar la configuración de Syncthing.app en este Mac, conservando su ID de dispositivo, sus carpetas y sus dispositivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain può usare la configurazione di Syncthing.app su questo Mac, mantenendo ID dispositivo, cartelle e dispositivi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainは、このMacのSyncthing.appの設定を、デバイスID、フォルダ、デバイスを保持したまま使用できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kan de configuratie van Syncthing.app op deze Mac gebruiken, met behoud van apparaat-ID, mappen en apparaten."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain може використовувати конфігурацію Syncthing.app на цьому Mac, зберігаючи ID пристрою, папки та пристрої."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 可以使用此 Mac 上 Syncthing.app 的配置，并保留其设备 ID、文件夹和设备。"
           }
         }
       }
@@ -17270,6 +18190,52 @@
         }
       }
     },
+    "Synctrain may not change the login items. Remove Syncthing in System Settings instead." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain darf die Anmeldeobjekte nicht ändern. Entfernen Sie Syncthing stattdessen in den Systemeinstellungen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no tiene permiso para cambiar los ítems de inicio. Elimina Syncthing en Ajustes del Sistema."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non può modificare gli elementi login. Rimuovi Syncthing in Impostazioni di Sistema."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainはログイン項目を変更できません。代わりにシステム設定でSyncthingを削除してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain mag de inlogonderdelen niet wijzigen. Verwijder Syncthing in plaats daarvan in Systeeminstellingen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не може змінювати об’єкти входу. Натомість вилучіть Syncthing у Системних параметрах."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无权更改登录项。请改为在“系统设置”中移除 Syncthing。"
+          }
+        }
+      }
+    },
     "Synctrain sends this change to %@ once it can be reached." : {
       "localizations" : {
         "de" : {
@@ -17316,6 +18282,98 @@
         }
       }
     },
+    "Synctrain waits for Syncthing to be taken over or to quit." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain wartet darauf, dass Syncthing übernommen oder beendet wird."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain espera a que se asuma la configuración de Syncthing o a que se cierre."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain attende che Syncthing venga sostituito o chiuso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SynctrainはSyncthingの引き継ぎか終了を待っています。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain wacht tot Syncthing is overgenomen of afgesloten."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain чекає, доки Syncthing буде перейнято або закрито."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 正在等待接管 Syncthing 或 Syncthing 退出。"
+          }
+        }
+      }
+    },
+    "Synctrain's own configuration folder isn't empty, so the copy can't be put there." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der eigene Konfigurationsordner von Synctrain ist nicht leer, daher kann die Kopie dort nicht abgelegt werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carpeta de configuración de Synctrain no está vacía, así que la copia no se puede poner allí."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cartella di configurazione di Synctrain non è vuota, quindi la copia non può essere messa lì."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain独自の設定フォルダが空ではないため、コピーをそこに置けません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De eigen configuratiemap van Synctrain is niet leeg, dus de kopie kan daar niet worden geplaatst."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Власна папка конфігурації Synctrain не порожня, тож копію не можна туди помістити."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 自己的配置文件夹不是空的，因此无法将副本放在那里。"
+          }
+        }
+      }
+    },
     "synctrain+pair://…" : {
       "localizations" : {
         "de" : {
@@ -17358,6 +18416,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "synctrain+pair://…"
+          }
+        }
+      }
+    },
+    "Take over Syncthing's setup..." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einrichtung von Syncthing übernehmen..."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asumir la configuración de Syncthing..."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subentra alla configurazione di Syncthing..."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingの設定を引き継ぐ..."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instellingen van Syncthing overnemen..."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перейняти налаштування Syncthing..."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接管 Syncthing 的设置..."
           }
         }
       }
@@ -62270,6 +63374,52 @@
         }
       }
     },
+    "Use Syncthing's configuration" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfiguration von Syncthing verwenden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar la configuración de Syncthing"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa la configurazione di Syncthing"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingの設定を使用"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuratie van Syncthing gebruiken"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Використовувати конфігурацію Syncthing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 Syncthing 的配置"
+          }
+        }
+      }
+    },
     "Use the default configuration location?" : {
       "localizations" : {
         "de" : {
@@ -62404,6 +63554,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用于"
+          }
+        }
+      }
+    },
+    "Using Syncthing's configuration backs it up first, then Synctrain restarts on it and leaves its own configuration as it is; Syncthing.app must not run anymore." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei Verwendung der Konfiguration von Syncthing wird diese zuerst gesichert, dann startet Synctrain damit neu und lässt seine eigene Konfiguration unverändert; Syncthing.app darf danach nicht mehr laufen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar la configuración de Syncthing primero hace una copia de seguridad y luego Synctrain se reinicia con ella y deja su propia configuración como está; Syncthing.app ya no debe ejecutarse."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usare la configurazione di Syncthing prima ne fa un backup, poi Synctrain si riavvia con essa e lascia la propria configurazione com'è; Syncthing.app non deve più essere eseguita."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingの設定を使用すると、まずバックアップを作成し、その設定でSynctrainが再起動します。Synctrain独自の設定はそのまま残ります。以後Syncthing.appを実行しないでください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bij gebruik van de configuratie van Syncthing wordt die eerst geback-upt, waarna Synctrain ermee opnieuw start en zijn eigen configuratie laat zoals ze is; Syncthing.app mag daarna niet meer draaien."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Використання конфігурації Syncthing спершу створює її резервну копію, потім Synctrain перезапускається з нею і залишає власну конфігурацію як є; Syncthing.app більше не повинен працювати."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 Syncthing 的配置时会先进行备份，然后 Synctrain 以该配置重新启动，并保留其自身的配置不变；此后不应再运行 Syncthing.app。"
+          }
+        }
+      }
+    },
+    "Using Syncthing's configuration backs it up first, then Synctrain restarts on it; Syncthing.app must not run anymore. Importing a copy puts Syncthing's configuration, keys and database in Synctrain's own folder and leaves Syncthing's as they are. A new configuration gives this Mac a new device ID." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei Verwendung der Konfiguration von Syncthing wird diese zuerst gesichert, dann startet Synctrain damit neu; Syncthing.app darf danach nicht mehr laufen. Beim Import einer Kopie kommen Konfiguration, Schlüssel und Datenbank von Syncthing in den eigenen Ordner von Synctrain, und die von Syncthing bleiben unverändert. Eine neue Konfiguration gibt diesem Mac eine neue Geräte-ID."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar la configuración de Syncthing primero hace una copia de seguridad y luego Synctrain se reinicia con ella; Syncthing.app ya no debe ejecutarse. Importar una copia pone la configuración, las claves y la base de datos de Syncthing en la carpeta propia de Synctrain y deja las de Syncthing como están. Una configuración nueva da a este Mac un ID de dispositivo nuevo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usare la configurazione di Syncthing prima ne fa un backup, poi Synctrain si riavvia con essa; Syncthing.app non deve più essere eseguita. Importare una copia mette configurazione, chiavi e database di Syncthing nella cartella di Synctrain e lascia quelli di Syncthing come sono. Una nuova configurazione dà a questo Mac un nuovo ID dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingの設定を使用すると、まずバックアップを作成し、その設定でSynctrainが再起動します。以後Syncthing.appを実行しないでください。コピーを読み込むと、Syncthingの設定、鍵、データベースがSynctrain独自のフォルダにコピーされ、Syncthing側はそのまま残ります。新しい設定では、このMacに新しいデバイスIDが付きます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bij gebruik van de configuratie van Syncthing wordt die eerst geback-upt, waarna Synctrain ermee opnieuw start; Syncthing.app mag daarna niet meer draaien. Een kopie importeren zet de configuratie, sleutels en database van Syncthing in de eigen map van Synctrain en laat die van Syncthing zoals ze zijn. Een nieuwe configuratie geeft deze Mac een nieuwe apparaat-ID."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Використання конфігурації Syncthing спершу створює її резервну копію, потім Synctrain перезапускається з нею; Syncthing.app більше не повинен працювати. Імпорт копії переносить конфігурацію, ключі та базу даних Syncthing у власну папку Synctrain, а дані Syncthing залишаються як є. Нова конфігурація дає цьому Mac новий ID пристрою."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 Syncthing 的配置时会先进行备份，然后 Synctrain 以该配置重新启动；此后不应再运行 Syncthing.app。导入副本会将 Syncthing 的配置、密钥和数据库放入 Synctrain 自己的文件夹，Syncthing 的原件保持不变。新配置会给此 Mac 一个新的设备 ID。"
           }
         }
       }
@@ -63324,6 +64566,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在等待批准（%@）"
+          }
+        }
+      }
+    },
+    "Waiting for Syncthing to quit" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten, bis Syncthing beendet ist"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando a que Syncthing se cierre"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In attesa della chiusura di Syncthing"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingの終了を待っています"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wachten tot Syncthing is afgesloten"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очікування закриття Syncthing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待 Syncthing 退出"
           }
         }
       }

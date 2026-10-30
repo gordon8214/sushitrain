@@ -56,6 +56,7 @@ import SushitrainCore
 		@State private var currentPath: URL? = nil
 		@State private var showRestartAlert: Bool = false
 		@State private var containerFolders = ContainerFolders()
+		@State private var showSyncthingTakeover = false
 
 		var body: some View {
 			Form {
@@ -110,6 +111,38 @@ import SushitrainCore
 				}
 
 				ContainerFoldersSection(model: containerFolders)
+
+				// Not after a takeover: the configuration is Syncthing's already, or a copy with its identity
+				if SyncthingInstallation.hasConfiguration && EngineSetup.choice != .importSyncthing
+					&& appState.configDirectory.standardizedFileURL.path
+						!= SyncthingInstallation.home.standardizedFileURL.path
+				{
+					Section {
+						Button("Take over Syncthing's setup...") {
+							showSyncthingTakeover = true
+						}
+						.buttonStyle(.link)
+					} header: {
+						Text("Syncthing")
+					} footer: {
+						Text(
+							"Synctrain can use the configuration of Syncthing.app on this Mac, keeping its device ID, folders and devices."
+						)
+					}
+				}
+			}
+			.sheet(isPresented: $showSyncthingTakeover) {
+				NavigationStack {
+					SyncthingTakeoverView(decision: .offerTakeover, fromSettings: true)
+						.toolbar {
+							ToolbarItem(placement: .confirmationAction) {
+								Button("Done") {
+									showSyncthingTakeover = false
+								}
+							}
+						}
+				}
+				.frame(minWidth: 520, minHeight: 560)
 			}
 			.formStyle(.grouped)
 			.navigationTitle("Configuration settings")

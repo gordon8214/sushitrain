@@ -134,6 +134,52 @@ The first start outside the sandbox takes over what the sandboxed app kept in it
   after its label, and paused while it moves. A journal in the configuration folder (`folder-relocations.json`) lets
   the next start finish a move the app stopped in the middle of.
 
+## Taking over Syncthing.app
+
+When Syncthing (Syncthing.app's backend, in `~/Library/Application Support/Syncthing`) is set up on the Mac, the
+app decides before its engine starts (`EngineSetupDecision`), so that two engines never run on one configuration and a
+device identity never runs twice:
+
+- **The first start** (with no configuration of its own, and no earlier version having run) offers to take over
+  Syncthing's setup: the Mac keeps its device ID, folders, devices and database, and nothing synchronizes again. The
+  same is offered later in the configuration settings (using Syncthing's configuration only, as the app's own engine
+  runs then). A home without a usable device certificate and key, or from a newer Syncthing, is not taken over.
+  - **Use Syncthing's configuration**: Syncthing's engine data (with its lock held) and Syncthing.app's preferences
+    are copied (cloned, on APFS) into `~/Library/Application Support/Synctrain Takeover Backups/<time>/`; then
+    Syncthing's folder becomes the app's configuration folder, and the app restarts on it.
+  - **Import a copy**: Syncthing's configuration, keys and database are copied into the app's own folder, with
+    Syncthing's lock held; Syncthing's own stay as they are. While the app runs, it keeps Syncthing's lock, so that
+    Syncthing.app can't start on that identity next to it.
+  - **Start with a new configuration**: a new device ID.
+  Either takeover first turns off Syncthing.app's StartAtLogin setting and removes its login item (through System
+  Events, which macOS asks to allow once; where that isn't allowed, in System Settings).
+- **Syncthing running** (its folder's lock is held, or Syncthing.app runs): the takeover waits for it to quit. The app
+  offers to quit it: Syncthing.app first, as it starts its backend again otherwise (it gets a SIGTERM if it doesn't quit
+  within 15 seconds), then if needed the backend, through its REST API once it answers with the expected device ID.
+- **The same identity** (Syncthing's configuration used directly, or a copy with its certificate) never starts while
+  Syncthing runs: the app waits, whether or not a window shows it, and starts once Syncthing has quit. Another
+  Syncthing, with another identity, runs alongside only once that is chosen; both then compete for the same ports. The
+  app comes forward when the user has to choose.
+- A debug run with `SYNCTRAIN_TEST_ROOT` takes over the Syncthing folder in its scratch directory, keeps its choices
+  there, and changes nothing in the real app's or Syncthing.app's settings.
+
+A taken-over configuration keeps its own web GUI setting, and its paused devices stay paused (the app pauses and
+resumes devices from its own list, which the takeover fills). A receipt, `syncthing-takeover.json` in
+`~/Library/Application Support/Synctrain`, records what was done: the choice, Syncthing's folder, the device ID,
+Syncthing.app's StartAtLogin setting before, whether its login item was removed, the app's own paused devices before,
+and where the backup is.
+
+**Going back to Syncthing.app.** Syncthing.app must start on Synctrain's current engine data, never on an older
+database with the same device identity: other devices already have this device's later changes, and would miss the
+older database's own. After *Use Syncthing's configuration*, Syncthing's folder is Synctrain's current data. After
+*Import a copy*, Synctrain's folder is, and goes back into Syncthing's (what syncthing-tools'
+`return-to-syncthing-app` does). Quit Synctrain and keep it from starting at login, then turn Syncthing.app's
+StartAtLogin setting and login item back on as the receipt records, and open it. Starting Syncthing.app on the backup,
+or on Syncthing's own folder after an import, needs its database reset first (`syncthing debug reset-database`), which
+exchanges every index anew. Going back is one-way when Synctrain's engine migrated the database to a newer schema than
+Syncthing.app's, or when a folder uses a filesystem type only Synctrain has (the Trash, photo folders);
+`return-to-syncthing-app` checks for both.
+
 ## Restarting and shutting down
 
 Restarting Syncthing (from the web GUI or the REST API's `/rest/system/restart`, from Troubleshooting in the app's

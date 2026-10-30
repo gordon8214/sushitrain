@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
+import SynctrainHostKit
 @preconcurrency import SushitrainCore
 import Combine
 import UserNotifications
@@ -47,6 +48,10 @@ enum DeviceMetric: String {
 
 enum AppStartupState: Equatable {
 	case notStarted
+	#if os(macOS)
+		/// Before the engine starts next to Syncthing.app: taking over its setup, or waiting for it to quit
+		case engineSetup(EngineSetupDecision)
+	#endif
 	case onboarding
 	case error(String)
 	case started
@@ -200,6 +205,10 @@ struct SyncState: Equatable {
 	var containerMigrationError: String? = nil
 	/// What to tell the user about taking over the sandboxed app's data once the app runs (macOS)
 	@ObservationIgnored var containerMigrationNotice: String? = nil
+	#if os(macOS)
+		/// Follows Syncthing while the engine waits for its setup next to it
+		@ObservationIgnored private var engineSetupWatcher: Task<Void, Never>? = nil
+	#endif
 	@ObservationIgnored private var hasFinishedStarting = false
 	/// Set when the app is about to quit, so that a failure to start isn't shown anymore
 	@ObservationIgnored var isQuitting = false
@@ -214,7 +223,7 @@ struct SyncState: Equatable {
 	fileprivate(set) var currentNetworkPath: NWPath? = nil
 	private(set) var isLowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
 
-	private let configDirectory: URL
+	let configDirectory: URL
 	private var changeCancellable: AnyCancellable? = nil
 	private var settingsCancellable: AnyCancellable? = nil
 
@@ -333,6 +342,53 @@ struct SyncState: Equatable {
 		}
 	}
 
+	#if os(macOS)
+		/// Starts once Syncthing's setup was taken over or Syncthing quit (SyncthingTakeoverView)
+		@MainActor func continueStart() async {
+			guard case .engineSetup = self.startupState else {
+				return
+			}
+			self.engineSetupWatcher?.cancel()
+			self.engineSetupWatcher = nil
+			self.startupState = .notStarted
+			await self.start()
+		}
+
+		/// Follows Syncthing while the engine waits, whether or not a window shows it, and goes on once the decision
+		/// changes (Syncthing quit, or was set up meanwhile). Brings the app forward when the user has to choose.
+		private func watchEngineSetup(_ decision: EngineSetupDecision) {
+			self.engineSetupWatcher?.cancel()
+			if decision == .offerTakeover || decision == .askToRunAlongside {
+				NSApp.activate()
+			}
+			self.engineSetupWatcher = Task { @MainActor [weak self] in
+				while !Task.isCancelled {
+					try? await Task.sleep(for: .seconds(2))
+					guard let self, case .engineSetup(let shown) = self.startupState else {
+						return
+					}
+					if EngineSetup.decision(configDirectory: self.configDirectory, client: self.client) != shown {
+						await self.continueStart()
+						return
+					}
+				}
+			}
+		}
+
+		/// For a configuration taken over from Syncthing: keeps its paused devices paused (the app pauses and resumes
+		/// devices from its own list), and skips the introduction and the upgrade steps, which are for the app's own
+		/// configurations
+		@MainActor func adoptSyncthingSettings(pausedDevices: [String]) {
+			// A test run leaves the real settings alone
+			guard !TestRun.isActive else {
+				return
+			}
+			self.userSettings.userPausedDevices = Set(pausedDevices)
+			self.userSettings.onboardingVersionShown = Self.currentOnboardingVersion
+			UserDefaults.standard.set(Int(Bundle.main.buildVersionNumber ?? "0") ?? 0, forKey: "lastRunBuild")
+		}
+	#endif
+
 	/// Starts again after the engine could not be loaded, as once the disk of a configuration folder that could not be
 	/// found is connected
 	@MainActor func retryStart() async {
@@ -367,6 +423,29 @@ struct SyncState: Equatable {
 			self.startupState = .error(containerMigrationError)
 			return
 		}
+
+		// Next to Syncthing.app, its setup is taken over (or it quits) before the engine starts
+		#if os(macOS)
+			if self.startupState == .notStarted {
+				var decision = EngineSetup.decision(configDirectory: self.configDirectory, client: self.client)
+				if decision == .start && EngineSetup.choice == .importSyncthing {
+					// The imported copy has Syncthing's device identity: Syncthing.app must not start meanwhile
+					do {
+						try self.client.holdSyncthingHome(SyncthingInstallation.home.path(percentEncoded: false))
+					}
+					catch {
+						Log.warn("Could not keep Syncthing from starting: \(error.localizedDescription)")
+						decision = .waitForSyncthing
+					}
+				}
+				if decision != .start {
+					Log.info("Not starting the engine yet next to Syncthing: \(decision)")
+					self.startupState = .engineSetup(decision)
+					self.watchEngineSetup(decision)
+					return
+				}
+			}
+		#endif
 
 		// If we are called again from onboarding, skip the stuff we already did
 		if self.startupState == .notStarted {
