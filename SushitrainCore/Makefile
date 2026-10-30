@@ -24,7 +24,7 @@ notices.html: notices.template.html go.mod go.sum
 	go tool go-licenses report ./... --template=./notices.template.html > notices.html
 
 build/SushitrainCore.xcframework: src/*.go gateway/*.go sthome/*.go Makefile go.mod go.sum notices.html
-	go tool gomobile bind -target ios,iossimulator,macos -iosversion=15 -tags noassets -o ./build/SushitrainCore.xcframework ./src
+	go tool gomobile bind -target ios,iossimulator,macos -iosversion=15 -tags noassets,noupgrade -o ./build/SushitrainCore.xcframework ./src
 
 install: build
 
@@ -32,7 +32,7 @@ clean:
 	rm -rf build/* notices.html
 
 test:
-	go test ./... -tags noassets
+	go test ./... -tags noassets -timeout 300s
 
 # The remote file service as a headless executable for Linux hosts, with Syncthing's web GUI
 GATEWAY_VERSION ?= $(shell git describe --always --dirty 2>/dev/null)
@@ -41,7 +41,7 @@ SYNCTHING_VERSION ?= v2.1.7-gateway.1
 SYNCTHING_BUILD = github.com/syncthing/syncthing/lib/build
 
 gateway-linux:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(GATEWAY_VERSION) \
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -tags noupgrade -ldflags "-s -w -X main.version=$(GATEWAY_VERSION) \
 		-X $(SYNCTHING_BUILD).Version=$(SYNCTHING_VERSION) -X $(SYNCTHING_BUILD).Tags=noupgrade" \
 		-o build/linux-amd64/synctrain-gateway ./cmd/synctrain-gateway
 

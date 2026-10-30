@@ -27,6 +27,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"testing"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -40,6 +41,7 @@ import (
 	"github.com/syncthing/syncthing/lib/protocol"
 	"github.com/syncthing/syncthing/lib/svcutil"
 	"github.com/syncthing/syncthing/lib/syncthing"
+	"github.com/syncthing/syncthing/lib/upgrade"
 
 	"t-shaped.nl/sushitrain/v2/sthome"
 )
@@ -703,7 +705,7 @@ func (clt *Client) Load(resetDeltaIdxs bool) (err error) {
 	}
 	clt.remoteManaged = remoteManaged
 	cfg, err := loadEngineConfig(locations.Get(locations.ConfigFile), cert, clt.evLogger, clt.filesPath,
-		clt.remoteManaged)
+		clt.remoteManaged, build.IsIOS)
 	if err != nil {
 		if errors.Is(err, sthome.ErrConfiguration) {
 			clt.startupProblem.Store(StartupProblemDamagedConfiguration)
@@ -729,8 +731,13 @@ func (clt *Client) Load(resetDeltaIdxs bool) (err error) {
 		return err
 	}
 
+	// The app is updated as a whole; self-upgrade is also compiled out (the noupgrade tag), which is what blocks the REST
+	// API's upgrade request
+	if !upgrade.DisabledByCompilation && !testing.Testing() {
+		slog.Error("This build can upgrade the engine through the REST API; build it with the noupgrade tag")
+	}
 	appOpts := syncthing.Options{
-		NoUpgrade:      false,
+		NoUpgrade:      true,
 		ProfilerAddr:   "",
 		ResetDeltaIdxs: resetDeltaIdxs,
 
@@ -813,14 +820,20 @@ func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) {
 	})
 }
 
-// loadEngineConfig loads the configuration, or creates one when the file doesn't exist, and applies the settings the app
-// relies on. A file that exists but can't be used is never replaced: the error wraps sthome.ErrConfiguration,
+// loadEngineConfig loads the configuration, or creates one when the file doesn't exist, and applies the app's settings.
+// A file that exists but can't be used is never replaced: the error wraps sthome.ErrConfiguration,
 // sthome.ErrNewerConfiguration or sthome.ErrUnreadableConfiguration. The settings are applied to a copy first, and the
 // file is written only when they changed it. The caller serves the returned configuration.
+//
+// On iOS the app's settings are applied at every start: there is no web GUI or REST API to change them, and the app
+// depends on them. On macOS they are only the defaults of a new configuration, so that changes made in the web GUI or
+// through the REST API last, and an existing Syncthing configuration is used as it is. On both, usage reporting stays
+// off and remote-managed folders stay paused.
 func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger, filesPath string,
-	remoteManaged *remoteManagedSet) (config.Wrapper, error) {
+	remoteManaged *remoteManagedSet, ios bool) (config.Wrapper, error) {
 	cfg, _, err := sthome.LoadConfig(cfgFile, cert, logger, false, func(conf *config.Configuration) {
 		conf.GUI.Enabled = false // Don't need the web UI, we have our own :-)
+		applyAppDefaults(conf, ios)
 	})
 	if err != nil {
 		return nil, err
@@ -840,59 +853,19 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 		<-stagingDone
 	}()
 
-	// Always override the following options in config
 	waiter, err := staging.Modify(func(conf *config.Configuration) {
-		conf.Options.CREnabled = false                       // No crash reporting for now
-		conf.Options.URAccepted = -1                         // No usage reporting for now
-		conf.Options.ProgressUpdateIntervalS = 1             // We want to update the user often, it improves the experience and is worth the compute cost
-		conf.Options.CRURL = ""                              // No crash reporting for now
-		conf.Options.URURL = ""                              // No usage reporting for now
-		conf.Options.ReleasesURL = ""                        // Disable auto update, we can't do so on iOS anyway
-		conf.Defaults.Folder.IgnorePerms = true              // iOS doesn't expose permissions to users
-		conf.Defaults.Folder.RescanIntervalS = 3600          // Force default rescan interval
-		conf.Options.RelayReconnectIntervalM = 1             // Set this to one minute (from the default 10) because on mobile networks this is more often necessary
-		conf.Defaults.Folder.FSWatcherEnabled = !build.IsIOS // Enable watching by default but not on iOS
-		conf.Defaults.Folder.BlockIndexing = false           // Save space by default
-
-		// On iOS and probably macOS, the absolute path to the apps container that has the synchronized folders changes on each
-		// run. Therefore we re-set the absolute folder path here to [app documents directory]/[folder ID] if we don't have
-		// a folder marker in the old location but do have one in the new.
-		for _, folderConfig := range conf.Folders {
-			if isNativeFilesystem(folderConfig.FilesystemType) {
-				standardPath := path.Join(filesPath, folderConfig.ID)
-				if folderConfig.Path != standardPath && folderConfig.Path != managedFolderPath(folderConfig.ID) {
-					slog.Warn("configured folder path differs from expected path", "configured", folderConfig.Path, "expected", standardPath)
-
-					oldMarkerPath := path.Join(folderConfig.Path, folderConfig.MarkerName)
-					if _, err := os.Stat(oldMarkerPath); errors.Is(err, os.ErrNotExist) {
-						newMarkerPath := path.Join(standardPath, folderConfig.MarkerName)
-						if _, err := os.Stat(newMarkerPath); errors.Is(err, os.ErrNotExist) {
-							slog.Warn("marker does not exist at either old or new location, not changing anything", "oldMarkerPath", oldMarkerPath, "newMarkerPath", newMarkerPath)
-						} else {
-							slog.Warn("marker does not exist at old location and exists at new location, resetting standard path", "oldMarkerPath", oldMarkerPath, "newMarkerPath", newMarkerPath, "standardPath", standardPath)
-							folderConfig.Path = standardPath
-							conf.SetFolder(folderConfig)
-						}
-					}
-				}
-
-				if recoverManagedFolder(&folderConfig, filesPath) {
-					conf.SetFolder(folderConfig)
-				}
-			}
-
-			// The app currently doesn't do anything with scan progress update events, and enabling progress reports apparently
-			// leads to some extra memory usage (see https://github.com/syncthing/syncthing/pull/10221), so disable it.
-			if folderConfig.ScanProgressIntervalS >= 0 {
-				folderConfig.ScanProgressIntervalS = -1
-				conf.SetFolder(folderConfig)
-			}
+		if ios {
+			applyAppDefaults(conf, ios)
+			applyIOSFolderSettings(conf, filesPath)
 		}
+
+		// This engine is a fork, which must not send usage and failure reports to Syncthing's servers as an unknown
+		// build. (Crash uploads are the work of Syncthing's monitor process, which the app doesn't have.)
+		conf.Options.URAccepted = -1
 
 		// Remote-managed folders stay paused, even if the file was edited to resume them
 		remoteManaged.enforce(conf)
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -909,6 +882,63 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 	// From now on, no change may resume them
 	cfg.Subscribe(remoteManaged)
 	return cfg, nil
+}
+
+// applyAppDefaults sets the options and folder defaults the app wants: on iOS at every start, on macOS for a new
+// configuration only. On macOS, folders keep Syncthing's default scan progress, which the web GUI shows.
+func applyAppDefaults(conf *config.Configuration, ios bool) {
+	conf.Options.CREnabled = false               // No crash reporting for now
+	conf.Options.URAccepted = -1                 // No usage reporting for now
+	conf.Options.ProgressUpdateIntervalS = 1     // We want to update the user often, it improves the experience and is worth the compute cost
+	conf.Options.CRURL = ""                      // No crash reporting for now
+	conf.Options.URURL = ""                      // No usage reporting for now
+	conf.Options.ReleasesURL = ""                // The app updates itself, the engine doesn't
+	conf.Defaults.Folder.RescanIntervalS = 3600  // Rescan every hour by default
+	conf.Options.RelayReconnectIntervalM = 1     // Set this to one minute (from the default 10) because on mobile networks this is more often necessary
+	conf.Defaults.Folder.FSWatcherEnabled = !ios // Enable watching by default but not on iOS
+	conf.Defaults.Folder.BlockIndexing = false   // Save space by default
+	if ios {
+		conf.Defaults.Folder.IgnorePerms = true // iOS doesn't expose permissions to users
+	}
+}
+
+// applyIOSFolderSettings keeps the folders in the app's container where they belong on iOS, resumes their interrupted
+// moves to the shared container, and turns off their scan progress
+func applyIOSFolderSettings(conf *config.Configuration, filesPath string) {
+	// The absolute path to the app's container that has the synchronized folders changes on each run. Therefore we
+	// re-set the absolute folder path here to [app documents directory]/[folder ID] if we don't have a folder marker in
+	// the old location but do have one in the new.
+	for _, folderConfig := range conf.Folders {
+		if isNativeFilesystem(folderConfig.FilesystemType) {
+			standardPath := path.Join(filesPath, folderConfig.ID)
+			if folderConfig.Path != standardPath && folderConfig.Path != managedFolderPath(folderConfig.ID) {
+				slog.Warn("configured folder path differs from expected path", "configured", folderConfig.Path, "expected", standardPath)
+
+				oldMarkerPath := path.Join(folderConfig.Path, folderConfig.MarkerName)
+				if _, err := os.Stat(oldMarkerPath); errors.Is(err, os.ErrNotExist) {
+					newMarkerPath := path.Join(standardPath, folderConfig.MarkerName)
+					if _, err := os.Stat(newMarkerPath); errors.Is(err, os.ErrNotExist) {
+						slog.Warn("marker does not exist at either old or new location, not changing anything", "oldMarkerPath", oldMarkerPath, "newMarkerPath", newMarkerPath)
+					} else {
+						slog.Warn("marker does not exist at old location and exists at new location, resetting standard path", "oldMarkerPath", oldMarkerPath, "newMarkerPath", newMarkerPath, "standardPath", standardPath)
+						folderConfig.Path = standardPath
+						conf.SetFolder(folderConfig)
+					}
+				}
+			}
+
+			if recoverManagedFolder(&folderConfig, filesPath) {
+				conf.SetFolder(folderConfig)
+			}
+		}
+
+		// The app currently doesn't do anything with scan progress update events, and enabling progress reports apparently
+		// leads to some extra memory usage (see https://github.com/syncthing/syncthing/pull/10221), so disable it.
+		if folderConfig.ScanProgressIntervalS >= 0 {
+			folderConfig.ScanProgressIntervalS = -1
+			conf.SetFolder(folderConfig)
+		}
+	}
 }
 
 /** Returns our node's device ID */

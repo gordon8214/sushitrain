@@ -88,7 +88,7 @@ func TestEngineConfigThatCannotBeUsedIsLeftAlone(t *testing.T) {
 	}
 	before := stateOf(t, path)
 
-	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}); !errors.Is(err,
+	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, false); !errors.Is(err,
 		sthome.ErrConfiguration) {
 		t.Fatalf("got %v", err)
 	}
@@ -101,7 +101,7 @@ func TestEngineConfigIsCreatedWithTheGUIOff(t *testing.T) {
 	dir := t.TempDir()
 	cert := testIdentity(t, dir)
 	path := filepath.Join(dir, "config.xml")
-	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}); err != nil {
+	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, false); err != nil {
 		t.Fatal(err)
 	}
 	saved, _, err := config.Load(path, protocolID(cert), events.NoopLogger)
@@ -117,19 +117,21 @@ func TestEngineConfigIsCreatedWithTheGUIOff(t *testing.T) {
 }
 
 func TestEngineConfigIsOnlyWrittenWhenItChanges(t *testing.T) {
-	dir := t.TempDir()
-	cert := testIdentity(t, dir)
-	path := filepath.Join(dir, "config.xml")
-	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}); err != nil {
-		t.Fatal(err)
-	}
-	before := stateOf(t, path)
+	for _, ios := range []bool{false, true} {
+		dir := t.TempDir()
+		cert := testIdentity(t, dir)
+		path := filepath.Join(dir, "config.xml")
+		if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, ios); err != nil {
+			t.Fatal(err)
+		}
+		before := stateOf(t, path)
 
-	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}); err != nil {
-		t.Fatal(err)
-	}
-	if after := stateOf(t, path); after != before {
-		t.Fatal("an unchanged configuration was written")
+		if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, ios); err != nil {
+			t.Fatal(err)
+		}
+		if after := stateOf(t, path); after != before {
+			t.Fatalf("iOS %v: an unchanged configuration was written", ios)
+		}
 	}
 }
 
@@ -230,7 +232,7 @@ func TestOnlyADamagedConfigurationCanBeSetAside(t *testing.T) {
 	testIdentity(t, dir)
 	path := filepath.Join(dir, "config.xml")
 	if _, err := loadEngineConfig(path, testIdentity(t, dir), events.NoopLogger, t.TempDir(),
-		&remoteManagedSet{}); err != nil {
+		&remoteManagedSet{}, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := clt.SetConfigurationAside(); err == nil {
@@ -288,7 +290,7 @@ func TestLoadFailingAfterTheConfigurationLeavesItAlone(t *testing.T) {
 	clt, dir := newLoadTestClient(t)
 	cert := testIdentity(t, dir)
 	path := filepath.Join(dir, "config.xml")
-	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}); err != nil {
+	if _, err := loadEngineConfig(path, cert, events.NoopLogger, t.TempDir(), &remoteManagedSet{}, false); err != nil {
 		t.Fatal(err)
 	}
 	// A database from a newer Syncthing

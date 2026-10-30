@@ -728,14 +728,9 @@ struct SyncState: Equatable {
 		}
 
 		if lastRunBuild < currentBuild {
-			#if os(macOS)
-				// From build 19 onwards, enable fs watching for all folders by default. It can later be disabled
-				if lastRunBuild <= 18 {
-					Log.info("Enabling FS watching for all folders")
-					self.client.setFSWatchingEnabledForAllFolders(true)
-				}
-			#endif
-
+			// (macOS turned on file system watching for all folders when upgrading from build 18 or earlier. Builds before
+			// 19 didn't record lastRunBuild, so that migration only ever ran at a first start, where it would now change
+			// an existing Syncthing configuration the app uses.)
 			#if os(iOS)
 				// From build 26 onwards, FS watching is supported on iOS, but it should not be enabled by default
 				if lastRunBuild <= 26 {
@@ -911,10 +906,10 @@ struct SyncState: Equatable {
 		#endif
 
 		#if os(macOS)
-			// Unsuspend devices
+			// Unsuspend devices. (The reconnect interval stays as configured: changing it here saved it to the
+			// configuration at every activation, which undid a value set in the web GUI.)
 			Task.detached {
 				dispatchPrecondition(condition: .notOnQueue(.main))
-				try? self.client.setReconnectIntervalS(1)
 				await self.suspend(false)
 			}
 			self.client.ignoreEvents = false
@@ -958,8 +953,6 @@ struct SyncState: Equatable {
 
 		#if os(macOS)
 			await self.suspend(true)
-			let client = self.client
-			try? await goTask { try client.setReconnectIntervalS(60) }
 			self.client.ignoreEvents = true
 		#endif
 
