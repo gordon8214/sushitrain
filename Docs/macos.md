@@ -390,6 +390,23 @@ with the engine stopped (on iOS, which has no web GUI, Restart Syncthing starts 
 remote file service and then the engine, waiting for each a limited time; what they could not finish is recovered at
 the next start.
 
+There is no separate Stop and Start: the engine runs for as long as the app does.
+
+## Menu commands
+
+The app menu and the menu bar menu have what Syncthing.app's menu has:
+
+- **Pause All Devices** (⌥⌘P) adds every other device to the app's list of paused devices, so it lasts across restarts,
+  and the menu bar icon shows a pause symbol. **Resume All Devices** takes its place once the user paused them all, and
+  empties the list, so devices paused one by one resume too. The title follows that list, not whether devices are paused
+  right now: while connectivity is turned off for the current network or Low Power Mode, devices are paused and the icon
+  says so, yet resuming could not bring them back, so the menu still offers Pause All Devices. When a device is added
+  while all are paused, the menu offers to pause it too.
+- **Rescan All Folders** (⌥⌘R) rescans each folder, as Rescan does for one.
+- **Restart Syncthing** has no shortcut, as it interrupts every transfer.
+- **Open Web GUI** (⌥⌘O) opens the address in the configuration in the default browser, and is unavailable while the web
+  GUI is off or on a Unix socket. Until the pages are built in it shows the empty page described above.
+
 ## Signing and releasing
 
 The Mac app is distributed as a disk image, signed with Developer ID and notarized, so that Gatekeeper accepts it on any

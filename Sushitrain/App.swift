@@ -353,11 +353,12 @@ struct SushitrainApp: App {
 					openWindow(id: "decrypter")
 				}
 
-				Button("Restart Syncthing") {
-					appState.restartEngine()
-				}
-				.disabled(
-					(appState.startupState != .started && !appState.engineCanRestart) || appState.isEngineRestarting)
+				Divider()
+
+				EngineMenuItems(appState: appState, hasShortcuts: true)
+					.labelStyle(.titleOnly)
+
+				Divider()
 
 				// Here too, as the settings only open once the engine has started
 				Button("Switch to Files in Finder…") {
@@ -431,7 +432,15 @@ struct SushitrainApp: App {
 					}
 
 					Divider()
+				}
 
+				if appState.startupState == .started || appState.engineCanRestart {
+					EngineMenuItems(appState: appState)
+
+					Divider()
+				}
+
+				if appState.startupState == .started {
 					Button("Settings", systemImage: "gear") {
 						// Open the "about" window
 						openWindow(id: "appSettings")
@@ -442,13 +451,6 @@ struct SushitrainApp: App {
 						openWindow(id: "stats")
 						NSApplication.shared.activate()
 					}
-				}
-
-				if appState.startupState == .started || appState.engineCanRestart {
-					Button("Restart Syncthing", systemImage: "arrow.clockwise") {
-						appState.restartEngine()
-					}
-					.disabled(appState.isEngineRestarting)
 				}
 
 				Button("About...", systemImage: "info.circle") {
@@ -497,6 +499,9 @@ struct SushitrainApp: App {
 
 		private var menuIcon: String {
 			if appState.startupState == .started {
+				if appState.engineMenuState.allDevicesPaused {
+					return "pause.circle.fill"
+				}
 				if appState.client.connectedPeerCount() > 0 {
 					if appState.client.isDownloading() || appState.client.isUploading() {
 						return "folder.fill.badge.gearshape"

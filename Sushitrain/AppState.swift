@@ -167,6 +167,21 @@ struct SyncState: Equatable {
 	}
 }
 
+/// All the menus need to know about the engine. AppState keeps it following the engine and the configuration, and
+/// EngineMenuItems brings the app menu up to date when it changes.
+struct EngineMenuState: Equatable {
+	var isRunning = false
+	var canRestart = false
+	var hasOtherDevices = false
+	/// Whether the user paused every other device. The menus go by this and not by `allDevicesPaused`, as resuming can't
+	/// end a pause the app itself is keeping up (see AppState.updateDeviceSuspension).
+	var allDevicesPausedByUser = false
+	/// Whether every other device is paused, by the user or by the app while connectivity is turned off
+	var allDevicesPaused = false
+	/// Where a browser can open the web GUI: nil when it is off, or on a Unix socket
+	var webGUIURL: URL? = nil
+}
+
 @Observable @MainActor class AppState {
 	private static let currentOnboardingVersion = 1
 
@@ -183,15 +198,21 @@ struct SyncState: Equatable {
 	private(set) var localDeviceID: String = ""
 	private(set) var eventCounter: Int = 0
 	fileprivate(set) var folderScanRevisions: [String: Int] = [:]
-	private(set) var startupState: AppStartupState = .notStarted
+	private(set) var startupState: AppStartupState = .notStarted {
+		didSet { self.updateEngineMenuState() }
+	}
 	// Client.Load holds the core mutex until database loading/migration finishes.
 	// Keep startup callbacks from querying the partially initialized core.
 	@ObservationIgnored private var hasLoadedClient = false
 
 	/// Whether the engine is restarting, after Restart Syncthing or a restart from the web GUI or the REST API
-	private(set) var isEngineRestarting = false
+	private(set) var isEngineRestarting = false {
+		didSet { self.updateEngineMenuState() }
+	}
 	/// Whether the engine can be started again (Restart Syncthing) after it failed or was shut down
-	private(set) var engineCanRestart = false
+	private(set) var engineCanRestart = false {
+		didSet { self.updateEngineMenuState() }
+	}
 
 	/// Why the sandboxed app's engine data could not be taken over (macOS); the engine does not start then
 	var containerMigrationError: String? = nil
@@ -206,6 +227,7 @@ struct SyncState: Equatable {
 	@ObservationIgnored var isQuitting = false
 	private(set) var isMigratedToNewDatabase: Bool = false
 	private(set) var syncState: SyncState = SyncState(isDownloading: false, isUploading: false, connectedPeerCount: 0)
+	private(set) var engineMenuState = EngineMenuState()
 	private(set) var launchedAt = Date.now
 	private(set) var maintenanceManager: MaintenanceManager!
 
@@ -290,6 +312,9 @@ struct SyncState: Equatable {
 		// Update device suspension to account for possibly new disableDevicesOnMetered/disableDevicesOnCellular setting
 		Task {
 			await self.updateDeviceSuspension()
+			// A new list of paused devices changes the menus even when it changes nothing in the configuration, as while
+			// connectivity is turned off, and the update below can't be sure to see it yet
+			self.update()
 		}
 
 		// Trigger global UI app update
@@ -853,10 +878,39 @@ struct SyncState: Equatable {
 		if self.syncState != nextState {
 			self.syncState = nextState
 		}
+		self.updateEngineMenuState()
 
 		Task {
 			await self.updateBadge()
 		}
+	}
+
+	private func updateEngineMenuState() {
+		var next = EngineMenuState(
+			isRunning: self.startupState == .started && !self.isEngineRestarting,
+			canRestart: (self.startupState == .started || self.engineCanRestart) && !self.isEngineRestarting
+		)
+		if self.hasLoadedClient {
+			let client = self.client
+			let devices = self.otherDeviceIDs()
+			next.hasOtherDevices = !devices.isEmpty
+			next.allDevicesPausedByUser = !devices.isEmpty && self.userSettings.userPausedDevices.isSuperset(of: devices)
+			next.allDevicesPaused = !devices.isEmpty && devices.allSatisfy { client.peer(withID: $0)?.isPaused() ?? true }
+			if client.isGUIEnabled(), let url = URL(string: client.guiurl()), url.scheme == "http" || url.scheme == "https" {
+				next.webGUIURL = url
+			}
+		}
+		if self.engineMenuState != next {
+			self.engineMenuState = next
+			#if os(macOS)
+				EngineMenuItems.refreshAppMenu()
+			#endif
+		}
+	}
+
+	private func otherDeviceIDs() -> [String] {
+		let ownID = self.client.deviceID()
+		return (self.client.peers()?.asArray() ?? []).filter { $0 != ownID }
 	}
 
 	nonisolated func getPeersNotSeenForALongTime() async -> [SushitrainPeer] {
@@ -948,6 +1002,34 @@ struct SyncState: Equatable {
 		self.userSettings.userPausedDevices.toggle(device.id, pausedByUser)
 		Task {
 			await self.updateDeviceSuspension()
+		}
+	}
+
+	/// Pauses or resumes all other devices through the app's list, as for a single device, so that it lasts across
+	/// restarts and agrees with what updateDeviceSuspension does. Resuming clears the whole list, so devices paused one by
+	/// one resume too.
+	func setAllDevices(pausedByUser: Bool) {
+		if pausedByUser {
+			self.userSettings.userPausedDevices.formUnion(self.otherDeviceIDs())
+		}
+		else {
+			self.userSettings.userPausedDevices.removeAll()
+		}
+		Task {
+			await self.updateDeviceSuspension()
+		}
+	}
+
+	func rescanAllFolders() {
+		Task {
+			for folder in await self.folders() {
+				do {
+					try folder.rescan()
+				}
+				catch {
+					Log.warn("Could not rescan folder \(folder.folderID): \(error.localizedDescription)")
+				}
+			}
 		}
 	}
 
