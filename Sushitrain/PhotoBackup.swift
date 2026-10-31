@@ -110,6 +110,7 @@ enum PhotoBackupProgress {
 	case exportingLivePhotos(index: Int, total: Int, current: String?)
 	case purging
 	case error(String)
+	case canceled
 	case finished(savedAssets: Int?, purgedAssets: Int?)
 
 	var stepProgress: Float {
@@ -129,6 +130,7 @@ enum PhotoBackupProgress {
 		case .purging: return 0.0
 		case .finished(savedAssets: _): return 1.0
 		case .error(_): return 1.0
+		case .canceled: return 1.0
 		}
 	}
 
@@ -141,6 +143,7 @@ enum PhotoBackupProgress {
 		case .exportingLivePhotos(let index, let total, current: _): return String(localized: "\(index+1) of \(total)")
 		case .purging: return ""
 		case .error(_): return ""
+		case .canceled: return ""
 		case .finished(_, _): return ""
 		}
 	}
@@ -155,6 +158,9 @@ enum PhotoBackupProgress {
 		case .purging: return String(localized: "Removing originals")
 		case .error(let e):
 			return String(localized: "Failed: \(e)")
+
+		case .canceled:
+			return String(localized: "Canceled.")
 
 		case .finished(savedAssets: _):
 			return String(localized: "Finished")
@@ -332,7 +338,7 @@ enum PhotoBackupProgress {
 				try? folder.rescanSubdirectory(subDirectoryPath.pathInFolder)
 			}
 
-			try await self.backupAlbum(
+			let isComplete = try await self.backupAlbum(
 				appState: appState,
 				album: album,
 				folder: folder,
@@ -345,9 +351,11 @@ enum PhotoBackupProgress {
 				onlyTheseLocalIdentifiers: onlyTheseLocalIdentifiers
 			)
 
-			// Save change token
-			DispatchQueue.main.async {
-				self.lastSuccessfulChangeToken = changeToken
+			// Save change token. After an incomplete run it would hide what was missed from later incremental runs
+			if isComplete {
+				DispatchQueue.main.async {
+					self.lastSuccessfulChangeToken = changeToken
+				}
 			}
 		}
 		return self.photoBackupTask
@@ -397,6 +405,7 @@ enum PhotoBackupProgress {
 		self.lastSuccessfulChangeToken = nil
 	}
 
+	// Returns whether the run was complete: it was not canceled, and no asset failed to save
 	private nonisolated func backupAlbum(
 		appState: AppState,
 		album: PHAssetCollection,
@@ -408,9 +417,10 @@ enum PhotoBackupProgress {
 		includeAllBurstAssets: Bool,
 		isInBackground: Bool,
 		onlyTheseLocalIdentifiers: Set<String>?
-	) async throws {
+	) async throws -> Bool {
 		// Fetch assets to export
 		var cancellingError: Error? = nil
+		var anyAssetFailed = false
 		let options: PHFetchOptions?
 		if includeAllBurstAssets || onlyTheseLocalIdentifiers != nil {
 			let fetchOptions = PHFetchOptions()
@@ -470,6 +480,7 @@ enum PhotoBackupProgress {
 				Log.info("- \(inFolderPath) \(dirInFolder) \(subDirectoryPath)")
 
 				// Check if this photo was saved or deleted before
+				var savedBefore = false
 				if purgeEnabled || !fullExport {
 					if let entry = try? folder.getFileInformation(inFolderPath.pathInFolder) {
 						// If purging is enabled, check if we should remove the photo from the source
@@ -494,21 +505,24 @@ enum PhotoBackupProgress {
 						if !fullExport {
 							if entry.isDeleted() {
 								Log.info("Entry at \(inFolderPath) was deleted, not saving again")
+								return
 							}
-							else {
-								Log.info("Entry at \(inFolderPath) exists, not saving again")
-							}
-							return
+
+							// The live photo part may still be missing, so this asset is not done yet
+							Log.info("Entry at \(inFolderPath) exists, not saving again")
+							savedBefore = true
 						}
 					}
 				}
 
 				// Create containing directory
-				try FileManager.default.createDirectory(at: dirInFolder, withIntermediateDirectories: true)
+				if !savedBefore {
+					try FileManager.default.createDirectory(at: dirInFolder, withIntermediateDirectories: true)
+				}
 
 				// Save asset if it doesn't exist already locally
 				let fileURL = folderURL.appending(path: inFolderPath.pathInFolder, directoryHint: .notDirectory)
-				if !FileManager.default.fileExists(atPath: fileURL.path) || fullExport {
+				if !savedBefore && (!FileManager.default.fileExists(atPath: fileURL.path) || fullExport) {
 					// If a video: queue video export session
 					if asset.mediaType == .video {
 						if categories.contains(.video) {
@@ -550,8 +564,11 @@ enum PhotoBackupProgress {
 									if let inICloud = info?[PHImageResultIsInCloudKey] as? NSNumber, inICloud.boolValue {
 										Log.warn("Asset is in iCloud and therefore ignored")
 									}
-									else if let error = info?[PHImageErrorKey] as? NSError {
-										Log.warn("Image data request failed: PHImageError \(error.localizedDescription) ")
+									else {
+										if let error = info?[PHImageErrorKey] as? NSError {
+											Log.warn("Image data request failed: PHImageError \(error.localizedDescription) ")
+										}
+										anyAssetFailed = true
 									}
 								}
 							}
@@ -564,17 +581,19 @@ enum PhotoBackupProgress {
 					let liveInFolderPath = asset.livePhotoPathInFolder(
 						structure: structure, subdirectoryPath: subDirectoryPath, timeZone: timeZone,
 						replaceExtension: livePhotoReplaceExtension)
-					let liveDirectoryURL = folderURL.appending(
-						path: asset.livePhotoDirectoryPathInFolder(
-							structure: structure, subdirectoryPath: subDirectoryPath, timeZone: timeZone
-						)
-						.pathInFolder,
-						directoryHint: .isDirectory)
-					try FileManager.default.createDirectory(at: liveDirectoryURL, withIntermediateDirectories: true)
 					let liveFileURL = folderURL.appending(path: liveInFolderPath.pathInFolder, directoryHint: .notDirectory)
 					Log.info("Found live photo \(asset.originalFilename) \(liveInFolderPath)")
 
-					if !FileManager.default.fileExists(atPath: liveFileURL.path) {
+					// As with the photo: if it was saved then deleted, do not try to save again (unless we are in full export)
+					let liveSavedBefore = !fullExport && (try? folder.getFileInformation(liveInFolderPath.pathInFolder)) != nil
+					if !liveSavedBefore && !FileManager.default.fileExists(atPath: liveFileURL.path) {
+						let liveDirectoryURL = folderURL.appending(
+							path: asset.livePhotoDirectoryPathInFolder(
+								structure: structure, subdirectoryPath: subDirectoryPath, timeZone: timeZone
+							)
+							.pathInFolder,
+							directoryHint: .isDirectory)
+						try FileManager.default.createDirectory(at: liveDirectoryURL, withIntermediateDirectories: true)
 						livePhotosToExport.append((asset, liveFileURL))
 					}
 				}
@@ -588,7 +607,7 @@ enum PhotoBackupProgress {
 		// Report error
 		if let ce = cancellingError {
 			DispatchQueue.main.async { self.progress = .error(ce.localizedDescription) }
-			return
+			return false
 		}
 
 		// Export videos
@@ -630,6 +649,11 @@ enum PhotoBackupProgress {
 				}
 				catch {
 					Log.warn("Failed to save original video for \(asset.originalFilename): \(error.localizedDescription)")
+
+					// A full export also tries videos that were saved before; those are not missing
+					if !FileManager.default.fileExists(atPath: fileURL.path) {
+						anyAssetFailed = true
+					}
 					continue
 				}
 
@@ -699,6 +723,7 @@ enum PhotoBackupProgress {
 				}
 				catch {
 					Log.warn("Failed to save \(destURL): \(error.localizedDescription)")
+					anyAssetFailed = true
 				}
 
 				DispatchQueue.main.async { self.progress = .exportingLivePhotos(index: idx, total: liveCount, current: nil) }
@@ -722,6 +747,13 @@ enum PhotoBackupProgress {
 					}
 				}
 			}
+		}
+
+		// A canceled run stops here: what it saved is tagged, but it does not go on to delete originals
+		if Task.isCancelled {
+			DispatchQueue.main.async { self.progress = .canceled }
+			Log.info("Photo back-up canceled")
+			return false
 		}
 
 		// Purge
@@ -748,6 +780,8 @@ enum PhotoBackupProgress {
 		#if os(iOS)
 			Log.info("Background time remaining: \(await UIApplication.shared.backgroundTimeRemaining))")
 		#endif
+
+		return !anyAssetFailed
 	}
 }
 

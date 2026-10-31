@@ -87,6 +87,9 @@ struct PhotoBackupStatusView: View {
 				else if case .error(let e) = photoBackup.progress {
 					Text(e)
 				}
+				else if case .canceled = photoBackup.progress {
+					Text(photoBackup.progress.localizedDescription)
+				}
 			}
 		}
 	}
