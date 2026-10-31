@@ -14,9 +14,10 @@ the phone, and for edits to complete. Edits made while it is unreachable wait on
 - **One engine.** The gateway is Syncthing: it uses the host's Syncthing configuration, keys, database and device ID.
   It never runs next to another Syncthing instance on the same home directory (it takes Syncthing's lock first and
   refuses to start otherwise).
-- **Writable folders** must be ordinary send-receive folders on the host's own filesystem that the host keeps in full
-  (not selective), or, on a Mac, [on demand](macos.md#files-in-finder). Read-only exports can be any unencrypted folder;
-  files the host doesn't keep are streamed from other devices.
+- **Writable folders** must be ordinary send-receive folders on the host's own filesystem that the host keeps in full. One
+  whose ignore patterns exclude everything by default is read-only for clients, whatever they were granted. Read-only exports
+  can be any unencrypted folder; files the host doesn't keep are streamed from other devices. A gateway is what a phone, or a
+  [Mac in Files in Finder mode](macos.md#two-modes), has instead of the files, so it should have all of them.
 - **HTTPS.** Either a certificate clients trust normally (such as Let's Encrypt), or a self-signed certificate whose
   public key the pairing code carries (clients then accept exactly that key). Arbitrary certificates are never
   accepted. The gateway can also sit behind a reverse proxy (below).
@@ -37,10 +38,10 @@ exported there.
 
 ## Synctrain on macOS
 
-Settings › Remote file service: turn it on, choose the port and certificate, export folders, pair phones, and see
-pending operations and clients. The Mac must stay awake and Synctrain running (it can start at login without a
-window); while the service runs, Synctrain keeps macOS from napping it. Sleep is an ordinary outage. Thumbnails are
-rendered with Quick Look.
+In Synchronize mode, Settings › Remote file service: turn it on, choose the port and certificate, export folders, pair
+phones, and see pending operations and clients. The Mac must stay awake and Synctrain running (it can start at login without a
+window); while the service runs, Synctrain keeps macOS from napping it. Sleep is an ordinary outage. Thumbnails are rendered
+with Quick Look. A Mac in [Files in Finder mode](macos.md#two-modes) runs no engine, so it can't be a gateway.
 
 ## Linux (`synctrain-gateway`)
 

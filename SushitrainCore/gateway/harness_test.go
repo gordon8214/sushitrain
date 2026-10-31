@@ -119,6 +119,11 @@ func newTestEngine(t *testing.T, folderID string, modify func(*config.FolderConf
 		cancel()
 		<-served
 	})
+	// Start doesn't wait for the model to start its folders, and until then a scan fails with "folder is not running"
+	waitFor(t, 30*time.Second, "the folder to start", func() bool {
+		state, _, _ := app.Internals.FolderState(folderID)
+		return state != ""
+	})
 	e := &testEngine{t: t, app: app, cfg: wrapper, events: evLogger, id: id, dir: dir, folderID: folderID,
 		folderPath: folderPath, listen: listen}
 	e.backend = &EngineBackend{App: app, Config: wrapper, Events: evLogger, ID: id}
@@ -154,7 +159,9 @@ func connect(t *testing.T, a, b *testEngine) {
 	for _, pair := range [][2]*testEngine{{a, b}, {b, a}} {
 		self, peer := pair[0], pair[1]
 		waiter, err := self.cfg.Modify(func(c *config.Configuration) {
-			c.SetDevice(config.DeviceConfiguration{DeviceID: peer.id, Name: "peer", Addresses: []string{peer.listen}})
+			// One connection: an extra one that comes up as a test ends holds up stopping the engine for ten seconds
+			c.SetDevice(config.DeviceConfiguration{DeviceID: peer.id, Name: "peer", Addresses: []string{peer.listen},
+				RawNumConnections: 1})
 			folder, _, _ := c.Folder(self.folderID)
 			folder.Devices = append(folder.Devices, config.FolderDeviceConfiguration{DeviceID: peer.id})
 			c.SetFolder(folder)

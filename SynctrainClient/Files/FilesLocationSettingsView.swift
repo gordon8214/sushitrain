@@ -14,7 +14,7 @@ struct FilesLocationSettingsView: View {
 	private var remote = RemoteCoordinator.shared
 	@State private var showRebuildConfirmation = false
 	@State private var showRebuildRefusal = false
-	@State private var pendingItemCount = 0
+	@State private var pendingItemCount: Int? = 0
 	@State private var showPendingItemsConfirmation = false
 
 	var body: some View {
@@ -97,7 +97,7 @@ struct FilesLocationSettingsView: View {
 				Task {
 					// Changes the system has not handed to Synctrain yet would be lost
 					pendingItemCount = await domain.pendingItemCount()
-					if pendingItemCount > 0 {
+					if pendingItemCount != 0 {
 						showPendingItemsConfirmation = true
 					}
 					else {
@@ -117,13 +117,27 @@ struct FilesLocationSettingsView: View {
 			}
 		} message: {
 			#if os(macOS)
-				Text(
-					"Changes to \(pendingItemCount) items made in Finder have not reached Synctrain yet. Rebuilding the location discards them."
-				)
+				if let pendingItemCount {
+					Text(
+						"Changes to \(pendingItemCount) items made in Finder have not reached Synctrain yet. Rebuilding the location discards them."
+					)
+				}
+				else {
+					Text(
+						"Synctrain could not find out whether changes made in Finder have reached it. Rebuilding the location discards any that have not."
+					)
+				}
 			#else
-				Text(
-					"Changes to \(pendingItemCount) items made in the Files app have not reached Synctrain yet. Rebuilding the location discards them."
-				)
+				if let pendingItemCount {
+					Text(
+						"Changes to \(pendingItemCount) items made in the Files app have not reached Synctrain yet. Rebuilding the location discards them."
+					)
+				}
+				else {
+					Text(
+						"Synctrain could not find out whether changes made in the Files app have reached it. Rebuilding the location discards any that have not."
+					)
+				}
 			#endif
 		}
 	}

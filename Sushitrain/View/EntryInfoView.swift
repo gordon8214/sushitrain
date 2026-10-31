@@ -24,7 +24,6 @@ struct EntryInfoView: View {
 	@State private var selfIndex: Int? = nil
 	@State private var fullyAvailableOnDevices: [SushitrainPeer]? = nil
 	@State private var availabilityError: Error? = nil
-	@State private var selectionError: ErrorMessage? = nil
 	@State private var showEncryptionSheet: Bool = false
 	@State private var conflictingEntries: [SushitrainEntry]? = nil
 	@State private var openWithAppURL: URL? = nil
@@ -113,7 +112,6 @@ struct EntryInfoView: View {
 				.formStyle(.grouped)
 			#endif
 			.navigationTitle(entry.fileName())
-			.errorAlert($selectionError)
 			.quickLookPreview(self.$localItemURL)
 
 			.userActivity(SushitrainApp.viewRouteActivityID) { ua in
@@ -268,36 +266,6 @@ struct EntryInfoView: View {
 					}
 				}
 			}
-
-			if self.folder.isSelective() == true && !entry.isSymlink() {
-				let isExplicitlySelected = entry.isExplicitlySelected()
-
-				Toggle(
-					"Synchronize with this device", systemImage: "pin",
-					isOn: Binding(
-						get: { entry.isExplicitlySelected() == true || entry.isSelected() },
-						set: { selected in
-							do {
-								try entry.setExplicitlySelected(selected)
-							}
-							catch {
-								selectionError = ErrorMessage(error)
-							}
-						}
-					)
-				).disabled(
-					// We're doing something weird
-					!folder.isIdleOrSyncing || isExplicitlySelected == nil
-						// Selected implicitly by parent
-						|| (entry.isSelected() && isExplicitlySelected == false)
-						// We have the only copy
-						|| (isExplicitlySelected == true && localIsOnlyCopy)
-						// File is selected but is not local, we are probably still downloading it
-						|| (entry.isSelected() && !entry.isLocallyPresent())
-				)
-			}
-		} footer: {
-			self.selectiveSyncFooter()
 		}
 	}
 
@@ -431,41 +399,6 @@ struct EntryInfoView: View {
 		#endif
 	}
 
-	@ViewBuilder private func selectiveSyncFooter() -> some View {
-		if !entry.isSymlink() && self.folder.isSelective() == true
-			&& (entry.isSelected() && entry.isExplicitlySelected() == false)
-		{
-			Text("This item is synchronized with this device because a parent folder is synchronized with this device.")
-		}
-
-		if !entry.isSymlink() {
-			if entry.isExplicitlySelected() == true {
-				if localIsOnlyCopy {
-					if self.folder.connectedPeerCount() > 0 {
-						Text("There are currently no other devices connected that have a full copy of this file.")
-					}
-					else {
-						Text(
-							"There are currently no other devices connected, so it can't be established that this file is fully available on at least one other device."
-						)
-					}
-				}
-			}
-			else if entry.isExplicitlySelected() == false && !self.entry.isLocallyPresent() {
-				if self.folder.connectedPeerCount() == 0 {
-					Text(
-						"When you select this file, it will not become immediately available on this device, because there are no other devices connected to download the file from."
-					)
-				}
-				else if let fa = self.fullyAvailableOnDevices, fa.isEmpty {
-					Text(
-						"When you select this file, it will not become immediately available on this device, because none of the currently connected devices have a full copy of the file that can be downloaded."
-					)
-				}
-			}
-		}
-	}
-
 	@ViewBuilder private func archiveSheet(archive: SushitrainArchiveProtocol) -> some View {
 		NavigationStack {
 			ArchiveView(archive: archive, prefix: "")
@@ -530,7 +463,7 @@ struct EntryInfoView: View {
 		#endif
 
 		if entry.isSelected() {
-			// Selective sync uses copy in working dir
+			// A file that is not ignored is used from the working directory
 			if entry.isLocallyPresent() {
 				if let localPathActual = localPath {
 					Section {

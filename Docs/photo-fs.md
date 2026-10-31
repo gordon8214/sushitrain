@@ -4,9 +4,8 @@ On macOS, Synctrain provides two mechanisms for synchronizing photos from the sy
 iOS app, a client of gateways, has neither):
 
 - The **photo back-up** feature automatically and periodically exports photos, videos and live photos from the library to
-  a specific location inside a (synchronized) folder. This feature is useful for backing up photos to other devices; using
-  selective synchronization the exported photos can be deselected again once other devices have received the photos. The
-  downside of this approach is that as long as other devices have not synchronized the photos yet, they take up disk space.
+  a specific location inside a (synchronized) folder. This feature is useful for backing up photos to other devices. The
+  downside of this approach is that the exported photos take up disk space as long as they stay in the folder.
 - The **photo folder** feature exposes one or more photo albums from the system photo library to Syncthing as if they
   existed in an actual (send-only) folder. Photos are never exported to disk, but instead read from the system photo library
   directly. This also means that whenever a photo is deleted from the system photo library, it will disappear from the

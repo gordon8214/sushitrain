@@ -61,7 +61,9 @@ import SynctrainFileProviderKit
 		}.value
 		switch result {
 		case .success(let endpoints):
-			ContentOpener.removeViewingCopies()
+			#if os(iOS)
+				ContentOpener.removeViewingCopies()
+			#endif
 			Task.detached(priority: .utility) { environment.storage.trimContent(toBytes: CacheSettings.limit) }
 			if !endpoints.isEmpty {
 				await FilesDomain.shared.register()

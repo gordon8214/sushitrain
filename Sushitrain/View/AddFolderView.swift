@@ -43,7 +43,6 @@ struct AddFolderView: View {
 	@State private var selectedTab = AddFolderViewTab.general
 	@State private var folderPath: URL? = nil
 	@State private var showPathSelector: Bool = false
-	@State private var isSelective = true
 	@State private var isPhotoFolder = false
 	@State private var isReceiveEncryptedFolder = false
 	@State private var photoFolderConfig = PhotoFSConfiguration()
@@ -178,10 +177,6 @@ struct AddFolderView: View {
 		if isPhotoFolder {
 			PhotoFolderConfigurationView(config: $photoFolderConfig)
 		}
-
-		if !isPhotoFolder && !isReceiveEncryptedFolder {
-			self.folderSyncTypeSection()
-		}
 	}
 
 	@ViewBuilder private func tabSwitcher() -> some View {
@@ -298,24 +293,6 @@ struct AddFolderView: View {
 		return appState.client.folder(withID: folderID)?.displayName ?? folderID
 	}
 
-	@ViewBuilder private func folderSyncTypeSection() -> some View {
-		Section {
-			Picker("Synchronize", selection: $isSelective) {
-				Text("All files").tag(false)
-				Text("Selected files").tag(true)
-			}
-		} footer: {
-			if isSelective {
-				Text(
-					"Only files that you select will be copied to this device. You can still access all files in the folder on demand when connected to other devices that have a copy of the file."
-				)
-			}
-			else {
-				Text("All files in the folder will be copied to this device.")
-			}
-		}
-	}
-
 	@ViewBuilder private func shareWithSection() -> some View {
 		ShareWithDevicesView(folderID: self.adding.folderID, sharedWith: $adding.sharedWithDevices)
 	}
@@ -377,7 +354,6 @@ struct AddFolderView: View {
 					try appState.client.addFolder(
 						self.adding.folderID,
 						folderPath: fp.path(percentEncoded: false),
-						createAsOnDemand: self.isSelective && !isReceiveEncryptedFolder,
 						createAsReceiveEncrypted: isReceiveEncryptedFolder
 					)
 				}
@@ -385,7 +361,6 @@ struct AddFolderView: View {
 					try appState.client.addFolder(
 						self.adding.folderID,
 						folderPath: "",
-						createAsOnDemand: self.isSelective && !isReceiveEncryptedFolder,
 						createAsReceiveEncrypted: isReceiveEncryptedFolder
 					)
 				}

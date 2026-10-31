@@ -8,9 +8,8 @@
 	import SynctrainFileProviderKit
 
 	/// What the Synctrain location cannot synchronize and keeps on this Mac: names macOS keeps for itself (`._name` and
-	/// the like), names an on-demand folder's `.stignore` cannot select (`*`, control characters, a space at the edge),
-	/// and paths a folder's ignore patterns exclude. The extension refuses those with `excludedFromSync`, so they stay
-	/// in the system's copy alone and the index never has them (`SystemCopy.unknownPaths` finds them).
+	/// the like), and paths a folder's ignore patterns exclude. The extension refuses those with `excludedFromSync`, so
+	/// they stay in the system's copy alone and the index never has them (`SystemCopy.unknownPaths` finds them).
 	///
 	/// The system cannot remove the directory of such a file, so a folder that leaves Finder leaves its directory at
 	/// the top level of the location, with those files inside. The user is told where it is, and `moveAside` renames it
@@ -42,6 +41,17 @@
 				case staying(count: Int, example: String, isComplete: Bool)
 				/// The name the directory of an earlier round has now, next to the folder that came back
 				case movedAside(String)
+				/// What the system kept of the location when it went, which is `url`
+				case keptBySystem
+			}
+
+			/// Whether all of what the folder held on this Mac alone left the location
+			var isComplete: Bool {
+				switch kind {
+				case .movedOut(_, _, let isComplete, _): return isComplete
+				case .staying: return false
+				case .movedAside, .keptBySystem: return true
+				}
 			}
 		}
 

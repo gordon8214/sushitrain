@@ -58,7 +58,7 @@ const (
 // engineRun is one run of the engine: Syncthing with its event logger, configuration and database. Restarting tears a
 // run down and starts a new one. The client, its lock, streaming server and measurements stay.
 type engineRun struct {
-	// Ends the run's event listener and file provider watcher, and the waits of calls into the run
+	// Ends the run's event listener, and the waits of calls into the run
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -287,20 +287,18 @@ func (clt *Client) prepareRun() (_ *engineRun, err error) {
 	return r, nil
 }
 
-// startRun starts a prepared run: its event listener, the file provider watcher, and Syncthing, and then watches it.
+// startRun starts a prepared run: its event listener and Syncthing, and then watches it.
 // The caller holds lifecycle.
 func (clt *Client) startRun(r *engineRun) error {
-	// Both subscribe before Syncthing starts, so that they see its first events
+	// It subscribes before Syncthing starts, so that it sees its first events
 	sub := r.evLogger.Subscribe(events.AllEvents)
 	r.listenDone = make(chan struct{})
 	go clt.listenToEvents(r, sub)
-	clt.followWithFileProviderWatcher(r)
 
 	if err := r.app.Start(); err != nil {
 		// The app closed the database and stopped what it had started
 		r.closeDB = nil
 		close(r.appDone)
-		clt.followWithFileProviderWatcher(nil)
 		clt.closeRun(r)
 		return err
 	}
@@ -396,10 +394,10 @@ func (clt *Client) Stop() {
 	clt.setStatus(EngineStateStopped, "", true)
 }
 
-// teardown stops a run: no more configuration changes, then the remote file service and the file provider watcher, then
-// Syncthing, and then the configuration (after its last save) and the event logger. It reports whether Syncthing has
-// stopped; if it didn't in time, its configuration and logger are left running for it, and a later call waits again.
-// The lock in the data directory stays. The caller holds lifecycle.
+// teardown stops a run: no more configuration changes, then the remote file service, then Syncthing, and then the
+// configuration (after its last save) and the event logger. It reports whether Syncthing has stopped; if it didn't in
+// time, its configuration and logger are left running for it, and a later call waits again. The lock in the data
+// directory stays. The caller holds lifecycle.
 func (clt *Client) teardown(r *engineRun) bool {
 	r.writes.Lock()
 	alreadyClosed := r.closed
@@ -408,7 +406,6 @@ func (clt *Client) teardown(r *engineRun) bool {
 
 	if !alreadyClosed {
 		clt.stopRemoteService()
-		clt.followWithFileProviderWatcher(nil)
 	}
 
 	if r.internals.Load() != nil {
@@ -432,8 +429,7 @@ func (clt *Client) teardown(r *engineRun) bool {
 	return true
 }
 
-// resetRunState forgets what the client learned from a run's events; the ignored extraneous files are a setting and
-// stay
+// resetRunState forgets what the client learned from a run's events
 func (clt *Client) resetRunState() {
 	clt.mutex.Lock()
 	clt.connectedDeviceAddresses = make(map[string]string)

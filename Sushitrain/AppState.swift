@@ -40,9 +40,6 @@ enum DeviceMetric: String {
 
 		// Always open the folder in the app
 		case browser = "browser"
-
-		// Open the folder in the Finder except when it is selectively synced
-		case finderExceptSelective = "finderExceptSelective"
 	}
 #endif
 
@@ -74,7 +71,6 @@ class SushitrainDelegate: NSObject {
 	@AppStorage("streamingLimitMbitsPerSec") var streamingLimitMbitsPerSec: Int = 0
 	@AppStorage("maxBytesForPreview") var maxBytesForPreview: Int = 2 * 1024 * 1024  // 2 MiB
 	@AppStorage("browserViewStyle") var defaultBrowserViewStyle: BrowserViewStyle = .list
-	@AppStorage("browserViewFilter") var defaultBrowserViewFilterAvailability: BrowserViewFilterAvailability = .all
 	@AppStorage("browserGridColumns") var browserGridColumns: Int = 3
 	@AppStorage("loggingEnabled") var loggingToFileEnabled: Bool = false
 	// Whether the app restores the levels of log facilities the user changed when it starts, and those levels (in the
@@ -103,9 +99,6 @@ class SushitrainDelegate: NSObject {
 	// Number of seconds after which we remind the user that a device hasn't connected in a while
 	@AppStorage("longTimeNoSeeInterval") var longTimeNoSeeInterval = 86400.0 * 2.0  // two days
 
-	// Whether to ignore certain files by default when scanning for extraneous files (i.e. .DS_Store)
-	@AppStorage("ignoreExtraneousDefaultFiles") var ignoreExtraneousDefaultFiles: Bool = true
-
 	// When did we apply privacy choices from the onboarding?
 	@AppStorage("appliedOnboardingPrivacyChoicesAt") var appliedOnboardingPrivacyChoicesAt: Double = 0.0
 
@@ -125,7 +118,7 @@ class SushitrainDelegate: NSObject {
 
 	#if os(macOS)
 		// The action to perform when a user clicks a folder in the dock menu
-		@AppStorage("menuFolderAction") var menuFolderAction: MenuFolderAction = .finderExceptSelective
+		@AppStorage("menuFolderAction") var menuFolderAction: MenuFolderAction = .finder
 	#endif
 
 	// First run time
@@ -190,7 +183,6 @@ struct SyncState: Equatable {
 	private(set) var localDeviceID: String = ""
 	private(set) var eventCounter: Int = 0
 	fileprivate(set) var folderScanRevisions: [String: Int] = [:]
-	private(set) var foldersWithExtraFiles: [String] = []
 	private(set) var startupState: AppStartupState = .notStarted
 	// Client.Load holds the core mutex until database loading/migration finishes.
 	// Keep startup callbacks from querying the partially initialized core.
@@ -234,10 +226,6 @@ struct SyncState: Equatable {
 
 	private(set) var isSuspended = false
 
-	static private var defaultIgnoredExtraneousFiles = [
-		".DS_Store", "Thumbs.db", "desktop.ini", ".Trashes", ".Spotlight-V100",
-		".DocumentRevisions-V100", ".TemporaryItems", "$RECYCLE.BIN", "@eaDir",
-	]
 	static let removeMigratedV1DatabaseAfterSeconds: TimeInterval = 7 * 86400.0  // 7 days
 	static let maxChanges = 25
 
@@ -590,7 +578,9 @@ struct SyncState: Equatable {
 			RemoteCoordinator.shared.start(client: client)
 		#elseif os(macOS)
 			GatewayController.shared.start(client: client)
-			FinderAccess.shared.start(client: client)
+			Task {
+				await ModeSwitch.removeLeftoverLocation { self.alert(message: $0, type: .informational) }
+			}
 		#endif
 
 		#if os(macOS)
@@ -718,44 +708,6 @@ struct SyncState: Equatable {
 
 		self.client.server?.maxMbitsPerSecondsStreaming = Int64(self.userSettings.streamingLimitMbitsPerSec)
 		Log.info("Apply settings: streaming limit=\(self.userSettings.streamingLimitMbitsPerSec) mbits/s")
-
-		do {
-			if self.userSettings.ignoreExtraneousDefaultFiles {
-				let json = try JSONEncoder().encode(Self.defaultIgnoredExtraneousFiles)
-				try self.client.setExtraneousIgnoredJSON(json)
-				Log.info("Applied setting: default ignore extraneous files \(json)")
-			}
-			else {
-				let json = try JSONEncoder().encode([] as [String])
-				try self.client.setExtraneousIgnoredJSON(json)
-				Log.info("Applied setting: default ignore extraneous files \(json)")
-			}
-		}
-		catch {
-			Log.warn("Could not set default ignored extraneous files: \(error.localizedDescription)")
-		}
-	}
-
-	private func updateExtraneousFiles() async {
-		// List folders that have extra files
-		let folders = await self.folders()
-		self.foldersWithExtraFiles = await
-			(Task.detached {
-				var myFoldersWithExtraFiles: [String] = []
-				for folder in folders {
-					if Task.isCancelled {
-						break
-					}
-					if folder.isIdle {
-						var hasExtra: ObjCBool = false
-						let _ = try? folder.hasExtraneousFiles(&hasExtra)
-						if hasExtra.boolValue {
-							myFoldersWithExtraFiles.append(folder.folderID)
-						}
-					}
-				}
-				return myFoldersWithExtraFiles
-			}).value
 	}
 
 	var isFinished: Bool {
@@ -1008,19 +960,16 @@ struct SyncState: Equatable {
 
 	func updateBadge() async {
 		guard self.hasLoadedClient else { return }
-		await self.updateExtraneousFiles()
-		let numExtra = self.foldersWithExtraFiles.count
 		let numLongTimeNoSee = (await getPeersNotSeenForALongTime()).count
-		let numTotal = numExtra + numLongTimeNoSee
 
 		#if os(iOS)
 			DispatchQueue.main.async {
-				UNUserNotificationCenter.current().setBadgeCount(numTotal)
+				UNUserNotificationCenter.current().setBadgeCount(numLongTimeNoSee)
 			}
 		#elseif os(macOS)
-			let newBadge = numTotal > 0 ? String(numTotal) : ""
+			let newBadge = numLongTimeNoSee > 0 ? String(numLongTimeNoSee) : ""
 			if NSApplication.shared.dockTile.badgeLabel != newBadge {
-				Log.info("Set dock tile badgeLabel \(numTotal)")
+				Log.info("Set dock tile badgeLabel \(numLongTimeNoSee)")
 			}
 			NSApplication.shared.dockTile.badgeLabel = newBadge
 			NSApplication.shared.dockTile.display()

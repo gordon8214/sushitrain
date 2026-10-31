@@ -19,7 +19,7 @@ import (
 )
 
 // The managed folder base is a directory (typically inside a shared app group container) where internal folders are
-// stored instead of the files path, so that other processes (such as a File Provider extension) can access them.
+// stored instead of the files path, so that other processes can access them.
 var (
 	managedFolderBaseMutex sync.Mutex
 	managedFolderBase      string

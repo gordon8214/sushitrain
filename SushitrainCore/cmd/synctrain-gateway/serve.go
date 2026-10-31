@@ -17,7 +17,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -27,7 +26,6 @@ import (
 	"github.com/syncthing/syncthing/lib/build"
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/ignore"
 	"github.com/syncthing/syncthing/lib/locations"
 	"github.com/syncthing/syncthing/lib/protocol"
 	"github.com/syncthing/syncthing/lib/svcutil"
@@ -265,7 +263,7 @@ func run(ctx context.Context, opts serveOptions) (restart bool, err error) {
 // startService starts the remote file service and its admin socket for a running Syncthing
 func startService(ctx context.Context, opts serveOptions, app *syncthing.App, cfg config.Wrapper,
 	evLogger events.Logger, id protocol.DeviceID) (*gateway.Service, *gateway.AdminServer, error) {
-	backend := &gateway.EngineBackend{App: app, Config: cfg, Events: evLogger, ID: id, IsSelective: isSelective(app, cfg)}
+	backend := &gateway.EngineBackend{App: app, Config: cfg, Events: evLogger, ID: id, IsSelective: gateway.SelectiveFolders(app, cfg)}
 	svc, err := gateway.New(opts.service, backend)
 	if err != nil {
 		return nil, nil, err
@@ -400,39 +398,6 @@ func pairingAddress(host string, port int, listen string) (string, int, error) {
 		}
 	}
 	return host, port, nil
-}
-
-// isSelective reports whether a folder's ignore patterns keep only a selection of its files on this device (a
-// pattern that ignores everything, usually after exceptions, as on-demand folders use). It answers yes when the
-// patterns can't be read, so that such a folder is never written.
-func isSelective(app *syncthing.App, cfg config.Wrapper) func(string) bool {
-	return func(folderID string) bool {
-		_, patterns, err := app.Internals.Ignores(folderID)
-		if err != nil {
-			// Syncthing has no patterns for folders that don't run (paused ones): read them from the folder
-			folder, ok := cfg.Folder(folderID)
-			if !ok {
-				return true
-			}
-			matcher := ignore.New(folder.Filesystem())
-			if err := matcher.Load(".stignore"); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return true
-			}
-			patterns = matcher.Patterns()
-		}
-		return slices.ContainsFunc(patterns, ignoresEverything)
-	}
-}
-
-// ignoresEverything reports whether a parsed ignore pattern ("(?d)(?i)!pattern") ignores every file
-func ignoresEverything(pattern string) bool {
-	pattern = strings.TrimPrefix(pattern, "(?d)")
-	pattern = strings.TrimPrefix(pattern, "(?i)")
-	switch pattern {
-	case "*", "**", "/*", "/**", "**/*", "**/**":
-		return true
-	}
-	return false
 }
 
 // registerHostAdmin adds Syncthing device and folder management to the admin socket

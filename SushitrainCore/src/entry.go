@@ -139,45 +139,6 @@ func (entry *Entry) BlocksHash() string {
 	return base64.StdEncoding.EncodeToString(entry.info.BlocksHash)
 }
 
-// Creates a subdirectory locally (including intermediate directories) so files can be placed in it, in selectively synced folders
-func (entry *Entry) MaterializeSubdirectory() error {
-	fc := entry.Folder.folderConfiguration()
-	if fc == nil {
-		return errors.New("invalid folder configuration")
-	}
-
-	selective, err := entry.Folder.IsSelective()
-	if err != nil {
-		return err
-	}
-	if !selective {
-		return errors.New("folder is not selective")
-	}
-
-	if !entry.IsDirectory() || entry.IsDeleted() {
-		return errors.New("entry is not a directory or was deleted")
-	}
-
-	ffs := fc.Filesystem()
-	nativeFilename := osutil.NativeFilename(entry.info.FileName())
-	mode := fs.FileMode(entry.info.Permissions & 0o777)
-	if fc.IgnorePerms || entry.info.NoPermissions {
-		mode = 0o777
-	}
-	err = ffs.MkdirAll(nativeFilename, mode)
-	if err != nil {
-		return err
-	}
-
-	// Set modified time from entry
-	err = ffs.Chtimes(nativeFilename, entry.info.ModTime(), entry.info.ModTime())
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (entry *Entry) FetchLocal(start int64, length int64) ([]byte, error) {
 	fc := entry.Folder.folderConfiguration()
 	if fc == nil {
@@ -228,7 +189,7 @@ func (entry *Entry) IsLocallyPresent() bool {
 	return err == nil
 }
 
-// For non-selective folders, this will return true when not ignored
+// IsSelected reports whether the folder's ignore patterns keep the entry on this device
 func (entry *Entry) IsSelected() bool {
 	matcher, err := entry.Folder.loadIgnores()
 	if err != nil {
@@ -238,23 +199,6 @@ func (entry *Entry) IsSelected() bool {
 
 	res := matcher.Match(entry.info.Name)
 	return !res.IsIgnored()
-}
-
-// IsExplicitlySelected returns an error when the selection cannot be determined.
-func (entry *Entry) IsExplicitlySelected() (bool, error) {
-	lines, _, err := entry.Folder.client.internals().Ignores(entry.Folder.FolderID)
-	if err != nil {
-		return false, err
-	}
-
-	selection := newSelection(lines)
-	return selection.isEntryExplicitlySelected(entry), nil
-}
-
-func (entry *Entry) SetExplicitlySelected(selected bool) error {
-	paths := map[string]bool{}
-	paths[entry.info.Name] = selected
-	return entry.Folder.setExplicitlySelected(paths)
 }
 
 func walkEntries(prefix string, entries []*model.TreeEntry, block func(prefix string, entry *model.TreeEntry) (bool, error)) error {
@@ -318,9 +262,8 @@ func (entry *Entry) PeersWithFullCopy() (*ListOfStrings, error) {
 				return true, nil
 			}
 
-			// Don't bother with files that are considered useless
-			// See https://forum.syncthing.net/t/syncthing-native-app-for-macos-synctrain-ios-based/22885/8?u=pixelspark
-			if entry.Folder.client.isExtraneousIgnored(leaf.Name) {
+			// Don't bother with Syncthing's temporary files
+			if fs.IsTemporary(leaf.Name) {
 				return true, nil
 			}
 
@@ -607,8 +550,4 @@ func (entry *Entry) Remove() error {
 	}
 	containingDir := filepath.Dir(path)
 	return entry.Folder.RescanSubdirectory(containingDir)
-	// In selective folders, the entry will remain selected until the app cleans the entry in .stignore up.
-	// It would be better to also deselect the file immediately after the deletion has been picked up by Syncthing,
-	// but there appears not to be a reliable way to do this. Hence deleted files may become unintentionally selected
-	// again if another peer re-adds them.
 }

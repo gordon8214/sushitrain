@@ -23,7 +23,7 @@ restart the folder through Syncthing's normal configuration lifecycle.
 The wrapper preserves options and the outer case-checking and modification-time
 layers applied by `fs.NewFilesystem`. It forwards ordinary operations to BasicFS.
 `Remove` moves files and symlinks to Trash, but removes directories only when empty
-using BasicFS. This preserves selective synchronization's per-child checks.
+using BasicFS.
 `RemoveAll` moves user subtrees as a single item, including the configured root
 when passed an empty path. Syncthing internal files and recognized temporary files
 retain permanent cleanup semantics.

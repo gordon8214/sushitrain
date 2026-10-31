@@ -8,8 +8,8 @@
 
 	extension View {
 		/// Tells the user what the Synctrain location keeps on this Mac because it cannot synchronize it, after a folder
-		/// left Finder or came back to it (`RemoteCoordinator.leftovers`). The settings window carries this once: two of
-		/// them would both try to show the same report.
+		/// left Finder or came back to it (`RemoteCoordinator.leftovers`). One window carries this: two of them would both
+		/// try to show the same report.
 		func filesLeftoversAlert() -> some View {
 			modifier(FilesLeftoversAlert())
 		}
@@ -69,6 +69,10 @@
 			case .movedAside(let name):
 				Text(
 					"Files of \(report.folder) that Synctrain cannot synchronize were still in Finder's Synctrain location. They are now in \(name), next to the folder, where you can move or remove them."
+				)
+			case .keptBySystem:
+				Text(
+					"macOS kept files from Finder's Synctrain location that never reached a gateway. They are in \(report.url.lastPathComponent), where you can move or remove them."
 				)
 			}
 		}

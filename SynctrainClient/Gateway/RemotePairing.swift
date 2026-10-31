@@ -100,23 +100,6 @@ enum RemotePairingError: LocalizedError, Sendable {
 
 	#if os(macOS)
 		private nonisolated static let platform = "macOS"
-
-		/// Pairs this Mac's File Provider with this Mac's own remote file service. Nobody has to approve that on a
-		/// gateway: `approve` is given the request to approve.
-		static func pairThisMac(
-			link: String, approve: @escaping @MainActor (String) async throws -> Void
-		) async throws -> RemoteEndpoint {
-			guard let invitation = invitation(from: link) else {
-				throw RemotePairingError.invalidLink
-			}
-			guard let environment = RemoteEnvironment.shared else {
-				throw RemotePairingError.unavailable
-			}
-			let clientName = DeviceName.current
-			let (client, pending) = try await request(invitation, clientName: clientName, environment: environment)
-			try await approve(pending.request)
-			return try await awaitApproval(invitation, client: client, pending: pending, environment: environment)
-		}
 	#else
 		private nonisolated static let platform = "iOS"
 	#endif

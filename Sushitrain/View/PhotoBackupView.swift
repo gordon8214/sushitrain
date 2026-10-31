@@ -113,7 +113,7 @@ struct PhotoBackupSettingsView: View {
 		Form {
 			Section {
 				Text(
-					"Synctrain can automatically export photos and videos from your photo library as files to a regular folder, which can then be synchronized. This can be useful if you want to back up your photos to other devices. Exported photos will take up storage space on your device as long as these files remain selected for synchronization."
+					"Synctrain can automatically export photos and videos from your photo library as files to a regular folder, which can then be synchronized. This can be useful if you want to back up your photos to other devices. Exported photos will take up storage space on your device as long as they remain in the folder."
 				)
 			} header: {
 				Label("About photo back-up", systemImage: "questionmark.circle")

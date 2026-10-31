@@ -114,16 +114,6 @@ import SynctrainFileProviderKit
 		}
 	}
 
-	/// Stops the work with gateways, which `start` starts again (on macOS, where it is a setting)
-	func stop() {
-		isStarted = false
-		stopLongPolling()
-		outboxTask?.cancel()
-		outboxTask = nil
-		outboxSleep?.cancel()
-		workObserver = nil
-	}
-
 	/// Items that are gone stay in the index for a while, for what Files has not asked about yet
 	private func pruneTombstones() async {
 		let key = "lastTombstonePrune"
@@ -765,39 +755,52 @@ import SynctrainFileProviderKit
 		return try result.get()
 	}
 
-	/// Removes a folder from this device; it stays on its gateway. Refused while its edits are unresolved. On macOS,
-	/// what the location cannot synchronize is taken out of it first, into `keeping` (the folder's own directory, for a
-	/// folder of this Mac) or else a new directory of this Mac.
-	func removeFolder(folderID: String, keeping destination: URL? = nil) async throws(GatewayFolderError) {
+	/// Removes a folder from this device; it stays on its gateway. Refused while its edits are unresolved. On macOS, what
+	/// the location cannot synchronize is taken out of it first, into a new directory of this Mac. Returns whether all of
+	/// that left the location.
+	@discardableResult func removeFolder(folderID: String) async throws(GatewayFolderError) -> Bool {
 		guard let environment else {
-			return
+			return true
 		}
 		let activity = BackgroundActivity(name: "Removing a folder")
 		defer { activity.end() }
 		#if os(macOS)
 			// While the folder is still in the index: its items are what tells what the location cannot synchronize
-			let report = await takeFilesOutOfTheLocation(
-				folderID: folderID, environment: environment, keeping: destination)
+			let report = await takeFilesOutOfTheLocation(folderID: folderID, environment: environment)
 		#endif
 		let result = await Task.detached(priority: .userInitiated) {
 			RemoteWork.removeFolder(folderID: folderID, environment: environment)
 		}.value
 		FilesDomain.shared.signalWorkingSet()
 		await reloadState()
-		try result.get()
 		#if os(macOS)
+			// Whether or not the folder went: the files have moved by now
 			if let report {
 				leftovers.append(report)
+			}
+			try result.get()
+			return report?.isComplete ?? true
+		#else
+			try result.get()
+			return true
+		#endif
+	}
+
+	/// Removes the Files location, and tells the user what the system kept of it
+	func removeLocation() async throws {
+		let kept = try await FilesDomain.shared.remove()
+		#if os(macOS)
+			if let kept {
+				leftovers.append(FilesLeftovers.Report(folder: "Synctrain", url: kept, kind: .keptBySystem))
 			}
 		#endif
 	}
 
 	#if os(macOS)
 		/// What the location cannot synchronize in the folder, taken out of it before it leaves Finder: macOS removes
-		/// its copy of a folder with everything in it, these files included, and they are nowhere else. They go to the
-		/// folder's own directory where it has one, and otherwise to a new directory of this Mac.
+		/// its copy of a folder with everything in it, these files included, and they are nowhere else
 		private func takeFilesOutOfTheLocation(
-			folderID: String, environment: RemoteEnvironment, keeping destination: URL?
+			folderID: String, environment: RemoteEnvironment
 		) async -> FilesLeftovers.Report? {
 			let folder = try? environment.store.folder(id: folderID)
 			guard let label = folder?.label,
@@ -823,7 +826,7 @@ import SynctrainFileProviderKit
 			Log.info(
 				"The Synctrain location cannot synchronize \(found.paths.count) items of \(folderID)"
 					+ (found.isComplete ? "" : " (at least)"))
-			let place = destination ?? ClientLifecycle.directoryForFilesOutsideTheLocation(named: label)
+			let place = ClientLifecycle.directoryForFilesOutsideTheLocation(named: label)
 			let paths = found.paths
 			let moved: Int
 			if let place {
@@ -917,7 +920,7 @@ import SynctrainFileProviderKit
 		gateways.removeAll { $0.id == serviceID }
 		await reloadState()
 		if gateways.isEmpty {
-			await FilesDomain.shared.remove()
+			try? await removeLocation()
 		}
 	}
 

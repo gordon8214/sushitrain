@@ -108,7 +108,6 @@ enum PhotoBackupProgress {
 	case exportingPhotos(index: Int, total: Int, current: String?)
 	case exportingVideos(index: Int, total: Int, current: String?)
 	case exportingLivePhotos(index: Int, total: Int, current: String?)
-	case selecting
 	case purging
 	case error(String)
 	case finished(savedAssets: Int?, purgedAssets: Int?)
@@ -127,7 +126,6 @@ enum PhotoBackupProgress {
 		case .exportingLivePhotos(let index, let total, current: _):
 			if total > 0 { return Float(index) / Float(total) }
 			return 1.0
-		case .selecting: return 0.0
 		case .purging: return 0.0
 		case .finished(savedAssets: _): return 1.0
 		case .error(_): return 1.0
@@ -142,7 +140,6 @@ enum PhotoBackupProgress {
 		case .exportingVideos(let index, let total, current: _): return String(localized: "\(index+1) of \(total)")
 		case .exportingLivePhotos(let index, let total, current: _): return String(localized: "\(index+1) of \(total)")
 		case .purging: return ""
-		case .selecting: return ""
 		case .error(_): return ""
 		case .finished(_, _): return ""
 		}
@@ -156,7 +153,6 @@ enum PhotoBackupProgress {
 		case .exportingVideos(index: _, total: _, current: _): return String(localized: "Saving videos")
 		case .exportingLivePhotos(index: _, total: _, current: _): return String(localized: "Saving live photos")
 		case .purging: return String(localized: "Removing originals")
-		case .selecting: return String(localized: "Selecting files to be synchronized")
 		case .error(let e):
 			return String(localized: "Failed: \(e)")
 
@@ -302,7 +298,7 @@ enum PhotoBackupProgress {
 				}
 			}
 
-			// Pause the folder while backing up so we can change selection state
+			// Pause the folder while backing up, so that it scans everything that was saved when it resumes
 			let folderWasPaused = folder.isPaused()
 			try folder.setPaused(true)
 			defer {
@@ -437,14 +433,12 @@ enum PhotoBackupProgress {
 		DispatchQueue.main.async { self.progress = .exportingPhotos(index: 0, total: count, current: nil) }
 
 		// Bookkeeping
-		var videosToExport: [(PHAsset, URL, EntryPath)] = []
-		var livePhotosToExport: [(PHAsset, URL, EntryPath)] = []
-		var selectPaths: [EntryPath] = []
+		var videosToExport: [(PHAsset, URL)] = []
+		var livePhotosToExport: [(PHAsset, URL)] = []
 		var originalsToPurge: [PHAsset] = []
 		var assetsSavedSuccessfully: [PHAsset] = []
 		let structure = await self.folderStructure
 		let purgeCutoffDate = await Date.now - Double.maximum(Double(self.purgeAfterDays), 0.0) * 86400.0
-		let isSelective = try folder.checkedIsSelective()
 		let myShortDeviceID = appState.client.shortDeviceID()
 		let purgeEnabled = await self.purgeEnabled
 		let maxAgeInterval = TimeInterval(Double(await self.maxAgeDays) * 86400.0)
@@ -521,7 +515,7 @@ enum PhotoBackupProgress {
 					if asset.mediaType == .video {
 						if categories.contains(.video) {
 							Log.info("Requesting video export session for \(asset.originalFilename)")
-							videosToExport.append((asset, fileURL, inFolderPath))
+							videosToExport.append((asset, fileURL))
 						}
 					}
 					else {
@@ -539,7 +533,6 @@ enum PhotoBackupProgress {
 								if let data = data {
 									do {
 										try data.write(to: fileURL)
-										selectPaths.append(inFolderPath)
 
 										// Set file creation and modified date to photo creation date. The modified date is what is synced
 										if let cd = asset.creationDate {
@@ -584,35 +577,13 @@ enum PhotoBackupProgress {
 					Log.info("Found live photo \(asset.originalFilename) \(liveInFolderPath)")
 
 					if !FileManager.default.fileExists(atPath: liveFileURL.path) {
-						livePhotosToExport.append((asset, liveFileURL, liveInFolderPath))
+						livePhotosToExport.append((asset, liveFileURL))
 					}
 				}
 			}
 			catch {
 				cancellingError = error
 				stop.pointee = true
-			}
-		}
-
-		// Select paths a first time for photos (video export may take too long)
-		if isSelective {
-			Log.info("Selecting paths (photos only)")
-			#if os(iOS)
-				Log.info("Background time remaining: \(await UIApplication.shared.backgroundTimeRemaining))")
-			#endif
-
-			DispatchQueue.main.async { self.progress = .selecting }
-
-			let stList = SushitrainNewListOfStrings()!
-			for path in selectPaths {
-				stList.append(path.pathInFolder)
-			}
-
-			do {
-				try folder.setLocalPathsExplicitlySelected(stList)
-			}
-			catch {
-				Log.warn("Could not select files: \(error.localizedDescription)")
 			}
 		}
 
@@ -632,7 +603,7 @@ enum PhotoBackupProgress {
 
 			DispatchQueue.main.async { self.progress = .exportingVideos(index: 0, total: videoCount, current: nil) }
 
-			for (idx, (asset, fileURL, selectPath)) in videosToExport.enumerated() {
+			for (idx, (asset, fileURL)) in videosToExport.enumerated() {
 				if Task.isCancelled { break }
 
 				DispatchQueue.main.async { self.progress = .exportingVideos(index: idx, total: videoCount, current: nil) }
@@ -664,7 +635,6 @@ enum PhotoBackupProgress {
 					continue
 				}
 
-				selectPaths.append(selectPath)
 				assetsSavedSuccessfully.append(asset)
 			}
 		}
@@ -678,9 +648,9 @@ enum PhotoBackupProgress {
 
 			let liveCount = livePhotosToExport.count
 			DispatchQueue.main.async { self.progress = .exportingLivePhotos(index: 0, total: liveCount, current: nil) }
-			for (idx, (asset, destURL, selectPath)) in livePhotosToExport.enumerated() {
+			for (idx, (asset, destURL)) in livePhotosToExport.enumerated() {
 				if Task.isCancelled { break }
-				Log.info("Exporting live photo \(asset.originalFilename) \(selectPath)")
+				Log.info("Exporting live photo \(asset.originalFilename) \(destURL)")
 
 				do {
 					try await withCheckedThrowingContinuation { resolve in
@@ -721,7 +691,6 @@ enum PhotoBackupProgress {
 						}
 					}
 
-					selectPaths.append(selectPath)
 					assetsSavedSuccessfully.append(asset)
 
 					if let cd = asset.creationDate {
@@ -735,28 +704,6 @@ enum PhotoBackupProgress {
 				}
 
 				DispatchQueue.main.async { self.progress = .exportingLivePhotos(index: idx, total: liveCount, current: nil) }
-			}
-		}
-
-		// Select paths
-		if isSelective {
-			Log.info("Selecting paths")
-			#if os(iOS)
-				Log.info("Background time remaining: \(await UIApplication.shared.backgroundTimeRemaining))")
-			#endif
-
-			DispatchQueue.main.async { self.progress = .selecting }
-
-			let stList = SushitrainNewListOfStrings()!
-			for path in selectPaths {
-				stList.append(path.pathInFolder)
-			}
-
-			do {
-				try folder.setLocalPathsExplicitlySelected(stList)
-			}
-			catch {
-				Log.warn("Could not select files: \(error.localizedDescription)")
 			}
 		}
 

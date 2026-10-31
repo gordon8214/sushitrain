@@ -99,7 +99,7 @@ func pairCommand(args []string) error {
 	if err := gateway.AdminCall(socket, "pairing.start", nil, &session); err != nil {
 		return err
 	}
-	fmt.Println("Scan this code in Synctrain (Settings › Remote folders › Pair), or enter the link:")
+	fmt.Println("Scan this code in Synctrain (Settings › Gateways › Pair with a Gateway), or enter the link:")
 	fmt.Println()
 	if err := printQR(os.Stdout, session.URL); err != nil {
 		return err

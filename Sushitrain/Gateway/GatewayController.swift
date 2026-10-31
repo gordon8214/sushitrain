@@ -24,9 +24,6 @@
 
 		/// Whether the user turned the service on
 		private(set) var isEnabled: Bool
-		/// Whether this Mac's File Provider needs the service. It then runs even if the user didn't turn it on, for this
-		/// Mac alone.
-		private(set) var servesThisMac = false
 		/// The settings the service runs with
 		private(set) var settings: GatewaySettings
 		private(set) var state = State.stopped
@@ -50,23 +47,14 @@
 		@ObservationIgnored private var refreshing: Task<Void, Never>? = nil
 		@ObservationIgnored private var terminationObserver: (any NSObjectProtocol)? = nil
 		@ObservationIgnored private var hasThumbnailRenderer = false
-		/// This Mac's own File Provider, which is not one of the devices the settings list
-		@ObservationIgnored var thisMacClientID: String? = UserDefaults.standard.string(forKey: thisMacClientKey) {
-			didSet {
-				UserDefaults.standard.set(thisMacClientID, forKey: Self.thisMacClientKey)
-			}
-		}
 
 		private static let enabledKey = "remoteFileServiceEnabled"
-		private static let thisMacClientKey = "remoteFileServiceThisMacClient"
 		private static let refreshInterval: Duration = .seconds(3)
 		private static let certificateRefreshInterval: Duration = .seconds(12 * 3600)
 		/// How long quitting waits for the service to finish what it is doing, while blocking the main thread
 		private static let stopTimeout: TimeInterval = 6
 		/// How long quitting waits for the service without blocking: longer than the core takes at most (about 8 s)
 		private static let terminationTimeout: TimeInterval = 9
-
-		private var shouldRun: Bool { isEnabled || servesThisMac }
 
 		private init() {
 			isEnabled = UserDefaults.standard.bool(forKey: Self.enabledKey)
@@ -84,7 +72,7 @@
 			) { _ in
 				MainActor.assumeIsolated { GatewayController.shared.stopForTermination() }
 			}
-			if shouldRun {
+			if isEnabled {
 				enqueue { await $0.startService() }
 			}
 		}
@@ -95,32 +83,12 @@
 			}
 			isEnabled = enabled
 			UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
-			if servesThisMac {
-				// Running either way, but on other addresses
-				restart()
-			}
-			else if enabled {
+			if enabled {
 				enqueue { await $0.startService() }
 			}
 			else {
 				enqueue { await $0.stopService() }
 			}
-		}
-
-		/// Runs the service for this Mac's File Provider, or stops doing that, and returns once that is done
-		func setServesThisMac(_ serves: Bool) async {
-			guard serves != servesThisMac else {
-				await transition?.value
-				return
-			}
-			servesThisMac = serves
-			if serves {
-				enqueue { await $0.startService() }
-			}
-			else if !isEnabled {
-				enqueue { await $0.stopService() }
-			}
-			await transition?.value
 		}
 
 		/// Saves new settings and restarts the service with them
@@ -155,7 +123,7 @@
 
 		/// Starts the service again, as after a change of settings or certificate
 		func restart() {
-			guard shouldRun else {
+			guard isEnabled else {
 				return
 			}
 			enqueue { controller in
@@ -203,7 +171,7 @@
 				}
 				status = snapshot.status
 				exports = Dictionary(snapshot.exports.map { ($0.folderID, $0) }, uniquingKeysWith: { _, last in last })
-				clients = snapshot.clients.filter { !$0.revoked && $0.clientID != thisMacClientID }
+				clients = snapshot.clients.filter { !$0.revoked }
 				pendingOperations = snapshot.pendingOperations
 				refreshError = nil
 			}
@@ -251,22 +219,6 @@
 			return try JSONDecoder.gateway().decode(GatewayPairingSession.self, from: data)
 		}
 
-		/// Starts pairing for this Mac's own File Provider, over the loopback interface
-		func startLocalPairing() async throws -> GatewayPairingSession {
-			let service = try runningService()
-			let data = try await Self.detached { try service.startLocalPairingJSON() }
-			return try JSONDecoder.gateway().decode(GatewayPairingSession.self, from: data)
-		}
-
-		/// The port the service listens on, and its certificate's key, for this Mac's own File Provider
-		func localAddress() async -> (port: Int, spki: String)? {
-			await refresh()
-			guard let service, let spki = status?.spki else {
-				return nil
-			}
-			return (service.port(), spki)
-		}
-
 		func pendingPairings() async throws -> [GatewayPendingPairing] {
 			let service = try runningService()
 			let data = try await Self.detached { try service.pendingPairingsJSON() }
@@ -299,27 +251,18 @@
 		}
 
 		private func startService() async {
-			guard shouldRun, service == nil, let client else {
+			guard isEnabled, service == nil, let client else {
 				return
 			}
 			state = .starting
 			do {
-				let configuration = try await serviceConfiguration(port: settings.port)
+				let configuration = try await serviceConfiguration()
 				if !hasThumbnailRenderer {
 					// The core only offers thumbnails if the renderer is set before the service starts
 					SushitrainSetRemoteThumbnailRenderer(QuickLookThumbnailRenderer())
 					hasThumbnailRenderer = true
 				}
-				let started: SushitrainRemoteFileService
-				do {
-					started = try await Self.startService(client: client, configuration: configuration)
-				}
-				catch  where !isEnabled {
-					// Nothing but this Mac's File Provider connects, which looks the port up: any free one will do
-					Log.info("Could not listen on the service's port for this Mac: \(error.localizedDescription)")
-					started = try await Self.startService(
-						client: client, configuration: try await serviceConfiguration(port: 0))
-				}
+				let started = try await Self.startService(client: client, configuration: configuration)
 				service = started
 				activity = ProcessInfo.processInfo.beginActivity(
 					options: [.userInitiatedAllowingIdleSystemSleep],
@@ -329,7 +272,6 @@
 					scheduleCertificateRefresh()
 				}
 				Log.info("Remote file service started on port \(started.port())")
-				await FinderAccess.shared.serviceDidChange()
 			}
 			catch {
 				Log.warn("Could not start the remote file service: \(error.localizedDescription)")
@@ -411,13 +353,12 @@
 					try? await Task.sleep(for: Self.certificateRefreshInterval)
 					if !Task.isCancelled {
 						await GatewayCertificateStore.refreshFromOriginals()
-						await FinderAccess.shared.serviceDidChange()
 					}
 				}
 			}
 		}
 
-		private func serviceConfiguration(port: Int) async throws -> Data {
+		private func serviceConfiguration() async throws -> Data {
 			var certFile = ""
 			var keyFile = ""
 			if settings.certificateMode == .files {
@@ -431,7 +372,7 @@
 			// They may have changed in System Settings since the last start
 			GatewaySettings.refreshSystemNames()
 			let configuration = ServiceConfiguration(
-				listenAddress: isEnabled ? ":\(port)" : "127.0.0.1:\(port)", certFile: certFile, keyFile: keyFile,
+				listenAddress: ":\(settings.port)", certFile: certFile, keyFile: keyFile,
 				serviceName: settings.effectiveServiceName, publicHost: settings.effectivePublicHost,
 				publicPort: settings.port, contentCacheMiB: settings.contentCacheMiB,
 				cacheDirectory: AppLocations.current.remoteFileService.path(percentEncoded: false))
@@ -471,10 +412,12 @@
 				.sorted()
 				.map { folder in
 					var restriction: String? = nil
+					var ignoresEverything: ObjCBool = false
 					if folder.folderType() != SushitrainFolderTypeSendReceive {
 						restriction = String(localized: "Only send-receive folders can be changed from other devices.")
 					}
-					else if folder.isSelective() != false && (try? folder.checkedIsOnDemand()) != true {
+					// A folder that ignores everything by default does not hold all of its files
+					else if (try? folder.isSelective(&ignoresEverything)) == nil || ignoresEverything.boolValue {
 						restriction = String(
 							localized: "Only folders that are kept on this Mac in full can be changed from other devices.")
 					}

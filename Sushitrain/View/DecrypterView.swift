@@ -310,7 +310,7 @@ import SwiftUI
 
 		var body: some View {
 			List(selection: $selectedURLs) {
-				PathsOutlineGroup(paths: decryptedPaths, disableIntermediateSelection: true) { decryptedPath, isIntermediate in
+				PathsOutlineGroup(paths: decryptedPaths) { decryptedPath, isIntermediate in
 					if let entries = self.entriesByDecryptedPath[decryptedPath] {
 						if entries.count > 1 || (entries.count == 1 && entries[0].version != nil) {
 							DisclosureGroup {

@@ -5,6 +5,8 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 #if os(macOS)
 	import AppKit
+	import SynctrainFileProviderKit
+	import SynctrainHostKit
 
 	/// What the work with gateways (SynctrainClient) needs from the app's life on this platform. A Mac app keeps running
 	/// behind its windows, so only the Mac going to sleep stops it, which it comes back from as from an outage.
@@ -25,6 +27,9 @@
 			}
 		}
 
+		/// Whether the app may use the app group, the Keychain and the system's location
+		nonisolated static var allowsSharedState: Bool { TestRun.allowsFileProvider }
+
 		static var isActive: Bool { true }
 		static var isInBackground: Bool { false }
 		static var backgroundTimeRemaining: TimeInterval { .greatestFiniteMagnitude }
@@ -40,24 +45,22 @@
 			NSWorkspace.shared.activateFileViewerSelecting([url])
 		}
 
-		/// Where files of a folder that the Synctrain location cannot synchronize go when the folder leaves it and has
-		/// no directory of its own on this Mac (a folder of a gateway). It is a new directory where new folders are
-		/// created, which the engine picks: in the configured default folder path, or else `~/Sync` or the home
-		/// directory, never inside a folder, and never one that exists already.
-		static func directoryForFilesOutsideTheLocation(named name: String) -> URL? {
-			guard let client = FinderAccess.shared.client else {
-				return nil
+		/// Where files of a folder that the Synctrain location cannot synchronize go when the folder leaves it: a new
+		/// directory in `~/Sync`, as a Mac with the location runs no engine to ask, and never one that exists already.
+		static func directoryForFilesOutsideTheLocation(named label: String) -> URL? {
+			let home = EngineLocations.testRoot ?? FileManager.default.homeDirectoryForCurrentUser
+			let parent = home.appending(path: "Sync", directoryHint: .isDirectory)
+			let name = String(localized: "\(FileNames.directoryName(forLabel: label)) (not synchronized)")
+			for attempt in 1...directoryNameAttempts {
+				let directory = parent.appending(path: attempt == 1 ? name : "\(name) \(attempt)", directoryHint: .isDirectory)
+				if !FileManager.default.fileExists(atPath: directory.path(percentEncoded: false)) {
+					return directory
+				}
 			}
-			var error: NSError? = nil
-			// The engine names a new folder's directory after the folder, so the name is given as the folder
-			let path = client.defaultFolderPath(String(localized: "\(name) (not synchronized)"), error: &error)
-			guard error == nil, !path.isEmpty else {
-				Log.warn(
-					"Could not find a place for what the Synctrain location cannot synchronize: \(error?.localizedDescription ?? "-")")
-				return nil
-			}
-			return URL(filePath: path, directoryHint: .isDirectory)
+			Log.warn("Could not find a place for what the Synctrain location cannot synchronize of \(label)")
+			return nil
 		}
+		private static let directoryNameAttempts = 100
 
 		/// Opens the settings where macOS asks the user to allow the Synctrain location
 		static func showLocationSettings() {

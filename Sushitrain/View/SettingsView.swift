@@ -429,16 +429,6 @@ struct AdvancedSettingsView: View {
 			}
 
 			Section {
-				Toggle("Ignore certain system files", isOn: userSettings.$ignoreExtraneousDefaultFiles)
-			} header: {
-				Text("System files")
-			} footer: {
-				Text(
-					"When enabled, certain files that are created by the system (such as .DS_Store) will not be noticed as 'new files' in folders that are selectively synced. These files will still be synced in folders that are fully synchronized and when they are created by other devices."
-				)
-			}
-
-			Section {
 				Toggle("Cache thumbnails on disk", isOn: userSettings.$cacheThumbnailsToDisk)
 
 				// Select thumbnail folder
@@ -1051,15 +1041,6 @@ private struct BandwidthSettingsView: View {
 						})
 
 					Tab(
-						value: "finder",
-						content: {
-							FinderAccessSettingsView()
-						},
-						label: {
-							Label("Files in Finder", systemImage: "folder.badge.gearshape")
-						})
-
-					Tab(
 						value: "photo",
 						content: {
 							PhotoBackupSettingsView(photoBackup: appState.photoBackup)
@@ -1081,8 +1062,6 @@ private struct BandwidthSettingsView: View {
 			.frame(minWidth: 500, minHeight: 450)
 			.windowResizeBehavior(.automatic)
 			.formStyle(.grouped)
-			// On the window, as the pages that switch folders are in it and two alerts would fight over one report
-			.filesLeftoversAlert()
 		}
 	}
 
@@ -1117,8 +1096,6 @@ private struct BandwidthSettingsView: View {
 						Text("Do not show folders").tag(MenuFolderAction.hide)
 						Text("Open in Finder").tag(MenuFolderAction.finder)
 						Text("Open in the app").tag(MenuFolderAction.browser)
-						Text("Open in Finder, except selectively synced folders").tag(
-							MenuFolderAction.finderExceptSelective)
 					}.disabled(!hideInDock)
 				}
 
@@ -1128,6 +1105,16 @@ private struct BandwidthSettingsView: View {
 
 				Section("View settings") {
 					ViewSettingsView(userSettings: appState.userSettings)
+				}
+
+				Section {
+					Button("Switch to Files in Finder…") {
+						ModeSwitch.askToSwitchToFilesInFinder()
+					}
+				} footer: {
+					Text(
+						"This Mac then runs no engine. Finder shows the folders of a gateway on another system, and keeps what you open."
+					)
 				}
 			}
 		}

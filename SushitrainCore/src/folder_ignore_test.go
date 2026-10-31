@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -54,11 +55,11 @@ func TestLoadIgnoreMatcherAccess(t *testing.T) {
 		missingRoot, missingIgnore bool
 		rootErr, openErr, statErr  error
 		wantErr                    bool
-		selective                  bool
+		lines                      []string
 	}{
 		{name: "readable root without ignore file", missingIgnore: true},
-		{name: "selective", contents: "!/keep\n*\n", selective: true},
-		{name: "ordinary patterns", contents: "*.tmp\n"},
+		{name: "ignores everything", contents: "!/keep\n*\n", lines: []string{"!/keep", "*"}},
+		{name: "ordinary patterns", contents: "*.tmp\n", lines: []string{"*.tmp"}},
 		{name: "missing root", missingRoot: true, missingIgnore: true, wantErr: true},
 		{name: "root denied with absent ignore", missingIgnore: true, rootErr: os.ErrPermission, wantErr: true},
 		{name: "ignore denied", contents: "*\n", openErr: os.ErrPermission, wantErr: true},
@@ -86,8 +87,8 @@ func TestLoadIgnoreMatcherAccess(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := newSelection(matcher.Lines()).isSelectiveIgnore(); got != tc.selective {
-				t.Fatalf("selective = %v, want %v", got, tc.selective)
+			if got := matcher.Lines(); !slices.Equal(got, tc.lines) {
+				t.Fatalf("lines = %q, want %q", got, tc.lines)
 			}
 		})
 	}
@@ -113,8 +114,8 @@ func TestLoadIgnoreMatcherPermissionRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !newSelection(matcher.Lines()).isSelectiveIgnore() {
-		t.Fatal("selective mode did not recover")
+	if !slices.Equal(matcher.Lines(), []string{"*"}) {
+		t.Fatalf("the patterns did not recover: %q", matcher.Lines())
 	}
 	if err := os.Remove(filepath.Join(root, ignoreFileName)); err != nil {
 		t.Fatal(err)
@@ -128,7 +129,7 @@ func TestLoadIgnoreMatcherPermissionRecovery(t *testing.T) {
 	}
 }
 
-// FolderWithID returns a new Folder for every call, and the service asks for a folder's mode for every access check
+// FolderWithID returns a new Folder for every call
 func TestIgnoresAreCachedPerFolderUntilTheFileChanges(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, ignoreFileName)
@@ -151,22 +152,19 @@ func TestIgnoresAreCachedPerFolderUntilTheFileChanges(t *testing.T) {
 	if first != second {
 		t.Fatal("the patterns were read again")
 	}
-	if selective, onDemand := folder.ignoreCache().modeOf(second); !selective || onDemand {
-		t.Fatalf("mode: %v %v", selective, onDemand)
-	}
-	if err := os.WriteFile(path, []byte(onDemandPattern+"\n!/a\n*\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("!/b\n*\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	later := time.Now().Add(time.Minute)
 	if err := os.Chtimes(path, later, later); err != nil {
 		t.Fatal(err)
 	}
-	if onDemand, err := folder.IsOnDemand(); !onDemand || err != nil {
-		t.Fatalf("a new file: %v %v", onDemand, err)
-	}
 	third, err := folder.loadIgnores()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !slices.Equal(third.Lines(), []string{"!/b", "*"}) {
+		t.Fatalf("a new file: %q", third.Lines())
 	}
 	folder.forgetIgnores()
 	if fourth, err := folder.loadIgnores(); fourth == third || err != nil {
@@ -174,61 +172,17 @@ func TestIgnoresAreCachedPerFolderUntilTheFileChanges(t *testing.T) {
 	}
 }
 
-func TestIsSelectiveUnavailableClient(t *testing.T) {
+func TestIsSelectiveWithoutARunningEngine(t *testing.T) {
 	if mode, err := (&Folder{}).IsSelective(); mode != false || err == nil {
-		t.Fatalf("got %v, %v", mode, err)
+		t.Fatalf("no client: got %v, %v", mode, err)
 	}
-}
-
-func TestIsSelectiveRootRecovery(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "volume")
+	if mode, err := (&Folder{client: &Client{}}).IsSelective(); mode != false || err == nil {
+		t.Fatalf("not loaded: got %v, %v", mode, err)
+	}
 	cfg := config.New(protocol.EmptyDeviceID)
-	cfg.Folders = []config.FolderConfiguration{{ID: "test", Path: root, FilesystemType: config.FilesystemTypeBasic}}
-	client := (&Client{}).withTestRun(config.Wrap("", cfg, protocol.EmptyDeviceID, events.NoopLogger),
-		&syncthing.App{Internals: &syncthing.Internals{}}, nil)
-	folder := &Folder{client: client, FolderID: "test"}
-	if mode, err := folder.IsSelective(); mode != false || err == nil {
-		t.Fatalf("missing root: got %v, %v", mode, err)
-	}
-	if err := os.Mkdir(root, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if mode, err := folder.IsSelective(); mode != false || err != nil {
-		t.Fatalf("readable empty root: got %v, %v", mode, err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ignoreFileName), []byte("*\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if mode, err := folder.IsSelective(); mode != true || err != nil {
-		t.Fatalf("selective root: got %v, %v", mode, err)
-	}
-	if err := os.Rename(root, root+"-unmounted"); err != nil {
-		t.Fatal(err)
-	}
-	if mode, err := folder.IsSelective(); mode != false || err == nil {
-		t.Fatalf("unmounted cached root: got %v, %v", mode, err)
-	}
-	if err := os.Rename(root+"-unmounted", root); err != nil {
-		t.Fatal(err)
-	}
-	if mode, err := folder.IsSelective(); mode != true || err != nil {
-		t.Fatalf("remounted root: got %v, %v", mode, err)
-	}
-	folder.FolderID = "missing"
-	if mode, err := folder.IsSelective(); mode != false || err == nil {
-		t.Fatalf("missing configuration: got %v, %v", mode, err)
-	}
-}
-
-func TestIsSelectiveUnsupportedFolderTypes(t *testing.T) {
-	for _, folderType := range []config.FolderType{config.FolderTypeSendOnly, config.FolderTypeReceiveEncrypted} {
-		cfg := config.New(protocol.EmptyDeviceID)
-		cfg.Folders = []config.FolderConfiguration{{ID: "test", Path: filepath.Join(t.TempDir(), "absent"), Type: folderType, FilesystemType: config.FilesystemTypeBasic}}
-		folder := &Folder{FolderID: "test", client: (&Client{}).withTestRun(
-			config.Wrap("", cfg, protocol.EmptyDeviceID, events.NoopLogger),
-			&syncthing.App{Internals: &syncthing.Internals{}}, nil)}
-		if mode, err := folder.IsSelective(); mode != false || err != nil {
-			t.Fatalf("type %v: got %v, %v", folderType, mode, err)
-		}
+	cfg.Folders = []config.FolderConfiguration{{ID: "test", Path: t.TempDir(), FilesystemType: config.FilesystemTypeBasic}}
+	client := (&Client{}).withTestRun(config.Wrap("", cfg, protocol.EmptyDeviceID, events.NoopLogger), nil, nil)
+	if mode, err := (&Folder{client: client, FolderID: "test"}).IsSelective(); mode != false || err == nil {
+		t.Fatalf("not started: got %v, %v", mode, err)
 	}
 }

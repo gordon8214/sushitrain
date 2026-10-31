@@ -227,14 +227,10 @@ func (s *Service) Start() error {
 	s.listener = listener
 	s.server = server
 
-	s.wg.Add(4)
+	s.wg.Add(3)
 	go func() {
 		defer s.wg.Done()
 		s.runReconciler(s.ctx)
-	}()
-	go func() {
-		defer s.wg.Done()
-		s.runDeselection(s.ctx)
 	}()
 	go func() {
 		defer s.wg.Done()

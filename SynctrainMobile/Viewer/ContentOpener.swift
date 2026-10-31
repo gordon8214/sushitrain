@@ -160,14 +160,3 @@ enum ContentOpener {
 		return destination
 	}
 }
-
-/// How much space downloaded files may take
-enum CacheSettings {
-	static let storageKey = "cacheLimitBytes"
-	static let defaultLimit = 5 << 30
-	static let choices = [1 << 30, 2 << 30, 5 << 30, 10 << 30, 20 << 30]
-
-	static var limit: Int64 {
-		Int64(UserDefaults.standard.object(forKey: storageKey) as? Int ?? defaultLimit)
-	}
-}

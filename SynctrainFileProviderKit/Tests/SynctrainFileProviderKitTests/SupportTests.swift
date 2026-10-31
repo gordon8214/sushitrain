@@ -10,6 +10,14 @@ import Testing
 @testable import SynctrainFileProviderKit
 
 @Suite struct FileNamesTests {
+	@Test func directoryNameCannotLeaveItsParentOrHide() {
+		#expect(FileNames.directoryName(forLabel: "Photos") == "Photos")
+		#expect(FileNames.directoryName(forLabel: "Work/2026") == "Work-2026")
+		#expect(FileNames.directoryName(forLabel: "../../etc") == "-..-etc")
+		#expect(FileNames.directoryName(forLabel: ".hidden") == "hidden")
+		#expect(FileNames.directoryName(forLabel: "a\0b") == "ab")
+	}
+
 	@Test func collisionKeys() {
 		#expect(FileNames.collisionKey("Report.TXT") == FileNames.collisionKey("report.txt"))
 		#expect(FileNames.collisionKey("Cafe\u{301}") == FileNames.collisionKey("Caf\u{e9}"))

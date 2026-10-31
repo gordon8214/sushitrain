@@ -10,7 +10,6 @@ import Combine
 import AppIntents
 import SynctrainHostKit
 
-@main
 struct SushitrainApp: App {
 	static var viewRouteActivityID = "nl.t-shaped.Sushitrain.view-route"
 
@@ -36,16 +35,8 @@ struct SushitrainApp: App {
 	#endif
 
 	init() {
-		// Install uncaught exception handler
-		NSSetUncaughtExceptionHandler { e in
-			Log.warn(
-				"Uncaught exception: \(e.name) reason=\(e.reason ?? "unknown") returnAddress=\(e.callStackReturnAddresses) symbols=\(e.callStackSymbols)"
-			)
-		}
-
 		// The first start outside the sandbox takes over the sandboxed app's preferences and engine data
 		#if os(macOS)
-			TestRun.redirectPreferences()
 			let containerMigration = ContainerMigrator.run()
 		#endif
 
@@ -367,6 +358,11 @@ struct SushitrainApp: App {
 				}
 				.disabled(
 					(appState.startupState != .started && !appState.engineCanRestart) || appState.isEngineRestarting)
+
+				// Here too, as the settings only open once the engine has started
+				Button("Switch to Files in Finder…") {
+					ModeSwitch.askToSwitchToFilesInFinder()
+				}
 			}
 		#endif
 	}
@@ -492,23 +488,6 @@ struct SushitrainApp: App {
 			case .browser:
 				openWindow(id: "folder", value: fld.folderID)
 				NSApplication.shared.activate()
-
-			case .finderExceptSelective:
-				if fld.isSelective() != false {
-					openWindow(
-						id: "folder",
-						value: fld.folderID)
-					NSApplication.shared.activate()
-				}
-				else if let lnu = fld.localNativeURL {
-					openURLInSystemFilesApp(url: lnu)
-				}
-				else {
-					openWindow(
-						id: "folder",
-						value: fld.folderID)
-					NSApplication.shared.activate()
-				}
 			}
 		}
 

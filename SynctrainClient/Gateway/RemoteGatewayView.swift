@@ -41,6 +41,9 @@ struct RemoteGatewayView: View {
 				ContentUnavailableView("Not paired", systemImage: "externaldrive.badge.xmark")
 			}
 		}
+		#if os(macOS)
+			.formStyle(.grouped)
+		#endif
 		.navigationTitle(coordinator.status(serviceID: serviceID)?.displayName ?? String(localized: "Gateway"))
 		.refreshable {
 			await coordinator.refresh(serviceID: serviceID)
@@ -160,11 +163,11 @@ struct RemoteGatewayFoldersSection: View {
 	@State private var errorMessage: String? = nil
 	@State private var working: Set<String> = []
 
-	/// Removing a folder from this device, with how many changes in Files would be lost
+	/// Removing a folder from this device, with how many changes in Files would be lost (nil if the system could not say)
 	struct Removal: Identifiable {
-		var folder: RemoteFolder
+		var remoteID: String
 		var localID: String
-		var pendingItemCount: Int
+		var pendingItemCount: Int?
 		var id: String { localID }
 	}
 
@@ -174,9 +177,10 @@ struct RemoteGatewayFoldersSection: View {
 
 	var body: some View {
 		let status = coordinator.status(serviceID: serviceID)
+		let unlisted = unlistedFolders(status)
 		Section {
 			if let folders = status?.folders {
-				if folders.isEmpty {
+				if folders.isEmpty && unlisted.isEmpty {
 					Text("The gateway does not let this device access any folder. Grant access on the gateway.")
 						.foregroundStyle(.secondary)
 				}
@@ -190,6 +194,9 @@ struct RemoteGatewayFoldersSection: View {
 			else {
 				ProgressView()
 			}
+			ForEach(unlisted, id: \.folderID) { binding in
+				row(binding)
+			}
 		} header: {
 			Text(status?.displayName ?? String(localized: "Folders"))
 		} footer: {
@@ -201,14 +208,19 @@ struct RemoteGatewayFoldersSection: View {
 			"Remove the folder from this device?", isPresented: Binding.isNotNil($confirmRemoval),
 			titleVisibility: .visible, presenting: confirmRemoval
 		) { removal in
-			Button(removal.pendingItemCount > 0 ? "Remove Anyway" : "Remove", role: .destructive) {
+			Button(removal.pendingItemCount == 0 ? "Remove" : "Remove Anyway", role: .destructive) {
 				remove(removal)
 			}
 		} message: { removal in
 			#if os(macOS)
-				if removal.pendingItemCount > 0 {
+				if let count = removal.pendingItemCount, count > 0 {
 					Text(
-						"Changes to \(removal.pendingItemCount) items made in Finder have not reached Synctrain yet. Removing the folder discards them."
+						"Changes to \(count) items made in Finder have not reached Synctrain yet. Removing the folder discards them."
+					)
+				}
+				else if removal.pendingItemCount == nil {
+					Text(
+						"Synctrain could not find out whether changes made in Finder have reached it. Removing the folder discards any that have not."
 					)
 				}
 				else {
@@ -217,9 +229,14 @@ struct RemoteGatewayFoldersSection: View {
 					)
 				}
 			#else
-				if removal.pendingItemCount > 0 {
+				if let count = removal.pendingItemCount, count > 0 {
 					Text(
-						"Changes to \(removal.pendingItemCount) items made in the Files app have not reached Synctrain yet. Removing the folder discards them."
+						"Changes to \(count) items made in the Files app have not reached Synctrain yet. Removing the folder discards them."
+					)
+				}
+				else if removal.pendingItemCount == nil {
+					Text(
+						"Synctrain could not find out whether changes made in the Files app have reached it. Removing the folder discards any that have not."
 					)
 				}
 				else {
@@ -256,27 +273,55 @@ struct RemoteGatewayFoldersSection: View {
 		}
 	}
 
+	/// Folders on this device that the gateway doesn't list: it can't be reached, or no longer shares them with this
+	/// device. Nothing else can take them away, and forgetting the gateway waits for them.
+	private func unlistedFolders(_ status: RemoteGatewayStatus?) -> [RemoteFolderBinding] {
+		let listed = Set(status?.folders?.map(\.id) ?? [])
+		return coordinator.bindings.values.filter { $0.serviceID == serviceID && !listed.contains($0.remoteFolderID) }
+			.sorted { $0.folderID < $1.folderID }
+	}
+
+	@ViewBuilder private func row(_ binding: RemoteFolderBinding) -> some View {
+		LabeledContent {
+			if working.contains(binding.remoteFolderID) {
+				ProgressView()
+			}
+			else {
+				addedMenu(remoteID: binding.remoteFolderID, localID: binding.folderID)
+			}
+		} label: {
+			VStack(alignment: .leading) {
+				Text(coordinator.folders.first { $0.folderID == binding.folderID }?.label ?? binding.remoteFolderID)
+				Text("Not listed by the gateway").font(.caption).foregroundStyle(.secondary)
+			}
+		}
+	}
+
+	@ViewBuilder private func addedMenu(remoteID: String, localID: String) -> some View {
+		Menu {
+			#if os(macOS)
+				Button("Show in Finder", systemImage: "folder") {
+					showInFiles(folderID: localID)
+				}
+			#else
+				Button("Show in Files", systemImage: "folder") {
+					showInFiles(folderID: localID)
+				}
+			#endif
+			Button("Remove from This Device…", systemImage: "minus.circle", role: .destructive) {
+				askToRemove(remoteID: remoteID, localID: localID)
+			}
+		} label: {
+			Label("Added", systemImage: "checkmark")
+		}
+	}
+
 	@ViewBuilder private func action(_ folder: RemoteFolder) -> some View {
 		if working.contains(folder.id) {
 			ProgressView()
 		}
 		else if let localID = coordinator.localFolderID(serviceID: serviceID, remoteFolderID: folder.id) {
-			Menu {
-				#if os(macOS)
-					Button("Show in Finder", systemImage: "folder") {
-						showInFiles(folderID: localID)
-					}
-				#else
-					Button("Show in Files", systemImage: "folder") {
-						showInFiles(folderID: localID)
-					}
-				#endif
-				Button("Remove from This Device…", systemImage: "minus.circle", role: .destructive) {
-					askToRemove(folder, localID: localID)
-				}
-			} label: {
-				Label("Added", systemImage: "checkmark")
-			}
+			addedMenu(remoteID: folder.id, localID: localID)
 		}
 		else if !folder.permissions.read {
 			Text("No access").foregroundStyle(.secondary)
@@ -318,17 +363,17 @@ struct RemoteGatewayFoldersSection: View {
 		}
 	}
 
-	private func askToRemove(_ folder: RemoteFolder, localID: String) {
+	private func askToRemove(remoteID: String, localID: String) {
 		Task {
 			let pending = await FilesDomain.shared.pendingItemCount()
-			confirmRemoval = Removal(folder: folder, localID: localID, pendingItemCount: pending)
+			confirmRemoval = Removal(remoteID: remoteID, localID: localID, pendingItemCount: pending)
 		}
 	}
 
 	private func remove(_ removal: Removal) {
-		working.insert(removal.folder.id)
+		working.insert(removal.remoteID)
 		Task {
-			defer { working.remove(removal.folder.id) }
+			defer { working.remove(removal.remoteID) }
 			do throws(GatewayFolderError) {
 				try await coordinator.removeFolder(folderID: removal.localID)
 			}

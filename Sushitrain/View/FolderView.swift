@@ -105,8 +105,6 @@ struct FolderStatusDescription {
 			let isAvailable = folder.connectedPeerCount() > 0
 
 			if !folder.isPaused() {
-				let selectionMode = folder.isSelective()
-
 				let peerStatusText: String
 				if folder.exists() {
 					let peerCount = (folder.sharedWithDeviceIDs()?.count() ?? 1) - 1
@@ -126,14 +124,8 @@ struct FolderStatusDescription {
 
 					switch status {
 					case "idle", "sync-waiting", "scan-waiting", "clean-waiting":
-						if selectionMode == false {
-							(self.text, self.systemImage, self.color) = (String(localized: "Synchronized"), "checkmark.circle.fill", .green)
-							self.badge = peerStatusText
-						}
-						else {
-							(self.text, self.systemImage, self.color) = (String(localized: "Connected"), "checkmark.circle.fill", .green)
-							self.badge = peerStatusText
-						}
+						(self.text, self.systemImage, self.color) = (String(localized: "Synchronized"), "checkmark.circle.fill", .green)
+						self.badge = peerStatusText
 
 					case "syncing":
 						(self.text, self.systemImage, self.color) = (
@@ -205,7 +197,7 @@ struct FolderStatusView: View {
 	var body: some View {
 		VStack {
 			if let status = status {
-				if status == "syncing" && folder.isSelective() == false {
+				if status == "syncing" {
 					if let statistics = self.statistics, statistics.global!.bytes > 0 {
 						let formatter = ByteCountFormatter()
 						if let globalBytes = statistics.global?.bytes, let localBytes = statistics.local?.bytes {
@@ -270,117 +262,10 @@ struct FolderStatusView: View {
 	}
 }
 
-struct FolderSyncTypePicker: View {
-	@Environment(AppState.self) private var appState
-	@State private var changeProhibited = true
-	@State private var isSelective: Bool? = nil
-	@State private var error: ErrorMessage? = nil
-	@State private var loadError: String?
-	@State private var refreshID = UUID()
-	@State private var isOnDemand = false
-	var folder: SushitrainFolder
-
-	var body: some View {
-		Group {
-			if isOnDemand {
-				// Finder shows all of it, and what is selected follows from what was written there
-				LabeledContent("Selection", value: String(localized: "On demand in Finder"))
-			}
-			else {
-				picker
-			}
-		}
-		.onAppear {
-			self.update()
-		}
-	}
-
-	@ViewBuilder private var picker: some View {
-		Picker(
-			"Selection",
-			selection: Binding(
-				get: { isSelective },
-				set: { newValue in
-					guard let newValue, !changeProhibited, newValue != isSelective else { return }
-					do {
-						try folder.setSelective(newValue)
-					}
-					catch {
-						self.error = ErrorMessage(error)
-					}
-					update()
-				})
-		) {
-			Text("All files").tag(false as Bool?)
-
-			Text("Selected files").tag(true as Bool?)
-				.disabled(folder.isSendOnlyFolder || folder.isReceiveEncryptedFolder)
-				.selectionDisabled(folder.isSendOnlyFolder || folder.isReceiveEncryptedFolder)
-
-			if isSelective == nil {
-				Text("(Unknown)").tag(nil as Bool?).disabled(true).selectionDisabled()
-			}
-		}
-		.pickerStyle(.menu)
-		.disabled(changeProhibited)
-		.errorAlert($error)
-		if let loadError {
-			Text(loadError).foregroundStyle(.secondary)
-			Button("Retry", action: update)
-		}
-	}
-
-	private func update() {
-		changeProhibited = true
-		let requestID = UUID()
-		refreshID = requestID
-		do {
-			isSelective = try folder.checkedIsSelective()
-			isOnDemand = try folder.checkedIsOnDemand()
-			loadError = nil
-		}
-		catch {
-			isSelective = nil
-			loadError = error.localizedDescription
-			return
-		}
-		guard isSelective != nil, !isOnDemand else { return }
-
-		// Only allow changes to selection mode when folder is idle
-		if !folder.isIdleOrSyncing || !self.folder.exists() {
-			changeProhibited = true
-			return
-		}
-
-		// Prohibit change in selection mode when there are extraneous files
-		Task.detached {
-			var hasExtra: ObjCBool = false
-			do {
-				let _ = try folder.hasExtraneousFiles(&hasExtra)
-				let hasExtraFinal = hasExtra
-				DispatchQueue.main.async {
-					guard refreshID == requestID else { return }
-					changeProhibited = hasExtraFinal.boolValue
-				}
-			}
-			catch {
-				Log.warn(
-					"Error calling hasExtraneousFiles: \(error.localizedDescription)"
-				)
-				DispatchQueue.main.async {
-					guard refreshID == requestID else { return }
-					changeProhibited = true
-				}
-			}
-		}
-	}
-}
-
 struct FolderDirectionPicker: View {
 	@Environment(AppState.self) private var appState
 	var folder: SushitrainFolder
 	@State private var changeProhibited: Bool = true
-	@State private var isOnDemand = false
 	@State private var folderType: String? = nil
 
 	var body: some View {
@@ -402,8 +287,6 @@ struct FolderDirectionPicker: View {
 					.help(
 						"Changes made on this device will be sent to other devices. Changes from other devices will not be accepted."
 					)
-					.disabled(folder.isSelective() != false)
-					.selectionDisabled(folder.isSelective() != false)
 
 				if folderType == nil {
 					Text("(Unknown)").tag(nil as String?)
@@ -419,8 +302,7 @@ struct FolderDirectionPicker: View {
 				}
 			}
 			.pickerStyle(.menu)
-			// An on-demand folder takes what Finder writes, which a receive-only folder doesn't
-			.disabled(changeProhibited || folderType == SushitrainFolderTypeReceiveOnly || isOnDemand)
+			.disabled(changeProhibited || folderType == SushitrainFolderTypeReceiveOnly)
 			.onAppear {
 				self.update()
 			}
@@ -435,32 +317,8 @@ struct FolderDirectionPicker: View {
 
 	private func update() {
 		self.folderType = self.folder.folderType()
-		self.isOnDemand = (try? self.folder.checkedIsOnDemand()) == true
-		// Only allow changes to selection mode when folder is idle
-		if !folder.isIdleOrSyncing {
-			changeProhibited = true
-			return
-		}
-
-		// Prohibit change in selection mode when there are extraneous files
-		Task.detached {
-			do {
-				var hasExtra: ObjCBool = false
-				let _ = try folder.hasExtraneousFiles(&hasExtra)
-				let hasExtraFinal = hasExtra
-				DispatchQueue.main.async {
-					changeProhibited = hasExtraFinal.boolValue
-				}
-			}
-			catch {
-				Log.warn(
-					"Error calling hasExtraneousFiles: \(error.localizedDescription)"
-				)
-				DispatchQueue.main.async {
-					changeProhibited = true
-				}
-			}
-		}
+		// Only allow changes to the direction when the folder is idle
+		changeProhibited = !folder.isIdleOrSyncing
 	}
 }
 
@@ -845,14 +703,11 @@ struct FolderView: View {
 
 			FolderDirectionPicker(folder: folder).disabled(isPhotoFolder || folder.isReceiveEncryptedFolder).id(
 				appState.eventCounter)
-
-			FolderSyncTypePicker(folder: folder).disabled(isPhotoFolder || folder.isReceiveEncryptedFolder).id(
-				appState.eventCounter)
 		} header: {
 			Text("Folder settings")
 		} footer: {
 			if isPhotoFolder {
-				Text("Photo folders can only be send-only and cannot be selectively synchronized.")
+				Text("Photo folders can only be send-only.")
 			}
 		}
 
@@ -971,7 +826,6 @@ private struct FolderThumbnailSettingsView: View {
 	@State private var deletingFromSharedCache = false
 	@State private var deletedFromSharedCache = false
 	@State private var settings = ThumbnailGeneration.disabled
-	@State private var selectionError: ErrorMessage? = nil
 
 	private var insidePathBinding: Binding<String> {
 		return Binding(
@@ -993,19 +847,6 @@ private struct FolderThumbnailSettingsView: View {
 		switch settings {
 		case .inside(let path): return .inside(path: path)
 		default: return .inside(path: ThumbnailGeneration.defaultInsideFolderThumbnailPath)
-		}
-	}
-
-	private var localDirectoryEntry: SushitrainEntry? {
-		switch settings {
-		case .inside(let path):
-			let e = try? self.folder.getFileInformation(path)
-			if let e = e, e.isDirectory() && !e.isDeleted() {
-				return e
-			}
-			return nil
-		default:
-			return nil
 		}
 	}
 
@@ -1046,23 +887,6 @@ private struct FolderThumbnailSettingsView: View {
 							.multilineTextAlignment(.trailing)
 					} label: {
 						Text("Subdirectory")
-					}
-
-					if let localDirectoryEntry = self.localDirectoryEntry, self.folder.isSelective() == true {
-						Toggle(
-							"Synchronize",
-							isOn: Binding(
-								get: { localDirectoryEntry.isExplicitlySelected() == true },
-								set: { selected in
-									do {
-										try localDirectoryEntry.setExplicitlySelected(selected)
-									}
-									catch {
-										selectionError = ErrorMessage(error)
-									}
-								})
-						)
-						.disabled(localDirectoryEntry.isSelected() != localDirectoryEntry.isExplicitlySelected())
 					}
 				}
 			} footer: {
@@ -1173,7 +997,6 @@ private struct FolderThumbnailSettingsView: View {
 			.formStyle(.grouped)
 		#endif
 		.navigationTitle("Thumbnails")
-		.errorAlert($selectionError)
 		#if os(iOS)
 			.navigationBarTitleDisplayMode(.inline)
 		#endif
@@ -1533,7 +1356,6 @@ private struct AdvancedFolderSettingsView: View {
 	@State private var showError: ErrorMessage? = nil
 
 	#if os(iOS)
-		@State private var showSelectiveIgnores: Bool = false
 		@State private var showIgnores: Bool = false
 	#endif
 
@@ -1562,7 +1384,7 @@ private struct AdvancedFolderSettingsView: View {
 					}
 					.sheet(isPresented: $showIgnores) {
 						NavigationStack {
-							FolderIgnoreSettingsView(folder: folder)
+							IgnoresView(folder: folder)
 						}
 					}
 				}

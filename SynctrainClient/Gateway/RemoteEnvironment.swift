@@ -39,8 +39,9 @@ final class RemoteEnvironment: Sendable {
 		extensionSessionIdentifier = RemoteSessionIdentifier.fileProviderExtension(appBundleIdentifier: bundleID)
 	}
 
-	/// The environment of the shared container, or nil when the app group is not available
-	static let shared: RemoteEnvironment? = SharedContainer.appGroup().map { RemoteEnvironment(container: $0) }
+	/// The environment of the shared container, or nil when the app group is not available, or not to be used
+	static let shared: RemoteEnvironment? =
+		ClientLifecycle.allowsSharedState ? SharedContainer.appGroup().map { RemoteEnvironment(container: $0) } : nil
 
 	/// The client of a paired gateway, or nil when it is not paired
 	func client(serviceID: String) -> RemoteFileClient? {

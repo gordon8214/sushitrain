@@ -18,13 +18,11 @@ the folders of files still waiting to be imported.
 The iOS app, a client of gateways, has none of this: new files reach a folder through the Files app.
 
 `FileImport.copy` is also used by the existing browser import/drop handlers. It
-materializes selective subdirectories, copies files without replacing existing
-items, explicitly selects successfully copied paths in selective folders, and
-rescans the destination. Reading the folder's selective status must succeed before
-copying starts. Security-scoped access is retained while the picker is displayed,
-and reads are coordinated with file providers during each copy.
+copies files without replacing existing items, and rescans the destination.
+Security-scoped access is retained while the picker is displayed, and reads are
+coordinated with file providers during each copy.
 
 If only part of a batch can be copied, the picker reports the errors and retains
-only the unsuccessful source URLs for retry. If selection or scanning fails after
+only the unsuccessful source URLs for retry. If scanning fails after
 copying, the error is shown and already copied files remain at the destination.
 Incoming URLs received during a save stay queued for the next save.

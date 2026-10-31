@@ -45,19 +45,6 @@ func TestFolderGrants(t *testing.T) {
 	}
 }
 
-func TestIgnoresEverything(t *testing.T) {
-	for _, pattern := range []string{"*", "**", "/*", "/**", "**/*", "(?d)*", "(?d)(?i)**"} {
-		if !ignoresEverything(pattern) {
-			t.Errorf("%q", pattern)
-		}
-	}
-	for _, pattern := range []string{"!*", "(?d)!/**", "*.tmp", "/Photos", "**/.DS_Store"} {
-		if ignoresEverything(pattern) {
-			t.Errorf("%q", pattern)
-		}
-	}
-}
-
 func TestPrintable(t *testing.T) {
 	got := printable("iPhone\x1b[2J\u202eevil\x9b")
 	if strings.ContainsRune(got, 0x1b) || strings.ContainsRune(got, 0x202e) || strings.Contains(got, "\x9b") {

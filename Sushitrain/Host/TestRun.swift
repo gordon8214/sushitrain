@@ -16,6 +16,19 @@
 			EngineLocations.testRoot != nil
 		}
 
+		/// A test run keeps out of the real system: the location, the app group container and the Keychain are not
+		/// redirected by its scratch directory, so it only uses them when it is told to
+		static var allowsFileProvider: Bool {
+			guard isActive else {
+				return true
+			}
+			#if DEBUG
+				return ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_FILE_PROVIDER"] != nil
+			#else
+				return false
+			#endif
+		}
+
 		/// Keeps this run's preferences in the scratch directory, as `Library/Preferences/<bundle identifier>.plist` there.
 		/// To be called before anything reads them. It changes what `UserDefaults.standard` returns, rather than each of
 		/// the many places that use it, so that it also covers `@AppStorage`, AppKit and what comes later. A preference left

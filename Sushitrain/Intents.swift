@@ -67,6 +67,7 @@ struct SynchronizePhotosIntent: AppIntent {
 	@Dependency private var appState: AppState
 
 	func perform() async throws -> some IntentResult {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		await appState.awake()
 		let backupTask = await appState.photoBackup.backup(appState: appState, fullExport: false, isInBackground: true)
@@ -109,6 +110,7 @@ struct GenerateThumbnailsIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some IntentResult {
+		try AppMode.requireEngine()
 		if time <= 0 {
 			throw GenerateThumbnailsError.invalidTimeout
 		}
@@ -167,6 +169,7 @@ struct SynchronizeIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some IntentResult {
+		try AppMode.requireEngine()
 		if self.time > 0 {
 			try await appState.waitForAppStarted()
 			await appState.awake()
@@ -248,6 +251,7 @@ struct FileEntityQuery: EntityQuery, EntityPropertyQuery {
 		sortedBy: [Sort<FileEntity>],
 		limit: Int?
 	) async throws -> [FileEntity] {
+		try AppMode.requireEngine()
 		var searchTerm: String? = nil
 		var folder: SushitrainFolder? = nil
 		var prefix: String? = nil
@@ -306,6 +310,7 @@ struct FileEntityQuery: EntityQuery, EntityPropertyQuery {
 	}
 
 	func entities(for identifiers: [DeviceEntity.ID]) async throws -> [FileEntity] {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		let client = appState.client
 		return identifiers.compactMap { urlString in
@@ -321,6 +326,7 @@ struct FileEntityQuery: EntityQuery, EntityPropertyQuery {
 	}
 
 	func suggestedEntities() async throws -> [FileEntityQuery] {
+		try AppMode.requireEngine()
 		return []
 	}
 }
@@ -480,6 +486,7 @@ struct FolderEntityQuery: EntityQuery, EntityStringQuery, EnumerableEntityQuery 
 	@Dependency private var appState: AppState
 
 	func entities(for identifiers: [FolderEntity.ID]) async throws -> [FolderEntity] {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		return await appState.folders().filter { identifiers.contains($0.folderID) }.map {
 			FolderEntity(folder: $0)
@@ -487,6 +494,7 @@ struct FolderEntityQuery: EntityQuery, EntityStringQuery, EnumerableEntityQuery 
 	}
 
 	func suggestedEntities() async throws -> [FolderEntity] {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		return await appState.folders().map {
 			FolderEntity(folder: $0)
@@ -494,6 +502,7 @@ struct FolderEntityQuery: EntityQuery, EntityStringQuery, EnumerableEntityQuery 
 	}
 
 	func entities(matching string: String) async throws -> [FolderEntity] {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		return await appState.folders().filter { $0.displayName.contains(string) }.map {
 			FolderEntity(folder: $0)
@@ -512,6 +521,7 @@ struct DeviceEntityQuery: EntityQuery, EntityStringQuery, EnumerableEntityQuery 
 	@Dependency private var appState: AppState
 
 	func entities(for identifiers: [DeviceEntity.ID]) async throws -> [DeviceEntity] {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		return await appState.peers().filter { !$0.isSelf() && identifiers.contains($0.id) }.map {
 			DeviceEntity(peer: $0)
@@ -519,6 +529,7 @@ struct DeviceEntityQuery: EntityQuery, EntityStringQuery, EnumerableEntityQuery 
 	}
 
 	func suggestedEntities() async throws -> [DeviceEntity] {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		return await appState.peers().filter { !$0.isSelf() }.map {
 			DeviceEntity(peer: $0)
@@ -526,40 +537,10 @@ struct DeviceEntityQuery: EntityQuery, EntityStringQuery, EnumerableEntityQuery 
 	}
 
 	func entities(matching string: String) async throws -> [DeviceEntity] {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		return await appState.peers().filter { !$0.isSelf() && $0.displayName.contains(string) }.map {
 			DeviceEntity(peer: $0)
-		}
-	}
-}
-
-struct GetExtraneousFilesIntent: AppIntent {
-	static let title: LocalizedStringResource = "Get new, unsynchronized files in folder"
-
-	@Dependency private var appState: AppState
-
-	@Parameter(title: "Folder", description: "The folder to list files in")
-	var folderEntity: FolderEntity
-
-	@MainActor
-	func perform() async throws -> some ReturnsValue<[IntentFile]> {
-		try await appState.waitForAppStarted()
-
-		if !folderEntity.folder.isRegularFolder {
-			// Photo folders have no extraneous files
-			return .result(value: [])
-		}
-
-		let files = try folderEntity.folder.extraneousFiles().asArray()
-		if let folderPath = folderEntity.folder.localNativeURL {
-			return .result(
-				value: files.compactMap { path in
-					let fileURL = folderPath.appending(path: path)
-					return IntentFile(fileURL: fileURL)
-				})
-		}
-		else {
-			throw IntentHandlingError.unsupported(String(localized: "the folder has no local path"))
 		}
 	}
 }
@@ -574,6 +555,7 @@ struct GetNeededFilesIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some ReturnsValue<[IntentFile]> {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		let files = (try folderEntity.folder.filesNeeded()).asArray()
 		let folderPath = folderEntity.folder.localNativeURL!
@@ -598,6 +580,7 @@ struct GetRemoteNeededFilesIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some ReturnsValue<[IntentFile]> {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		let files = (try folderEntity.folder.filesNeeded(by: deviceEntity.deviceID)).asArray()
 		let folderPath = folderEntity.folder.localNativeURL!
@@ -622,6 +605,7 @@ struct RescanIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some IntentResult {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		if let sub = self.subdirectory {
 			try folderEntity.folder.rescanSubdirectory(sub)
@@ -629,82 +613,6 @@ struct RescanIntent: AppIntent {
 		else {
 			try folderEntity.folder.rescan()
 		}
-		return .result()
-	}
-}
-
-struct RemoveEmptySubdirectoriesIntent: AppIntent {
-	static let title: LocalizedStringResource = "Remove unsynchronized empty subdirectories"
-
-	@Dependency private var appState: AppState
-
-	@Parameter(
-		title: "Folder",
-		description: "Folder to remove empty unsynchronized subdirectories from. The folder must be selectively synchronized."
-	)
-	var folderEntity: FolderEntity
-
-	@MainActor
-	func perform() async throws -> some IntentResult {
-		try await appState.waitForAppStarted()
-		try folderEntity.folder.removeSuperfluousSubdirectories()
-		try folderEntity.folder.removeSuperfluousSelectionEntries()
-		return .result()
-	}
-}
-
-struct UnselectSynchronizedFilesIntent: AppIntent {
-	static let title: LocalizedStringResource = "Deselect files that are on other devices"
-
-	enum Errors: LocalizedError {
-		case invalidQuorum
-
-		var errorDescription: String? {
-			switch self {
-			case .invalidQuorum:
-				return String(localized: "The quorum must be a positive number.")
-			}
-		}
-	}
-
-	@Dependency private var appState: AppState
-
-	@Parameter(title: "Folder", description: "Folder to deselect files in.")
-	var folderEntity: FolderEntity
-
-	@Parameter(
-		title: "Quorum",
-		description: "Minimum number of devices that need to have a copy before a file can be desynchronized.",
-		default: 1, controlStyle: .field, inclusiveRange: (1, 1000))
-	var quorum: Int
-
-	@MainActor
-	func perform() async throws -> some IntentResult {
-		if self.quorum < 1 {
-			throw Errors.invalidQuorum
-		}
-
-		try await appState.waitForAppStarted()
-		let folder = folderEntity.folder
-		var selectedPaths = Set(try folder.selectedPaths(true).asArray())
-
-		for path in selectedPaths {
-			let entry = try folderEntity.folder.getFileInformation(path)
-			let peersWithFullCopy = try entry.peersWithFullCopy()
-			let numPeersWithCopy = peersWithFullCopy.count()
-			if numPeersWithCopy < self.quorum {
-				Log.info(
-					"Not removing \(path), there are only \(numPeersWithCopy) other devices with a copy (required: \(self.quorum).")
-				selectedPaths.remove(path)
-			}
-		}
-
-		let verdicts = selectedPaths.reduce(into: [:]) { dict, p in
-			dict[p] = false
-		}
-		let json = try JSONEncoder().encode(verdicts)
-		try folder.setExplicitlySelectedJSON(json)
-
 		return .result()
 	}
 }
@@ -769,6 +677,7 @@ struct ConfigureFolderIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some IntentResult {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		for f in self.folderEntities {
 			switch self.enable {
@@ -818,6 +727,7 @@ struct GetFolderIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some ReturnsValue<IntentFile> {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		if let url = self.folderEntity.folder.localNativeURL {
 			return .result(value: IntentFile(fileURL: url))
@@ -842,6 +752,7 @@ struct SearchInAppIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some IntentResult {
+		try AppMode.requireEngine()
 		QuickActionService.shared.action = .search(for: searchFor)
 		return .result()
 	}
@@ -865,6 +776,7 @@ struct OpenFolderInAppIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some IntentResult {
+		try AppMode.requireEngine()
 		QuickActionService.shared.action = .folder(folderID: folderEntity.folder.folderID, prefix: path)
 		return .result()
 	}
@@ -881,6 +793,7 @@ struct OpenFileInAppIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some IntentResult {
+		try AppMode.requireEngine()
 		if let folder = fileEntity.file.folder {
 			QuickActionService.shared.action = .file(folderID: folder.folderID, path: fileEntity.file.path())
 		}
@@ -901,6 +814,7 @@ struct ConfigureDeviceIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some IntentResult {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		for f in self.deviceEntities {
 			// TODO: check if this works correctly with device suspension
@@ -925,6 +839,7 @@ struct GetDeviceIDIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some ReturnsValue<String> {
+		try AppMode.requireEngine()
 		return .result(value: self.appState.localDeviceID)
 	}
 }
@@ -946,6 +861,7 @@ struct DownloadFilesIntent: AppIntent {
 
 	@MainActor
 	func perform() async throws -> some ReturnsValue<[IntentFile]> {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		// Reconnect to peers
 		await appState.awake()

@@ -11,7 +11,6 @@ struct BrowserListView: View {
 	@Environment(AppState.self) private var appState
 	let folder: SushitrainFolder
 	let prefix: String
-	let hasExtraneousFiles: Bool
 	let files: [SushitrainEntry]
 	let subdirectories: [SushitrainEntry]
 	let viewStyle: BrowserViewStyle
@@ -35,12 +34,6 @@ struct BrowserListView: View {
 							}
 					}
 				}
-
-				if hasExtraneousFiles {
-					NavigationLink(destination: { ExtraFilesView(folder: self.folder) }) {
-						Label("This folder has new files", systemImage: "exclamationmark.triangle.fill").foregroundColor(.orange)
-					}
-				}
 			}
 
 			// List subdirectories
@@ -50,18 +43,16 @@ struct BrowserListView: View {
 					NavigationLink(
 						destination: BrowserView(folder: folder, prefix: "\(prefix)\(fileName)/", userSettings: appState.userSettings)
 					) {
-						ItemSelectSwipeView(file: subDirEntry) {
-							EntryContextMenuWrapper(
-								appState: appState, entry: subDirEntry, inFolder: self.folder, siblings: files, honorTapToPreview: false
-							) {
-								// Subdirectory name with a nice icon
-								HStack(spacing: 9.0) {
-									Image(systemName: subDirEntry.systemImage).foregroundStyle(subDirEntry.color ?? Color.accentColor)
-									Text(subDirEntry.fileName()).multilineTextAlignment(.leading).foregroundStyle(Color.primary).opacity(
-										subDirEntry.isLocallyPresent() ? 1.0 : EntryView.remoteFileOpacity)
-									Spacer()
-								}.frame(maxWidth: .infinity).padding(0)
-							}
+						EntryContextMenuWrapper(
+							appState: appState, entry: subDirEntry, inFolder: self.folder, siblings: files, honorTapToPreview: false
+						) {
+							// Subdirectory name with a nice icon
+							HStack(spacing: 9.0) {
+								Image(systemName: subDirEntry.systemImage).foregroundStyle(subDirEntry.color ?? Color.accentColor)
+								Text(subDirEntry.fileName()).multilineTextAlignment(.leading).foregroundStyle(Color.primary).opacity(
+									subDirEntry.isLocallyPresent() ? 1.0 : EntryView.remoteFileOpacity)
+								Spacer()
+							}.frame(maxWidth: .infinity).padding(0)
 						}
 					}
 				}
@@ -100,31 +91,29 @@ struct EntryView: View {
 
 	static let remoteFileOpacity = 0.7
 
-	private func entryView(entry: SushitrainEntry) -> some View {
-		ItemSelectSwipeView(file: entry) {
-			if self.showThumbnail {
-				// Thubmnail view shows thumbnail image next to the file name
-				HStack(alignment: .center, spacing: 9.0) {
-					ThumbnailView(file: entry, showFileName: false, showErrorMessages: false)
-						.frame(width: 60, height: 40)
-						.cornerRadius(6.0).help(entry.fileName())
+	@ViewBuilder private func entryView(entry: SushitrainEntry) -> some View {
+		if self.showThumbnail {
+			// Thubmnail view shows thumbnail image next to the file name
+			HStack(alignment: .center, spacing: 9.0) {
+				ThumbnailView(file: entry, showFileName: false, showErrorMessages: false)
+					.frame(width: 60, height: 40)
+					.cornerRadius(6.0).help(entry.fileName())
 
-					// The entry name (grey when not locally present)
-					Text(entry.fileName()).multilineTextAlignment(.leading).foregroundStyle(
-						entry.isConflictCopy() ? Color.red : Color.primary
-					).opacity(entry.isLocallyPresent() ? 1.0 : Self.remoteFileOpacity)
-					Spacer()
-				}.frame(maxWidth: .infinity).padding(0)
-			}
-			else {
-				HStack {
-					Image(systemName: entry.systemImage).foregroundStyle(entry.color ?? Color.accentColor)
-					Text(entry.fileName()).multilineTextAlignment(.leading).foregroundStyle(
-						entry.isConflictCopy() ? Color.red : Color.primary
-					).opacity(entry.isLocallyPresent() ? 1.0 : Self.remoteFileOpacity)
-					Spacer()
-				}.frame(maxWidth: .infinity)
-			}
+				// The entry name (grey when not locally present)
+				Text(entry.fileName()).multilineTextAlignment(.leading).foregroundStyle(
+					entry.isConflictCopy() ? Color.red : Color.primary
+				).opacity(entry.isLocallyPresent() ? 1.0 : Self.remoteFileOpacity)
+				Spacer()
+			}.frame(maxWidth: .infinity).padding(0)
+		}
+		else {
+			HStack {
+				Image(systemName: entry.systemImage).foregroundStyle(entry.color ?? Color.accentColor)
+				Text(entry.fileName()).multilineTextAlignment(.leading).foregroundStyle(
+					entry.isConflictCopy() ? Color.red : Color.primary
+				).opacity(entry.isLocallyPresent() ? 1.0 : Self.remoteFileOpacity)
+				Spacer()
+			}.frame(maxWidth: .infinity)
 		}
 	}
 
@@ -365,10 +354,6 @@ struct EntryContextMenuWrapper<Content: View>: View {
 					Divider()
 					FileSharingLinksView(entry: entry, sync: true)
 				}
-
-				Divider()
-
-				ItemSelectToggleView(file: entry)
 			} preview: {
 				NavigationStack {  // to force the image to take up all available space
 					VStack {
@@ -401,14 +386,9 @@ struct EntryShareButton: View {
 		if !entry.isSymlink() && !entry.isDeleted() {
 			if let folder = entry.folder, !folder.isReceiveEncryptedFolder {
 				Group {
-					// Check if the file is locally available. If it is, show a regular share link.
-					// When the entry is a folder, this does not guarantee it is available locally fully (it may be a
-					// 'leftover' empty folder). Therefore, check if we are in a selective folder when the entry is a
-					// directory. If we are, the entry must be selected. (Note that while syncing this *still* could be
-					// a half synced folder).
-					if entry.isLocallyPresent()
-						&& (!entry.isDirectory() || folder.isSelective() == false || entry.isSelected())
-					{
+					// Check if the file is locally available. If it is, show a regular share link. (Note that while syncing
+					// a directory that is locally present could still be half synced.)
+					if entry.isLocallyPresent() {
 						FileShareLink(file: entry)
 					}
 					else {
@@ -417,82 +397,6 @@ struct EntryShareButton: View {
 						}
 					}
 				}
-			}
-		}
-	}
-}
-
-struct ItemSelectSwipeView<Content: View>: View {
-	let file: SushitrainEntry
-	@ViewBuilder var content: Content
-	var onDeselected: (() async -> Void)? = nil
-
-	@State private var confirmationMessage: String? = nil
-	@State private var isPreparingConfirmation = false
-	@State private var errorMessage: String? = nil
-
-	var body: some View {
-		if self.file.isSelectionToggleAvailable, let explicitlySelected = file.isExplicitlySelected() {
-			self.content
-				.alert(isPresented: Binding.isNotNil($errorMessage)) {
-					Alert(
-						title: Text("Could not change synchronization setting"), message: Text(errorMessage ?? ""),
-						dismissButton: .default(Text("OK")))
-				}
-				.alert("Remove from this device?", isPresented: Binding.isNotNil($confirmationMessage)) {
-					Button("Remove from this device", role: .destructive) {
-						Task {
-							self.errorMessage = await self.file.setSelectedFromToggle(s: false)
-							if self.errorMessage == nil {
-								await onDeselected?()
-							}
-						}
-					}
-					Button("Cancel", role: .cancel) {}
-				} message: {
-					Text(confirmationMessage ?? "")
-				}
-				.swipeActions(allowsFullSwipe: false) {
-					if explicitlySelected || file.isSelected() {
-						// Unselect button
-						Button {
-							self.deselectSwipe()
-						} label: {
-							Label(
-								file.folder!.isSendOnlyFolder ? "Synchronize with other devices" : "Do not synchronize with this device",
-								systemImage: "pin.slash")
-						}.tint(.red)
-							.disabled(isPreparingConfirmation)
-					}
-					else {
-						// Select button
-						Button {
-							Task { self.errorMessage = await self.file.setSelectedFromToggle(s: true) }
-						} label: {
-							Label(
-								file.folder!.isSendOnlyFolder ? "Synchronize with other devices" : "Synchronize with this device",
-								systemImage: "pin")
-						}
-					}
-				}
-		}
-		else {
-			self.content
-		}
-	}
-
-	private func deselectSwipe() {
-		let file = self.file
-		Task {
-			isPreparingConfirmation = true
-			defer { isPreparingConfirmation = false }
-			do {
-				confirmationMessage = try await Task.detached {
-					try file.deselectionConfirmationMessage()
-				}.value
-			}
-			catch {
-				errorMessage = error.localizedDescription
 			}
 		}
 	}

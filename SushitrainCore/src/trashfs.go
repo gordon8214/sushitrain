@@ -103,8 +103,8 @@ func (f *trashFilesystem) Remove(name string) error {
 	if err != nil {
 		return err
 	}
-	// Keep Remove's non-recursive contract. Deselection relies on this to retain
-	// children which are still selected or have no other copy.
+	// Keep Remove's non-recursive contract. Removing what is ignored relies on this to
+	// retain children which are not ignored or have no other copy.
 	if info.IsDir() || fs.IsInternal(name) || fs.IsTemporary(name) {
 		return f.Filesystem.Remove(name)
 	}

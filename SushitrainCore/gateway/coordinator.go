@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path"
@@ -310,19 +311,14 @@ func (s *Service) executeWriteFile(ctx context.Context, op *operationRecord) (Op
 	}
 	// Nothing to stage while this device doesn't have the base version yet (checked again in the folder loop)
 	if (op.journal == journalIntent || op.journal == journalStaged) && op.kind == opReplace && !op.data.Conflict &&
-		s.awaitingBase(info, target, base) {
+		s.awaitingBase(op.folder, target, base) {
 		return Operation{}, errWaiting
 	}
 
 	// Staging copies the upload next to the target: it can take long, so it happens outside the folder lock
 	var blocks []protocol.BlockInfo
 	if op.journal == journalIntent || op.journal == journalStaged || op.journal == journalPublishing {
-		if info.OnDemand {
-			if err := s.ensureDir(root, info, parentPath(target)); err != nil {
-				return Operation{}, openDirError(err, newAPIError(http.StatusNotFound, codeNotFound, "the parent directory no longer exists"))
-			}
-		}
-		blocks, err = s.stage(ctx, op, info, root, parentPath(target))
+		blocks, err = s.stage(ctx, op, root, parentPath(target))
 		if err != nil {
 			return Operation{}, err
 		}
@@ -370,24 +366,20 @@ func isEntry(root *dir, p string, device, inode uint64) bool {
 	return err == nil && st.exists && st.id.dev == device && st.id.ino == inode
 }
 
-// awaitingBase reports whether a replacement waits for this device to have its base version. An on-demand folder
-// doesn't wait for a file it doesn't hold, which the engine isn't fetching: the replacement builds on the global version.
-func (s *Service) awaitingBase(info FolderInfo, target, base string) bool {
-	global, ok, err := s.backend.GlobalFile(info.ID, target)
+// awaitingBase reports whether a replacement waits for this device to have its base version
+func (s *Service) awaitingBase(folder, target, base string) bool {
+	global, ok, err := s.backend.GlobalFile(folder, target)
 	if err != nil || !ok || global.Deleted || global.IsInvalid() || revisionOf(global) != base {
 		return false
 	}
-	local, ok, err := s.backend.LocalFile(info.ID, target)
-	if err == nil && info.OnDemand && !isIndexed(local, ok) {
-		return false
-	}
+	local, ok, err := s.backend.LocalFile(folder, target)
 	return err == nil && (!ok || !local.Version.Equal(global.Version))
 }
 
 // stage copies what the operation writes (its upload, or the version it names) into a temporary file in the target's
 // directory, hashing it into blocks and checking it against the upload's digest or the version's size, and returns the
 // blocks
-func (s *Service) stage(ctx context.Context, op *operationRecord, info FolderInfo, root *dir, parent string) ([]protocol.BlockInfo, error) {
+func (s *Service) stage(ctx context.Context, op *operationRecord, root *dir, parent string) ([]protocol.BlockInfo, error) {
 	pdir, err := root.openDir(parent)
 	if err != nil {
 		return nil, openDirError(err, newAPIError(http.StatusNotFound, codeNotFound, "the parent directory no longer exists"))
@@ -401,7 +393,7 @@ func (s *Service) stage(ctx context.Context, op *operationRecord, info FolderInf
 			f, err := pdir.openFile(temp)
 			if err == nil {
 				defer f.Close()
-				blocks, _, err := hashBlocks(ctx, f, s.blockSizeFor(op, info, st.size))
+				blocks, _, err := hashBlocks(ctx, f, s.blockSizeFor(op, st.size))
 				if err == nil && bytes.Equal(protocol.BlocksHash(blocks), op.data.BlocksHash) {
 					return blocks, nil
 				}
@@ -427,7 +419,7 @@ func (s *Service) stage(ctx context.Context, op *operationRecord, info FolderInf
 			_ = pdir.remove(temp)
 		}
 	}()
-	blocks, digest, err := hashBlocks(ctx, io.TeeReader(src, dst), s.blockSizeFor(op, info, size))
+	blocks, digest, err := hashBlocks(ctx, io.TeeReader(src, dst), s.blockSizeFor(op, size))
 	if err != nil {
 		return nil, err
 	}
@@ -480,12 +472,8 @@ func (s *Service) stagingSource(op *operationRecord) (io.ReadCloser, int64, erro
 }
 
 // blockSizeFor picks the block size a scan would use for the new content of the target
-func (s *Service) blockSizeFor(op *operationRecord, info FolderInfo, size int64) int {
+func (s *Service) blockSizeFor(op *operationRecord, size int64) int {
 	cur, ok, err := s.backend.LocalFile(op.folder, op.data.Target)
-	if info.OnDemand && err == nil && !isIndexed(cur, ok) {
-		// As fileInfoFor sees it
-		cur, ok, err = s.backend.GlobalFile(op.folder, op.data.Target)
-	}
 	if err != nil || !ok || cur.Deleted {
 		return scanner.BlockSizeFor(size, protocol.FileInfo{}, false)
 	}
@@ -516,7 +504,7 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 	temp := baseName(op.data.Temp)
 
 	if op.journal == journalPublished || op.journal == journalIndexed {
-		return op.data.Displaced, s.indexPublished(ctx, op, h, info, root)
+		return op.data.Displaced, s.indexPublished(ctx, op, h, root)
 	}
 
 	st, err := pdir.lstat(temp)
@@ -527,14 +515,10 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 		// A run that stopped after moving the replaced file to the versions or the Trash finishes putting the edit in
 		// its place, whatever the index says about the target meanwhile
 		if tst, err := pdir.lstat(baseName(target)); err == nil && !tst.exists {
-			return "", s.putInPlace(ctx, op, h, info, pdir, temp, blocks)
+			return "", s.putInPlace(ctx, op, h, pdir, temp, blocks)
 		}
 	}
-	excluded, err := s.exclusions(h, info)
-	if err != nil {
-		return "", err
-	}
-	if excluded(target) {
+	if h.IsIgnored(target) {
 		_ = pdir.remove(temp)
 		return "", ignoredPath()
 	}
@@ -542,36 +526,14 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 	replace := op.kind == opReplace && !op.data.Conflict
 	// Whether the edit writes the contents the file has (a phone saving a file it only opened, for instance)
 	var unchanged bool
-	// Whether an on-demand folder replaces a file it doesn't hold, so there is nothing to compare, swap or archive
-	var absent bool
-	// What the replacement was checked against
-	var global protocol.FileInfo
 	if replace {
-		var live bool
-		global, live, err = liveEntry(h, target)
+		global, live, err := liveEntry(h, target)
 		if err != nil {
 			return "", err
 		}
 		conflict := !live || revisionOf(global) != base
-		if !conflict && info.OnDemand {
-			state, _, err := classify(h, root, target, global)
-			if err != nil {
-				return "", err
-			}
-			switch state {
-			case pathStale:
-				return "", errWaiting
-			case pathUnindexed:
-				// Whatever is on disk may be the only copy of it
-				conflict = true
-			case pathAbsent:
-				absent = true
-			}
-		}
-		var local protocol.FileInfo
-		if !conflict && !absent {
-			var ok bool
-			local, ok, err = h.CurrentFile(target)
+		if !conflict {
+			local, ok, err := h.CurrentFile(target)
 			if err != nil {
 				return "", err
 			}
@@ -622,7 +584,7 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 		if err != nil {
 			return "", err
 		}
-		if excluded(name) {
+		if h.IsIgnored(name) {
 			_ = pdir.remove(temp)
 			return "", ignoredPath()
 		}
@@ -650,19 +612,15 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 	op.data.ModNs = modTime.UnixNano()
 	if replace && !info.IgnorePerms {
 		// Keep the replaced file's permissions, which Syncthing synchronizes
-		current, ok, err := h.CurrentFile(target)
-		if absent {
-			current, ok, err = h.GlobalFile(target)
-		}
-		if err == nil && ok && !current.Deleted {
-			if err := pdir.chmod(temp, current.Permissions&0o777); err != nil {
+		if local, ok, err := h.CurrentFile(target); err == nil && ok && !local.Deleted {
+			if err := pdir.chmod(temp, local.Permissions&0o777); err != nil {
 				return "", err
 			}
 		}
 	}
 
 	op.data.Method, op.data.Displaced = methodRename, ""
-	if replace && !absent {
+	if replace {
 		// Unchanged contents aren't archived: the versions would fill up with copies of the file as it is
 		if (h.HasVersioner() || info.FilesystemType == "basic-trash") && !unchanged {
 			op.data.Method = methodArchive
@@ -671,25 +629,15 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 			op.data.Method, op.data.Displaced = methodSwap, op.data.Temp
 		}
 	}
-	if info.OnDemand {
-		merged, ok, err := mergedFile(h, target)
-		if replace {
-			merged, ok, err = mergedWith(h, target, global, true)
-		}
-		if err != nil {
-			return "", err
-		}
-		op.data.Base = newWriteBase(merged, ok)
-	}
 	if err := s.saveJournal(op, journalPublishing); err != nil {
 		return "", err
 	}
-	return op.data.Displaced, s.putInPlace(ctx, op, h, info, pdir, temp, blocks)
+	return op.data.Displaced, s.putInPlace(ctx, op, h, pdir, temp, blocks)
 }
 
 // putInPlace moves the staged file to the operation's target by its method, then indexes it
-func (s *Service) putInPlace(ctx context.Context, op *operationRecord, h syncthing.FolderHandle, info FolderInfo, pdir *dir,
-	temp string, blocks []protocol.BlockInfo,
+func (s *Service) putInPlace(ctx context.Context, op *operationRecord, h syncthing.FolderHandle, pdir *dir, temp string,
+	blocks []protocol.BlockInfo,
 ) error {
 	target := op.data.Target
 	name := baseName(target)
@@ -733,7 +681,7 @@ func (s *Service) putInPlace(ctx context.Context, op *operationRecord, h syncthi
 	if err := s.saveJournal(op, journalPublished); err != nil {
 		return err
 	}
-	return s.indexFile(ctx, op, h, info, pdir, target, blocks)
+	return s.indexFile(ctx, op, h, pdir, target, blocks)
 }
 
 // setPublishedTime gives the published file its modification time. Operations journaled before it was recorded set it
@@ -771,10 +719,15 @@ func freeConflictName(h syncthing.FolderHandle, pdir *dir, target string) (strin
 	return "", newAPIError(http.StatusConflict, codeNameConflict, "no free conflict copy name")
 }
 
+// fileInfoFor builds the index entry of a published file or directory
+func fileInfoFor(ctx context.Context, h syncthing.FolderHandle, name string, blocks []protocol.BlockInfo) (protocol.FileInfo, error) {
+	return scanner.FileInfoFor(ctx, h.ScanConfig(), name, blocks)
+}
+
 // indexFile commits the published file's index entry (with blocks, when known, else hashing it), checking that the
 // file on disk is still the staged one
-func (s *Service) indexFile(ctx context.Context, op *operationRecord, h syncthing.FolderHandle, info FolderInfo, pdir *dir,
-	target string, blocks []protocol.BlockInfo,
+func (s *Service) indexFile(ctx context.Context, op *operationRecord, h syncthing.FolderHandle, pdir *dir, target string,
+	blocks []protocol.BlockInfo,
 ) error {
 	st, err := pdir.lstat(baseName(target))
 	if err != nil {
@@ -783,21 +736,14 @@ func (s *Service) indexFile(ctx context.Context, op *operationRecord, h syncthin
 	if !st.exists || st.id.dev != op.data.Device || st.id.ino != op.data.Inode {
 		return s.keepAsConflict(ctx, op, h, target)
 	}
-	fi, err := fileInfoFor(ctx, h, info, target, blocks, op.data.Base)
+	fi, err := fileInfoFor(ctx, h, target, blocks)
 	if err != nil {
 		return err
 	}
 	if !bytes.Equal(fi.BlocksHash, op.data.BlocksHash) {
 		return s.keepAsConflict(ctx, op, h, target)
 	}
-	entries, err := ancestorEntries(h, info, target)
-	if err != nil {
-		return err
-	}
-	if err := h.CommitLocal(append(entries, fi)); err != nil {
-		return err
-	}
-	if err := s.keepSelected(info, target); err != nil {
+	if err := h.CommitLocal([]protocol.FileInfo{fi}); err != nil {
 		return err
 	}
 	return s.saveJournal(op, journalIndexed)
@@ -820,19 +766,13 @@ func (s *Service) keepAsConflict(ctx context.Context, op *operationRecord, h syn
 
 // indexPublished finishes an operation whose file was published before a restart: Syncthing's index decides
 // whether it was indexed
-func (s *Service) indexPublished(ctx context.Context, op *operationRecord, h syncthing.FolderHandle, info FolderInfo,
-	root *dir,
-) error {
+func (s *Service) indexPublished(ctx context.Context, op *operationRecord, h syncthing.FolderHandle, root *dir) error {
 	target := op.data.Target
 	local, ok, err := h.CurrentFile(target)
 	if err != nil {
 		return err
 	}
-	// In an on-demand folder, a scan may have marked it ignored since: that takes indexing it again, and it isn't selected
-	if ok && !local.Deleted && (!info.OnDemand || !local.IsInvalid()) && bytes.Equal(blocksHashOf(local), op.data.BlocksHash) {
-		if err := s.keepSelected(info, target); err != nil {
-			return err
-		}
+	if ok && !local.Deleted && bytes.Equal(blocksHashOf(local), op.data.BlocksHash) {
 		return s.saveJournal(op, journalIndexed)
 	}
 	pdir, err := root.openDir(parentPath(target))
@@ -852,7 +792,7 @@ func (s *Service) indexPublished(ctx context.Context, op *operationRecord, h syn
 	if err := s.setPublishedTime(op, pdir, baseName(target)); err != nil {
 		return err
 	}
-	return s.indexFile(ctx, op, h, info, pdir, target, nil)
+	return s.indexFile(ctx, op, h, pdir, target, nil)
 }
 
 func (s *Service) fileResult(op *operationRecord, target string) (Operation, error) {
@@ -903,11 +843,6 @@ func (s *Service) executeCreateDirectory(ctx context.Context, op *operationRecor
 			return err
 		}
 		defer done()
-		if info.OnDemand {
-			if err := s.ensureDir(root, info, parent.path); err != nil {
-				return openDirError(err, newAPIError(http.StatusNotFound, codeNotFound, "the parent directory no longer exists"))
-			}
-		}
 		pdir, err := root.openDir(parent.path)
 		if err != nil {
 			return openDirError(err, newAPIError(http.StatusNotFound, codeNotFound, "the parent directory no longer exists"))
@@ -920,11 +855,7 @@ func (s *Service) executeCreateDirectory(ctx context.Context, op *operationRecor
 			}
 		}
 		if op.journal != journalPublished && op.journal != journalIndexed {
-			excluded, err := s.exclusions(h, info)
-			if err != nil {
-				return err
-			}
-			if excluded(target) {
+			if h.IsIgnored(target) {
 				return ignoredPath()
 			}
 			if _, live, err := liveEntry(h, target); err != nil || live {
@@ -947,28 +878,17 @@ func (s *Service) executeCreateDirectory(ctx context.Context, op *operationRecor
 				return err
 			}
 		}
-		if local, ok, err := h.CurrentFile(target); err == nil && ok && !local.Deleted && local.IsDirectory() &&
-			(!info.OnDemand || !local.IsInvalid()) {
-			if err := s.keepSelected(info, target); err != nil {
-				return err
-			}
+		if local, ok, err := h.CurrentFile(target); err == nil && ok && !local.Deleted && local.IsDirectory() {
 			return s.saveJournal(op, journalIndexed)
 		}
-		fi, err := fileInfoFor(ctx, h, info, target, nil, nil)
+		fi, err := fileInfoFor(ctx, h, target, nil)
 		if err != nil {
 			return err
 		}
 		if !fi.IsDirectory() {
 			return nameConflict(s.currentItem(op.folder, target))
 		}
-		entries, err := ancestorEntries(h, info, target)
-		if err != nil {
-			return err
-		}
-		if err := h.CommitLocal(append(entries, fi)); err != nil {
-			return err
-		}
-		if err := s.keepSelected(info, target); err != nil {
+		if err := h.CommitLocal([]protocol.FileInfo{fi}); err != nil {
 			return err
 		}
 		return s.saveJournal(op, journalIndexed)
@@ -986,14 +906,21 @@ func (s *Service) executeCreateDirectory(ctx context.Context, op *operationRecor
 type subtreeEntry struct {
 	path  string
 	local protocol.FileInfo
-	// In an on-demand folder: this device doesn't hold it, and local is the entry to build on (see collectOnDemand)
-	absent bool
+	// Removed by a delete that stopped before indexing that
+	gone bool
 }
 
 // collectSubtree returns the local index entries of an item and everything below it, deepest first, after checking
 // that disk matches them and that nothing untracked is in the way. A mismatch is scanned and reported as a changed
 // item.
-func (s *Service) collectSubtree(ctx context.Context, h syncthing.FolderHandle, root *dir, row itemRow, current *Item) ([]subtreeEntry, error) {
+//
+// A delete that stopped partway passes the highest sequence it checked. What it can't find on disk is then what it
+// removed, and anything with a higher sequence reached this device after it checked, which isn't its to remove. Those
+// sequences only go up, so one number says this of everything it looked at, however large the directory.
+func (s *Service) collectSubtree(ctx context.Context, h syncthing.FolderHandle, root *dir, row itemRow, current *Item,
+	checked int64,
+) ([]subtreeEntry, error) {
+	resuming := checked > 0
 	lower, upper := descendantRange(row.path)
 	rows, err := queryItems(s.store.db, `SELECT `+itemColumns+` FROM items WHERE folder_id = ? AND deleted = 0
 		AND path > ? AND path < ?`, row.folder, lower, upper)
@@ -1023,14 +950,25 @@ func (s *Service) collectSubtree(ctx context.Context, h syncthing.FolderHandle, 
 			}
 			continue
 		}
-		pdir, err := root.openDir(parentPath(r.path))
-		if err != nil {
+		if resuming && local.Sequence > checked {
+			_ = h.Scan(ctx, []string{row.path})
 			return nil, revisionMismatch(current)
 		}
-		st, err := pdir.lstat(baseName(r.path))
-		pdir.close()
-		if err != nil {
-			return nil, err
+		var st entryStat
+		pdir, err := root.openDir(parentPath(r.path))
+		switch {
+		case err == nil:
+			st, err = pdir.lstat(baseName(r.path))
+			pdir.close()
+			if err != nil {
+				return nil, err
+			}
+		case !resuming || !errors.Is(openDirError(err, errItemGone), errItemGone):
+			return nil, revisionMismatch(current)
+		}
+		if resuming && !st.exists {
+			entries = append(entries, subtreeEntry{path: r.path, local: local, gone: true})
+			continue
 		}
 		if !matchesIndex(st, local, h.ModTimeWindow()) {
 			_ = h.Scan(ctx, []string{row.path})
@@ -1052,10 +990,13 @@ func (s *Service) collectSubtree(ctx context.Context, h syncthing.FolderHandle, 
 	return entries, nil
 }
 
+// What openDirError gives collectSubtree for a directory that isn't there
+var errItemGone = errors.New("item gone")
+
 func checkUntracked(h syncthing.FolderHandle, p string, known map[string]struct{}) error {
 	names, err := h.Filesystem().DirNames(p)
 	if fs.IsNotExist(err) {
-		// Not on this device, in an on-demand folder
+		// The directory is gone from disk, and nothing in it can be in the way
 		return nil
 	}
 	if err != nil {
@@ -1096,13 +1037,7 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 		return Operation{}, newAPIError(http.StatusNotFound, codeNotFound, "no such item")
 	}
 	if row.deleted {
-		// Already gone: the intended result holds. A run that stopped after indexing the deletion finishes making sure it
-		// stays announced.
-		if op.journal == journalPublishing {
-			if err := s.keepSelected(info, row.path); err != nil {
-				return Operation{}, err
-			}
-		}
+		// Already gone: the intended result holds
 		return s.deleteResult(op, row)
 	}
 	if row.path == "" {
@@ -1111,6 +1046,14 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 	current := row.toItem(true)
 	// A run that stopped while removing items finishes removing them; the preconditions held when it started
 	resuming := op.journal == journalPublishing
+	checked := int64(0)
+	if resuming {
+		checked = op.data.DeleteSequence
+		if checked == 0 {
+			// Recorded by a version that kept none: all that is known is that it began
+			checked = math.MaxInt64
+		}
+	}
 	if !resuming && row.kind == protocol.FileInfoTypeDirectory &&
 		(op.req.SubtreeGeneration == nil || *op.req.SubtreeGeneration != row.subtreeGen) {
 		return Operation{}, revisionMismatch(&current)
@@ -1127,43 +1070,37 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 			return err
 		}
 		if !live {
-			if resuming {
-				// A run that stopped after indexing the deletion finishes making sure it stays announced
-				return s.keepSelected(info, row.path)
-			}
 			return nil
 		}
-		// A resumed delete of a folder that doesn't hold the item has nothing on disk that shows what it was about
-		if (!resuming || info.OnDemand) && revisionOf(global) != op.req.BaseRevision {
+		if !resuming && revisionOf(global) != op.req.BaseRevision {
 			fresh := row
 			fresh.setFromFileInfo(global, info.IgnorePerms)
 			item := fresh.toItem(true)
 			return revisionMismatch(&item)
 		}
-		var entries []subtreeEntry
-		if info.OnDemand {
-			if !SelectablePath(row.path) {
-				return ignoredPath()
-			}
-			entries, err = s.collectOnDemand(ctx, h, root, row, &current)
-		} else {
-			entries, err = s.collectSubtree(ctx, h, root, row, &current)
-		}
+		entries, err := s.collectSubtree(ctx, h, root, row, &current, checked)
 		if err != nil {
 			return err
 		}
 		op.data.Method = methodDelete
+		if !resuming {
+			for _, e := range entries {
+				op.data.DeleteSequence = max(op.data.DeleteSequence, e.local.Sequence)
+			}
+		}
 		if err := s.saveJournal(op, journalPublishing); err != nil {
 			return err
 		}
 		deletions := make([]protocol.FileInfo, 0, len(entries))
 		for _, e := range entries {
+			if e.gone {
+				deletions = append(deletions, h.DeletionOf(e.local))
+				continue
+			}
 			if e.local.IsDirectory() {
 				if err := h.Filesystem().Remove(e.path); err != nil && !fs.IsNotExist(err) {
 					break
 				}
-			} else if e.absent {
-				// Nothing here to remove or archive: others do that when they see the deletion
 			} else if h.HasVersioner() {
 				if err := h.Archive(e.path); err != nil {
 					break
@@ -1174,9 +1111,6 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 			deletions = append(deletions, h.DeletionOf(e.local))
 		}
 		if err := h.CommitLocal(deletions); err != nil {
-			return err
-		}
-		if err := s.keepSelected(info, row.path); err != nil {
 			return err
 		}
 		if len(deletions) < len(entries) {
@@ -1292,12 +1226,11 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 	commitDest := func(ctx context.Context, h syncthing.FolderHandle) error {
 		if op.journal != journalPublished {
 			// The folder's ignore patterns apply to everything that moves, not only to the item itself
-			excluded, err := s.exclusions(h, destInfo)
-			if err != nil {
-				return err
+			if h.IsIgnored(dest) {
+				return ignoredPath()
 			}
-			for _, name := range append([]string{""}, relativePaths(entries, row.path)...) {
-				if excluded(dest + name) {
+			for _, e := range entries {
+				if h.IsIgnored(dest + strings.TrimPrefix(e.path, row.path)) {
 					return ignoredPath()
 				}
 			}
@@ -1309,11 +1242,6 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 				return openDirError(err, revisionMismatch(&current))
 			}
 			defer srcDir.close()
-			if destInfo.OnDemand {
-				if err := s.ensureDir(destRoot, destInfo, parent.path); err != nil {
-					return openDirError(err, newAPIError(http.StatusNotFound, codeNotFound, "the destination no longer exists"))
-				}
-			}
 			dstDir, err := destRoot.openDir(parent.path)
 			if err != nil {
 				return openDirError(err, newAPIError(http.StatusNotFound, codeNotFound, "the destination no longer exists"))
@@ -1354,14 +1282,10 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 			}
 		}
 		// Index the new paths, keeping each file's block list
-		added, err := ancestorEntries(h, destInfo, dest)
-		if err != nil {
-			return err
-		}
+		added := make([]protocol.FileInfo, 0, len(entries))
 		for _, e := range entries {
 			newPath := dest + strings.TrimPrefix(e.path, row.path)
 			if local, ok, err := h.CurrentFile(newPath); err == nil && ok && !local.Deleted &&
-				(!destInfo.OnDemand || !local.IsInvalid()) &&
 				(local.IsDirectory() || bytes.Equal(blocksHashOf(local), blocksHashOf(e.local))) {
 				continue
 			}
@@ -1369,16 +1293,13 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 			if !e.local.IsDirectory() {
 				blocks = e.local.Blocks
 			}
-			fi, err := fileInfoFor(ctx, h, destInfo, newPath, blocks, nil)
+			fi, err := fileInfoFor(ctx, h, newPath, blocks)
 			if err != nil {
 				return err
 			}
 			added = append(added, fi)
 		}
-		if err := h.CommitLocal(added); err != nil {
-			return err
-		}
-		return s.keepSelected(destInfo, dest)
+		return h.CommitLocal(added)
 	}
 	removeSource := func(_ context.Context, h syncthing.FolderHandle) error {
 		deletions := make([]protocol.FileInfo, 0, len(entries))
@@ -1412,19 +1333,10 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 				return revisionMismatch(&current)
 			}
 		}
-		switch {
-		case op.journal == journalPublished:
+		if op.journal == journalPublished {
 			entries, err = s.publishedSubtree(h, row)
-		case info.OnDemand:
-			if !SelectablePath(row.path) {
-				return ignoredPath()
-			}
-			if err := s.checkDestination(destInfo, dest); err != nil {
-				return err
-			}
-			entries, err = s.collectForMove(ctx, h, root, info, row, &current)
-		default:
-			entries, err = s.collectSubtree(ctx, h, root, row, &current)
+		} else {
+			entries, err = s.collectSubtree(ctx, h, root, row, &current, 0)
 		}
 		if err != nil {
 			return err
@@ -1439,10 +1351,6 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 			return err
 		}
 		if err := removeSource(ctx, h); err != nil {
-			return err
-		}
-		// What was at the old path stays selected, so that its deletion stays announced
-		if err := s.keepSelected(info, row.path); err != nil {
 			return err
 		}
 		return s.saveJournal(op, journalIndexed)
@@ -1498,15 +1406,6 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 		return Operation{}, err
 	}
 	return s.moveResult(op, moved)
-}
-
-// relativePaths returns what is below prefix in entries, each with its leading slash
-func relativePaths(entries []subtreeEntry, prefix string) []string {
-	paths := make([]string, 0, len(entries))
-	for _, e := range entries {
-		paths = append(paths, strings.TrimPrefix(e.path, prefix))
-	}
-	return paths
 }
 
 // publishedSubtree lists the local entries a move interrupted after publication still has to index

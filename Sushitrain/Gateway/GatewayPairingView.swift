@@ -67,7 +67,7 @@
 		@ViewBuilder private func codeSections(_ session: GatewayPairingSession) -> some View {
 			Section {
 				VStack(spacing: 12) {
-					Text("In Synctrain on your iPhone or iPad, open Settings › Remote folders › Pair and scan this code.")
+					Text("In Synctrain on your iPhone or iPad, open Settings › Gateways › Pair with a Gateway and scan this code.")
 						.multilineTextAlignment(.center)
 						.fixedSize(horizontal: false, vertical: true)
 

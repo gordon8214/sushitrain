@@ -24,6 +24,13 @@ public enum FileNames {
 		!name.isEmpty && name != "." && name != ".." && !name.contains("/") && !name.contains("\0")
 	}
 
+	/// A name for a new directory from a folder's label, which a gateway chose: without what would make it another path
+	/// or hide it
+	public static func directoryName(forLabel label: String) -> String {
+		let name = label.replacing("/", with: "-").replacing("\0", with: "")
+		return String(name.drop { $0 == "." || $0.isWhitespace })
+	}
+
 	/// Whether the path (relative to a folder root) consists of valid names only, so that it cannot point outside the
 	/// folder. The empty path (the folder root itself) is valid.
 	public static func isValidPath(_ path: String) -> Bool {

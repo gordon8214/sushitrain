@@ -35,11 +35,6 @@ enum BrowserViewStyle: String {
 	case web = "web"
 }
 
-enum BrowserViewFilterAvailability: String, Codable {
-	case all = "all"
-	case localOnly = "localOnly"
-}
-
 enum BrowserViewSortAttribute: String, Codable {
 	case name = "name"
 	case size = "size"
@@ -129,10 +124,8 @@ struct BrowserView: View {
 
 	@State private var showSettings = false
 	@State private var searchText = ""
-	@State private var canShowInFinder = false
 	@State private var localNativeURL: URL? = nil
 	@State private var folderExists = false
-	private var folderIsSelective: Bool? { folder.isSelective() }
 	@State private var showSearch = false
 	@State private var showAddFilePicker = false
 	@State private var showPhotoPicker = false
@@ -140,11 +133,9 @@ struct BrowserView: View {
 	@State private var isImportingMedia = false
 	@State private var webViewAvailable = false
 	@State private var viewStyle: BrowserViewStyle? = nil
-	@State private var filterAvailability: BrowserViewFilterAvailability? = nil
 	@State private var entriesSort: BrowserViewSort? = nil
 	@State private var showAlert: ShowAlert? = nil
 	@State private var showConfirmable: ConfirmableAction? = nil
-	@State private var isWorking = false
 	@State private var isBookmarked = false
 	@State private var showNewBookmarkInfo = false
 	@State private var recursive = false
@@ -169,18 +160,6 @@ struct BrowserView: View {
 				}
 			})
 	}
-
-	private var currentFilterAvailability: BrowserViewFilterAvailability {
-		// Virtual filesystem entries cannot be checked for local presence.
-		if !self.folder.isNativeFilesystem() {
-			return .all
-		}
-		if self.folderIsSelective == false {
-			return .localOnly
-		}
-		return self.filterAvailability ?? appState.userSettings.defaultBrowserViewFilterAvailability
-	}
-
 	private var currentSort: BrowserViewSort {
 		return self.entriesSort ?? appState.userSettings.defaultBrowserSort.value ?? BrowserViewSort()
 	}
@@ -220,7 +199,6 @@ struct BrowserView: View {
 			prefix: prefix,
 			// Note: this binding does *not* set appState.defaultBrowserViewStyle, because this one is primarily set programmatically
 			viewStyle: $viewStyle,
-			filterAvailability: currentFilterAvailability,
 			sortOrder: currentSort,
 			recursive: recursive,
 			searchText: $searchText,
@@ -355,11 +333,6 @@ struct BrowserView: View {
 						Label("Subdirectory properties...", systemImage: entry.systemImage)
 					}
 
-					ItemSelectToggleView(file: entry)
-
-					NavigationLink(destination: SelectiveFolderView(folder: folder, prefix: self.prefix)) {
-						Label("Files kept on this device", systemImage: "pin")
-					}
 				}
 			}
 			.onDrop(
@@ -459,7 +432,7 @@ struct BrowserView: View {
 				Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
 					self.showInFinder()
 				}
-				.disabled(!canShowInFinder || isSearching)
+				.disabled(localNativeURL == nil || isSearching)
 				.keyboardShortcut("G", modifiers: .command)
 			#endif
 
@@ -469,7 +442,7 @@ struct BrowserView: View {
 
 	#if os(macOS)
 		@ViewBuilder private func ignoreSheetView() -> some View {
-			FolderIgnoreSettingsView(folder: folder)
+			IgnoresView(folder: folder)
 				.navigationTitle("Files to ignore")
 				.presentationSizing(.form)
 				.frame(minWidth: 640, minHeight: 480)
@@ -478,23 +451,6 @@ struct BrowserView: View {
 
 	@ViewBuilder private func filterMenu() -> some View {
 		Menu {
-			if self.folderIsSelective == true {
-				Picker(
-					"Show",
-					selection: Binding(
-						get: { self.currentFilterAvailability },
-						set: {
-							self.filterAvailability = $0
-							userSettings.defaultBrowserViewFilterAvailability = $0
-						})
-				) {
-					Label("All files and folders", systemImage: "folder").tag(BrowserViewFilterAvailability.all)
-					Label("Only files on this device", systemImage: "folder.fill").tag(BrowserViewFilterAvailability.localOnly)
-				}.pickerStyle(.inline)
-			}
-
-			Divider()
-
 			// Sort options
 			Picker(
 				"Sort",
@@ -538,7 +494,6 @@ struct BrowserView: View {
 
 		} label: {
 			Label("Filter and sort", systemImage: "line.3.horizontal.decrease")
-				.tint(self.currentFilterAvailability == .all ? nil : Color.accentColor)
 		}
 		.disabled(self.currentViewStyle().wrappedValue == .web)
 	}
@@ -579,17 +534,9 @@ struct BrowserView: View {
 	}
 
 	private func showInFinder() {
-		if !canShowInFinder {
-			return
-		}
-		// Open in Finder/Files (and possibly materialize empty folder)
+		// Open in Finder/Files
 		if let localNativeURL = self.localNativeURL {
 			openURLInSystemFilesApp(url: localNativeURL)
-		}
-		else {
-			if let entry = try? self.folder.getFileInformation(self.prefix.withoutEndingSlash) {
-				try? entry.showInFinder()
-			}
 		}
 	}
 
@@ -690,22 +637,6 @@ struct BrowserView: View {
 
 			Divider()
 
-			if folder.isSelective() == true {
-				Button(
-					"Remove unsynchronized empty subdirectories",
-					systemImage: "eraser", role: .destructive
-				) {
-					self.removeUnsynchronizedEmpty()
-				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
-				.foregroundColor(.red)
-				.disabled(isWorking)
-			}
-
-			Divider()
-
 			Button("Unlink folder", systemImage: "folder.badge.minus", role: .destructive) {
 				showConfirmable = .unlinkFolder
 			}
@@ -747,7 +678,7 @@ struct BrowserView: View {
 
 					Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
 						self.showInFinder()
-					}.disabled(!canShowInFinder)
+					}.disabled(localNativeURL == nil)
 				#else
 					self.addMenuContents()
 				#endif
@@ -777,12 +708,6 @@ struct BrowserView: View {
 				}
 
 				Divider()
-
-				if folderIsSelective == true && folder.isRegularFolder {
-					NavigationLink(destination: SelectiveFolderView(folder: folder, prefix: "")) {
-						Label("Files kept on this device...", systemImage: "pin")
-					}
-				}
 
 				if let versioningArchiveURL = folder.versioningArchiveURL {
 					Button("File versions...", systemImage: "clock.arrow.circlepath") {
@@ -871,23 +796,6 @@ struct BrowserView: View {
 		}
 	}
 
-	private func removeUnsynchronizedEmpty() {
-		Task {
-			do {
-				self.isWorking = true
-				try await Task.detached {
-					try folder.removeSuperfluousSubdirectories()
-					try folder.removeSuperfluousSelectionEntries()
-				}.value
-				self.isWorking = false
-				showToast(Toast(title: "Unsynchronized empty subdirectories removed", image: "eraser"))
-			}
-			catch {
-				self.showAlert = .error(error.localizedDescription)
-			}
-		}
-	}
-
 	private func onDrop(_ providers: [NSItemProvider]) async throws {
 		var urls: [URL] = []
 
@@ -964,7 +872,6 @@ struct BrowserView: View {
 	private func updateLocalURL() {
 		if !self.folder.exists() {
 			self.localNativeURL = nil
-			self.canShowInFinder = false
 			return
 		}
 
@@ -978,17 +885,11 @@ struct BrowserView: View {
 
 			if FileManager.default.fileExists(atPath: localNativeURL.path) {
 				self.localNativeURL = localNativeURL
-				self.canShowInFinder = true
 				return
 			}
 		}
 
-		// Check if this entry supports lazy creation
-		if let entry = try? self.folder.getFileInformation(self.prefix.withoutEndingSlash) {
-			if entry.isDirectory() && !entry.isLocallyPresent() && entry.canShowInFinder {
-				self.canShowInFinder = true
-			}
-		}
+		self.localNativeURL = nil
 	}
 }
 
@@ -1019,7 +920,6 @@ private struct BrowserItemsView: View {
 		let prefix: String
 		let state: Int
 		let scanRevision: Int
-		let filter: BrowserViewFilterAvailability
 		let sort: BrowserViewSort
 		let recursive: Bool
 		let hideDotFiles: Bool
@@ -1029,7 +929,7 @@ private struct BrowserItemsView: View {
 		ReloadIdentity(
 			folderID: folder.folderID, prefix: prefix, state: folder.folderStateForUpdating,
 			scanRevision: appState.folderScanRevisions[folder.folderID, default: 0],
-			filter: filterAvailability, sort: sortOrder, recursive: recursive,
+			sort: sortOrder, recursive: recursive,
 			hideDotFiles: appState.userSettings.dotFilesHidden)
 	}
 
@@ -1040,7 +940,6 @@ private struct BrowserItemsView: View {
 	let folder: SushitrainFolder
 	let prefix: String
 	@Binding var viewStyle: BrowserViewStyle?
-	let filterAvailability: BrowserViewFilterAvailability
 	let sortOrder: BrowserViewSort
 	let recursive: Bool
 
@@ -1049,7 +948,6 @@ private struct BrowserItemsView: View {
 
 	@State private var subdirectories: [SushitrainEntry] = []
 	@State private var files: [SushitrainEntry] = []
-	@State private var hasExtraneousFiles = false
 	@State private var isLoading = true
 	@State private var showSpinner = false
 	@State private var folderExists = false
@@ -1130,11 +1028,6 @@ private struct BrowserItemsView: View {
 		.task(id: reloadIdentity) {
 			await self.reload()
 		}
-		.onChange(of: appState.eventCounter) {
-			Task {
-				await self.updateExtraneousFiles()
-			}
-		}
 	}
 
 	private var isEmpty: Bool {
@@ -1145,60 +1038,45 @@ private struct BrowserItemsView: View {
 		GridScrollView(
 			userSettings: appState.userSettings,
 			header: {
-				VStack {
-					HStack {
-						#if os(iOS)
-							Button(action: {
-								showStatistics = true
-							}) {
-								FolderStatusView(folder: folder).padding(.horizontal, 10).padding(.vertical, 15)
-							}.sheet(isPresented: $showStatistics) {
-								NavigationStack {
-									FolderStatisticsView(folder: folder)
-										.toolbar {
-											SheetButton(role: .done) {
-												showStatistics = false
-											}
-										}
-								}
-							}
-						#endif
-
-						Spacer()
-
-						#if os(macOS)
-							// You can pinch on macOS using the touch pad, but it is handy to have a slider as well
-							Slider(
-								value: Binding(
-									get: {
-										return Double(appState.userSettings.browserGridColumns)
-									},
-									set: { nv in
-										withAnimation(.spring(response: 0.8)) {
-											appState.userSettings.browserGridColumns = Int(nv)
+				HStack {
+					#if os(iOS)
+						Button(action: {
+							showStatistics = true
+						}) {
+							FolderStatusView(folder: folder).padding(.horizontal, 10).padding(.vertical, 15)
+						}.sheet(isPresented: $showStatistics) {
+							NavigationStack {
+								FolderStatisticsView(folder: folder)
+									.toolbar {
+										SheetButton(role: .done) {
+											showStatistics = false
 										}
 									}
-								),
-								in: 1.0...10.0, step: 1.0
-							)
-							.frame(minWidth: 50, maxWidth: 150)
-							.padding(.horizontal, 20)
-							.padding(.vertical, 15)
-						#endif
-					}
-
-					if hasExtraneousFiles {
-						NavigationLink(destination: {
-							ExtraFilesView(folder: self.folder)
-						}) {
-							Label(
-								"This folder has new files",
-								systemImage:
-									"exclamationmark.triangle.fill"
-							).foregroundColor(.orange)
+							}
 						}
-						.frame(maxWidth: .infinity)
-					}
+					#endif
+
+					Spacer()
+
+					#if os(macOS)
+						// You can pinch on macOS using the touch pad, but it is handy to have a slider as well
+						Slider(
+							value: Binding(
+								get: {
+									return Double(appState.userSettings.browserGridColumns)
+								},
+								set: { nv in
+									withAnimation(.spring(response: 0.8)) {
+										appState.userSettings.browserGridColumns = Int(nv)
+									}
+								}
+							),
+							in: 1.0...10.0, step: 1.0
+						)
+						.frame(minWidth: 50, maxWidth: 150)
+						.padding(.horizontal, 20)
+						.padding(.vertical, 15)
+					#endif
 				}
 			},
 			content: { columns in
@@ -1218,42 +1096,16 @@ private struct BrowserItemsView: View {
 
 	@ViewBuilder private func listView() -> some View {
 		#if os(macOS)
-			VStack {
-				// Show extraneous files banner when necessary
-				if hasExtraneousFiles {
-					HStack(alignment: .center) {
-						Label(
-							"This folder has new files",
-							systemImage:
-								"exclamationmark.triangle.fill"
-						).foregroundColor(.orange)
-
-						Spacer()
-
-						NavigationLink(destination: {
-							ExtraFilesView(folder: self.folder)
-						}) {
-							Text("Review...")
-						}
-					}
-					.padding(
-						EdgeInsets(
-							top: 10.0, leading: 10.0,
-							bottom: 5.0, trailing: 10.0))
-				}
-
-				BrowserTableView(
-					folder: folder,
-					files: files,
-					subdirectories: subdirectories,
-					viewStyle: viewStyle ?? appState.userSettings.defaultBrowserViewStyle
-				)
-			}
+			BrowserTableView(
+				folder: folder,
+				files: files,
+				subdirectories: subdirectories,
+				viewStyle: viewStyle ?? appState.userSettings.defaultBrowserViewStyle
+			)
 		#else
 			BrowserListView(
 				folder: folder,
 				prefix: prefix,
-				hasExtraneousFiles: hasExtraneousFiles,
 				files: files,
 				subdirectories: subdirectories,
 				viewStyle: viewStyle ?? appState.userSettings.defaultBrowserViewStyle
@@ -1316,7 +1168,7 @@ private struct BrowserItemsView: View {
 							)
 						)
 					}
-					else if filterAvailability != .all {
+					else if folder.isNativeFilesystem() {
 						ContentUnavailableView(
 							"There are no files in this folder to show",
 							systemImage: "line.3.horizontal.decrease",
@@ -1389,8 +1241,8 @@ private struct BrowserItemsView: View {
 				var files = try folder.listEntries(
 					prefix: request.prefix, directories: false, hideDotFiles: request.hideDotFiles,
 					recursive: request.recursive)
-				files.sort(by: request.sort.isOrderedBefore)
-				if request.filter == .localOnly {
+				// Virtual filesystem entries cannot be checked for local presence.
+				if folder.isNativeFilesystem() {
 					files = files.filter { $0.isLocallyPresent() }
 					directories = directories.filter { $0.isLocallyPresent() }
 				}
@@ -1414,7 +1266,6 @@ private struct BrowserItemsView: View {
 					self.autoSelectViewStyle()
 				}
 			}
-			await self.updateExtraneousFiles()
 		}
 		catch {
 			guard !Task.isCancelled, self.reloadGeneration == generation else { return }
@@ -1454,26 +1305,6 @@ private struct BrowserItemsView: View {
 			}
 		}
 	}
-
-	private func updateExtraneousFiles() async {
-		if self.folder.isIdle {
-			hasExtraneousFiles = await Task.detached {
-				dispatchPrecondition(condition: .notOnQueue(.main))
-				var hasExtra: ObjCBool = false
-				do {
-					try folder.hasExtraneousFiles(&hasExtra)
-					return hasExtra.boolValue
-				}
-				catch let error {
-					Log.warn("error checking for extraneous files: \(error.localizedDescription)")
-				}
-				return false
-			}.value
-		}
-		else {
-			hasExtraneousFiles = false
-		}
-	}
 }
 
 extension SushitrainFolder {
@@ -1487,42 +1318,6 @@ extension SushitrainFolder {
 		hasher.combine(state)
 		hasher.combine(self.isPaused())
 		return hasher.finalize()
-	}
-}
-
-struct ItemSelectToggleView: View {
-	@Environment(AppState.self) private var appState
-	let file: SushitrainEntry
-
-	var body: some View {
-		if self.file.isSelectionToggleAvailable {
-			Toggle(
-				"Synchronize with this device", systemImage: "pin",
-				isOn: Binding(
-					get: {
-						file.isExplicitlySelected() == true || file.isSelected()
-					},
-					set: { s in
-						Task {
-							if let em = await self.file.setSelectedFromToggle(s: s) {
-								// We can't use our own alert since by the time we get here, the context menu is gone
-								appState.alert(message: em)
-							}
-							else if s && self.file.isDirectory() {
-								appState.alert(
-									message: String(
-										localized:
-											"You have selected a subdirectory for synchronisation. All files contained in this subdirectory will be synchronized, including new files. If you delete files from this subdirectory, the deletion will propagate to other devices."
-									),
-									type: .informational
-								)
-							}
-						}
-					})
-			)
-			.disabled(self.file.isSelectionToggleShallowDisabled)
-			.labelStyle(.titleAndIcon)
-		}
 	}
 }
 

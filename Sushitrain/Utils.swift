@@ -11,6 +11,7 @@ import WebKit
 import CoreTransferable
 import SwiftUI
 import Combine
+import os
 
 extension SushitrainListOfStrings {
 	public func asArray() -> [String] {
@@ -76,12 +77,6 @@ extension SushitrainFolder {
 		return nil
 	}
 
-	var isIdle: Bool {
-		var error: NSError? = nil
-		let s = self.state(&error)
-		return s == "idle"
-	}
-
 	var isExternal: Bool? {
 		var isExternal: ObjCBool = false
 		do {
@@ -93,7 +88,7 @@ extension SushitrainFolder {
 		}
 	}
 
-	// When true, the folder's selection can be changed (files may be transferring, but otherwise the folder is idle)
+	// When true, the folder's direction can be changed (files may be transferring, but otherwise the folder is idle)
 	var isIdleOrSyncing: Bool {
 		var error: NSError? = nil
 		let s = self.state(&error)
@@ -406,18 +401,6 @@ extension SushitrainEntry {
 		return nil
 	}
 
-	nonisolated func isLocalOnlyCopy() async throws -> Bool {
-		if !self.isLocallyPresent() {
-			return false
-		}
-
-		let availability = try await Task { [self] in
-			return (try self.peersWithFullCopy()).asArray()
-		}.value
-
-		return availability.isEmpty
-	}
-
 	var thumbnailStrategy: ThumbnailStrategy {
 		return self.isVideo ? .video : .image
 	}
@@ -454,117 +437,9 @@ extension SushitrainEntry {
 		return self.isLocallyPresent() || self.isStreamable
 	}
 
-	// Shared functionality for swipe and toggle selection views
-	var isSelectionToggleAvailable: Bool {
-		if let folder = self.folder {
-			return folder.isSelective() == true
-		}
-		return false
-	}
-
-	// First check to see if this action should be disabled
-	var isSelectionToggleShallowDisabled: Bool {
-		if self.isSymlink() || self.isExplicitlySelected() == nil {
-			return true
-		}
-		if let folder = self.folder {
-			return folder.isSelective() != true || !folder.isIdleOrSyncing
-		}
-		return true
-	}
-
-	/// Prepare the warning without changing selection. The toggle checks availability again on confirmation.
-	func deselectionConfirmationMessage() throws -> String {
-		guard try self.peersWithFullCopy().count() > 0 else {
-			throw NSError(
-				domain: "Deselection", code: 1,
-				userInfo: [
-					NSLocalizedDescriptionKey: String(
-						localized:
-							"The synchronization setting for this item cannot be changed, as the local copy is the only copy currently available."
-					)
-				])
-		}
-		if self.isDirectory(), let folder = self.folder {
-			let prefix = self.path().withoutEndingSlash + "/"
-			let paths = try folder.list(prefix, directories: false, recurse: true).asArray()
-			var count = 0
-			for path in paths {
-				let entry = try folder.getFileInformation(prefix + path)
-				if !entry.isDirectory() && !entry.isDeleted() {
-					count += 1
-				}
-			}
-			return String(
-				localized:
-					"This will stop synchronizing this subdirectory and remove the local copies of \(count) files. Another device appears to still have a copy of these files."
-			)
-		}
-		return String(
-			localized:
-				"This will stop synchronizing this file and remove its local copy. Another device appears to still have a copy of the file."
-		)
-	}
-
-	// Returns error message on fail
-	func setSelectedFromToggle(s: Bool) async -> String? {
-		do {
-			let isExplicitlySelected = try self.checkedIsExplicitlySelected()
-			if !self.isSelectionToggleShallowDisabled {
-				// Check some additional things
-				if self.isSelected() && !isExplicitlySelected {
-					// File is implicitly selected, do not allow changes
-					return String(
-						localized:
-							"The synchronization setting for this item cannot be changed, because it is inside a subdirectory that is configured to be kept on this device."
-					)
-				}
-
-				if !s {
-					let isLocalOnlyCopy = try await self.isLocalOnlyCopy()
-					if isLocalOnlyCopy {
-						// We are the only remaining copy, can't deselect
-						return String(
-							localized:
-								"The synchronization setting for this item cannot be changed, as the local copy is the only copy currently available."
-						)
-					}
-				}
-
-				// We can change the selection status
-				try self.setExplicitlySelected(s)
-			}
-			else {
-				if self.isSymlink() {
-					return String(
-						localized: "The synchronization setting for symlinks cannot be changed."
-					)
-				}
-				else if let f = self.folder, f.isSelective() == false {
-					return String(
-						localized: "The folder is not configured for selective synchronization."
-					)
-				}
-				else {
-					return String(
-						localized: "Wait until the folder is done synchronizing and try again.")
-				}
-
-			}
-		}
-		catch {
-			return String(
-				localized:
-					"The synchronization setting for this item could not be changed: \(error.localizedDescription)."
-			)
-		}
-
-		return nil
-	}
-
 	var canShowInFinder: Bool {
 		if let f = self.folder {
-			return f.isRegularFolder && (self.isLocallyPresent() || self.isDirectory())  // Directories can be materialized
+			return f.isRegularFolder && self.isLocallyPresent()
 		}
 		return false
 	}
@@ -573,10 +448,6 @@ extension SushitrainEntry {
 		if let f = self.folder {
 			if !f.isRegularFolder {
 				return
-			}
-
-			if !self.isLocallyPresent() && self.isDirectory() {
-				try? self.materializeSubdirectory()
 			}
 
 			if let localNativeURL = self.localNativeFileURL {
@@ -833,12 +704,26 @@ extension SushitrainArchive: @unchecked @retroactive Sendable {}
 extension SushitrainMeasurement: @unchecked @retroactive Sendable {}
 
 final class Log {
+	/// Whether no engine runs, so that the framework's logger, which starts with it, goes nowhere. Set once, first thing.
+	nonisolated(unsafe) static var usesSystemLog = false
+	private static let systemLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Synctrain", category: "App")
+
 	static func info(_ message: String) {
-		SushitrainLogInfo(message)
+		if usesSystemLog {
+			systemLog.info("\(message, privacy: .public)")
+		}
+		else {
+			SushitrainLogInfo(message)
+		}
 	}
 
 	static func warn(_ message: String) {
-		SushitrainLogWarn(message)
+		if usesSystemLog {
+			systemLog.warning("\(message, privacy: .public)")
+		}
+		else {
+			SushitrainLogWarn(message)
+		}
 	}
 }
 
@@ -1267,39 +1152,5 @@ extension Date {
 				.day()
 				.dateSeparator(.omitted)
 		)
-	}
-}
-
-extension SushitrainFolder {
-	/// True for selective sync, false for all files, nil when the mode cannot be read.
-	func isSelective() -> Bool? {
-		try? checkedIsSelective()
-	}
-
-	/// Preserve the underlying access error for editors and operations that need to display it.
-	func checkedIsSelective() throws -> Bool {
-		var selective: ObjCBool = false
-		_ = try isSelective(&selective)
-		return selective.boolValue
-	}
-
-	func checkedIsOnDemand() throws -> Bool {
-		var onDemand: ObjCBool = false
-		_ = try self.is(onDemand: &onDemand)
-		return onDemand.boolValue
-	}
-}
-
-extension SushitrainEntry {
-	/// True for explicitly selected, false otherwise, nil when selection cannot be read.
-	func isExplicitlySelected() -> Bool? {
-		try? checkedIsExplicitlySelected()
-	}
-
-	/// Preserve the underlying error for operations that need to report it.
-	func checkedIsExplicitlySelected() throws -> Bool {
-		var selected: ObjCBool = false
-		_ = try isExplicitlySelected(&selected)
-		return selected.boolValue
 	}
 }

@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/events"
@@ -275,25 +274,5 @@ func TestMoveToManagedBaseRefusals(t *testing.T) {
 	}
 	if err := folder.MoveToManagedBase(); !errors.Is(err, ErrFolderIsExternal) {
 		t.Fatalf("moved an external folder: %v", err)
-	}
-}
-
-func TestRemoveSuperfluousSelectionEntriesTakesSelectionLock(t *testing.T) {
-	folder := newFeedTestFolder(t, "*\n")
-	unlock := lockSelection(folder.FolderID)
-	done := make(chan error, 1)
-	go func() { done <- folder.RemoveSuperfluousSelectionEntries() }()
-
-	select {
-	case <-done:
-		unlock()
-		t.Fatal("selection entries were changed while the selection was locked")
-	case <-time.After(50 * time.Millisecond):
-	}
-	unlock()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("selection lock was not released")
 	}
 }

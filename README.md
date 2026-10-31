@@ -14,14 +14,16 @@ Securely synchronize files with Syncthing on macOS, and open them from iOS throu
 
 These are for iOS. The Mac app runs outside the App Sandbox, so it isn't in the App Store: get the notarized disk image from the [releases](https://github.com/gordon8214/sushitrain/releases).
 
-On macOS, Sushitrain runs Syncthing, and has some extra tricks up its sleeve:
+On macOS, Sushitrain does one of two things, chosen per Mac:
 
-- **Selective file synchronization**: only keep specific files or subdirectories from a larger folder on your device.
-- **On-demand access to files**: download or stream files that are not available locally from another peer through the Syncthing protocol. This allows access to your files, from your own devices, without setting up a VPN.
+- **Synchronize**: it runs Syncthing, and every folder syncs all of its contents.
+- [**Files in Finder**](./Docs/file-provider.md#on-macos): it runs no Syncthing. Finder shows the folders of a gateway on another system, which has all their files, and macOS fetches what you open.
+
+In Synchronize mode it has some extra tricks up its sleeve:
+
 - [**Remote thumbnails**](./Docs/thumbnails.md): the app can generate thumbnails for files on other devices (images or videos). You can even synchronize thumbnails between devices, so previews can be generated on a device that has all the files for use on other devices.
 - **Photo back-up** (automatically export photos from the system album to a folder) as well as [**photo folders**](./Docs/photo-fs.md) (directly synchronize a system photo album as a send-only folder, without exporting).
-- **Tight macOS integration**: Shortcuts, Continuity, a [gateway](./Docs/gateway.md) for your phone, and
-  [folders on demand in Finder](./Docs/file-provider.md#on-macos), without a gateway.
+- **Tight macOS integration**: Shortcuts, Continuity, and a [gateway](./Docs/gateway.md) for your phone.
 
 On iOS and iPadOS, Synctrain is a [client of gateways](./Docs/file-provider.md): it runs no Syncthing itself. Choose folders from a Mac running Synctrain or a server running `synctrain-gateway`, then browse, search and play them in the app, and open, edit and add files from the Files app.
 
@@ -96,68 +98,12 @@ needs for folders in Finder is in `SynctrainClient`, which both apps compile.
 
 ## Features
 
-Sushitrain provides several affordances that regular Syncthing clients typically do not. The most important features are (1) on-demand download and (2) selective synchronisation.
+### Streaming
 
-### Selective synchronisation
-
-Typically, mobile devices are constrained in the amount of storage they have. While modern devices are capable enough for
-synchronising larger folders using Syncthing, it is often undesirable. Current clients do not offer any other way to access
-files through Syncthing without synchronising first.
-
-One solution is _selective synchronisation_. This feature allows the user to select a subset of files and directories in the folder
-that should be synchronised. In Sushitrain, this is implemented using the existing 'ignore' capabilities in Syncthing. When
-a folder is set into 'selective' mode, an `.stignore` file will be created with a single pattern: `*`. This causes all files
-to be ignored for synchronisation. At this point, the folder global index will still be synchronized like normal, but the
-client will not 'pull' files from other peers, nor will it 'push' any new files or changes to files. Because the global
-index is available and the client does have the ability to pull files, it can still download files 'on demand' (see below).
-
-When a user selects a file to sync to the device, an exception pattern is added to the `.stignore` file before the catch-
-all `*` pattern, e.g.:
-
-```
-!/some/file/I/want.txt
-*
-```
-
-This will cause the file to be synchronised (depending on the mode of the folder, changes made locally will also be pushed,
-and deleting the file is propagated as well).
-
-There are a few issues with this:
-
-- When the file is renamed locally, Syncthing handles this as a removal and creation of a new file. The removal is pushed
-  to other nodes (if the folder is 'send receive'), the new file will be ignored because of the `*` pattern. For this reason,
-  the app checks for files that exist in the local directory, but are not 'selected', and offers the user a choice to either
-  'select' the file and synchronize it, or delete it locally. Files that exist locally but aren't 'selected' are termed 'extraneous files'.
-- When a new file is created locally that has the same name of a file that also exists in the global index, but is not selected,
-  the file is not synced until it is 'selected', at which point it might overwrite the existing global file. This situation
-  is also handled by providing the user a choice.
-- When a file is renamed remotely, it is also a removal and creation. The removal is processed by the client (the selected
-  file will disappear), the new file will not appear until 'selected'.
-
-Sushitrain also supports 'selecting' directories. In this case, a pattern is added to `.stignore` that matches any (current
-and future) file in the folder:
-
-```
-!/some/folder
-*
-```
-
-Current and future files in the folder will be synced and considered 'implicitly selected'.
-
-Synctrain enables selective synchronisation features in the UI when the `.stignore` file conforms to the following rules:
-
-* The last pattern in the file is `*`
-* The file starts with zero or more patterns that start with `(?d)` and that do not contain `/` or `**` (these allow for 
-  global ignores of certain files like `.DS_Store` when synchronizing subdirectories)
-* The file otherwise contains only patterns that start with `!/` and that do not contain `*`. These indicate paths to be 'selected' (un-ignored)
-* Empty lines are allowed
-
-### On-demand downloads
-
-In Sushitrain, files can be accessed on demand. The user can select a file to view, and it will be downloaded from one of
-the peers that has the necessary blocks available. The file is selected from the 'global index' (i.e. the set of files that
-all nodes participating in a folder synchronisation agree on). Sushitrain always syncs the global index, even when selective
-synchronisation is enabled. File downloads use the same mechanism as regular 'pulling' during synchronisation.
+A file that hasn't arrived on this device yet, or that a folder's ignore patterns exclude, can still be viewed. It is selected
+from the 'global index' (i.e. the set of files that all nodes participating in a folder synchronisation agree on), and
+downloaded from one of the peers that has the necessary blocks available. File downloads use the same mechanism as regular
+'pulling' during synchronisation.
 
 To enable streaming playback of media files, Sushitrain runs an HTTP server on localhost on a random port. When a user selects
 a video file for streaming, it will point the media player to a special URL (`/file?folder=X&path=Y&signature=Z`) that supports

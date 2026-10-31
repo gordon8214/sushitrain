@@ -307,41 +307,64 @@ func TestEngineStopIsNotAShutdownRequest(t *testing.T) {
 	}
 }
 
-// folderConfigurationRecorder is a file provider delegate that counts folder configuration changes
-type folderConfigurationRecorder struct {
-	changes chan struct{}
-}
-
-func (f *folderConfigurationRecorder) OnFolderIndexChanged(string, bool) {}
-func (f *folderConfigurationRecorder) OnFolderConfigurationChanged() {
-	select {
-	case f.changes <- struct{}{}:
-	default:
+// IsSelective goes by the same patterns the remote file service goes by, which the engine takes in at a scan
+func TestEngineIsSelective(t *testing.T) {
+	clt, _, dir := startTestEngine(t)
+	folder := clt.FolderWithID("test")
+	setLines := func(want bool, lines ...string) {
+		t.Helper()
+		// Patterns can't change while the folder scans, as it does after starting and after a change of patterns
+		deadline := time.Now().Add(30 * time.Second)
+		for err := folder.SetIgnoreLines(List(lines)); err != nil; err = folder.SetIgnoreLines(List(lines)) {
+			if time.Now().After(deadline) {
+				t.Fatal(err)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if err := clt.scanFolderSubdirs("test", nil); err != nil {
+			t.Fatal(err)
+		}
+		if selective, err := folder.IsSelective(); selective != want || err != nil {
+			t.Fatalf("%q: got %v, %v", lines, selective, err)
+		}
 	}
-}
+	if selective, err := folder.IsSelective(); selective || err != nil {
+		t.Fatalf("no patterns: got %v, %v", selective, err)
+	}
+	setLines(false, "*.tmp")
+	setLines(true, "!/keep", "*")
+	// A folder that ignores everything is a folder like any other: its patterns can be changed
+	setLines(false)
 
-func TestEngineRestartKeepsTheFileProviderWatcher(t *testing.T) {
-	clt, _, _ := startTestEngine(t)
-	delegate := &folderConfigurationRecorder{changes: make(chan struct{}, 1)}
-	clt.SetFileProviderDelegate(delegate)
-	defer clt.SetFileProviderDelegate(nil)
-
-	if err := clt.RestartEngine(); err != nil {
+	// Whatever the folder's type, as on a host without the app
+	setLines(true, "*")
+	if err := folder.SetFolderType(FolderTypeSendOnly); err != nil {
 		t.Fatal(err)
 	}
-	// After the restart the delegate hears of every folder once, and then of changes
-	select {
-	case <-delegate.changes:
-	case <-time.After(30 * time.Second):
-		t.Fatal("the file provider delegate was not told about the restart")
+	if selective, err := folder.IsSelective(); !selective || err != nil {
+		t.Fatalf("send-only: got %v, %v", selective, err)
 	}
-	if err := clt.FolderWithID("test").SetLabel("Renamed"); err != nil {
+
+	// Syncthing doesn't run a paused folder, whose patterns are in its file
+	if err := folder.SetPaused(true); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-delegate.changes:
-	case <-time.After(30 * time.Second):
-		t.Fatal("the file provider delegate was not told about the change after the restart")
+	if selective, err := folder.IsSelective(); !selective || err != nil {
+		t.Fatalf("paused: got %v, %v", selective, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "folder", ignoreFileName), []byte("*.tmp\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if selective, err := folder.IsSelective(); selective || err != nil {
+		t.Fatalf("paused with ordinary patterns: got %v, %v", selective, err)
+	}
+
+	if selective, err := (&Folder{client: clt, FolderID: "missing"}).IsSelective(); selective || err == nil {
+		t.Fatalf("missing configuration: got %v, %v", selective, err)
+	}
+	clt.Stop()
+	if selective, err := folder.IsSelective(); selective || !errors.Is(err, ErrEngineStopped) {
+		t.Fatalf("stopped: got %v, %v", selective, err)
 	}
 }
 

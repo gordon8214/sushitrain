@@ -750,7 +750,7 @@ struct StartView: View {
 	}
 
 	@ViewBuilder private func folderIssuesSection() -> some View {
-		if !appState.foldersWithExtraFiles.isEmpty || !foldersWithIssues.isEmpty || !inaccessibleExternalFolders.isEmpty {
+		if !foldersWithIssues.isEmpty || !inaccessibleExternalFolders.isEmpty {
 			Section("Folders that need your attention") {
 				// External folders that have become inaccessible
 				ForEach(inaccessibleExternalFolders, id: \.folderID) { folder in
@@ -780,22 +780,6 @@ struct StartView: View {
 						)
 						.foregroundStyle(.red)
 					}
-				}
-
-				// Folders with extra files
-				ForEach(appState.foldersWithExtraFiles, id: \.self) { folderID in
-					if let folder = appState.client.folder(withID: folderID) {
-						NavigationLink(destination: {
-							ExtraFilesView(folder: folder)
-						}) {
-							Label(
-								"Folder '\(folder.displayName)' has extra files",
-								systemImage: "exclamationmark.triangle.fill"
-							)
-							.foregroundStyle(.orange)
-						}
-					}
-					// Folder may have been recently deleted; in that case it cannot be accessed anymore
 				}
 			}
 		}
@@ -829,7 +813,7 @@ struct StartView: View {
 			return !entry.isDirectory()
 		})
 
-		await self.appState.updateBadge()  // Updates extraneous files list
+		await self.appState.updateBadge()
 		let enabledPeerCount = p.count { !$0.isSelf() && !appState.userSettings.userPausedDevices.contains($0.deviceID()) }
 		showNoPeersEnabledWarning = p.count > 1 && enabledPeerCount == 0
 	}
@@ -881,7 +865,7 @@ private struct DiskSpaceWarningView: View {
 					.foregroundStyle(.red)
 			}
 			Text(
-				"To prevent issues, synchronization is temporarily disabled. To resume synchronization, free up space on the device by removing files, and/or by unselecting files for synchronization in selectively synced folders. If there is space available, empty the trash can, restart the app and the device."
+				"To prevent issues, synchronization is temporarily disabled. To resume synchronization, free up space on the device by removing files. If there is space available, empty the trash can, restart the app and the device."
 			)
 			.foregroundStyle(.red)
 		}.task {

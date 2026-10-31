@@ -7,10 +7,15 @@ import SwiftUI
 import SynctrainFileProviderKit
 
 /// Settings › Gateways: the paired gateways, pairing with another one, the Files location and edits waiting for
-/// gateways
-struct RemoteFoldersSettingsView: View {
+/// gateways. On a Mac in Files in Finder mode this is the app's window, which adds sections of its own.
+struct RemoteFoldersSettingsView<Extra: View>: View {
+	private let extra: Extra
 	private var coordinator = RemoteCoordinator.shared
 	@State private var showPairing = false
+
+	init(@ViewBuilder extra: () -> Extra) {
+		self.extra = extra()
+	}
 
 	var body: some View {
 		Form {
@@ -26,16 +31,26 @@ struct RemoteFoldersSettingsView: View {
 			} header: {
 				Text("Gateways")
 			} footer: {
-				Text(
-					"A gateway is a Mac running Synctrain, or a server running synctrain-gateway, that synchronizes folders with Syncthing. Its folders can be browsed here and edited in the Files app without keeping copies of them on this device. The gateway has to be reachable, on the same network or through a VPN, to open files that are not on this device and to save edits."
-				)
+				#if os(macOS)
+					Text(
+						"A gateway is a server running synctrain-gateway, or another Mac running Synctrain in Synchronize mode, that keeps all the files of its folders. Add a gateway's folders to see them in Finder without keeping copies of them on this Mac. The gateway has to be reachable, on the same network or through a VPN, to open files that are not on this Mac and to save edits."
+					)
+				#else
+					Text(
+						"A gateway is a Mac running Synctrain, or a server running synctrain-gateway, that synchronizes folders with Syncthing. Its folders can be browsed here and edited in the Files app without keeping copies of them on this device. The gateway has to be reachable, on the same network or through a VPN, to open files that are not on this device and to save edits."
+					)
+				#endif
 			}
 
 			if !coordinator.gateways.isEmpty {
 				FilesLocationSettingsView()
 			}
 			RemoteOperationsSection()
+			extra
 		}
+		#if os(macOS)
+			.formStyle(.grouped)
+		#endif
 		.navigationTitle("Gateways")
 		.refreshable {
 			await coordinator.refresh()
@@ -45,6 +60,14 @@ struct RemoteFoldersSettingsView: View {
 		}
 		.sheet(isPresented: $showPairing) {
 			RemotePairingView()
+		}
+	}
+}
+
+extension RemoteFoldersSettingsView where Extra == EmptyView {
+	init() {
+		self.init {
+			EmptyView()
 		}
 	}
 }

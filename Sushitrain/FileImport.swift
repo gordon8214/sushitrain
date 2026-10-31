@@ -20,8 +20,6 @@ enum FileImport {
 			throw CocoaError(.fileWriteNoPermission)
 		}
 
-		let isSelective = try folder.checkedIsSelective()
-
 		// Find out the native location of our folder
 		var error: NSError? = nil
 		let localNativePath = folder.localNativePath(&error)
@@ -29,20 +27,8 @@ enum FileImport {
 			throw error
 		}
 
-		// If we are in a subdirectory, and the folder is selective, ensure the folder is materialized
-		if !prefix.isEmpty && isSelective {
-			let entry = try folder.getFileInformation(prefix.withoutEndingSlash)
-			if entry.isDirectory() && !entry.isDeleted() {
-				try entry.materializeSubdirectory()
-			}
-			else {
-				throw CocoaError(.fileWriteInvalidFileName)
-			}
-		}
-
 		let localNativeURL = URL(fileURLWithPath: localNativePath).appendingPathComponent(
 			prefix)
-		var pathsToSelect: [String] = []
 
 		if FileManager.default.fileExists(atPath: localNativeURL.path) {
 			var copyErrors: [String] = []
@@ -52,12 +38,6 @@ enum FileImport {
 					let targetURL = localNativeURL.appendingPathComponent(url.lastPathComponent)
 					try FileImportCopy.copy(url, to: targetURL)
 					copiedURLs.append(url)
-
-					// Select the dropped file
-					if isSelective {
-						let localURL = (prefix.withoutEndingSlash + "/" + url.lastPathComponent).withoutStartingSlash
-						pathsToSelect.append(localURL)
-					}
 				}
 				catch {
 					Log.warn("failed to copy a dropped file: \(error)")
@@ -66,9 +46,6 @@ enum FileImport {
 			}
 
 			do {
-				if isSelective && !pathsToSelect.isEmpty {
-					try folder.setLocalPathsExplicitlySelected(SushitrainListOfStrings.from(pathsToSelect))
-				}
 				try folder.rescanSubdirectory(prefix)
 			}
 			catch {

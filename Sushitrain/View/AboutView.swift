@@ -8,6 +8,8 @@ import SwiftUI
 import SushitrainCore
 
 struct AboutView: View {
+	/// Whether the introduction can be shown again, which takes a running engine
+	var showsIntroduction = true
 	@State private var showOnboarding = false
 	@State private var showNotices = false
 
@@ -74,12 +76,14 @@ struct AboutView: View {
 				Text("Syncthing").badge(SushitrainVersion())
 			}
 
-			Button("Show introduction screen", systemImage: "hands.and.sparkles.fill") {
-				showOnboarding = true
+			if showsIntroduction {
+				Button("Show introduction screen", systemImage: "hands.and.sparkles.fill") {
+					showOnboarding = true
+				}
+				#if os(macOS)
+					.buttonStyle(.link)
+				#endif
 			}
-			#if os(macOS)
-				.buttonStyle(.link)
-			#endif
 		}
 		.navigationTitle("About this app")
 		#if os(iOS)

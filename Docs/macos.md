@@ -1,7 +1,8 @@
 # Synctrain on macOS
 
 On a Mac, Synctrain is meant to replace Syncthing.app: one engine, configured from the app, and from its web GUI or its
-REST API where a configuration has the GUI enabled. Since October 30, 2026 the iOS app no longer runs Syncthing: it is a
+REST API where a configuration has the GUI enabled. That is [Synchronize mode](#two-modes), which most of this page is
+about; in Files in Finder mode no engine runs. Since October 30, 2026 the iOS app no longer runs Syncthing: it is a
 [client of gateways](file-provider.md) with a target of its own, `SynctrainMobile`, and `Synctrain` builds for macOS only.
 The Go framework has only a macOS slice. iOS code still in the shared Go and Swift sources is unused, so where this page
 compares the Mac app with iOS, it describes how the iOS app used to work and why the Mac differs from that.
@@ -160,98 +161,93 @@ says why and offers what helps (for a damaged configuration, setting it aside an
 the device identity). A configuration from an older Syncthing is archived as `config.xml.v<version>` before it is
 migrated, and a database a newer Syncthing wrote is refused.
 
-## Files in Finder
+## Two modes
 
-A folder can be on demand instead of synchronized in full: Finder shows all of it under Locations, and only what is opened
-comes to this Mac, from the devices that have it. It is an option, off by default, under **Settings › Files in Finder**,
-and other folders stay as they are. See [file-provider.md](file-provider.md#on-macos) for what it does; this is how.
+Synctrain does one of two things on a Mac, and never both. The two have nothing in common at run time, so the mode is
+settled before anything starts (`AppEntry`, `AppMode`), and changing it restarts the app.
 
-The File Provider extension is sandboxed and has no engine, and there is one engine on a Mac, in the app. But the app also
-runs the [remote file service](gateway.md), which is what the extension speaks to on iOS. So the Mac is its own gateway:
+| | **Synchronize** | **Files in Finder** |
+| --- | --- | --- |
+| Engine | Runs; every folder synchronizes all of its contents | Does not start |
+| Files | On this Mac | On a gateway on another system; macOS keeps what is opened |
+| Gateway for other devices | Can be one | Can't be one |
+| Finder's Synctrain location | None | Exists while a gateway is paired |
 
-- **The service runs for this Mac alone** while the setting is on and the remote file service is off: it listens on
-  `127.0.0.1`, and on a free port if its own is taken. With the remote file service on, it listens as it does for other
-  devices, and the extension still connects over the loopback interface. `FinderAccess` pairs the app with its own
-  service at the first start, with the service's key pinned, and keeps the port and the key up to date whenever the service
-  starts or its certificate changes. The extension connects to it like to any gateway, and paired gateways work next to
-  this Mac, in the same list.
-- **An on-demand folder is a selective folder** whose `.stignore` also has the line `!*.sync-conflict-*`, which marks it
-  (`onDemandPattern`). It stays where it is, for example in `~/Sync`. Its directory holds only what was written here and
-  hasn't reached every device, what no other device had when the folder became on demand, and conflict copies, which that
-  line selects. Nothing keeps a record of it elsewhere.
-- **The service writes to on-demand folders**, which it refuses for plain selective folders (`gateway/ondemand.go`). Three
-  things differ from a complete replica. A new version builds on the global one, as this device usually has an ignored
-  entry or none, and a scan would start a version vector that conflicts on every device. What was written is selected in
-  the callback that commits it, and stays selected until other devices have it (below): a scan marks an ignored entry
-  invalid, deletions included, and other devices then keep their old copy. So `RemoveSuperfluousSelectionEntries` leaves
-  these folders alone, and deselecting by hand is refused. And `!*.sync-conflict-*` keeps conflict copies indexed: when
-  another device wins a conflict, the engine renames this device's edit to a conflict copy, which the last pattern would
-  otherwise ignore, so that it would never reach anyone. What a write builds on is journaled when its preconditions hold
-  (`writeBase`), as other devices' changes reach the index without going through the folder loop: a version that arrives
-  before the file is indexed, even across a restart, stays concurrent with it, and devices keep both.
-- **What was written is deselected once every device has it** (`deselectWritten`), so that `.stignore` and the folder don't
-  go on growing, and an edited file isn't kept twice on this Mac. The service records the paths it selects
-  (`written_paths`, in its own database), as only those are its to deselect: other lines are what the user selected, and
-  what no other device had at the switch. It looks once a minute. A path goes when every device that shares the folder has
-  announced this device's entry for it or something newer, valid or ignored, and for anything but a deletion at least one
-  of them has it as a valid entry, which goes for all that is below a directory too. This device passes on only its own
-  entries, so one device having a change isn't enough: a device that is behind may never meet that one. So a device that
-  is away holds a path back until it returns, and one that is gone for good until it is removed from the folder. A
-  deletion is the exception, as a device keeps no entry for the deletion of what it never had: a connected device without
-  an entry counts as having it, or the line of a temporary file would stay for good. The version is not recorded, as the
-  local index says what has to arrive, which a scan or a pull may have moved on. What is on disk must be what the index
-  says, or the path stays: a file no scan has seen may be all there is of it. The folder has to have no operation waiting,
-  as moving what isn't here selects it and waits for the engine. The line goes before the file, as a scan that finds a
-  selected file gone announces a deletion. A file that is unlinked here is safe on other devices, so it doesn't go to the
-  Trash in a folder that uses it. Stopping between the two leaves a file nothing refers to, which switching to on demand
-  again clears up.
-- **A directory can take over from its paths** when two or more of them are selected and nothing else exists in it, while
-  they wait for a device that is away. Elsewhere every path needs its own line, as selecting a directory would download
-  all of it. Each line still means a rewrite of `.stignore` and a scan, so writing many files into a directory that has
-  other files costs about one scan per file for now.
-- **Deleting a file or directory this Mac doesn't have** downloads nothing. Moving does: an index entry without a file
-  behind it would be announced as something this device can't provide. The item is selected, the operation waits until
-  the engine has it, and it then moves as in a complete replica. A directory that would take more than 4 GiB is refused
-  (`move_too_large`).
-- **Switching a folder to on demand** (`SwitchToOnDemand`) must not lose what only this Mac has: making a folder
-  selective ignores all of it, and this device stops offering it. So a file stays selected unless a connected device has
-  that version in full, going by that device's own valid index entry, and the rest is removed. A device that merely ignores
-  a file has an entry at the global version too; the fork leaves those out of a file's availability. With the folder
-  paused, whatever is no longer the version found on another device stays as well. The switch is refused when no connected
-  device has any of the files, when more than 10,000 would stay, when a device that shares the folder, connected or not,
-  still needs a deletion (which this device would stop announcing), and when the folder has ignore patterns a selective
-  folder can't express, as they would stop applying. Switching again finishes one that stopped halfway.
-- **Switching back** removes the folder from Finder, refused while its edits are unresolved, and makes it synchronize in
-  full again.
-- **What the location can't synchronize stays on this Mac**, in the system's copy alone: the extension refuses those with
-  `excludedFromSync` (names macOS keeps for itself, names an on-demand folder can't select, paths the folder's ignore
-  patterns exclude), so the index never has them. The system then can't remove the directory such a file is in, and a
-  folder that leaves Finder leaves its own directory at the top level of the location. Before the folder goes,
-  `SystemCopy.unknownPaths` walks the system's copy and lists what the index has no item at, which is what the folder
-  never had, and `FilesLeftovers.moveOut` takes those out of the location before the folder goes, keeping the paths they
-  had in it: into the folder's own directory, or, for a folder of a gateway, a new directory the engine names as it
-  would a new folder's (`ClientLifecycle.directoryForFilesOutsideTheLocation`). macOS removes its copy of a folder with
-  everything in it, these files included, and they are nowhere else, so leaving them would lose them. Nothing is
-  removed, and the settings say how many there were and where they are now. What could not be moved stays, and macOS
-  then keeps or removes it. The directory of a file the extension refuses is read with `opendir`, as `FileManager` leaves
-  `._name` files out of a listing, which are most of what this looks for. The directory a folder left is offered to the
-  extension as a new item of the top level; `excludedFromSync` keeps it on this Mac, where `cannotSynchronize` would have
-  the system ask again every minute. A folder coming back to a name that directory holds would show nothing of its own,
-  so `FilesLeftovers.moveAside` renames it to "Name (not synchronized)" first.
-- **Changes run one at a time** (`FinderAccess.inOrder`), and the setting can't be turned off while Finder is the way to a
-  folder, on demand or from a gateway: its files aren't on this Mac, and removing the location would discard what the
-  system's copy holds that hasn't reached the service. A folder that other devices may only read has to allow changes
-  first: allowing them for this Mac would also give write access to devices that were granted it.
+There are no partial folders. A file that hasn't arrived yet, or that a folder's ignore patterns exclude, can still be
+viewed or streamed from a device that has it, but the folder holds everything else. A `.stignore` that ends in `*`, as
+from an earlier version, is just a folder with ignore patterns: the normal ignore editor shows it, and it stays read-only
+through a gateway.
 
-The extension uses no background `URLSession` on macOS, unlike on iOS, where the system starts the app to finish a
-session's events. macOS doesn't, and a session with a pinned key needs a process to answer its challenges. Nothing suspends
-the extension here, and the app's outbox picks up an upload that it left.
+A Mac where the engine has run stays in Synchronize mode without asking: one with a configuration, a chosen configuration
+folder, `lastRunBuild` or a sandbox container. Anywhere else the first start asks, before an engine would make a device
+identity and announce it. Choosing Synchronize restarts the app, which then offers to take over Syncthing as usual.
+
+### Files in Finder mode
+
+The app is another app in this mode (`FilesApp`): no engine, no device identity, and a window with the paired gateways,
+their folders, edits that wait for review, and the location. It has no file browser, as Finder is that. `RemoteCoordinator`
+and the File Provider extension do what they do on iOS, and share the code (`AppModel`, `SynctrainClient`).
+
+The extension browses and opens files by itself. Its work with gateways is limited to what the system asks of it, though:
+following changes and retrying edits are the app's, so it stays in the Dock or the menu bar when its window closes, and
+**Launch at login** is worth turning on. The extension uses no background `URLSession` on macOS, unlike on iOS, where the
+system starts the app to finish a session's events. macOS doesn't, and a session with a pinned key needs a process to
+answer its challenges.
+
+Without an engine the framework's logger goes nowhere, so `Log` writes to the unified log instead. The app's Shortcuts
+actions need the engine, and can't be hidden in this mode: they and what looks things up for them stop first, saying so
+(`AppMode.requireEngine`). Files that reach the app (from document types and the Share extension) are refused with an alert.
+
+Pairing can only be with another system. The pairing screen exists only in this mode, and the remote file service only
+runs next to an engine.
+
+### Switching
+
+**To Files in Finder** (Settings › General, or the app menu, as the settings don't open while the engine can't start)
+changes the mode and restarts. Folders stay where they are and stop synchronizing. Devices paired with this Mac can't
+reach it until it switches back, and the alert says so.
+
+**To Synchronize** (the window of the app) has what the system's copy holds to think of. In order, and writing the mode last,
+so that stopping anywhere leaves a Mac in Files in Finder mode, which sets up the location again and can repeat this:
+
+1. It is refused while edits are unresolved, and when that can't be told. It asks first if the system has changes the
+   extension hasn't accepted, or can't say.
+2. Each folder is removed from the location, as on the page of its gateway. This needs no gateway: one that is gone for good
+   doesn't keep a folder here.
+3. It stops if what the location can't synchronize could not all be moved out, or wasn't looked at in full.
+4. The location goes, with `.preserveDirtyUserData`, as the default removes everything the system holds. What the system
+   keeps is reported.
+5. The index starts a new generation, and released upload tokens and downloaded content go. Pairings stay.
+6. What was moved or kept is reported, which only this process knows, and the app waits for the user.
+
+**A location left over** in Synchronize mode, as after a failed removal or with restored preferences, is looked for once the
+engine has started (`ModeSwitch.removeLeftoverLocation`). Without folders or unresolved edits it is removed. Otherwise the
+app says so and removes nothing, as what it holds may be nowhere else.
+
+### What the location can't synchronize
+
+Names macOS keeps for itself (such as `._name`) and paths the folder's ignore patterns exclude stay on this Mac, in the
+system's copy alone: the extension refuses them with `excludedFromSync`, so the index never has them. The system then can't
+remove the directory such a file is in, and a folder that leaves Finder leaves its own directory at the top level of the
+location. Before the folder goes, `SystemCopy.unknownPaths` walks the system's copy and lists what the index has no item at,
+and `FilesLeftovers.moveOut` takes those out of the location, keeping the paths they had in it, into a new directory named
+after the folder in `~/Sync` (`ClientLifecycle.directoryForFilesOutsideTheLocation`). macOS removes its copy of a folder with
+everything in it, these files included, and they are nowhere else, so leaving them would lose them. Nothing is removed, and
+the app says how many there were and where they are now. What could not be moved stays, and macOS then keeps or removes
+it. The directory of a file the extension refuses is read with `opendir`, as `FileManager` leaves `._name` files out of a
+listing, which are most of what this looks for. The directory a folder left is offered to the extension as a new item of the
+top level; `excludedFromSync` keeps it on this Mac, where `cannotSynchronize` would have the system ask again every minute.
+A folder coming back to a name that directory holds would show nothing of its own, so `FilesLeftovers.moveAside` renames it
+to "Name (not synchronized)" first.
+
+### The system's part
 
 macOS asks the user to allow a File Provider, in System Settings under General › Login Items & Extensions › File Providers.
 Until then the domain is registered and Finder can't open it. It also doesn't accept an app in a temporary location, such as
-a derived data path under `/private/tmp`: `NSFileProviderManager.add` fails with *The application cannot be used right
-now*. A debug run with `SYNCTRAIN_TEST_ROOT` stays out of all this unless `SYNCTRAIN_TEST_FILE_PROVIDER` is set, because
-domains and the group container aren't under its scratch directory.
+a derived data path under `/private/tmp`, nor a stale registration of one: `NSFileProviderManager.add` fails with *The
+application cannot be used right now*. A debug run with `SYNCTRAIN_TEST_ROOT` stays out of all this unless
+`SYNCTRAIN_TEST_FILE_PROVIDER` is set, because domains, the Keychain and the group container aren't under its scratch
+directory (`TestRun.allowsFileProvider`, `ClientLifecycle.allowsSharedState`); it starts in Files in Finder mode if so.
 
 Programs run from some shells have materializing dataless files turned off, and get `EDEADLK` (*Resource deadlock avoided*)
 from the location. That is the process's I/O policy (`setiopolicy_np`), not the extension.

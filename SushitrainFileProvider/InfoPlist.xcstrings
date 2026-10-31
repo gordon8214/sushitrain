@@ -169,6 +169,60 @@
         }
       }
     },
+    "NSLocalNetworkUsageDescription" : {
+      "comment" : "Privacy - Local Network Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain verbindet sich mit Gateways, die Ihre Ordner in Ihrem lokalen Netzwerk bereitstellen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Synctrain connects to gateways that serve your folders on your local network."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain se conecta a puertas de enlace que sirven tus carpetas en tu red local."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain si connette ai gateway che servono le tue cartelle sulla rete locale."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainは、ローカルネットワーク上でフォルダを提供するゲートウェイに接続します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain maakt verbinding met gateways die je mappen op je lokale netwerk aanbieden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain підключається до шлюзів, які обслуговують ваші папки в локальній мережі."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 会连接到在本地网络上提供你的文件夹的网关。"
+          }
+        }
+      }
+    },
     "Stop Keeping on This Device" : {
       "comment" : "Name of a File Provider action in the Files app",
       "extractionState" : "manual",

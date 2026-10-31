@@ -55,16 +55,6 @@ func KeysOf[K comparable, V any](m map[K]V) []K {
 	return keys
 }
 
-func Filter[T any](input []T, f func(T) bool) []T {
-	output := make([]T, 0)
-	for _, item := range input {
-		if f(item) {
-			output = append(output, item)
-		}
-	}
-	return output
-}
-
 var mimesByExtension = map[string]string{
 	".3mf":    "model/3mf",
 	".aac":    "audio/aac",

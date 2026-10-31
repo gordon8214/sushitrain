@@ -49,7 +49,7 @@ import SynctrainFileProviderKit
 	}
 
 	private var manager: NSFileProviderManager? {
-		NSFileProviderManager(for: Self.domain)
+		ClientLifecycle.allowsSharedState ? NSFileProviderManager(for: Self.domain) : nil
 	}
 
 	/// Whether the system answered that the location does not exist: nothing to tell it about yet
@@ -61,6 +61,9 @@ import SynctrainFileProviderKit
 
 	/// Adds the location, which is harmless when it exists already
 	func register() async {
+		guard ClientLifecycle.allowsSharedState else {
+			return
+		}
 		do {
 			try await NSFileProviderManager.add(Self.domain)
 			lastError = nil
@@ -72,17 +75,34 @@ import SynctrainFileProviderKit
 		await refreshState()
 	}
 
-	/// Removes the location, and with it the system's copy of its files. Only for when no gateway is left.
-	func remove() async {
+	/// Removes the location, and with it the system's copy of its files. Only for when no gateway is left. On a Mac the
+	/// system keeps what never reached a gateway, which can be files that are nowhere else (`FilesLeftovers`), and this
+	/// returns where, if it kept anything. It also leaves a failure in `lastError`.
+	@discardableResult func remove() async throws -> URL? {
+		guard ClientLifecycle.allowsSharedState else {
+			return nil
+		}
 		do {
-			try await NSFileProviderManager.remove(Self.domain)
+			#if os(macOS)
+				// The system names a place also when it had nothing to keep
+				let kept = try await NSFileProviderManager.remove(Self.domain, mode: .preserveDirtyUserData).flatMap { url in
+					(try? FileManager.default.contentsOfDirectory(atPath: url.path(percentEncoded: false)))?.isEmpty == false
+						? url : nil
+				}
+			#else
+				try await NSFileProviderManager.remove(Self.domain)
+				let kept: URL? = nil
+			#endif
 			lastError = nil
+			await refreshState()
+			return kept
 		}
 		catch {
 			Log.warn("Could not remove the File Provider domain: \(error.localizedDescription)")
 			lastError = error.localizedDescription
+			await refreshState()
+			throw error
 		}
-		await refreshState()
 	}
 
 	func refreshState() async {
@@ -150,11 +170,11 @@ import SynctrainFileProviderKit
 		)
 	}
 
-	/// How many items have changes in the system's copy that the extension has not accepted yet. Only the first page is
-	/// counted.
-	func pendingItemCount() async -> Int {
+	/// How many items have changes in the system's copy that the extension has not accepted yet, or nil if the system
+	/// could not say, which callers must not take for none. Only the first page is counted.
+	func pendingItemCount() async -> Int? {
 		guard let manager else {
-			return 0
+			return nil
 		}
 		let enumerator = manager.enumeratorForPendingItems()
 		defer { enumerator.invalidate() }
@@ -231,9 +251,9 @@ import SynctrainFileProviderKit
 /// Counts the items of the first page of an enumeration
 private final class PendingItemCounter: NSObject, NSFileProviderEnumerationObserver, @unchecked Sendable {
 	private let lock = OSAllocatedUnfairLock(initialState: (count: 0, finished: false))
-	private let completion: @Sendable (Int) -> Void
+	private let completion: @Sendable (Int?) -> Void
 
-	init(completion: @escaping @Sendable (Int) -> Void) {
+	init(completion: @escaping @Sendable (Int?) -> Void) {
 		self.completion = completion
 	}
 
@@ -242,20 +262,20 @@ private final class PendingItemCounter: NSObject, NSFileProviderEnumerationObser
 	}
 
 	func finishEnumerating(upTo nextPage: NSFileProviderPage?) {
-		finish()
+		finish(failed: false)
 	}
 
 	func finishEnumeratingWithError(_ error: any Error) {
-		finish()
+		finish(failed: true)
 	}
 
-	private func finish() {
-		let count: Int? = lock.withLock { state in
+	private func finish(failed: Bool) {
+		let count: Int?? = lock.withLock { state in
 			guard !state.finished else {
 				return nil
 			}
 			state.finished = true
-			return state.count
+			return .some(failed ? nil : state.count)
 		}
 		if let count {
 			completion(count)

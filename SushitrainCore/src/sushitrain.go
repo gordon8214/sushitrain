@@ -58,7 +58,6 @@ type Client struct {
 	foldersDownloading       map[string]bool
 	ResolvedListenAddresses  map[string][]string
 	mutex                    sync.Mutex
-	extraneousIgnored        []string
 	Measurements             *Measurements
 	defaultLogLevel          slog.Level
 	appLock                  *flock.Flock
@@ -85,11 +84,6 @@ type Client struct {
 	notifyMutex   sync.Mutex
 	notifications []engineStatus
 	notifying     bool
-
-	// The file provider watcher follows the running engine (fileprovider_events.go)
-	watcherMutex         sync.Mutex
-	fileProviderDelegate FileProviderDelegate
-	watchedRun           *engineRun
 
 	// The remote file service serves one run; a restart stops it (gateway_mobile.go)
 	remoteMutex   sync.Mutex
@@ -244,7 +238,6 @@ func NewClient(configPath string, filesPath string, logPath string, foldersInHom
 		uploadProgress:             make(map[string]map[string]map[string]int),
 		downloadProgress:           make(map[string]map[string]*model.PullerProgress),
 		ResolvedListenAddresses:    make(map[string][]string),
-		extraneousIgnored:          make([]string, 0),
 		Measurements:               nil,
 		defaultLogLevel:            defaultLogLevel,
 	}
@@ -283,30 +276,6 @@ func useCustomConfiguration(filesPath string, ios bool) bool {
 		}
 	}
 	return isUsingCustomConfiguration
-}
-
-func (clt *Client) SetExtraneousIgnored(names []string) {
-	clt.extraneousIgnored = names
-}
-
-func (clt *Client) SetExtraneousIgnoredJSON(js []byte) error {
-	var names []string
-	if err := json.Unmarshal(js, &names); err != nil {
-		return err
-	}
-	clt.SetExtraneousIgnored(names)
-	return nil
-}
-
-func (clt *Client) isExtraneousIgnored(name string) bool {
-	// Always ignore files that are prefixed with .syncthing. or ~syncthing~, these are considered 'Syncthing private'
-	// See https://docs.syncthing.net/users/syncing.html#temporary-files
-	if strings.HasPrefix(name, ".syncthing.") || strings.HasPrefix(name, "~syncthing~") {
-		return true
-	}
-
-	// Must be an equal match for now
-	return slices.Contains(clt.extraneousIgnored, name)
 }
 
 func (clt *Client) CurrentConfigDirectory() string {
@@ -1221,14 +1190,9 @@ func (clt *Client) AddSpecialFolder(folderID string, fsType string, folderPath s
 }
 
 // Leave path empty to add folder at default location
-func (clt *Client) AddFolder(folderID string, folderPath string, createAsOnDemand bool, createAsReceiveEncrypted bool) error {
+func (clt *Client) AddFolder(folderID string, folderPath string, createAsReceiveEncrypted bool) error {
 	if clt.internals() == nil {
 		return ErrStillLoading
-	}
-
-	if createAsReceiveEncrypted && createAsOnDemand {
-		// This is not allowed
-		panic("invalid combination of createAsReceiveEncrypted and createAsOnDemand specified")
 	}
 
 	folderConfig := clt.cfg().DefaultFolder()
@@ -1268,13 +1232,8 @@ func (clt *Client) AddFolder(folderID string, folderPath string, createAsOnDeman
 	}
 
 	if !createAsReceiveEncrypted {
-		// Set default ignores for on-demand sync
-		if createAsOnDemand {
-			return clt.internals().SetIgnores(folderID, []string{"*"})
-		} else {
-			// Create empty .stignore anyway because there may be an old one lingering around
-			return clt.internals().SetIgnores(folderID, []string{})
-		}
+		// Create empty .stignore anyway because there may be an old one lingering around
+		return clt.internals().SetIgnores(folderID, []string{})
 	} else {
 		return nil
 	}
@@ -1956,7 +1915,6 @@ func (c *Client) generateSupportBundle(writer io.Writer, appInfo []byte) error {
 	infoJson["shortDeviceID"] = c.ShortDeviceID()
 	infoJson["isUsingCustomConfiguration"] = c.IsUsingCustomConfiguration
 	infoJson["isIgnoringEvents"] = c.IgnoreEvents
-	infoJson["extraneousIgnored"] = c.extraneousIgnored
 	infoJson["hasLegacyDatabase"] = c.HasLegacyDatabase()
 	infoJson["hasMigratedLegacyDatabase"] = c.HasMigratedLegacyDatabase()
 	infoJson["connectedPeerCount"] = c.ConnectedPeerCount()

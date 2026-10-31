@@ -24,6 +24,9 @@ import UIKit
 		}
 	}
 
+	/// Whether the app may use the app group, the Keychain and the system's location
+	nonisolated static var allowsSharedState: Bool { true }
+
 	/// Whether the app is on the screen, and may keep long polls open
 	static var isActive: Bool {
 		UIApplication.shared.applicationState == .active

@@ -137,6 +137,7 @@ struct RemotePairingView: View {
 				TextField("synctrain+pair://…", text: $link, axis: .vertical)
 					.autocorrectionDisabled()
 					.font(.body.monospaced())
+					.labelsHidden()
 				if let imageProblem {
 					Text(imageProblem).foregroundStyle(.red)
 				}

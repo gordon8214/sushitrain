@@ -6,7 +6,6 @@
 package sushitrain
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -22,10 +21,10 @@ import (
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/fs"
 	"github.com/syncthing/syncthing/lib/ignore"
-	"github.com/syncthing/syncthing/lib/ignore/ignoreresult"
 	"github.com/syncthing/syncthing/lib/model"
-	"github.com/syncthing/syncthing/lib/osutil"
 	"github.com/syncthing/syncthing/lib/protocol"
+
+	"t-shaped.nl/sushitrain/v2/gateway"
 )
 
 const (
@@ -42,26 +41,11 @@ const (
 )
 
 // CachedIgnore is what a folder's .stignore says, as of the modification time of the file. Reading the file means
-// compiling every line, and going through the lines again to tell what mode the folder is in.
+// compiling every line.
 type CachedIgnore struct {
 	mutex   sync.Mutex
 	matcher *ignore.Matcher
 	modTime time.Time
-
-	// The folder's mode, as the patterns of modeOf say
-	modeFor             *ignore.Matcher
-	selective, onDemand bool
-}
-
-// modeOf returns whether the patterns are those of a selective and of an on-demand folder
-func (cache *CachedIgnore) modeOf(ignores *ignore.Matcher) (selective bool, onDemand bool) {
-	cache.mutex.Lock()
-	defer cache.mutex.Unlock()
-	if cache.modeFor != ignores {
-		selection := newSelection(ignores.Lines())
-		cache.modeFor, cache.selective, cache.onDemand = ignores, selection.isSelectiveIgnore(), selection.isOnDemand()
-	}
-	return cache.selective, cache.onDemand
 }
 
 // forget makes the next load read the file
@@ -590,76 +574,6 @@ func (fld *Folder) whilePaused(block func() error) error {
 	return block()
 }
 
-func (fld *Folder) SetSelective(selective bool) error {
-	slog.Info("SetSelective", "folder", fld.FolderID, "selective", selective)
-	if fld.client.internals() == nil {
-		return errNoClient
-	}
-	fld.forgetIgnores()
-
-	return fld.whilePaused(func() error {
-		_, err := fld.changeSelection(func(selection *selection) error {
-			return selection.setSelective(selective)
-		})
-		return err
-	})
-}
-
-// This deselects all files, but (importantly) keeps global ignore patterns
-func (fld *Folder) ClearSelection(keepLastCopy bool) error {
-	_, err := fld.changeSelection(func(selection *selection) error {
-		if !selection.isSelectiveIgnore() {
-			return errors.New("folder is not a selective sync folder")
-		}
-		if selection.isOnDemand() {
-			return errOnDemandSelection
-		}
-
-		selection.filterSelectedPaths(func(path string) bool {
-			// Deselect all
-			return false
-		})
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return fld.CleanSelection(keepLastCopy)
-}
-
-func (fld *Folder) SelectedPaths(onlyExisting bool) (*ListOfStrings, error) {
-	fc := fld.folderConfiguration()
-	if fc == nil {
-		return nil, errors.New("folder does not exist")
-	}
-
-	if fld.client.internals() == nil {
-		return nil, errNoClient
-	}
-
-	lines, _, err := fld.client.internals().Ignores(fld.FolderID)
-	if err != nil {
-		return nil, err
-	}
-
-	selection := newSelection(lines)
-	paths := selection.selectedPaths()
-
-	if onlyExisting {
-		ffs, err := fld.filesystem()
-		if err != nil {
-			return nil, err
-		}
-		paths = Filter(paths, func(path string) bool {
-			_, statErr := ffs.Lstat(path)
-			return statErr == nil
-		})
-	}
-	return &ListOfStrings{data: paths}, nil
-}
-
 const (
 	FolderTypeSendReceive      = "sendrecieve"
 	FolderTypeReceiveOnly      = "receiveonly"
@@ -741,25 +655,23 @@ func (fld *Folder) SetFolderType(folderType string) error {
 	})
 }
 
-// IsSelective reports whether the folder is selective, or an error if its mode is unknown.
+// IsSelective reports whether the folder's ignore patterns keep only a selection of its files on this device, as the
+// remote file service sees it on every host, or an error if the engine isn't running.
 func (fld *Folder) IsSelective() (bool, error) {
-	if fld.client == nil || fld.client.internals() == nil {
+	if fld.client == nil {
 		return false, errNoClient
 	}
-	fc := fld.folderConfiguration()
-	if fc == nil {
+	r := fld.client.currentRun()
+	if r == nil || r.internals.Load() == nil {
+		return false, errNoClient
+	}
+	if r.isClosed() {
+		return false, fld.client.errNotRunning()
+	}
+	if _, ok := r.config.Folder(fld.FolderID); !ok {
 		return false, errors.New("folder does not exist")
 	}
-	// These folder types never apply selective synchronization.
-	if fc.Type == config.FolderTypeSendOnly || fc.Type == config.FolderTypeReceiveEncrypted {
-		return false, nil
-	}
-	ignores, err := fld.loadIgnores()
-	if err != nil {
-		return false, err
-	}
-	selective, _ := fld.ignoreCache().modeOf(ignores)
-	return selective, nil
+	return gateway.SelectiveFolders(r.app, r.config)(fld.FolderID), nil
 }
 
 func (fld *Folder) LocalNativePath() (string, error) {
@@ -836,102 +748,6 @@ func loadIgnoreMatcher(ffs fs.Filesystem, cache *CachedIgnore) (*ignore.Matcher,
 		cache.matcher = ignores
 	}
 	return ignores, nil
-}
-
-func (fld *Folder) ExtraneousFiles() (*ListOfStrings, error) {
-	return fld.extraneousFiles(false)
-}
-
-func (fld *Folder) HasExtraneousFiles() (bool, error) {
-	files, err := fld.extraneousFiles(true)
-	if err != nil {
-		return false, err
-	}
-	return files.Count() > 0, nil
-}
-
-// List of files that are not selected but exist locally. When stopAtOne = true, return after finding just one file
-func (fld *Folder) extraneousFiles(stopAtOne bool) (*ListOfStrings, error) {
-	cfg := fld.folderConfiguration()
-
-	if cfg == nil {
-		return nil, errors.New("folder does not exist")
-	}
-
-	ignores, err := fld.loadIgnores()
-	if err != nil {
-		return nil, err
-	}
-
-	return fld.client.extraneousFiles(cfg.Filesystem(), ignores, cfg.MarkerName, stopAtOne)
-}
-
-func (clt *Client) extraneousFiles(ffs fs.Filesystem, ignores *ignore.Matcher, markerName string, stopAtOne bool) (*ListOfStrings, error) {
-	selection := newSelection(ignores.Lines())
-
-	// Can't have extraneous files when you are not a selective ignore folder
-	if !selection.isSelectiveIgnore() {
-		return &ListOfStrings{}, nil
-	}
-
-	// Selective folders can have global ignores. If a file is ignored due to one of those rules, do not report it as
-	// extraneous, but keep ignoring it.
-	alwaysIgnoreGlobs, err := selection.globalIgnoreGlobs()
-	if err != nil {
-		return nil, fmt.Errorf("in globalIgnoreGlobs: %w", err)
-	}
-
-	extraFiles := make([]string, 0)
-	foundOneError := errors.New("found one")
-	err = ffs.Walk("", func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			slog.Error("walking", "path", path, "error", err)
-			return nil
-		}
-
-		// Never report Syncthing's private files, or descend into private directories.
-		isMarker := markerName != "" && (path == markerName || strings.HasPrefix(path, markerName+string(filepath.Separator)))
-		if fs.IsInternal(path) || fs.IsTemporary(path) || isMarker {
-			if info.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
-
-		// Ignore directories, only files count
-		if info.IsDir() {
-			return nil
-		}
-
-		// Ignore whatever is on the 'extraneous ignore' list (used to ignore .DS_Store and similar)
-		if clt.isExtraneousIgnored(filepath.Base(path)) {
-			return nil
-		}
-
-		// Ignore anything that is ignored by global ignore patterns in a selective folder
-		for _, globPattern := range alwaysIgnoreGlobs {
-			if globPattern.Match(path) {
-				return nil
-			}
-		}
-
-		// Check ignore status
-		result := ignores.Match(path)
-		if result.IsIgnored() {
-			extraFiles = append(extraFiles, path)
-			if stopAtOne {
-				return foundOneError
-			}
-		}
-		return nil
-	})
-
-	if err != nil && err != foundOneError {
-		return nil, err
-	}
-
-	list := ListOfStrings{data: extraFiles}
-	return &list, nil
 }
 
 // Remove ignored files from the local working copy. When keepLastCopy is true,
@@ -1040,101 +856,13 @@ func deleteEmptyParentDirectories(ffs fs.Filesystem, path string) {
 	}
 }
 
-func (fld *Folder) RemoveSuperfluousSelectionEntries() error {
-	unlock := lockSelection(fld.FolderID)
-	defer unlock()
-
-	fld.forgetIgnores()
-	state, err := fld.State()
-	if err != nil {
-		return err
-	}
-	if state != "idle" && state != "syncing" {
-		return errors.New("cannot remove superfluous selection entries when not idle or syncing")
-	}
-
-	// Load ignores from file
-	ignores, err := fld.loadIgnores()
-	if err != nil {
-		return err
-	}
-
-	selection := newSelection(ignores.Lines())
-	if !selection.isSelectiveIgnore() {
-		return errors.New("folder is not a selective folder")
-	}
-	if selection.isOnDemand() {
-		// A path that was deleted here is not on disk, but stays selected so that the deletion stays announced, until the
-		// remote file service knows that other devices have it
-		return nil
-	}
-
-	fc := fld.folderConfiguration()
-	if fc == nil {
-		return errors.New("invalid folder state")
-	}
-
-	ffs := fc.Filesystem()
-
-	// Enumerate selection entries, find out if we need them. An entry that can't be looked up (as when the engine
-	// restarts) is kept, and nothing is saved.
-	var lookupErr error
-	selection.filterSelectedPaths(func(path string) bool {
-		if lookupErr != nil {
-			return true
-		}
-		entry, err := fld.GetFileInformation(path)
-		if err != nil {
-			lookupErr = err
-			return true
-		}
-		if entry == nil {
-			slog.Info("entry not found", "path", path)
-			return false
-		}
-
-		// If this entry exists on disk, don't change anything
-		nativeFilename := osutil.NativeFilename(path)
-		_, err = ffs.Stat(nativeFilename)
-		if err == nil {
-			slog.Info("entry exists, keeping", "nativeFileName", nativeFilename)
-			return true
-		}
-
-		// Only keep files that we can find a global entry for, and never delete if we still have a local entry
-		keep := (err == nil && entry != nil && !entry.IsDeleted()) || (entry != nil && entry.IsLocallyPresent())
-		slog.Info("keep selected", "path", path, "keep", keep, "error", err, "isDeleted", entry != nil && entry.IsDeleted(), "isLocallyPresent", entry != nil && entry.IsLocallyPresent())
-		return keep
-	})
-
-	if lookupErr != nil {
-		return lookupErr
-	}
-
-	// Save new ignores (this triggers a reload of ignores and eventually a scan)
-	err = fld.client.internals().SetIgnores(fld.FolderID, selection.patterns())
-	if err != nil {
-		return err
-	}
-
-	return nil
+// What operating systems leave in directories, which nobody misses when a directory is removed
+var systemFileNames = []string{
+	".DS_Store", "Thumbs.db", "desktop.ini", ".Trashes", ".Spotlight-V100", ".DocumentRevisions-V100", ".TemporaryItems",
+	"$RECYCLE.BIN", "@eaDir",
 }
 
-// Remove empty, ignored directories that exist locally in selective folders
-func (fld *Folder) RemoveSuperfluousSubdirectories() error {
-	selective, err := fld.IsSelective()
-	if err != nil {
-		return err
-	}
-	if !selective {
-		return errors.New("Folder is not selective")
-	}
-
-	ffs := fld.folderConfiguration().Filesystem()
-	return fld.removeRedundantChildren(ffs, "", true)
-}
-
-func (fld *Folder) removeRedundantChildren(ffs fs.Filesystem, path string, directoriesAndAlwaysIgnoredOnly bool) error {
+func (fld *Folder) removeRedundantChildren(ffs fs.Filesystem, path string) error {
 	ignores, err := fld.loadIgnores()
 	if err != nil {
 		return err
@@ -1156,43 +884,40 @@ func (fld *Folder) removeRedundantChildren(ffs fs.Filesystem, path string, direc
 			return nil
 		}
 
-		// Delete items that match the 'extraneous ignore' list (used to ignore .DS_Store and similar)
-		// *also* when directoriesAndAlwaysIgnoredOnly is set!
-		if fld.client.isExtraneousIgnored(filepath.Base(childPath)) {
-			slog.Info("deleting always ignored extraneous file", "childPath", childPath, "base", filepath.Base(childPath))
+		// Syncthing's temporary files and what systems leave behind would keep their directory from being removed
+		if fs.IsTemporary(childPath) || slices.Contains(systemFileNames, filepath.Base(childPath)) {
+			slog.Info("deleting temporary or system file", "childPath", childPath)
 			toDelete = append(toDelete, childPath)
 			return nil
 		}
 
-		if !directoriesAndAlwaysIgnoredOnly || info.IsDir() {
-			// Check file ignore status
-			ignoreStatus := ignores.Match(childPath)
-			if ignoreStatus.IsIgnored() {
-				// Check remote availability
-				entry, err := fld.GetFileInformation(childPath)
-				if err != nil {
-					return err
-				}
+		// Check file ignore status
+		ignoreStatus := ignores.Match(childPath)
+		if ignoreStatus.IsIgnored() {
+			// Check remote availability
+			entry, err := fld.GetFileInformation(childPath)
+			if err != nil {
+				return err
+			}
 
-				if entry == nil || entry.IsDeleted() {
-					// File is not known in the global index at all. Leave it in place except when it is an empty directory
-					if info.IsDir() {
-						toDelete = append(toDelete, childPath)
-					}
-					return nil
-				}
-
-				lst, err := entry.PeersWithFullCopy()
-				if err != nil {
-					return err
-				}
-
-				if lst.Count() > 0 {
+			if entry == nil || entry.IsDeleted() {
+				// File is not known in the global index at all. Leave it in place except when it is an empty directory
+				if info.IsDir() {
 					toDelete = append(toDelete, childPath)
-				} else {
-					// File is not available elsewhere, skip it
-					slog.Info("refusing to delete file because there are no peers with a full copy", "path", childPath)
 				}
+				return nil
+			}
+
+			lst, err := entry.PeersWithFullCopy()
+			if err != nil {
+				return err
+			}
+
+			if lst.Count() > 0 {
+				toDelete = append(toDelete, childPath)
+			} else {
+				// File is not available elsewhere, skip it
+				slog.Info("refusing to delete file because there are no peers with a full copy", "path", childPath)
 			}
 		}
 		return nil
@@ -1238,45 +963,20 @@ func (fld *Folder) deleteLocalFileAndRedundantChildren(path string) error {
 
 	// Try to recursively remove children that are ignored and available on other peers
 	if stat.IsDir() {
-		err = fld.removeRedundantChildren(ffs, path, false)
+		err = fld.removeRedundantChildren(ffs, path)
 		if err != nil {
 			return err
 		}
 	}
 
+	// Removing the last child of a directory takes the directory with it
 	err = ffs.Remove(path)
-	if err != nil {
+	if err != nil && !fs.IsNotExist(err) {
 		return err
 	}
 
 	deleteEmptyParentDirectories(ffs, path)
 	return nil
-}
-
-func (fld *Folder) reloadIgnores() error {
-	if !fld.IsPaused() {
-		err := fld.SetPaused(true)
-		if err != nil {
-			return err
-		}
-		fld.SetPaused(false)
-
-		// Force a (minimal) scan. The current implementation also reloads the ignore file here (regardless of the path that is scanned)
-		// Note, this could potentially take a while
-		err = fld.client.scanFolderSubdirs(fld.FolderID, []string{ignoreFileName})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (fld *Folder) SetExplicitlySelectedJSON(js []byte) error {
-	var paths map[string]bool
-	if err := json.Unmarshal(js, &paths); err != nil {
-		return err
-	}
-	return fld.setExplicitlySelected(paths)
 }
 
 func (fld *Folder) IgnoreLines() (*ListOfStrings, error) {
@@ -1288,15 +988,8 @@ func (fld *Folder) IgnoreLines() (*ListOfStrings, error) {
 	return List(ignores.Lines()), nil
 }
 
-// This overwrites the ignore file with the selected lines. Note that this should not be used on selective folders
+// This overwrites the ignore file with the given lines
 func (fld *Folder) SetIgnoreLines(lines *ListOfStrings) error {
-	selective, modeErr := fld.IsSelective()
-	if modeErr != nil {
-		return modeErr
-	}
-	if selective {
-		return errors.New("use selective ignore settings for a selective folder")
-	}
 	if _, err := fld.loadIgnores(); err != nil {
 		return err
 	}
@@ -1319,165 +1012,6 @@ func (fld *Folder) SetIgnoreLines(lines *ListOfStrings) error {
 	}
 
 	return nil
-}
-
-// Returns the list of global ignore patterns in a selective folder
-func (fld *Folder) GetSelectiveGlobalIgnorePatterns() (*ListOfStrings, error) {
-	// Load ignores from file
-	ignores, err := fld.loadIgnores()
-	if err != nil {
-		return nil, err
-	}
-
-	selection := newSelection(ignores.Lines())
-	if !selection.isSelectiveIgnore() {
-		return nil, errors.New("folder is not a selective folder")
-	}
-
-	return List(selection.globalIgnorePatterns()), nil
-}
-
-func (fld *Folder) SetSelectiveGlobalIgnorePatterns(patterns *ListOfStrings) error {
-	slog.Info("changing selective folder global ignores", "patterns", patterns)
-	_, err := fld.changeSelection(func(sel *selection) error {
-		if !sel.isSelectiveIgnore() {
-			return errors.New("folder is not a selective folder")
-		}
-		return sel.setGlobalIgnorePatterns(patterns.data)
-	})
-	return err
-}
-
-func (fld *Folder) changeSelection(block func(sel *selection) error) (*ignore.Matcher, error) {
-	unlock := lockSelection(fld.FolderID)
-	defer unlock()
-	return fld.changeSelectionLocked(block)
-}
-
-// Like changeSelection, for callers that already hold the selection lock
-func (fld *Folder) changeSelectionLocked(block func(sel *selection) error) (*ignore.Matcher, error) {
-	// Load ignores from file
-	ignores, err := fld.loadIgnores()
-	if err != nil {
-		return nil, err
-	}
-
-	selection := newSelection(ignores.Lines())
-
-	hashBefore := ignores.Hash()
-	err = block(selection)
-	if err != nil {
-		return nil, err
-	}
-
-	// Save new ignores (this triggers a reload of ignores and eventually a scan)
-	err = fld.client.internals().SetIgnores(fld.FolderID, selection.patterns())
-	if err != nil {
-		return nil, err
-	}
-
-	fld.forgetIgnores()
-
-	// Delete files if necessary
-	ignores, err = fld.loadIgnores()
-	if err != nil {
-		return nil, err
-	}
-
-	hashAfter := ignores.Hash()
-	if hashAfter == hashBefore {
-		slog.Warn("ignore file did not change after edits")
-	}
-	slog.Debug("ignore hash", "before", hashBefore, "after", hashAfter)
-	return ignores, nil
-}
-
-func (fld *Folder) setExplicitlySelected(paths map[string]bool) error {
-	slog.Info("set explicitly selected", "paths", paths)
-
-	fld.forgetIgnores()
-	state, err := fld.State()
-	var lowDiskSpace = false
-
-	if err != nil {
-		// We allow deselections when disk space is insufficient (to clear up space)
-		if !fld.IsDiskSpaceSufficient() {
-			lowDiskSpace = true
-		} else {
-			return err
-		}
-	}
-	if state != "idle" && state != "syncing" && state != "" { // The empty state is what we get when the folder is paused
-		if lowDiskSpace || !fld.IsDiskSpaceSufficient() {
-			lowDiskSpace = true
-		} else {
-			return errors.New("cannot change explicit selection state when not idle or syncing (state is '" + state + "')")
-		}
-	}
-
-	// Check if we have any work to do
-	if len(paths) == 0 {
-		return nil
-	}
-
-	// If we are in the special 'low disk space' mode, allow only deselections
-	if lowDiskSpace {
-		for _, selected := range paths {
-			if selected {
-				return errors.New("there is insufficient disk space, new files cannot be selected")
-			}
-		}
-	}
-
-	// Deleting below depends on the new selection, which must not change before the deletions are done
-	unlock := lockSelection(fld.FolderID)
-	defer unlock()
-
-	ignores, err := fld.changeSelectionLocked(func(selection *selection) error {
-		if !selection.isSelectiveIgnore() {
-			return errors.New("folder is not a selective folder")
-		}
-
-		// Edit lines
-		return selection.setExplicitlySelected(paths)
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Delete local files that are not selected anymore
-	var deletionErrors []error
-	for path, selected := range paths {
-		if !selected {
-			// Check if not still implicitly selected
-			res := ignores.Match(path)
-			if res == ignoreresult.Ignored || res == ignoreresult.IgnoreAndSkip {
-				slog.Info("deleting local deselected", "path", path)
-				if err := fld.deleteLocalFileAndRedundantChildren(path); err != nil && !fs.IsNotExist(err) {
-					deletionErrors = append(deletionErrors, fmt.Errorf("deselected %q but could not remove its local copy: %w", path, err))
-				}
-			} else {
-				slog.Info("not deleting local deselected file, it apparently was reselected", "path", path, "ignoreResult", res)
-			}
-		}
-	}
-
-	return errors.Join(deletionErrors...)
-}
-
-func (fld *Folder) SetLocalPathsExplicitlySelected(paths *ListOfStrings) error {
-	pathsMap := map[string]bool{}
-	for _, path := range paths.data {
-		pathsMap[path] = true
-	}
-	return fld.setExplicitlySelected(pathsMap)
-}
-
-func (fld *Folder) SetLocalFileExplicitlySelected(path string, toggle bool) error {
-	pathsMap := map[string]bool{}
-	pathsMap[path] = toggle
-	return fld.setExplicitlySelected(pathsMap)
 }
 
 func (fld *Folder) Statistics() (*FolderStats, error) {
