@@ -106,9 +106,12 @@ changes it, and what the web GUI or the REST API changed meanwhile stays too. Mo
   layout of Syncthing's crash reports, if crash reporting is on. If it is off, the crash is set aside, so that turning it
   on later doesn't send it. Logs are removed after a week. The framework is built with `-trimpath`, so that traces don't
   name folders on the computer that built it.
-- Reports identify the engine as `v2.1.7`, the version the app sets, with the tag `synctrain` in the long version, which
-  tells them from Syncthing's own builds. Syncthing's crash server refuses a long version it can't parse, so the app
-  recalculates it after setting the version; at package init it still says `unknown-dev`.
+- The engine calls itself `v2.1.7-synctrain.N`, with the tag `synctrain` in the long version, in its GUI's About dialog,
+  `/rest/system/version`, reports, logs and to other devices, which tells it from Syncthing's own builds.
+  `SushitrainCore/Makefile` stamps the version, tags, builder and commit time through `-ldflags -X`, because `lib/build`
+  works out the long version in its `init`; raise N there when `go.mod` moves to another commit of the fork. `lib/build`
+  stops the process on a version it can't parse, and Syncthing's crash server refuses such a long version, so `make test`
+  and `make test-engine` run with the same stamp. Without it, as in a plain `go test`, the version is `unknown-dev`.
 - **Low priority** (`setLowPriority`) calls `setpriority` for the whole process, app included, at each start of the
   engine, and it is on by default, as in Syncthing. It is measurably in force (the process has a nice value of 9) but
   makes little difference on macOS. In a normally launched app the main thread stayed at priority 46 and the engine's

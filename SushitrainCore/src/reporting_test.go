@@ -271,21 +271,24 @@ func TestACrashOfTheProcessIsSaved(t *testing.T) {
 	}
 }
 
+// make test says which version it stamped, so that this checks what the app gets, and fails if the stamp didn't land: the
+// linker ignores an -X it has no variable for
 func TestReportsCarryAVersionCrashServersAccept(t *testing.T) {
-	version, host, user, longVersion := build.Version, build.Host, build.User, build.LongVersion
-	t.Cleanup(func() {
-		build.Version, build.Host, build.User, build.LongVersion = version, host, user, longVersion
-	})
-
-	setBuildInfo()
+	stamped := os.Getenv("ENGINE_VERSION")
+	if stamped == "" {
+		t.Skip("no version stamped: run make test")
+	}
 
 	// What Syncthing's crash receiver parses, and refuses what it can't
 	parsed, err := build.ParseVersion(build.LongVersion)
 	if err != nil {
 		t.Fatalf("%q: %v", build.LongVersion, err)
 	}
-	if parsed.Tag != "v2.1.7" || !slices.Contains(parsed.Extra, "synctrain") {
+	if parsed.Tag != stamped || !slices.Contains(parsed.Extra, "synctrain") {
 		t.Fatalf("%q: %+v", build.LongVersion, parsed)
+	}
+	if build.Date.Unix() == 0 || parsed.Builder == "unknown@unknown" {
+		t.Fatalf("%q: no builder or date", build.LongVersion)
 	}
 }
 

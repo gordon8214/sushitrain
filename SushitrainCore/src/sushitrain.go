@@ -182,22 +182,11 @@ func createLogFile(dir string, started time.Time) (*os.File, error) {
 	return os.Create(logFilePath(dir, started))
 }
 
-// setBuildInfo sets the version info of the engine. The tag also sets the long version that reports carry, which tells
-// this fork from Syncthing's own builds.
-func setBuildInfo() {
-	build.Version = "v2.1.7"
-	build.Host = "t-shaped.nl"
-	build.User = "sushitrain"
-	build.AddTag("synctrain")
-}
-
 // NewClient creates the client of an engine that keeps its configuration and database in configPath and treats
 // filesPath as the user's home directory. When saveLog is set, the log is also saved to a file in logPath. With
 // foldersInHome (the Mac app outside the App Sandbox, where filesPath is the real home directory), folders are the
 // user's, anywhere; otherwise they are in or outside the app's container.
 func NewClient(configPath string, filesPath string, logPath string, foldersInHome bool, saveLog bool) *Client {
-	setBuildInfo()
-
 	// Set up logging
 	var logOutWriter io.Writer = os.Stdout
 	var logFileErr error
@@ -209,6 +198,8 @@ func NewClient(configPath string, filesPath string, logPath string, foldersInHom
 		}
 	}
 	defaultLogLevel := configureLogging(logOutWriter, saveLog)
+	// Syncthing starts its log with this too, so that a saved log says which build wrote it
+	slog.Info(build.LongVersion)
 	if logFileErr != nil {
 		slog.Warn("Could not save the log to a file", "directory", logPath, "error", logFileErr)
 	}
