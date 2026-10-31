@@ -15,8 +15,8 @@ the phone, and for edits to complete. Edits made while it is unreachable wait on
   It never runs next to another Syncthing instance on the same home directory (it takes Syncthing's lock first and
   refuses to start otherwise).
 - **Writable folders** must be ordinary send-receive folders on the host's own filesystem that the host keeps in full
-  (not on-demand or selective). Read-only exports can be any unencrypted folder; files the host doesn't keep are
-  streamed from other devices.
+  (not selective), or, on a Mac, [on demand](macos.md#files-in-finder). Read-only exports can be any unencrypted folder;
+  files the host doesn't keep are streamed from other devices.
 - **HTTPS.** Either a certificate clients trust normally (such as Let's Encrypt), or a self-signed certificate whose
   public key the pairing code carries (clients then accept exactly that key). Arbitrary certificates are never
   accepted. The gateway can also sit behind a reverse proxy (below).

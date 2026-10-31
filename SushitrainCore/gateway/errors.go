@@ -24,6 +24,7 @@ const (
 	codeIgnoredPath         = "ignored_path"
 	codeNotEmpty            = "not_empty"
 	codeCrossFolder         = "cross_folder"
+	codeMoveTooLarge        = "move_too_large"
 	codeRevisionMismatch    = "revision_mismatch"
 	codeUploadMismatch      = "upload_mismatch"
 	codeCursorExpired       = "cursor_expired"

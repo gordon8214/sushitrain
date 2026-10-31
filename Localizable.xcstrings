@@ -1606,6 +1606,52 @@
         }
       }
     },
+    "%@ leaves Finder's Synctrain location, and all of its files are downloaded to this Mac. Edits that were not saved yet have to be saved or discarded first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wird aus dem Speicherort „Synctrain“ im Finder entfernt, und alle Dateien werden auf diesen Mac geladen. Noch nicht gesicherte Änderungen müssen zuerst gesichert oder verworfen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ saldrá de la ubicación Synctrain de Finder y todos sus archivos se descargarán en este Mac. Los cambios que aún no se hayan guardado deben guardarse o descartarse primero."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ esce dalla posizione Synctrain del Finder e tutti i suoi file vengono scaricati su questo Mac. Le modifiche non ancora salvate vanno prima salvate o scartate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@はFinderの「Synctrain」の場所から外れ、すべてのファイルがこのMacにダウンロードされます。まだ保存されていない編集は、先に保存するか破棄する必要があります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ verdwijnt uit de locatie Synctrain in Finder en al zijn bestanden worden naar deze Mac gedownload. Bewerkingen die nog niet zijn bewaard, moeten eerst worden bewaard of weggegooid."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ зникне з розташування Synctrain у Finder, а всі файли буде завантажено на цей Mac. Ще не збережені зміни потрібно спочатку зберегти або відхилити."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 将离开 Finder 中的“Synctrain”位置，其所有文件都会下载到这台 Mac。尚未保存的编辑必须先保存或放弃。"
+          }
+        }
+      }
+    },
     "%@ may have lost recent changes: its database was reset or restored, or another device became the folders' authority. Edits it could not confirm are listed for review." : {
       "localizations" : {
         "de" : {
@@ -4180,6 +4226,52 @@
         }
       }
     },
+    "A folder that is on demand stays where it is, but keeps only the files that were edited here, or that no other device has. Others open through Finder, from a device that is connected. Previous versions list what this Mac kept." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein bei Bedarf bereitgestellter Ordner bleibt, wo er ist, behält aber nur die Dateien, die hier bearbeitet wurden oder die kein anderes Gerät hat. Andere werden über den Finder von einem verbundenen Gerät geöffnet. Frühere Versionen zeigen, was dieser Mac aufbewahrt hat."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una carpeta bajo demanda se queda donde está, pero solo conserva los archivos editados aquí o los que no tiene ningún otro dispositivo. Los demás se abren desde Finder, a través de un dispositivo conectado. Las versiones anteriores muestran lo que ha guardado este Mac."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una cartella su richiesta resta dov'è, ma conserva solo i file modificati qui o che nessun altro dispositivo ha. Gli altri si aprono dal Finder, da un dispositivo connesso. Le versioni precedenti elencano ciò che questo Mac ha conservato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オンデマンドのフォルダは場所を変えず、ここで編集したファイルや他のデバイスにないファイルだけを保持します。その他のファイルは、接続中のデバイスからFinder経由で開きます。以前のバージョンには、このMacが保持したものが表示されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een map op aanvraag blijft waar hij is, maar bewaart alleen de bestanden die hier zijn bewerkt of die geen ander apparaat heeft. Andere bestanden open je via Finder, vanaf een verbonden apparaat. Eerdere versies tonen wat deze Mac heeft bewaard."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папка на вимогу залишається на місці, але зберігає лише файли, відредаговані тут, або ті, яких немає на інших пристроях. Інші відкриваються через Finder із підключеного пристрою. Попередні версії показують те, що зберіг цей Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按需文件夹保持原位，但只保留在此编辑过或其他设备没有的文件。其他文件通过 Finder 从已连接的设备打开。以前的版本列出这台 Mac 保留的内容。"
+          }
+        }
+      }
+    },
     "A gateway is a Mac running Synctrain, or a server running synctrain-gateway, that synchronizes folders with Syncthing. Folders opened through a gateway can be browsed and edited in the Files app without keeping copies of them on this device. The gateway has to be reachable, on the same network or through a VPN, to open files that are not on this device and to save edits." : {
       "localizations" : {
         "de" : {
@@ -4222,6 +4314,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网关是运行 Synctrain 的 Mac，或运行 synctrain-gateway 的服务器，它通过 Syncthing 同步文件夹。通过网关打开的文件夹可以在文件应用中浏览和编辑，而无需在此设备上保留副本。要打开不在此设备上的文件以及保存编辑内容，网关必须可以访问（在同一网络中或通过 VPN）。"
+          }
+        }
+      }
+    },
+    "A gateway is another Mac running Synctrain, or a server running synctrain-gateway. Its folders can be added here without synchronizing them to this Mac." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Gateway ist ein anderer Mac mit Synctrain oder ein Server mit synctrain-gateway. Seine Ordner können hier hinzugefügt werden, ohne sie auf diesen Mac zu synchronisieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una puerta de enlace es otro Mac con Synctrain o un servidor con synctrain-gateway. Sus carpetas se pueden añadir aquí sin sincronizarlas con este Mac."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un gateway è un altro Mac con Synctrain o un server con synctrain-gateway. Le sue cartelle si possono aggiungere qui senza sincronizzarle su questo Mac."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイとは、Synctrainを実行している別のMac、またはsynctrain-gatewayを実行しているサーバです。そのフォルダは、このMacに同期せずにここに追加できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een gateway is een andere Mac met Synctrain, of een server met synctrain-gateway. Zijn mappen kunnen hier worden toegevoegd zonder ze naar deze Mac te synchroniseren."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Шлюз — це інший Mac із Synctrain або сервер із synctrain-gateway. Його папки можна додати тут, не синхронізуючи їх на цей Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网关是运行 Synctrain 的另一台 Mac，或运行 synctrain-gateway 的服务器。可以在此添加其文件夹，而无需将它们同步到这台 Mac。"
           }
         }
       }
@@ -12150,6 +12288,98 @@
         }
       }
     },
+    "Changes to %lld items made in Finder have not reached Synctrain yet. Rebuilding the location discards them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen an %lld Objekten im Finder haben Synctrain noch nicht erreicht. Beim Neuaufbau des Speicherorts werden sie verworfen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los cambios en %lld elementos hechos en Finder aún no han llegado a Synctrain. Al reconstruir la ubicación se descartarán."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le modifiche a %lld elementi fatte nel Finder non hanno ancora raggiunto Synctrain. Ricreando la posizione verranno scartate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finderで行った%lld項目の変更はまだSynctrainに届いていません。場所を再構築すると破棄されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzigingen aan %lld onderdelen in Finder hebben Synctrain nog niet bereikt. Als je de locatie opnieuw opbouwt, gaan ze verloren."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зміни в %lld елементах, зроблені у Finder, ще не дійшли до Synctrain. Перебудова розташування їх відкине."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Finder 中对 %lld 个项目所做的更改尚未到达 Synctrain。重建位置会放弃这些更改。"
+          }
+        }
+      }
+    },
+    "Changes to %lld items made in Finder have not reached Synctrain yet. Removing the folder discards them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen an %lld Objekten im Finder haben Synctrain noch nicht erreicht. Beim Entfernen des Ordners werden sie verworfen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los cambios en %lld elementos hechos en Finder aún no han llegado a Synctrain. Al eliminar la carpeta se descartarán."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le modifiche a %lld elementi fatte nel Finder non hanno ancora raggiunto Synctrain. Rimuovendo la cartella verranno scartate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finderで行った%lld項目の変更はまだSynctrainに届いていません。フォルダを削除すると破棄されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzigingen aan %lld onderdelen in Finder hebben Synctrain nog niet bereikt. Als je de map verwijdert, gaan ze verloren."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зміни в %lld елементах, зроблені у Finder, ще не дійшли до Synctrain. Вилучення папки їх відкине."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Finder 中对 %lld 个项目所做的更改尚未到达 Synctrain。移除文件夹会放弃这些更改。"
+          }
+        }
+      }
+    },
     "Changes to %lld items made in the Files app have not reached Synctrain yet. Rebuilding the location discards them." : {
       "localizations" : {
         "de" : {
@@ -12422,6 +12652,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请选择 1 到 65535 之间的端口。"
+          }
+        }
+      }
+    },
+    "Choose an Image of the Code…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bild des Codes auswählen …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elegir una imagen del código…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli un'immagine del codice…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コードの画像を選択…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies een afbeelding van de code…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вибрати зображення коду…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择代码图像…"
           }
         }
       }
@@ -22290,6 +22566,98 @@
         }
       }
     },
+    "Files in Finder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dateien im Finder"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivos en Finder"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File nel Finder"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finderのファイル"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestanden in Finder"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файли у Finder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder 中的文件"
+          }
+        }
+      }
+    },
+    "Files in Finder is not available in this build of Synctrain." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Dateien im Finder“ ist in dieser Version von Synctrain nicht verfügbar."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivos en Finder no está disponible en esta versión de Synctrain."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File nel Finder non è disponibile in questa versione di Synctrain."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このビルドのSynctrainでは「Finderのファイル」を利用できません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestanden in Finder is niet beschikbaar in deze versie van Synctrain."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файли у Finder недоступні в цій збірці Synctrain."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此版本的 Synctrain 不支持“Finder 中的文件”。"
+          }
+        }
+      }
+    },
     "Files kept on device" : {
       "localizations" : {
         "de" : {
@@ -22566,6 +22934,52 @@
         }
       }
     },
+    "Files of %@ that a connected device has are removed from this Mac, and open through Finder from now on. Files that only this Mac has stay here." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dateien von %@, die ein verbundenes Gerät hat, werden von diesem Mac entfernt und ab jetzt über den Finder geöffnet. Dateien, die nur dieser Mac hat, bleiben hier."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos de %@ que tenga un dispositivo conectado se eliminarán de este Mac y a partir de ahora se abrirán desde Finder. Los archivos que solo tenga este Mac se quedan aquí."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I file di %@ presenti su un dispositivo connesso vengono rimossi da questo Mac e da ora si aprono dal Finder. I file presenti solo su questo Mac restano qui."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接続中のデバイスにある%@のファイルはこのMacから削除され、今後はFinderから開きます。このMacにしかないファイルはここに残ります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestanden van %@ die een verbonden apparaat heeft, worden van deze Mac verwijderd en openen voortaan via Finder. Bestanden die alleen deze Mac heeft, blijven hier."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файли %@, які є на підключеному пристрої, буде вилучено з цього Mac, і відтепер вони відкриватимуться через Finder. Файли, які є лише на цьому Mac, залишаться тут."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已连接设备上拥有的 %@ 文件将从这台 Mac 移除，此后通过 Finder 打开。只有这台 Mac 拥有的文件会保留在此。"
+          }
+        }
+      }
+    },
     "Files on this device" : {
       "localizations" : {
         "de" : {
@@ -22792,6 +23206,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "筛选和排序"
+          }
+        }
+      }
+    },
+    "Finder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder"
+          }
+        }
+      }
+    },
+    "Finder still shows folders. Switch them to Synchronize All, or remove them from their gateways, first: their files could not be opened otherwise." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Finder zeigt noch Ordner an. Stellen Sie sie zuerst auf „Alles synchronisieren“ um oder entfernen Sie sie von ihren Gateways, da ihre Dateien sonst nicht mehr geöffnet werden könnten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder aún muestra carpetas. Primero cámbialas a Sincronizar todo o quítalas de sus puertas de enlace; de lo contrario, no se podrían abrir sus archivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il Finder mostra ancora delle cartelle. Prima passale a Sincronizza tutto o rimuovile dai loro gateway: altrimenti i loro file non si potrebbero aprire."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finderにまだフォルダが表示されています。先に「すべて同期」に切り替えるか、ゲートウェイから削除してください。そうしないとファイルを開けなくなります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder toont nog mappen. Zet ze eerst op Alles synchroniseren, of verwijder ze van hun gateways: anders zijn hun bestanden niet meer te openen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder досі показує папки. Спочатку виберіть для них «Синхронізувати все» або вилучіть їх зі шлюзів, інакше їхні файли неможливо буде відкрити."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder 仍在显示文件夹。请先将它们切换为“全部同步”，或将它们从其网关移除，否则将无法打开其中的文件。"
           }
         }
       }
@@ -24500,6 +25006,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "存储在应用中的文件夹会显示在文件应用的“Synctrain”位置中，除非它们已被隐藏。仅存在于你其他设备上的文件可在 Synctrain 打开时下载。"
+          }
+        }
+      }
+    },
+    "Folders that are on demand appear under Locations in Finder with all their files. Only what you open comes to this Mac, from the other devices that have it, and it can be removed again at any time. Other folders stay as they are." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei Bedarf bereitgestellte Ordner erscheinen im Finder unter „Orte“ mit allen Dateien. Nur was Sie öffnen, gelangt von den anderen Geräten, die es haben, auf diesen Mac und kann jederzeit wieder entfernt werden. Andere Ordner bleiben, wie sie sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las carpetas bajo demanda aparecen en Ubicaciones de Finder con todos sus archivos. Solo lo que abras llega a este Mac, desde los otros dispositivos que lo tengan, y puedes eliminarlo en cualquier momento. Las demás carpetas se quedan como están."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le cartelle su richiesta appaiono in Posizioni nel Finder con tutti i loro file. Solo ciò che apri arriva su questo Mac, dagli altri dispositivi che lo hanno, e puoi rimuoverlo in qualsiasi momento. Le altre cartelle restano come sono."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オンデマンドのフォルダは、すべてのファイルとともにFinderの「場所」に表示されます。開いたものだけが、それを持つ他のデバイスからこのMacに届き、いつでも再び削除できます。他のフォルダはそのままです。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappen op aanvraag verschijnen onder Locaties in Finder, met al hun bestanden. Alleen wat je opent, komt naar deze Mac, van de andere apparaten die het hebben, en dat kan altijd weer worden verwijderd. Andere mappen blijven zoals ze zijn."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папки на вимогу з’являються у Finder у розділі «Розташування» з усіма файлами. На цей Mac потрапляє лише те, що ви відкриваєте, з інших пристроїв, де воно є, і це можна будь-коли знову вилучити. Інші папки залишаються без змін."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按需文件夹会连同所有文件显示在 Finder 的“位置”下。只有你打开的内容才会从拥有它的其他设备来到这台 Mac，并且可随时再次移除。其他文件夹保持不变。"
           }
         }
       }
@@ -29778,6 +30330,52 @@
         }
       }
     },
+    "Keep this folder on demand?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diesen Ordner bei Bedarf bereitstellen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Mantener esta carpeta bajo demanda?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tenere questa cartella su richiesta?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このフォルダをオンデマンドにしますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze map op aanvraag houden?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тримати цю папку на вимогу?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将此文件夹设为按需？"
+          }
+        }
+      }
+    },
     "Keep this item on this device to change it." : {
       "localizations" : {
         "de" : {
@@ -32130,6 +32728,52 @@
         }
       }
     },
+    "macOS asks you to allow this. To see your folders in Finder, turn on Synctrain in System Settings, under General › Login Items & Extensions › File Providers." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS fragt nach Ihrer Erlaubnis. Um Ihre Ordner im Finder zu sehen, aktivieren Sie Synctrain in den Systemeinstellungen unter „Allgemein“ › „Anmeldeobjekte und Erweiterungen“ › „Dateianbieter“."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS te pide permiso para esto. Para ver tus carpetas en Finder, activa Synctrain en Ajustes del Sistema, en General › Ítems de inicio y extensiones › Proveedores de archivos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS chiede la tua autorizzazione. Per vedere le tue cartelle nel Finder, attiva Synctrain in Impostazioni di Sistema, in Generali › Elementi login ed estensioni › Fornitori di file."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOSから許可を求められます。Finderでフォルダを表示するには、システム設定の「一般」›「ログイン項目と拡張機能」›「ファイルプロバイダ」でSynctrainをオンにしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS vraagt je hiervoor toestemming. Om je mappen in Finder te zien, schakel je Synctrain in bij Systeeminstellingen, onder Algemeen › Inloggen en extensies › Bestandsaanbieders."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS просить дозволити це. Щоб бачити папки у Finder, увімкніть Synctrain у Системних параметрах: Загальні › Елементи входу й розширення › Постачальники файлів."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 会请你允许此操作。要在 Finder 中查看文件夹，请在系统设置的“通用”›“登录项与扩展”›“文件提供程序”中打开 Synctrain。"
+          }
+        }
+      }
+    },
     "Manage files and folders" : {
       "localizations" : {
         "de" : {
@@ -33368,6 +34012,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无访问权限"
+          }
+        }
+      }
+    },
+    "No connected device has %lld of the folder's files, so they stay on this Mac for now." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein verbundenes Gerät hat %lld der Dateien des Ordners. Sie bleiben deshalb vorerst auf diesem Mac."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ningún dispositivo conectado tiene %lld de los archivos de la carpeta, así que por ahora se quedan en este Mac."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun dispositivo connesso ha %lld dei file della cartella, quindi per ora restano su questo Mac."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接続中のデバイスにこのフォルダの%lld個のファイルがないため、当面このMacに残ります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen enkel verbonden apparaat heeft %lld van de bestanden van de map, dus ze blijven voorlopig op deze Mac."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Жоден підключений пристрій не має %lld файлів папки, тому поки що вони залишаються на цьому Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有已连接的设备拥有此文件夹中的 %lld 个文件，因此它们暂时保留在这台 Mac 上。"
           }
         }
       }
@@ -35212,6 +35902,144 @@
         }
       }
     },
+    "On demand" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei Bedarf"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bajo demanda"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su richiesta"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オンデマンド"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op aanvraag"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На вимогу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按需"
+          }
+        }
+      }
+    },
+    "On demand in Finder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei Bedarf im Finder"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bajo demanda en Finder"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su richiesta nel Finder"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finderでオンデマンド"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op aanvraag in Finder"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На вимогу у Finder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Finder 中按需"
+          }
+        }
+      }
+    },
+    "On demand, not in Finder yet" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei Bedarf, noch nicht im Finder"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bajo demanda, aún no en Finder"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su richiesta, non ancora nel Finder"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オンデマンド（Finderには未表示）"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op aanvraag, nog niet in Finder"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На вимогу, ще не у Finder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按需，尚未显示在 Finder 中"
+          }
+        }
+      }
+    },
     "On metered networks" : {
       "localizations" : {
         "de" : {
@@ -35948,6 +36776,52 @@
         }
       }
     },
+    "Only send-receive folders can be on demand." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur Ordner vom Typ „Senden und Empfangen“ können bei Bedarf bereitgestellt werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo las carpetas de envío y recepción pueden estar bajo demanda."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo le cartelle di invio e ricezione possono essere su richiesta."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オンデマンドにできるのは送受信フォルダのみです。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alleen mappen voor verzenden en ontvangen kunnen op aanvraag zijn."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На вимогу можуть бути лише папки надсилання й отримання."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只有收发文件夹可以设为按需。"
+          }
+        }
+      }
+    },
     "Open file browser..." : {
       "localizations" : {
         "de" : {
@@ -36593,6 +37467,52 @@
         }
       }
     },
+    "Open System Settings…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Systemeinstellungen öffnen …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Ajustes del Sistema…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri Impostazioni di Sistema…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "システム設定を開く…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Systeeminstellingen…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відкрити Системні параметри…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开系统设置…"
+          }
+        }
+      }
+    },
     "Open with '%@'" : {
       "localizations" : {
         "de" : {
@@ -36727,6 +37647,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "其他设备"
+          }
+        }
+      }
+    },
+    "Other devices may only read this folder. Allow changes to it under Remote file service first, which applies to the devices you gave write access." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere Geräte dürfen diesen Ordner nur lesen. Erlauben Sie zuerst Änderungen unter „Remote-Dateidienst“. Das gilt für die Geräte, denen Sie Schreibzugriff gegeben haben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otros dispositivos solo pueden leer esta carpeta. Primero permite los cambios en Servicio de archivos remotos, lo que se aplica a los dispositivos a los que diste acceso de escritura."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli altri dispositivi possono solo leggere questa cartella. Prima consenti le modifiche in Servizio file remoti: vale per i dispositivi a cui hai dato accesso in scrittura."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "他のデバイスはこのフォルダを読み取ることしかできません。先に「リモートファイルサービス」で変更を許可してください。これは書き込みアクセスを与えたデバイスに適用されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere apparaten mogen deze map alleen lezen. Sta eerst wijzigingen toe onder Externe bestandsdienst; dat geldt voor de apparaten die je schrijftoegang hebt gegeven."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Інші пристрої можуть лише читати цю папку. Спершу дозвольте зміни в розділі «Служба віддалених файлів»; це стосується пристроїв, яким ви надали доступ для запису."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他设备只能读取此文件夹。请先在“远程文件服务”下允许更改，这适用于你已授予写入权限的设备。"
           }
         }
       }
@@ -40223,6 +41189,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "要重建“Synctrain”位置吗？"
+          }
+        }
+      }
+    },
+    "Rebuilding removes the Synctrain location from Finder and sets it up again. Your files are not affected. Edits of folders are kept." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Neuaufbau wird der Speicherort „Synctrain“ aus dem Finder entfernt und neu eingerichtet. Ihre Dateien sind davon nicht betroffen. Änderungen an Ordnern bleiben erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al reconstruir, se elimina la ubicación Synctrain de Finder y se vuelve a configurar. Tus archivos no se ven afectados. Se conservan los cambios de las carpetas."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La ricreazione rimuove la posizione Synctrain dal Finder e la configura di nuovo. I tuoi file non vengono toccati. Le modifiche alle cartelle vengono conservate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再構築すると、Finderから「Synctrain」の場所が削除され、再度設定されます。ファイルには影響しません。フォルダの編集は保持されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opnieuw opbouwen verwijdert de locatie Synctrain uit Finder en stelt die opnieuw in. Je bestanden blijven ongewijzigd. Bewerkingen van mappen blijven behouden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перебудова вилучає розташування Synctrain із Finder і налаштовує його знову. Це не впливає на ваші файли. Зміни в папках зберігаються."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重建会从 Finder 移除“Synctrain”位置并重新设置。你的文件不受影响。文件夹的编辑会保留。"
           }
         }
       }
@@ -48460,6 +49472,52 @@
         }
       }
     },
+    "Show folders in Finder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordner im Finder anzeigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar carpetas en Finder"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra le cartelle nel Finder"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finderにフォルダを表示"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappen tonen in Finder"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показувати папки у Finder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Finder 中显示文件夹"
+          }
+        }
+      }
+    },
     "Show image previews" : {
       "localizations" : {
         "de" : {
@@ -49564,6 +50622,52 @@
         }
       }
     },
+    "Some files stay on this Mac" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Dateien bleiben auf diesem Mac"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunos archivos se quedan en este Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alcuni file restano su questo Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部のファイルはこのMacに残ります"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sommige bestanden blijven op deze Mac"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Деякі файли залишаються на цьому Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分文件保留在这台 Mac 上"
+          }
+        }
+      }
+    },
     "Some folders could not be moved" : {
       "localizations" : {
         "de" : {
@@ -49882,6 +50986,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "立即开始后台同步"
+          }
+        }
+      }
+    },
+    "Start pairing on the gateway: in Synctrain on a Mac, under Settings › Remote file service; on a server, with synctrain-gateway pair. Then paste its link here, or choose an image of the code it shows." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starten Sie die Kopplung auf dem Gateway: in Synctrain auf einem Mac unter „Einstellungen“ › „Remote-Dateidienst“, auf einem Server mit synctrain-gateway pair. Fügen Sie dann den Link hier ein oder wählen Sie ein Bild des angezeigten Codes."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia la vinculación en la puerta de enlace: en Synctrain en un Mac, en Ajustes › Servicio de archivos remotos; en un servidor, con synctrain-gateway pair. Después pega aquí su enlace o elige una imagen del código que muestra."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avvia l'abbinamento sul gateway: in Synctrain su un Mac, in Impostazioni › Servizio file remoti; su un server, con synctrain-gateway pair. Poi incolla qui il link o scegli un'immagine del codice mostrato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイでペアリングを開始してください。MacではSynctrainの「設定」›「リモートファイルサービス」で、サーバではsynctrain-gateway pairで開始します。その後、リンクをここにペーストするか、表示されたコードの画像を選択してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start het koppelen op de gateway: in Synctrain op een Mac via Instellingen › Externe bestandsdienst; op een server met synctrain-gateway pair. Plak daarna de link hier, of kies een afbeelding van de code die wordt getoond."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почніть створення пари на шлюзі: у Synctrain на Mac — у розділі Налаштування › Служба віддалених файлів; на сервері — командою synctrain-gateway pair. Потім вставте сюди посилання або виберіть зображення показаного коду."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在网关上开始配对：在 Mac 上的 Synctrain 中，前往“设置”›“远程文件服务”；在服务器上，运行 synctrain-gateway pair。然后在此处粘贴其链接，或选择其显示的代码的图像。"
           }
         }
       }
@@ -51450,6 +52600,52 @@
         }
       }
     },
+    "Switch to On Demand" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu „Bei Bedarf“ wechseln"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar a bajo demanda"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passa a su richiesta"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オンデマンドに切り替える"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overschakelen op aanvraag"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перейти на вимогу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换为按需"
+          }
+        }
+      }
+    },
     "Switch to remote access?" : {
       "localizations" : {
         "de" : {
@@ -52228,6 +53424,144 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "同步"
+          }
+        }
+      }
+    },
+    "Synchronize All" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alles synchronisieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronizar todo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronizza tutto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて同期"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alles synchroniseren"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Синхронізувати все"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部同步"
+          }
+        }
+      }
+    },
+    "Synchronize All Files" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Dateien synchronisieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronizar todos los archivos"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronizza tutti i file"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてのファイルを同期"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle bestanden synchroniseren"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Синхронізувати всі файли"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步所有文件"
+          }
+        }
+      }
+    },
+    "Synchronize all of this folder?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diesen Ordner vollständig synchronisieren?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Sincronizar toda esta carpeta?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronizzare tutta questa cartella?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このフォルダ全体を同期しますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze hele map synchroniseren?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Синхронізувати всю цю папку?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步此文件夹的全部内容？"
           }
         }
       }
@@ -53884,6 +55218,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synctrain 无法读取此文件的信息。"
+          }
+        }
+      }
+    },
+    "Synctrain could not start the service that Finder uses." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain konnte den vom Finder verwendeten Dienst nicht starten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no ha podido iniciar el servicio que usa Finder."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non è riuscito ad avviare il servizio usato dal Finder."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SynctrainはFinderが使用するサービスを開始できませんでした。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kon de dienst die Finder gebruikt niet starten."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не вдалося запустити службу, яку використовує Finder."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法启动 Finder 使用的服务。"
           }
         }
       }
@@ -57706,6 +59086,52 @@
         }
       }
     },
+    "The folder is not shown in Finder yet. Is the Synctrain location turned on?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Ordner wird noch nicht im Finder angezeigt. Ist der Speicherort „Synctrain“ aktiviert?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carpeta aún no aparece en Finder. ¿Está activada la ubicación Synctrain?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cartella non è ancora visibile nel Finder. La posizione Synctrain è attiva?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダはまだFinderに表示されていません。「Synctrain」の場所はオンになっていますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De map wordt nog niet getoond in Finder. Staat de locatie Synctrain aan?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папка ще не показується у Finder. Чи ввімкнено розташування Synctrain?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹尚未显示在 Finder 中。“Synctrain”位置是否已打开？"
+          }
+        }
+      }
+    },
     "The folder is paused. Resume it and wait until it is up to date with the gateway, so that no change made on this device is left behind." : {
       "localizations" : {
         "de" : {
@@ -57840,6 +59266,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "该文件夹将从此设备的文件应用中移除，但仍保留在网关上。未经网关确认的编辑必须先发送、导出或丢弃。"
+          }
+        }
+      }
+    },
+    "The folder leaves this Mac and Finder; it stays on the gateway. Edits that were not confirmed by the gateway have to be sent, exported or discarded first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Ordner wird von diesem Mac und aus dem Finder entfernt, bleibt aber auf dem Gateway. Vom Gateway nicht bestätigte Änderungen müssen zuerst gesendet, exportiert oder verworfen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carpeta sale de este Mac y de Finder, pero sigue en la puerta de enlace. Las ediciones que la puerta de enlace no haya confirmado deben enviarse, exportarse o descartarse primero."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cartella esce da questo Mac e dal Finder, ma resta sul gateway. Le modifiche non confermate dal gateway vanno prima inviate, esportate o scartate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダはこのMacとFinderから外れますが、ゲートウェイには残ります。ゲートウェイが確認していない編集は、先に送信、書き出し、または破棄する必要があります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De map verdwijnt van deze Mac en uit Finder, maar blijft op de gateway. Bewerkingen die de gateway niet heeft bevestigd, moeten eerst worden verzonden, geëxporteerd of weggegooid."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папка зникне з цього Mac і Finder, але залишиться на шлюзі. Зміни, не підтверджені шлюзом, потрібно спочатку надіслати, експортувати або відхилити."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹将离开这台 Mac 和 Finder，但仍保留在网关上。网关尚未确认的编辑必须先发送、导出或放弃。"
           }
         }
       }
@@ -60002,6 +61474,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所选文件夹受保护，因此在设备锁定时无法访问。"
+          }
+        }
+      }
+    },
+    "The service that Finder uses does not list this folder. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der vom Finder verwendete Dienst führt diesen Ordner nicht auf. Versuchen Sie es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El servicio que usa Finder no incluye esta carpeta. Vuelve a intentarlo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il servizio usato dal Finder non elenca questa cartella. Riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finderが使用するサービスにこのフォルダが表示されません。もう一度お試しください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De dienst die Finder gebruikt, toont deze map niet. Probeer het opnieuw."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Служба, яку використовує Finder, не показує цю папку. Спробуйте ще раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder 使用的服务未列出此文件夹。请重试。"
           }
         }
       }
@@ -62686,6 +64204,52 @@
         }
       }
     },
+    "This folder is too large to move here, as all of it would have to be downloaded first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Ordner ist zu groß, um ihn hier zu bewegen, da er zuerst vollständig geladen werden müsste."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta carpeta es demasiado grande para moverla aquí, porque habría que descargarla entera primero."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa cartella è troppo grande per essere spostata qui, perché andrebbe prima scaricata tutta."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このフォルダは大きすぎてここでは移動できません。先にすべてをダウンロードする必要があります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze map is te groot om hier te verplaatsen, omdat hij eerst helemaal gedownload zou moeten worden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ця папка завелика для переміщення тут, бо спочатку її довелося б завантажити повністю."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件夹太大，无法在此移动，因为必须先下载全部内容。"
+          }
+        }
+      }
+    },
     "This folder on %@ keeps versions in a custom location, which the gateway doesn't show. Its versioning must use the default location." : {
       "localizations" : {
         "de" : {
@@ -62912,6 +64476,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "该文件夹已被移除。"
+          }
+        }
+      }
+    },
+    "This image has no pairing code in it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Bild enthält keinen Kopplungscode."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta imagen no contiene ningún código de vinculación."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa immagine non contiene alcun codice di abbinamento."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この画像にはペアリングコードが含まれていません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze afbeelding bevat geen koppelcode."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На цьому зображенні немає коду створення пари."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此图像中没有配对码。"
           }
         }
       }
@@ -63234,6 +64844,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此位置与文件夹'%@'重叠。不支持相互嵌套的文件夹。"
+          }
+        }
+      }
+    },
+    "This Mac" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Mac"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このMac"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze Mac"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac"
+          }
+        }
+      }
+    },
+    "This Mac has no folders yet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Mac hat noch keine Ordner."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este Mac aún no tiene carpetas."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo Mac non ha ancora cartelle."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このMacにはまだフォルダがありません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze Mac heeft nog geen mappen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На цьому Mac ще немає папок."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 还没有文件夹。"
           }
         }
       }

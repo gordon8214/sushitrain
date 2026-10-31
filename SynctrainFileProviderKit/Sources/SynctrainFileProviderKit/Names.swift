@@ -36,6 +36,17 @@ public enum FileNames {
 			|| name.hasPrefix("~syncthing~")
 	}
 
+	/// Names of files macOS keeps for itself. Finder leaves `.DS_Store` in every folder it shows, so on macOS such files
+	/// are neither shown nor sent to the gateway, which would pass them on to every device.
+	public static func isPlatformMetadata(_ name: String) -> Bool {
+		#if os(macOS)
+			name == ".DS_Store" || name.hasPrefix("._") || name == ".Spotlight-V100" || name == ".fseventsd"
+				|| name == ".Trashes" || name == ".TemporaryItems" || name == "Icon\r"
+		#else
+			false
+		#endif
+	}
+
 	/// Whether any component of the path is reserved
 	public static func isReservedPath(_ path: String, markerName: String = ".stfolder") -> Bool {
 		path.split(separator: "/").contains { isReserved(String($0), markerName: markerName) }

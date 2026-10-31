@@ -9,7 +9,7 @@
 # notarized and staples the ticket, then does the same for a disk image around it. Both carry their own ticket, so that
 # Gatekeeper accepts either offline, also once the app is copied out of the image. See Docs/macos.md.
 #
-#   Scripts/notarize-mac.sh --check                   checks that notary credentials are set, and nothing else
+#   Scripts/notarize-mac.sh --check                   checks the notary credentials and provisioning profiles, and nothing else
 #   Scripts/notarize-mac.sh <archive> <output folder>
 #
 # Notary credentials come from the environment, never from the repository. Either NOTARY_KEYCHAIN_PROFILE names a
@@ -31,7 +31,28 @@ else
 	fail "set NOTARY_KEYCHAIN_PROFILE, or NOTARY_KEY_PATH, NOTARY_KEY_ID and NOTARY_ISSUER_ID"
 fi
 
-[[ "${1:-}" == "--check" ]] && exit 0
+# Keychain sharing between the app and its File Provider takes a profile for each. Without them Xcode can't sign the app,
+# which this finds out before a build instead of during one.
+check_profiles() {
+	local name file found
+	for name in "Synctrain Developer ID" "Synctrain File Provider Developer ID" "Synctrain File Provider UI Developer ID"; do
+		found=false
+		for file in "$HOME/Library/MobileDevice/Provisioning Profiles/"* \
+			"$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/"*; do
+			[[ -f "$file" ]] || continue
+			if [[ "$(security cms -D -i "$file" 2>/dev/null | plutil -extract Name raw -o - - 2>/dev/null)" == "$name" ]]; then
+				found=true
+				break
+			fi
+		done
+		$found || fail "the provisioning profile \"$name\" is not installed (see Docs/macos.md)"
+	done
+}
+
+if [[ "${1:-}" == "--check" ]]; then
+	check_profiles
+	exit 0
+fi
 [[ $# -eq 2 ]] || fail "usage: $0 <archive> <output folder>"
 
 archive="$1"
@@ -70,6 +91,16 @@ check_app_group() {
 	entitlements "$code" | grep -q "<string>$app_group</string>" || fail "$code is not entitled to app group $app_group"
 }
 
+# Keychain access groups are restricted: macOS won't start code that claims one without a profile that allows it
+check_profile() {
+	local code="$1" claimed bundle_id
+	claimed=$(entitlements "$code")
+	grep -q "<key>keychain-access-groups</key>" <<<"$claimed" || return 0
+	[[ -f "$code/Contents/embedded.provisionprofile" ]] || fail "$code has no provisioning profile, and would not start"
+	bundle_id=$(plist_value "$code/Contents/Info.plist" CFBundleIdentifier)
+	grep -q "<string>$team.$bundle_id</string>" <<<"$claimed" || fail "$code is not entitled to its application identifier, $team.$bundle_id"
+}
+
 check_app() {
 	local code extensions=0
 	codesign --verify --deep --strict --verbose=2 "$app"
@@ -80,6 +111,7 @@ check_app() {
 
 	check_signature "$app"
 	check_app_group "$app"
+	check_profile "$app"
 	if entitlements "$app" | grep -q "<key>com.apple.security.app-sandbox</key>"; then
 		fail "$app is sandboxed"
 	fi
@@ -89,13 +121,14 @@ check_app() {
 		if [[ "$code" == *.appex ]]; then
 			extensions=$((extensions + 1))
 			check_app_group "$code"
+			check_profile "$code"
 			if ! entitlements "$code" | grep -q "<key>com.apple.security.app-sandbox</key>"; then
 				fail "$code is not sandboxed, which macOS requires of extensions"
 			fi
 		fi
 	done < <(find "$app/Contents" \( -name '*.app' -o -name '*.appex' -o -name '*.xpc' -o -name '*.framework' -o -name '*.dylib' \) -print0)
 
-	[[ $extensions -gt 0 ]] || fail "$app has no extensions, which means the share extension is missing"
+	[[ $extensions -eq 3 ]] || fail "$app has $extensions extensions, not the share extension and the two of the File Provider"
 }
 
 # Waits for the notary service's verdict. notarytool returns on any verdict and doesn't document its exit codes, so this

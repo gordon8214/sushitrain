@@ -586,6 +586,9 @@ func (fld *Folder) ClearSelection(keepLastCopy bool) error {
 		if !selection.isSelectiveIgnore() {
 			return errors.New("folder is not a selective sync folder")
 		}
+		if selection.isOnDemand() {
+			return errOnDemandSelection
+		}
 
 		selection.filterSelectedPaths(func(path string) bool {
 			// Deselect all
@@ -1021,6 +1024,10 @@ func (fld *Folder) RemoveSuperfluousSelectionEntries() error {
 	selection := newSelection(ignores.Lines())
 	if !selection.isSelectiveIgnore() {
 		return errors.New("folder is not a selective folder")
+	}
+	if selection.isOnDemand() {
+		// A path that was deleted here is not on disk, but stays selected so that the deletion stays announced
+		return nil
 	}
 
 	fc := fld.folderConfiguration()

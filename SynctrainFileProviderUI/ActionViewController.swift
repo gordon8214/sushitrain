@@ -15,6 +15,13 @@ let log = Logger(subsystem: "nl.t-shaped.Sushitrain.FileProvider", category: "Ve
 final class ActionViewController: FPUIActionExtensionViewController {
 	private var model: VersionsModel?
 
+	#if os(macOS)
+		// An NSViewController has no view of its own without a nib
+		override func loadView() {
+			view = NSView()
+		}
+	#endif
+
 	override func prepare(forAction actionIdentifier: String, itemIdentifiers: [NSFileProviderItemIdentifier]) {
 		let context = extensionContext
 		guard actionIdentifier.hasSuffix(".versions") else {
@@ -49,11 +56,21 @@ final class ActionViewController: FPUIActionExtensionViewController {
 		guard children.isEmpty else {
 			return
 		}
-		let host = UIHostingController(rootView: content)
-		addChild(host)
-		host.view.frame = view.bounds
-		host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-		view.addSubview(host.view)
-		host.didMove(toParent: self)
+		#if os(macOS)
+			let host = NSHostingController(rootView: content)
+			addChild(host)
+			host.view.frame = view.bounds
+			host.view.autoresizingMask = [.width, .height]
+			view.addSubview(host.view)
+			// Finder sizes its sheet to this
+			preferredContentSize = CGSize(width: 480, height: 420)
+		#else
+			let host = UIHostingController(rootView: content)
+			addChild(host)
+			host.view.frame = view.bounds
+			host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+			view.addSubview(host.view)
+			host.didMove(toParent: self)
+		#endif
 	}
 }

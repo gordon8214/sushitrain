@@ -5,7 +5,6 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 @preconcurrency import FileProvider
 import Observation
-import UIKit
 import os
 import SynctrainFileProviderKit
 
@@ -35,7 +34,7 @@ import SynctrainFileProviderKit
 				Task { @MainActor in await FilesDomain.shared.refreshState() }
 			})
 		observers.append(
-			center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
+			ClientLifecycle.observe(.willResume) {
 				Task { @MainActor in await FilesDomain.shared.refreshState() }
 			})
 	}

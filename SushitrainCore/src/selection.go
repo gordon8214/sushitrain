@@ -6,17 +6,25 @@
 package sushitrain
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/gobwas/glob"
 	"golang.org/x/exp/slog"
+	"t-shaped.nl/sushitrain/v2/gateway"
 )
 
 type selection struct {
 	lines []string
 }
+
+// onDemandPattern marks a selective folder as on demand: the app shows all of it in Finder through the remote file
+// service, which selects the paths it writes. The line also keeps conflict copies out of the last pattern: when a peer
+// wins a conflict, the engine renames this device's edit to a conflict copy, which would otherwise be ignored and never
+// reach other devices.
+const onDemandPattern = "!*.sync-conflict-*"
 
 func newSelection(lines []string) *selection {
 	sel := &selection{
@@ -38,6 +46,30 @@ func isCommentPattern(pattern string) bool {
 	return len(pattern) == 0 || strings.HasPrefix(pattern, "//")
 }
 
+func lineSet(lines []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(lines))
+	for _, line := range lines {
+		set[line] = struct{}{}
+	}
+	return set
+}
+
+// hasSelectedParent reports whether one of the selection lines selects line through a parent directory. Given a
+// selection of "/a/some", "/a/some/thing" is selected by it, but "/a/something" and "/a/something/else" are not.
+func hasSelectedParent(line string, selected map[string]struct{}) bool {
+	for {
+		// The slash at index 1 is the one of "!/"
+		slash := strings.LastIndexByte(line, '/')
+		if slash <= 1 {
+			return false
+		}
+		line = line[:slash]
+		if _, ok := selected[line]; ok {
+			return true
+		}
+	}
+}
+
 func cleanSelectiveSelection(lines []string) ([]string, error) {
 	result := make([]string, 0)
 
@@ -46,6 +78,9 @@ func cleanSelectiveSelection(lines []string) ([]string, error) {
 
 	for idx, line := range lines {
 		if idx == len(lines)-1 && line == "*" {
+			continue
+		} else if line == onDemandPattern {
+			// Put back below, after the global ignores
 			continue
 		} else if isSelectionPattern(line) {
 			selectionPatterns = append(selectionPatterns, line)
@@ -61,18 +96,16 @@ func cleanSelectiveSelection(lines []string) ([]string, error) {
 
 	slices.Sort(selectionPatterns)
 
+	if slices.Contains(lines, onDemandPattern) {
+		result = append(result, onDemandPattern)
+	}
+
 	// Write new ignore lines for selection patterns
+	selected := lineSet(selectionPatterns)
 	for _, line := range lines {
 		if isSelectionPattern(line) {
-			// Note: given an existing selection of "/a/some", a new line "/a/something" is *not* implicitly selected,
-			// but "/a/some/thing" is.
-			foundIndex := slices.IndexFunc(selectionPatterns, func(otherLine string) bool {
-				return otherLine != line && strings.HasPrefix(line, otherLine) && strings.Contains(line[len(otherLine):], "/")
-			})
-
-			if foundIndex >= 0 {
-				// Some other line has this line as a prefix; skip it
-				slog.Warn("selection contains a path that is also selected by a parent; removing", "prefix", lines[foundIndex], "path", line)
+			if hasSelectedParent(line, selected) {
+				slog.Warn("selection contains a path that is also selected by a parent; removing", "path", line)
 				continue
 			}
 			result = append(result, line)
@@ -133,8 +166,8 @@ func (sel *selection) isSelectiveIgnore() bool {
 				continue
 			} else if pattern[0] == '!' {
 				// Allow patterns that start with '!/' and disallow global ignore patterns from that point onwards
-				// These patterns may not contain '*'
-				if !isSelectionPattern(pattern) {
+				// These patterns may not contain '*', apart from the line that marks an on-demand folder
+				if !isSelectionPattern(pattern) && pattern != onDemandPattern {
 					return false
 				}
 				inSelectionPatterns = true
@@ -260,6 +293,11 @@ func (sel *selection) setExplicitlySelected(paths map[string]bool) error {
 		line := ignoreLineForSelectingPath(path)
 		slog.Info("Edit ignore line", "selected", selectPath, "line", line)
 
+		// What the remote file service wrote stays selected, or its changes would stop reaching other devices
+		if !selectPath && sel.isOnDemand() {
+			return errOnDemandSelection
+		}
+
 		// Is ths entry ignored and do we now want to select it? Then deny
 		if selectPath {
 			for _, globalIgnoreGlob := range globalIgnoreGlobs {
@@ -278,13 +316,7 @@ func (sel *selection) setExplicitlySelected(paths map[string]bool) error {
 		}
 
 		// Is this entry currently selected implicitly? (i.e. due to a parent path being selected)
-		// Note: given an existing selection of "/a/some", a new line "/a/something" is *not* implicitly selected,
-		// but "/a/some/thing" is.
-		currentlySelectedImplicitly := slices.ContainsFunc(newLines, func(existingLine string) bool {
-			return existingLine != line && strings.HasPrefix(line, existingLine) && strings.Contains(line[len(existingLine):], "/")
-		})
-
-		if currentlySelectedImplicitly {
+		if hasSelectedParent(line, lineSet(newLines)) {
 			return fmt.Errorf("cannot change selection: the path '%s' is already implicitly selected", path)
 		}
 
@@ -350,7 +382,7 @@ func (sel *selection) isPathExplicitlySelected(path string) bool {
 func (sel *selection) selectedPaths() []string {
 	paths := make([]string, 0)
 	for _, pattern := range sel.lines {
-		if len(pattern) > 0 && pattern[0] == '!' {
+		if len(pattern) > 0 && pattern[0] == '!' && pattern != onDemandPattern {
 			paths = append(paths, pathForIgnoreLine(pattern))
 		}
 	}
@@ -362,7 +394,7 @@ func (sel *selection) filterSelectedPaths(retain func(string) bool) {
 
 	for _, pattern := range sel.lines {
 		// Filter patterns that start with '!', these are selection patterns
-		if len(pattern) > 0 && pattern[0] == '!' {
+		if len(pattern) > 0 && pattern[0] == '!' && pattern != onDemandPattern {
 			if retain(pathForIgnoreLine(pattern)) {
 				newLines = append(newLines, pattern)
 			}
@@ -372,6 +404,56 @@ func (sel *selection) filterSelectedPaths(retain func(string) bool) {
 		}
 	}
 	sel.lines = newLines
+}
+
+// isOnDemand reports whether this is the selection of an on-demand folder
+func (sel *selection) isOnDemand() bool {
+	return sel.isSelectiveIgnore() && slices.Contains(sel.lines, onDemandPattern)
+}
+
+// setOnDemand marks a selective folder as on demand, keeping what it has selected
+func (sel *selection) setOnDemand() error {
+	if !sel.isSelectiveIgnore() {
+		return errors.New("folder is not a selective folder")
+	}
+	if sel.isOnDemand() {
+		return nil
+	}
+	lines, err := cleanSelectiveSelection(append([]string{onDemandPattern}, sel.lines...))
+	if err != nil {
+		return err
+	}
+	sel.lines = lines
+	return nil
+}
+
+// isKept reports whether path is selected, by itself or through a parent
+func (sel *selection) isKept(path string) bool {
+	line := ignoreLineForSelectingPath(path)
+	lines := lineSet(sel.lines)
+	_, selected := lines[line]
+	return selected || hasSelectedParent(line, lines)
+}
+
+// keep selects paths the remote file service wrote in an on-demand folder, whatever is selected around them: unlike
+// setExplicitlySelected, a selected parent or child is fine. It reports whether the selection changed.
+func (sel *selection) keep(paths []string) (bool, error) {
+	if !sel.isOnDemand() {
+		return false, errors.New("folder is not an on-demand folder")
+	}
+	changed := false
+	for _, path := range paths {
+		if sel.isKept(path) {
+			continue
+		}
+		line := ignoreLineForSelectingPath(path)
+		if !gateway.SelectablePath(path) || !isSelectionPattern(line) {
+			return false, fmt.Errorf("the path '%s' cannot be selected", path)
+		}
+		sel.lines = append(sel.lines[:len(sel.lines)-1], line, "*")
+		changed = true
+	}
+	return changed, nil
 }
 
 // Escape special characters: https://docs.syncthing.net/users/ignoring.html

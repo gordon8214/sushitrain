@@ -20,7 +20,8 @@ On macOS, Sushitrain runs Syncthing, and has some extra tricks up its sleeve:
 - **On-demand access to files**: download or stream files that are not available locally from another peer through the Syncthing protocol. This allows access to your files, from your own devices, without setting up a VPN.
 - [**Remote thumbnails**](./Docs/thumbnails.md): the app can generate thumbnails for files on other devices (images or videos). You can even synchronize thumbnails between devices, so previews can be generated on a device that has all the files for use on other devices.
 - **Photo back-up** (automatically export photos from the system album to a folder) as well as [**photo folders**](./Docs/photo-fs.md) (directly synchronize a system photo album as a send-only folder, without exporting).
-- **Tight macOS integration**: Shortcuts, Continuity, and a [gateway](./Docs/gateway.md) for your phone.
+- **Tight macOS integration**: Shortcuts, Continuity, a [gateway](./Docs/gateway.md) for your phone, and
+  [folders on demand in Finder](./Docs/file-provider.md#on-macos), without a gateway.
 
 On iOS and iPadOS, Synctrain is a [client of gateways](./Docs/file-provider.md): it runs no Syncthing itself. Choose folders from a Mac running Synctrain or a server running `synctrain-gateway`, then browse, search and play them in the app, and open, edit and add files from the Files app.
 
@@ -90,7 +91,8 @@ of Syncthing, as well as features around e.g. discovery, ignore files, et cetera
 ease of use.
 
 The iOS app embeds none of this. It is a SwiftUI client of the gateway API, in `SynctrainMobile`, on top of the index,
-outbox and transfers in `SynctrainFileProviderKit`, which the File Provider extension shares with it.
+outbox and transfers in `SynctrainFileProviderKit`, which the File Provider extension shares with it. What the Mac app also
+needs for folders in Finder is in `SynctrainClient`, which both apps compile.
 
 ## Features
 

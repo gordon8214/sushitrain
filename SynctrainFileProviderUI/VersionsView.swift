@@ -16,13 +16,27 @@ struct VersionsView: View {
 			content
 				.disabled(model.activity != nil)
 				.navigationTitle(model.fileName.isEmpty ? String(localized: "Previous Versions") : model.fileName)
-				.navigationBarTitleDisplayMode(.inline)
-				.toolbar {
-					// Stays available while the gateway works: what it accepted, it carries out anyway
-					ToolbarItem(placement: .confirmationAction) {
-						Button("Done") { model.finish() }
+				#if os(iOS)
+					.navigationBarTitleDisplayMode(.inline)
+				#endif
+				#if os(macOS)
+					// Finder's sheet has no toolbar to put this in
+					.safeAreaInset(edge: .bottom) {
+						HStack {
+							Spacer()
+							Button("Done") { model.finish() }
+							.keyboardShortcut(.defaultAction)
+						}
+						.padding()
 					}
-				}
+				#else
+					.toolbar {
+						// Stays available while the gateway works: what it accepted, it carries out anyway
+						ToolbarItem(placement: .confirmationAction) {
+							Button("Done") { model.finish() }
+						}
+					}
+				#endif
 		}
 		.overlay {
 			if let activity = model.activity {
@@ -208,11 +222,22 @@ struct ErrorView: View {
 			} description: {
 				Text(message)
 			}
-			.toolbar {
-				ToolbarItem(placement: .confirmationAction) {
-					Button("Done", action: done)
+			#if os(macOS)
+				.safeAreaInset(edge: .bottom) {
+					HStack {
+						Spacer()
+						Button("Done", action: done)
+						.keyboardShortcut(.defaultAction)
+					}
+					.padding()
 				}
-			}
+			#else
+				.toolbar {
+					ToolbarItem(placement: .confirmationAction) {
+						Button("Done", action: done)
+					}
+				}
+			#endif
 		}
 	}
 }

@@ -8,8 +8,8 @@ compares the Mac app with iOS, it describes how the iOS app used to work and why
 
 The Mac app runs outside the App Sandbox (with the hardened runtime), so that it reaches folders anywhere, as Syncthing
 does; that also means it can't come from the Mac App Store, and comes as a notarized disk image instead (see
-[Signing and releasing](#signing-and-releasing)). Its share extension stays sandboxed, as macOS requires of
-extensions, and shares the app's group container (both are signed by the same team). macOS still asks before the app
+[Signing and releasing](#signing-and-releasing)). Its extensions stay sandboxed, as macOS requires, and share the app's
+group container (all are signed by the same team). macOS still asks before the app
 reaches the Desktop, Documents and Downloads folders, external disks and network volumes, the first time a folder there
 is synchronized; places that only Full Disk Access opens (such as other apps' data) are allowed in System Settings,
 under Privacy & Security. Earlier versions were sandboxed; the app tells whether it is by its own entitlement.
@@ -160,6 +160,66 @@ says why and offers what helps (for a damaged configuration, setting it aside an
 the device identity). A configuration from an older Syncthing is archived as `config.xml.v<version>` before it is
 migrated, and a database a newer Syncthing wrote is refused.
 
+## Files in Finder
+
+A folder can be on demand instead of synchronized in full: Finder shows all of it under Locations, and only what is opened
+comes to this Mac, from the devices that have it. It is an option, off by default, under **Settings › Files in Finder**,
+and other folders stay as they are. See [file-provider.md](file-provider.md#on-macos) for what it does; this is how.
+
+The File Provider extension is sandboxed and has no engine, and there is one engine on a Mac, in the app. But the app also
+runs the [remote file service](gateway.md), which is what the extension speaks to on iOS. So the Mac is its own gateway:
+
+- **The service runs for this Mac alone** while the setting is on and the remote file service is off: it listens on
+  `127.0.0.1`, and on a free port if its own is taken. With the remote file service on, it listens as it does for other
+  devices, and the extension still connects over the loopback interface. `FinderAccess` pairs the app with its own
+  service at the first start, with the service's key pinned, and keeps the port and the key up to date whenever the service
+  starts or its certificate changes. The extension connects to it like to any gateway, and paired gateways work next to
+  this Mac, in the same list.
+- **An on-demand folder is a selective folder** whose `.stignore` also has the line `!*.sync-conflict-*`, which marks it
+  (`onDemandPattern`). It stays where it is, for example in `~/Sync`. Its directory holds only what was written here, what
+  no other device has, and conflict copies, which that line selects. Nothing keeps a record of it elsewhere.
+- **The service writes to on-demand folders**, which it refuses for plain selective folders (`gateway/ondemand.go`). Three
+  things differ from a complete replica. A new version builds on the global one, as this device usually has an ignored
+  entry or none, and a scan would start a version vector that conflicts on every device. What was written is selected in
+  the callback that commits it, and stays selected: a scan marks an ignored entry invalid, deletions included, and other
+  devices then keep their old copy. So `RemoveSuperfluousSelectionEntries` leaves these folders alone, and deselecting is
+  refused. And `!*.sync-conflict-*` keeps conflict copies indexed: when another device wins a conflict, the engine renames
+  this device's edit to a conflict copy, which the last pattern would otherwise ignore, so that it would never reach
+  anyone. What a write builds on is journaled when its preconditions hold (`writeBase`), as other devices' changes reach
+  the index without going through the folder loop: a version that arrives before the file is indexed, even across a
+  restart, stays concurrent with it, and devices keep both.
+- **Deleting a file or directory this Mac doesn't have** downloads nothing. Moving does: an index entry without a file
+  behind it would be announced as something this device can't provide. The item is selected, the operation waits until
+  the engine has it, and it then moves as in a complete replica. A directory that would take more than 4 GiB is refused
+  (`move_too_large`).
+- **Switching a folder to on demand** (`SwitchToOnDemand`) must not lose what only this Mac has: making a folder
+  selective ignores all of it, and this device stops offering it. So a file stays selected unless a connected device has
+  that version in full, going by that device's own valid index entry, and the rest is removed. A device that merely ignores
+  a file has an entry at the global version too; the fork leaves those out of a file's availability. With the folder
+  paused, whatever is no longer the version found on another device stays as well. The switch is refused when no connected
+  device has any of the files, when more than 10,000 would stay, when a device that shares the folder, connected or not,
+  still needs a deletion (which this device would stop announcing), and when the folder has ignore patterns a selective
+  folder can't express, as they would stop applying. Switching again finishes one that stopped halfway.
+- **Switching back** removes the folder from Finder, refused while its edits are unresolved, and makes it synchronize in
+  full again.
+- **Changes run one at a time** (`FinderAccess.inOrder`), and the setting can't be turned off while Finder is the way to a
+  folder, on demand or from a gateway: its files aren't on this Mac, and removing the location would discard what the
+  system's copy holds that hasn't reached the service. A folder that other devices may only read has to allow changes
+  first: allowing them for this Mac would also give write access to devices that were granted it.
+
+The extension uses no background `URLSession` on macOS, unlike on iOS, where the system starts the app to finish a
+session's events. macOS doesn't, and a session with a pinned key needs a process to answer its challenges. Nothing suspends
+the extension here, and the app's outbox picks up an upload that it left.
+
+macOS asks the user to allow a File Provider, in System Settings under General › Login Items & Extensions › File Providers.
+Until then the domain is registered and Finder can't open it. It also doesn't accept an app in a temporary location, such as
+a derived data path under `/private/tmp`: `NSFileProviderManager.add` fails with *The application cannot be used right
+now*. A debug run with `SYNCTRAIN_TEST_ROOT` stays out of all this unless `SYNCTRAIN_TEST_FILE_PROVIDER` is set, because
+domains and the group container aren't under its scratch directory.
+
+Programs run from some shells have materializing dataless files turned off, and get `EDEADLK` (*Resource deadlock avoided*)
+from the location. That is the process's I/O policy (`setiopolicy_np`), not the extension.
+
 ## Where things are
 
 Outside the App Sandbox, the Mac app keeps the engine's configuration, keys and database in
@@ -287,19 +347,23 @@ the next start.
 The Mac app is distributed as a disk image, signed with Developer ID and notarized, so that Gatekeeper accepts it on any
 Mac.
 
-The Release configuration signs the app and its share extension with Developer ID Application, with the hardened runtime
-and without the `get-task-allow` entitlement. It needs no provisioning profile: neither has an entitlement that takes
-one, and macOS accepts an app group that starts with the team's ID without one, and without asking the user. Debug and
-iOS builds sign as they did. Both schemes run the Release configuration, so running the app on a Mac from Xcode takes
-the certificate too, or a scheme set to Debug; a Release run has no debugger, as it lacks `get-task-allow`. `make mac` and
+The Release configuration signs the app and its extensions with Developer ID Application, with the hardened runtime
+and without the `get-task-allow` entitlement. The app and the two File Provider extensions take a provisioning profile
+each: they share gateway credentials in the Keychain through an access group (the app group's name), and macOS won't start
+code that claims one without a profile that allows it. **An app signed without them doesn't start at all**, not even for
+those who never use Files in Finder. The share extension needs none, as macOS accepts an app group that starts with the
+team's ID without one, and without asking the user. Debug and iOS builds sign automatically, which creates the Debug
+profiles. Both schemes run the Release configuration, so running the app on a Mac from Xcode takes
+the certificate and the profiles too, or a scheme set to Debug; a Release run has no debugger, as it lacks `get-task-allow`. `make mac` and
 `make build` don't sign, and take no certificate.
 
 `make mac-release` archives the app and hands the archive to [`Scripts/notarize-mac.sh`](../Scripts/notarize-mac.sh),
 which leaves the stapled app and `Synctrain-<version>.<build>.dmg` in `Build/release`:
 
 1. It checks that all code in the app is signed by one team with Developer ID, with a secure timestamp and the hardened
-   runtime and without `get-task-allow`; that the app is not sandboxed and its extensions are; and that they all use one
-   app group with the team's prefix, which neither notarization nor Gatekeeper looks at.
+   runtime and without `get-task-allow`; that the app is not sandboxed and its three extensions are; that they all use one
+   app group with the team's prefix, which neither notarization nor Gatekeeper looks at; and that whatever claims a
+   Keychain access group has a profile.
 2. It has the app notarized and staples the ticket to it.
 3. It puts the stapled app in a disk image, signs that, has it notarized and staples the ticket to it. So the image and
    the app copied out of it both open without a connection to Apple.
@@ -324,7 +388,17 @@ to two hours. If it fails, the archive is still there: fix the cause and run the
    NOTARY_KEYCHAIN_PROFILE=synctrain-notary make mac-release
    ```
 
-3. **CI.** Turn workflows on in the repository's Actions tab: GitHub doesn't run them in a fork until then. Create an
+3. **Provisioning profiles.** Under Certificates, Identifiers & Profiles on the developer website, create one profile of
+   type *Developer ID* for each of these App IDs, with these names, which the project refers to. `make mac-release` checks
+   for them first (`Scripts/notarize-mac.sh --check`). Install each by opening it in Xcode.
+
+   | App ID | Profile name |
+   | --- | --- |
+   | `gordonbyrnes.Sushitrain` | Synctrain Developer ID |
+   | `gordonbyrnes.Sushitrain.FileProvider` | Synctrain File Provider Developer ID |
+   | `gordonbyrnes.Sushitrain.FileProviderUI` | Synctrain File Provider UI Developer ID |
+
+4. **CI.** Turn workflows on in the repository's Actions tab: GitHub doesn't run them in a fork until then. Create an
    environment named `mac-release` in the repository's settings, allow it only tags matching `v*`, and add these secrets
    to that environment rather than to the repository, so that no branch can read them:
 
@@ -332,12 +406,15 @@ to two hours. If it fails, the archive is still there: fix the cause and run the
    | --- | --- |
    | `DEVELOPER_ID_P12` | The `.p12`, as base64 (`base64 -i developer-id.p12`) |
    | `DEVELOPER_ID_P12_PASSWORD` | Its password |
+   | `DEVELOPER_ID_PROFILE_APP` | The app's profile, as base64 |
+   | `DEVELOPER_ID_PROFILE_FILE_PROVIDER` | The File Provider extension's profile, as base64 |
+   | `DEVELOPER_ID_PROFILE_FILE_PROVIDER_UI` | The File Provider UI extension's profile, as base64 |
    | `NOTARY_KEY_P8` | The `.p8` key, as base64 |
    | `NOTARY_KEY_ID` | The key's ID |
    | `NOTARY_ISSUER_ID` | The issuer ID shown above the keys |
 
-Neither file belongs in the repository, and Git ignores both types. The workflow keeps them in a temporary keychain and
-folder, which it removes after the build.
+None of these files belong in the repository, and Git ignores the certificate and key types. The workflow keeps them in a
+temporary keychain and folder, which it removes after the build.
 
 ### Releasing
 

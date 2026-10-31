@@ -1282,6 +1282,12 @@ extension SushitrainFolder {
 		_ = try isSelective(&selective)
 		return selective.boolValue
 	}
+
+	func checkedIsOnDemand() throws -> Bool {
+		var onDemand: ObjCBool = false
+		_ = try self.is(onDemand: &onDemand)
+		return onDemand.boolValue
+	}
 }
 
 extension SushitrainEntry {

@@ -80,6 +80,8 @@ type journalData struct {
 	Original string `json:"original,omitempty"`
 	// How the change is put on disk (method… constants). For moves, Device and Inode identify the moved entry.
 	Method string `json:"method,omitempty"`
+	// In an on-demand folder, what a written file builds on, as it was when its preconditions held
+	Base *writeBase `json:"base,omitempty"`
 	// Failed attempts with server errors, which are retried a limited number of times
 	Attempts int `json:"attempts,omitempty"`
 	// The modification time a written file gets once it is in place (Unix nanoseconds)

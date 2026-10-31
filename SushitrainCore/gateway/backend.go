@@ -33,6 +33,8 @@ type FolderInfo struct {
 	Paused bool
 	// Whether this device holds only a selection of the folder
 	Selective bool
+	// Whether the folder is selective, and clients may change what this device doesn't hold (see ondemand.go)
+	OnDemand bool
 	// The folder's directory, when its filesystem is the native one ("basic" or a wrapper of it)
 	NativePath     string
 	FilesystemType string
@@ -81,6 +83,11 @@ type RemoteFileBackend interface {
 	// OpenFileVersion opens the version of a file archived at versionTime, or fails with
 	// syncthing.ErrVersionNotFound. It doesn't wait for the folder loop.
 	OpenFileVersion(folder, name string, versionTime time.Time) (fs.File, error)
+	// KeepSelected selects paths of an on-demand folder, so that the engine goes on offering what the service wrote
+	// there. It runs in RunInFolderLoop and doesn't wait for the folder. Paths selected already change nothing.
+	KeepSelected(folder string, paths []string) error
+	// GlobalIgnores returns what excludes a path from an on-demand folder, whether it is selected or not
+	GlobalIgnores(folder string) (func(name string) bool, error)
 	// ScanPaths has the given paths scanned soon
 	ScanPaths(folder string, paths []string)
 	// Watch calls fn with a folder ID whenever that folder's index may have changed, until stop is called
@@ -115,6 +122,10 @@ type EngineBackend struct {
 	Fetch func(ctx context.Context, folder string, file protocol.FileInfo, index int) ([]byte, error)
 	// Optional: whether the folder holds only a selection of its files on this device
 	IsSelective func(folderID string) bool
+	// Optional, for hosts with on-demand folders: all three, or none
+	IsOnDemand        func(folderID string) bool
+	Select            func(folderID string, paths []string) error
+	LoadGlobalIgnores func(folderID string) (func(name string) bool, error)
 
 	scanMutex sync.Mutex
 	scans     map[string]map[string]struct{}
@@ -151,6 +162,9 @@ func (b *EngineBackend) Folder(id string) (FolderInfo, bool) {
 	}
 	if b.IsSelective != nil {
 		info.Selective = b.IsSelective(fc.ID)
+	}
+	if info.Selective && b.IsOnDemand != nil {
+		info.OnDemand = b.IsOnDemand(fc.ID)
 	}
 	return info, true
 }
@@ -274,6 +288,20 @@ func (b *EngineBackend) OpenFileVersion(folder, name string, versionTime time.Ti
 		return nil, syncthing.ErrVersionsNotSupported
 	}
 	return b.App.Internals.OpenFileVersion(folder, name, versionTime)
+}
+
+func (b *EngineBackend) KeepSelected(folder string, paths []string) error {
+	if b.Select == nil {
+		return errors.New("this host cannot select paths")
+	}
+	return b.Select(folder, paths)
+}
+
+func (b *EngineBackend) GlobalIgnores(folder string) (func(name string) bool, error) {
+	if b.LoadGlobalIgnores == nil {
+		return nil, errors.New("this host cannot check ignore patterns")
+	}
+	return b.LoadGlobalIgnores(folder)
 }
 
 // ScanPaths queues the paths and scans them in the background, coalescing requests that arrive while a scan of the

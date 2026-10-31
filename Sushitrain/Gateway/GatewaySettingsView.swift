@@ -74,7 +74,7 @@
 									.multilineTextAlignment(.trailing)
 							}
 						}
-						LabeledContent("Paired devices", value: status.clients, format: .number)
+						LabeledContent("Paired devices", value: controller.clients.count, format: .number)
 						LabeledContent("Changes being saved", value: status.pendingOperations, format: .number)
 						LabeledContent("Content cache") {
 							Text("\(bytes(status.contentCacheBytes)) of \(bytes(status.contentCacheQuota))")

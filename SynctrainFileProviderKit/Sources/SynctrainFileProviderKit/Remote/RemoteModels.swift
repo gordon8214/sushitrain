@@ -748,6 +748,7 @@ public enum RemoteErrorCode {
 	public static let ignoredPath = "ignored_path"
 	public static let notEmpty = "not_empty"
 	public static let crossFolder = "cross_folder"
+	public static let moveTooLarge = "move_too_large"
 	public static let revisionMismatch = "revision_mismatch"
 	public static let uploadMismatch = "upload_mismatch"
 	public static let cursorExpired = "cursor_expired"

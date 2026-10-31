@@ -205,16 +205,29 @@ struct RemoteGatewayFoldersSection: View {
 				remove(removal)
 			}
 		} message: { removal in
-			if removal.pendingItemCount > 0 {
-				Text(
-					"Changes to \(removal.pendingItemCount) items made in the Files app have not reached Synctrain yet. Removing the folder discards them."
-				)
-			}
-			else {
-				Text(
-					"The folder leaves this device and the Files app; it stays on the gateway. Edits that were not confirmed by the gateway have to be sent, exported or discarded first."
-				)
-			}
+			#if os(macOS)
+				if removal.pendingItemCount > 0 {
+					Text(
+						"Changes to \(removal.pendingItemCount) items made in Finder have not reached Synctrain yet. Removing the folder discards them."
+					)
+				}
+				else {
+					Text(
+						"The folder leaves this Mac and Finder; it stays on the gateway. Edits that were not confirmed by the gateway have to be sent, exported or discarded first."
+					)
+				}
+			#else
+				if removal.pendingItemCount > 0 {
+					Text(
+						"Changes to \(removal.pendingItemCount) items made in the Files app have not reached Synctrain yet. Removing the folder discards them."
+					)
+				}
+				else {
+					Text(
+						"The folder leaves this device and the Files app; it stays on the gateway. Edits that were not confirmed by the gateway have to be sent, exported or discarded first."
+					)
+				}
+			#endif
 		}
 		.alert(
 			"Could not change the folder", isPresented: Binding.isNotNil($errorMessage), presenting: errorMessage
@@ -249,9 +262,15 @@ struct RemoteGatewayFoldersSection: View {
 		}
 		else if let localID = coordinator.localFolderID(serviceID: serviceID, remoteFolderID: folder.id) {
 			Menu {
-				Button("Show in Files", systemImage: "folder") {
-					showInFiles(folderID: localID)
-				}
+				#if os(macOS)
+					Button("Show in Finder", systemImage: "folder") {
+						showInFiles(folderID: localID)
+					}
+				#else
+					Button("Show in Files", systemImage: "folder") {
+						showInFiles(folderID: localID)
+					}
+				#endif
 				Button("Remove from This Device…", systemImage: "minus.circle", role: .destructive) {
 					askToRemove(folder, localID: localID)
 				}
@@ -285,11 +304,16 @@ struct RemoteGatewayFoldersSection: View {
 	private func showInFiles(folderID: String) {
 		Task {
 			if let url = await FilesDomain.shared.userVisibleURL(folderID: folderID, path: "") {
-				openInFilesApp(url: url)
+				ClientLifecycle.show(url)
 			}
 			else {
-				errorMessage = String(
-					localized: "The folder is not shown in the Files app. Is the Synctrain location turned on?")
+				#if os(macOS)
+					errorMessage = String(
+						localized: "The folder is not shown in Finder yet. Is the Synctrain location turned on?")
+				#else
+					errorMessage = String(
+						localized: "The folder is not shown in the Files app. Is the Synctrain location turned on?")
+				#endif
 			}
 		}
 	}

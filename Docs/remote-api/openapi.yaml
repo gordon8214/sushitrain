@@ -679,7 +679,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Conflict:
-      description: Name or operation conflict (`name_conflict`, `ignored_path`, `not_empty`, `cross_folder`).
+      description: Name or operation conflict (`name_conflict`, `ignored_path`, `not_empty`, `cross_folder`, `move_too_large`).
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1080,7 +1080,7 @@ components:
           type: string
           description: |
             `invalid_request`, `unauthenticated`, `forbidden`, `folder_read_only`, `reserved_name`, `not_found`,
-            `name_conflict`, `ignored_path`, `not_empty`, `cross_folder`, `revision_mismatch`, `upload_mismatch`,
+            `name_conflict`, `ignored_path`, `not_empty`, `cross_folder`, `move_too_large`, `revision_mismatch`, `upload_mismatch`,
             `cursor_expired`, `snapshot_expired`, `lease_expired`, `operation_mismatch`, `overloaded`,
             `too_many_attempts`, `content_unavailable`, `insufficient_storage`, `pairing_denied`,
             `pairing_expired`, `version_not_found`, `internal`. Unknown codes are treated by their HTTP status.

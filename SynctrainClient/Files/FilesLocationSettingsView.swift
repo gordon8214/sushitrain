@@ -4,6 +4,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
+#if os(macOS)
+	import AppKit
+#endif
 
 /// The Synctrain location in the Files app: whether it is on, and setting it up again
 struct FilesLocationSettingsView: View {
@@ -26,6 +29,13 @@ struct FilesLocationSettingsView: View {
 			if let error = domain.lastError {
 				Text(error).foregroundStyle(.red)
 			}
+			#if os(macOS)
+				if domain.isEnabled == false {
+					Button("Open System Settings…") {
+						ClientLifecycle.showLocationSettings()
+					}
+				}
+			#endif
 			Button("Rebuild Synctrain location", role: .destructive) {
 				if remote.hasUnresolvedOperations {
 					showRebuildRefusal = true
@@ -36,22 +46,45 @@ struct FilesLocationSettingsView: View {
 			}
 			.disabled(domain.isRebuilding)
 		} header: {
-			Text("Files app")
+			#if os(macOS)
+				Text("Finder")
+			#else
+				Text("Files app")
+			#endif
 		} footer: {
-			if domain.isEnabled != true {
-				Text(
-					"To open your folders in the Files app, open Files, tap Browse, then tap Synctrain under Locations and turn it on."
-				)
-			}
-			else {
-				Text(
-					"Rebuilding removes the Synctrain location from the Files app and sets it up again. Your files are not affected, but you will need to turn the location on again in the Files app. Edits of folders on gateways are kept."
-				)
-			}
+			#if os(macOS)
+				if domain.isEnabled != true {
+					Text(
+						"macOS asks you to allow this. To see your folders in Finder, turn on Synctrain in System Settings, under General › Login Items & Extensions › File Providers."
+					)
+				}
+				else {
+					Text(
+						"Rebuilding removes the Synctrain location from Finder and sets it up again. Your files are not affected. Edits of folders are kept."
+					)
+				}
+			#else
+				if domain.isEnabled != true {
+					Text(
+						"To open your folders in the Files app, open Files, tap Browse, then tap Synctrain under Locations and turn it on."
+					)
+				}
+				else {
+					Text(
+						"Rebuilding removes the Synctrain location from the Files app and sets it up again. Your files are not affected, but you will need to turn the location on again in the Files app. Edits of folders on gateways are kept."
+					)
+				}
+			#endif
 		}
 		.task {
 			await domain.refreshState()
 		}
+		#if os(macOS)
+			.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+				// Back from System Settings
+				Task { await domain.refreshState() }
+			}
+		#endif
 		.alert("The location cannot be rebuilt now", isPresented: $showRebuildRefusal) {
 			Button("OK") {}
 		} message: {
@@ -83,9 +116,15 @@ struct FilesLocationSettingsView: View {
 				}
 			}
 		} message: {
-			Text(
-				"Changes to \(pendingItemCount) items made in the Files app have not reached Synctrain yet. Rebuilding the location discards them."
-			)
+			#if os(macOS)
+				Text(
+					"Changes to \(pendingItemCount) items made in Finder have not reached Synctrain yet. Rebuilding the location discards them."
+				)
+			#else
+				Text(
+					"Changes to \(pendingItemCount) items made in the Files app have not reached Synctrain yet. Rebuilding the location discards them."
+				)
+			#endif
 		}
 	}
 }

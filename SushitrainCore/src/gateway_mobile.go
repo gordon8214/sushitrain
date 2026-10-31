@@ -160,6 +160,27 @@ func (clt *Client) StartRemoteFileService(settingsJSON []byte) (*RemoteFileServi
 			}
 			return false
 		},
+		IsOnDemand: func(folderID string) bool {
+			if folder := clt.FolderWithID(folderID); folder != nil {
+				onDemand, err := folder.IsOnDemand()
+				return err == nil && onDemand
+			}
+			return false
+		},
+		Select: func(folderID string, paths []string) error {
+			folder := clt.FolderWithID(folderID)
+			if folder == nil {
+				return errors.New("folder does not exist")
+			}
+			return folder.keepSelected(paths)
+		},
+		LoadGlobalIgnores: func(folderID string) (func(string) bool, error) {
+			folder := clt.FolderWithID(folderID)
+			if folder == nil {
+				return nil, errors.New("folder does not exist")
+			}
+			return folder.globalIgnores()
+		},
 	}
 	cfg := gateway.Config{
 		Home:           filepath.Join(locations.GetBaseDir(locations.ConfigBaseDir), "synctrain-gateway"),
@@ -299,6 +320,12 @@ func (r *RemoteFileService) StartPairingJSON() ([]byte, error) {
 		port = r.Port()
 	}
 	return jsonResult(r.svc.StartPairing(r.publicHost, port, spki))
+}
+
+// StartLocalPairingJSON starts pairing for this device's own File Provider, which connects over the loopback interface
+// and always pins the service's key, as no certificate is valid for that address
+func (r *RemoteFileService) StartLocalPairingJSON() ([]byte, error) {
+	return jsonResult(r.svc.StartPairing("127.0.0.1", r.Port(), r.svc.SPKI()))
 }
 
 func (r *RemoteFileService) PendingPairingsJSON() ([]byte, error) {

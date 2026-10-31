@@ -42,7 +42,9 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 
 	var lastUsedDate: Date? { attributes.lastUsedDate }
 	var tagData: Data? { attributes.tagData }
-	var favoriteRank: NSNumber? { attributes.favoriteRank.map { NSNumber(value: UInt64(bitPattern: $0)) } }
+	#if os(iOS)
+		var favoriteRank: NSNumber? { attributes.favoriteRank.map { NSNumber(value: UInt64(bitPattern: $0)) } }
+	#endif
 
 	/// Items need a date: the system fails to create items in its replica without one
 	static let referenceDate = Date(timeIntervalSince1970: 946_684_800)  // 2000-01-01

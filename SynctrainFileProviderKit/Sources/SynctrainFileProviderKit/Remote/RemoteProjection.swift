@@ -353,7 +353,9 @@ final class RemoteProjector {
 		default: kind = nil
 		}
 		// Gone, or not shown (symbolic links, unknown kinds, names that cannot be on disk or belong to Syncthing)
-		guard !remote.deleted, let kind, FileNames.isValid(name), !FileNames.isReserved(name) else {
+		guard !remote.deleted, let kind, FileNames.isValid(name), !FileNames.isReserved(name),
+			!FileNames.isPlatformMetadata(name)
+		else {
 			if let itemID = remote.itemID, let row = try localRow(itemID), !row.deleted {
 				try removeRow(row, unplace: false)
 			}

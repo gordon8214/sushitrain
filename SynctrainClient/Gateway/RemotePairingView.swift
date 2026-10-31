@@ -4,7 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
-import VisionKit
+#if os(iOS)
+	import VisionKit
+#else
+	import CoreImage
+	import UniformTypeIdentifiers
+#endif
 
 /// Pairs this device with a gateway: scan the code the gateway shows (or paste its link), approve the request on the
 /// gateway, then choose which of its folders to open in Files
@@ -17,9 +22,14 @@ struct RemotePairingView: View {
 	@State private var now = Date.now
 	@AppStorage(DeviceName.storageKey) private var deviceName = ""
 
-	private var canScan: Bool {
-		DataScannerViewController.isSupported && DataScannerViewController.isAvailable
-	}
+	#if os(iOS)
+		private var canScan: Bool {
+			DataScannerViewController.isSupported && DataScannerViewController.isAvailable
+		}
+	#else
+		@State private var showImageChooser = false
+		@State private var imageProblem: String? = nil
+	#endif
 
 	var body: some View {
 		NavigationStack {
@@ -47,7 +57,11 @@ struct RemotePairingView: View {
 				}
 			}
 			.navigationTitle("Pair with a Gateway")
-			.navigationBarTitleDisplayMode(.inline)
+			#if os(iOS)
+				.navigationBarTitleDisplayMode(.inline)
+			#else
+				.formStyle(.grouped)
+			#endif
 			.toolbar {
 				if case .paired = pairing.phase {
 					SheetButton(role: .done) {
@@ -61,9 +75,15 @@ struct RemotePairingView: View {
 					}
 				}
 			}
-			.sheet(isPresented: $showScanner) {
-				scannerSheet
-			}
+			#if os(iOS)
+				.sheet(isPresented: $showScanner) {
+					scannerSheet
+				}
+			#else
+				.fileImporter(isPresented: $showImageChooser, allowedContentTypes: [.image]) { result in
+					readCode(from: result)
+				}
+			#endif
 			.onChange(of: scannedText) { _, text in
 				guard !text.isEmpty else {
 					return
@@ -99,24 +119,42 @@ struct RemotePairingView: View {
 		}
 
 		Section {
-			if canScan {
-				Button("Scan Pairing Code…", systemImage: "qrcode.viewfinder") {
-					showScanner = true
+			#if os(iOS)
+				if canScan {
+					Button("Scan Pairing Code…", systemImage: "qrcode.viewfinder") {
+						showScanner = true
+					}
 				}
-			}
-			TextField("synctrain+pair://…", text: $link, axis: .vertical)
-				.textInputAutocapitalization(.never)
-				.autocorrectionDisabled()
-				.keyboardType(.URL)
-				.font(.body.monospaced())
+				TextField("synctrain+pair://…", text: $link, axis: .vertical)
+					.textInputAutocapitalization(.never)
+					.autocorrectionDisabled()
+					.keyboardType(.URL)
+					.font(.body.monospaced())
+			#else
+				Button("Choose an Image of the Code…", systemImage: "qrcode") {
+					showImageChooser = true
+				}
+				TextField("synctrain+pair://…", text: $link, axis: .vertical)
+					.autocorrectionDisabled()
+					.font(.body.monospaced())
+				if let imageProblem {
+					Text(imageProblem).foregroundStyle(.red)
+				}
+			#endif
 			Button("Pair") {
 				pairing.start(link: link)
 			}
 			.disabled(!RemotePairing.isPairingLink(link))
 		} footer: {
-			Text(
-				"Start pairing on the gateway: in Synctrain on a Mac, under Settings › Remote file service; on a server, with synctrain-gateway pair. Then scan the code it shows, or paste its link here."
-			)
+			#if os(iOS)
+				Text(
+					"Start pairing on the gateway: in Synctrain on a Mac, under Settings › Remote file service; on a server, with synctrain-gateway pair. Then scan the code it shows, or paste its link here."
+				)
+			#else
+				Text(
+					"Start pairing on the gateway: in Synctrain on a Mac, under Settings › Remote file service; on a server, with synctrain-gateway pair. Then paste its link here, or choose an image of the code it shows."
+				)
+			#endif
 		}
 
 		if case .failed(let message) = pairing.phase {
@@ -147,21 +185,47 @@ struct RemotePairingView: View {
 		}
 	}
 
-	@ViewBuilder private var scannerSheet: some View {
-		if canScan {
-			NavigationStack {
-				QRScannerViewRepresentable(
-					scannedText: $scannedText, shouldStartScanning: $showScanner,
-					dataToScanFor: [.barcode(symbologies: [.qr])]
-				)
-				.navigationTitle("Scan the pairing code")
-				.navigationBarTitleDisplayMode(.inline)
-				.toolbar {
-					SheetButton(role: .cancel) {
-						showScanner = false
+	#if os(iOS)
+		@ViewBuilder private var scannerSheet: some View {
+			if canScan {
+				NavigationStack {
+					QRScannerViewRepresentable(
+						scannedText: $scannedText, shouldStartScanning: $showScanner,
+						dataToScanFor: [.barcode(symbologies: [.qr])]
+					)
+					.navigationTitle("Scan the pairing code")
+					.navigationBarTitleDisplayMode(.inline)
+					.toolbar {
+						SheetButton(role: .cancel) {
+							showScanner = false
+						}
 					}
 				}
 			}
 		}
-	}
+	#else
+		/// Reads the pairing link from an image of the code, such as a screenshot of another Mac's screen
+		private func readCode(from result: Result<URL, any Error>) {
+			imageProblem = nil
+			guard case .success(let url) = result else {
+				imageProblem = String(localized: "This image has no pairing code in it.")
+				return
+			}
+			let didAccess = url.startAccessingSecurityScopedResource()
+			defer {
+				if didAccess {
+					url.stopAccessingSecurityScopedResource()
+				}
+			}
+			let detector = CIDetector(
+				ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
+			let codes = CIImage(contentsOf: url).flatMap { detector?.features(in: $0) } ?? []
+			let links = codes.compactMap { ($0 as? CIQRCodeFeature)?.messageString }
+			guard let found = links.first(where: RemotePairing.isPairingLink) else {
+				imageProblem = String(localized: "This image has no pairing code in it.")
+				return
+			}
+			scannedText = found
+		}
+	#endif
 }

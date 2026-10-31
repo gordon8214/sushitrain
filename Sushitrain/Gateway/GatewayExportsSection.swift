@@ -54,6 +54,11 @@
 			self.export = export
 		}
 
+		/// Finder reaches this folder through its export, which it needs to stay as it is
+		private var isInFinder: Bool {
+			FinderAccess.shared.localFolderID(folder.id) != nil
+		}
+
 		var body: some View {
 			VStack(alignment: .leading) {
 				Toggle(
@@ -63,6 +68,7 @@
 				) {
 					Text(folder.name)
 				}
+				.disabled(isInFinder)
 
 				if let export {
 					Toggle(
@@ -72,7 +78,7 @@
 							set: { allowWrite in update(exported: true, allowWrite: allowWrite) })
 					)
 					// Changes can always be turned off, even when the folder no longer allows them
-					.disabled(!export.allowWrite && folder.writeRestriction != nil)
+					.disabled(isInFinder || !export.allowWrite && folder.writeRestriction != nil)
 					.padding(.leading)
 
 					if let restriction = folder.writeRestriction {

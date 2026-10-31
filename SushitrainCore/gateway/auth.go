@@ -101,7 +101,7 @@ type folderAccess struct {
 }
 
 // access returns a client's current permissions on a folder: those it was granted, limited by what the folder's
-// export and configuration allow. Writable folders must be native, send-receive, complete replicas.
+// export and configuration allow. Writable folders must be native, send-receive, and complete replicas or on demand.
 func (s *Service) access(clientID, folderID string) (folderAccess, error) {
 	var allowWrite, canWrite bool
 	err := s.store.db.QueryRow(`SELECT e.allow_write, p.can_write FROM exports e
@@ -127,7 +127,7 @@ func writableFolder(info FolderInfo) error {
 	switch {
 	case info.Type != config.FolderTypeSendReceive.String():
 		return errors.New("only send-receive folders can be written")
-	case info.Selective:
+	case info.Selective && !info.OnDemand:
 		return errors.New("folders this device holds only a selection of cannot be written")
 	case info.NativePath == "":
 		return errors.New("only folders on the native filesystem can be written")

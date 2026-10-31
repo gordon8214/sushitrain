@@ -91,6 +91,20 @@ import Testing
 		#expect(try store.mutation(operationID: operationID) == nil)
 	}
 
+	@Test func aPartialDownloadOfARemovedFolderIsRemoved() throws {
+		let root = FileManager.default.temporaryDirectory.appending(path: "synctrain-\(UUID().uuidString)")
+		defer { try? FileManager.default.removeItem(at: root) }
+		let storage = RemoteStorage(container: SharedContainer(baseURL: root))
+		try storage.createDirectories()
+		let directory = storage.transferURL("transfer")
+		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+		try Data("partial".utf8).write(to: directory.appending(path: "content.partial"))
+
+		RemoteUploader.removeReleasedStagedFiles(
+			["\(RemoteStorage.transfersDirectory)/transfer"], store: try makeStore(), storage: storage)
+		#expect(!FileManager.default.fileExists(atPath: directory.path(percentEncoded: false)))
+	}
+
 	@Test func aChangeOfWritePermissionReportsTheFoldersItems() throws {
 		let store = try makeRemoteStore()
 		try store.snapshot([remoteFile("itm_a", "a.txt"), remoteFile("itm_b", "b.txt")])

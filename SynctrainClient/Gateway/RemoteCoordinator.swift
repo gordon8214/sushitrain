@@ -6,7 +6,6 @@
 @preconcurrency import FileProvider
 import Foundation
 import os
-import UIKit
 import SynctrainFileProviderKit
 
 /// Runs the app's side of folders accessed through gateways. It refreshes their metadata (at start, on foreground,
@@ -63,8 +62,10 @@ import SynctrainFileProviderKit
 	/// How long the app works on what a background session's tasks finished before it tells the system that their
 	/// events are handled (the system then suspends it)
 	private static let eventsBudget: Duration = .seconds(20)
-	/// The operations whose background upload task ended, as the session delegates reported them
-	private nonisolated static let finishedUploads = OSAllocatedUnfairLock<Set<String>>(initialState: [])
+	#if os(iOS)
+		/// The operations whose background upload task ended, as the session delegates reported them
+		private nonisolated static let finishedUploads = OSAllocatedUnfairLock<Set<String>>(initialState: [])
+	#endif
 
 	var environment: RemoteEnvironment? { RemoteEnvironment.shared }
 
@@ -76,23 +77,15 @@ import SynctrainFileProviderKit
 			return
 		}
 		isStarted = true
-		_ = backgroundTransfers(for: environment.appSessionIdentifier)
+		#if os(iOS)
+			_ = backgroundTransfers(for: environment.appSessionIdentifier)
+		#endif
 
-		let center = NotificationCenter.default
-		observers.append(
-			center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) {
-				_ in
-				MainActor.assumeIsolated { RemoteCoordinator.shared.didEnterForeground() }
-			})
-		observers.append(
-			center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
-				MainActor.assumeIsolated { RemoteCoordinator.shared.startLongPolling() }
-			})
-		observers.append(
-			center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) {
-				_ in
-				MainActor.assumeIsolated { RemoteCoordinator.shared.stopLongPolling() }
-			})
+		if observers.isEmpty {
+			observers.append(ClientLifecycle.observe(.willResume) { RemoteCoordinator.shared.didEnterForeground() })
+			observers.append(ClientLifecycle.observe(.didBecomeActive) { RemoteCoordinator.shared.startLongPolling() })
+			observers.append(ClientLifecycle.observe(.didStop) { RemoteCoordinator.shared.stopLongPolling() })
+		}
 		// The extension posts this after recording work, which includes edits of remote folders
 		workObserver = SharedNotificationObserver(.workQueued) {
 			Task { @MainActor in RemoteCoordinator.shared.pokeOutbox() }
@@ -110,10 +103,20 @@ import SynctrainFileProviderKit
 			await reconcileTransfers()
 			startOutbox()
 			await refresh()
-			if UIApplication.shared.applicationState == .active {
+			if ClientLifecycle.isActive {
 				startLongPolling()
 			}
 		}
+	}
+
+	/// Stops the work with gateways, which `start` starts again (on macOS, where it is a setting)
+	func stop() {
+		isStarted = false
+		stopLongPolling()
+		outboxTask?.cancel()
+		outboxTask = nil
+		outboxSleep?.cancel()
+		workObserver = nil
 	}
 
 	/// Items that are gone stay in the index for a while, for what Files has not asked about yet
@@ -143,7 +146,7 @@ import SynctrainFileProviderKit
 		guard isStarted else {
 			return
 		}
-		let remaining = UIApplication.shared.backgroundTimeRemaining
+		let remaining = ClientLifecycle.backgroundTimeRemaining
 		let budget = min(max(remaining - Self.backgroundReserve, 0), 60)
 		guard budget > 1 else {
 			return
@@ -440,7 +443,7 @@ import SynctrainFileProviderKit
 	}
 
 	private func startOutbox() {
-		guard outboxTask == nil, let environment else {
+		guard isStarted, outboxTask == nil, let environment else {
 			return
 		}
 		outboxTask = Task { [weak self] in
@@ -453,6 +456,9 @@ import SynctrainFileProviderKit
 				let incompatible = Set(gateways.filter { $0.isCompatible == false }.map(\.id))
 				let pass = await runOutboxPass(environment, incompatible: incompatible)
 				await afterOutboxPass(pass)
+				if Task.isCancelled {
+					return
+				}
 				if outboxPoked {
 					continue
 				}
@@ -513,8 +519,7 @@ import SynctrainFileProviderKit
 
 	/// Whether the app runs in the background with less time left than handing an upload over needs
 	private static var isRunningOutOfTime: Bool {
-		UIApplication.shared.applicationState == .background
-			&& UIApplication.shared.backgroundTimeRemaining < handoffReserve
+		ClientLifecycle.isInBackground && ClientLifecycle.backgroundTimeRemaining < handoffReserve
 	}
 
 	/// Before the app loses its execution time (a background run ends): the rest of the upload in progress goes to the
@@ -553,136 +558,140 @@ import SynctrainFileProviderKit
 		}
 	}
 
-	// MARK: - Background transfers
+	#if os(iOS)
+		// MARK: - Background transfers
 
-	/// The background transfers of the app's session, or of the extension's (recreated only to finish its events)
-	private func backgroundTransfers(for identifier: String) -> BackgroundTransfers? {
-		guard let environment else {
-			return nil
-		}
-		if identifier == environment.appSessionIdentifier, let appTransfers {
-			return appTransfers
-		}
-		if identifier == environment.extensionSessionIdentifier, let extensionTransfers {
-			return extensionTransfers
-		}
-		guard identifier == environment.appSessionIdentifier || identifier == environment.extensionSessionIdentifier
-		else {
-			return nil
-		}
-		let transfers = BackgroundTransfers(
-			identifier: identifier, appGroupIdentifier: environment.appGroupIdentifier, store: environment.store,
-			storage: environment.storage, credentials: environment.credentials
-		) { record in
-			if record.kind == .upload, let operationID = record.operationID {
-				// Remembered right away, for the end of the session's events
-				_ = RemoteCoordinator.finishedUploads.withLock { $0.insert(operationID) }
+		/// The background transfers of the app's session, or of the extension's (recreated only to finish its events)
+		private func backgroundTransfers(for identifier: String) -> BackgroundTransfers? {
+			guard let environment else {
+				return nil
 			}
-			Task { @MainActor in RemoteCoordinator.shared.transferFinished(record) }
+			if identifier == environment.appSessionIdentifier, let appTransfers {
+				return appTransfers
+			}
+			if identifier == environment.extensionSessionIdentifier, let extensionTransfers {
+				return extensionTransfers
+			}
+			guard identifier == environment.appSessionIdentifier || identifier == environment.extensionSessionIdentifier
+			else {
+				return nil
+			}
+			let transfers = BackgroundTransfers(
+				identifier: identifier, appGroupIdentifier: environment.appGroupIdentifier, store: environment.store,
+				storage: environment.storage, credentials: environment.credentials
+			) { record in
+				if record.kind == .upload, let operationID = record.operationID {
+					// Remembered right away, for the end of the session's events
+					_ = RemoteCoordinator.finishedUploads.withLock { $0.insert(operationID) }
+				}
+				Task { @MainActor in RemoteCoordinator.shared.transferFinished(record) }
+			}
+			if identifier == environment.appSessionIdentifier {
+				appTransfers = transfers
+			}
+			else {
+				extensionTransfers = transfers
+			}
+			return transfers
 		}
-		if identifier == environment.appSessionIdentifier {
-			appTransfers = transfers
-		}
-		else {
-			extensionTransfers = transfers
-		}
-		return transfers
-	}
 
-	/// For `application(_:handleEventsForBackgroundURLSession:completionHandler:)`: the app's session, or the
-	/// extension's (events of the extension's tasks reach the app when the extension does not run). Once the events
-	/// are delivered, the operations whose uploads ended are submitted and the downloads verified, Files is told what
-	/// was resolved, and then the completion is called, exactly once. Returns false for sessions that are not about
-	/// remote folders.
-	func handleBackgroundEvents(identifier: String, completion: @escaping @MainActor @Sendable () -> Void) -> Bool {
-		guard let environment, let transfers = backgroundTransfers(for: identifier) else {
-			return false
-		}
-		Log.info("Finishing the events of background session \(identifier)")
-		let isExtensionSession = identifier == environment.extensionSessionIdentifier
-		transfers.handleEvents {
-			Task { @MainActor in
-				await RemoteCoordinator.shared.finishBackgroundEvents(of: transfers)
-				completion()
-				if isExtensionSession {
-					// Only the extension uses its session otherwise: let go of it once its tasks are done (never
-					// cancel them)
-					transfers.disconnect()
-					if RemoteCoordinator.shared.extensionTransfers === transfers {
-						RemoteCoordinator.shared.extensionTransfers = nil
+		/// For `application(_:handleEventsForBackgroundURLSession:completionHandler:)`: the app's session, or the
+		/// extension's (events of the extension's tasks reach the app when the extension does not run). Once the events
+		/// are delivered, the operations whose uploads ended are submitted and the downloads verified, Files is told what
+		/// was resolved, and then the completion is called, exactly once. Returns false for sessions that are not about
+		/// remote folders.
+		func handleBackgroundEvents(identifier: String, completion: @escaping @MainActor @Sendable () -> Void) -> Bool {
+			guard let environment, let transfers = backgroundTransfers(for: identifier) else {
+				return false
+			}
+			Log.info("Finishing the events of background session \(identifier)")
+			let isExtensionSession = identifier == environment.extensionSessionIdentifier
+			transfers.handleEvents {
+				Task { @MainActor in
+					await RemoteCoordinator.shared.finishBackgroundEvents(of: transfers)
+					completion()
+					if isExtensionSession {
+						// Only the extension uses its session otherwise: let go of it once its tasks are done (never
+						// cancel them)
+						transfers.disconnect()
+						if RemoteCoordinator.shared.extensionTransfers === transfers {
+							RemoteCoordinator.shared.extensionTransfers = nil
+						}
 					}
 				}
 			}
+			return true
 		}
-		return true
-	}
 
-	/// Goes on with what a session's tasks finished, within the time the system gives the app for its events
-	private func finishBackgroundEvents(of transfers: BackgroundTransfers) async {
-		guard let environment else {
-			return
+		/// Goes on with what a session's tasks finished, within the time the system gives the app for its events
+		private func finishBackgroundEvents(of transfers: BackgroundTransfers) async {
+			guard let environment else {
+				return
+			}
+			let operationIDs = Self.finishedUploads.withLock { finished in
+				defer { finished = [] }
+				return finished
+			}
+			let incompatible = Set(gateways.filter { $0.isCompatible == false }.map(\.id))
+			// In the background, the app has only the events' time: what a task did not send goes to a new one
+			let handoff = backgroundTransfers(for: environment.appSessionIdentifier).map { BackgroundHandoff(transfers: $0) }
+			if ClientLifecycle.isInBackground {
+				handoff?.request()
+			}
+			let work = Task.detached(priority: .utility) {
+				// Tasks of uploads that newer edits replaced, or whose operations were resolved, stop
+				await transfers.cancelObsoleteUploads()
+				return await RemoteWork.finishBackgroundTransfers(
+					operationIDs, environment: environment, incompatible: incompatible, handoff: handoff)
+			}
+			let activity = BackgroundActivity(name: "Finishing background transfers") {
+				work.cancel()
+			}
+			defer { activity.end() }
+			let timeout = Task {
+				try? await Task.sleep(for: Self.eventsBudget)
+				work.cancel()
+			}
+			defer { timeout.cancel() }
+			let pass = await work.value
+			if pass.resolved > 0 {
+				// Awaited, since the app may be suspended as soon as the events are handled
+				await Self.signalResolvedChanges()
+			}
+			await afterOutboxPass(pass, signal: false)
 		}
-		let operationIDs = Self.finishedUploads.withLock { finished in
-			defer { finished = [] }
-			return finished
-		}
-		let incompatible = Set(gateways.filter { $0.isCompatible == false }.map(\.id))
-		// In the background, the app has only the events' time: what a task did not send goes to a new one
-		let handoff = backgroundTransfers(for: environment.appSessionIdentifier).map { BackgroundHandoff(transfers: $0) }
-		if UIApplication.shared.applicationState == .background {
-			handoff?.request()
-		}
-		let work = Task.detached(priority: .utility) {
-			// Tasks of uploads that newer edits replaced, or whose operations were resolved, stop
-			await transfers.cancelObsoleteUploads()
-			return await RemoteWork.finishBackgroundTransfers(
-				operationIDs, environment: environment, incompatible: incompatible, handoff: handoff)
-		}
-		let activity = BackgroundActivity(name: "Finishing background transfers") {
-			work.cancel()
-		}
-		defer { activity.end() }
-		let timeout = Task {
-			try? await Task.sleep(for: Self.eventsBudget)
-			work.cancel()
-		}
-		defer { timeout.cancel() }
-		let pass = await work.value
-		if pass.resolved > 0 {
-			// Awaited, since the app may be suspended as soon as the events are handled
-			await Self.signalResolvedChanges()
-		}
-		await afterOutboxPass(pass, signal: false)
-	}
 
-	/// Tells Files that changes it was told are waiting were resolved, so that it asks for them again
-	private static func signalResolvedChanges() async {
-		guard let manager = NSFileProviderManager(for: FilesDomain.domain) else {
-			return
+		/// Tells Files that changes it was told are waiting were resolved, so that it asks for them again
+		private static func signalResolvedChanges() async {
+			guard let manager = NSFileProviderManager(for: FilesDomain.domain) else {
+				return
+			}
+			do {
+				try await manager.signalEnumerator(for: .workingSet)
+				try await manager.signalErrorResolved(NSFileProviderError(.cannotSynchronize))
+			}
+			catch {
+				Log.warn("Could not tell the File Provider about resolved changes: \(error.localizedDescription)")
+			}
 		}
-		do {
-			try await manager.signalEnumerator(for: .workingSet)
-			try await manager.signalErrorResolved(NSFileProviderError(.cannotSynchronize))
-		}
-		catch {
-			Log.warn("Could not tell the File Provider about resolved changes: \(error.localizedDescription)")
-		}
-	}
+	#endif
 
 	/// At start: reconnects to the app's session (transfers whose task it no longer has are interrupted, and their
 	/// operations go on), and removes what finished transfers left
 	private func reconcileTransfers() async {
-		guard let environment, let appTransfers else {
+		guard let environment else {
 			return
 		}
-		do {
-			let lost = try await appTransfers.reconcile()
-			if !lost.isEmpty {
-				Log.info("\(lost.count) background transfers were interrupted while the app did not run")
+		if let appTransfers {
+			do {
+				let lost = try await appTransfers.reconcile()
+				if !lost.isEmpty {
+					Log.info("\(lost.count) background transfers were interrupted while the app did not run")
+				}
 			}
-		}
-		catch {
-			Log.warn("Could not reconcile background transfers: \(error.userDescription)")
+			catch {
+				Log.warn("Could not reconcile background transfers: \(error.userDescription)")
+			}
 		}
 		await Task.detached(priority: .utility) {
 			let outbox = environment.outbox()
@@ -691,20 +700,22 @@ import SynctrainFileProviderKit
 		}.value
 	}
 
-	private func transferFinished(_ record: TransferRecord) {
-		guard let environment else {
-			return
+	#if os(iOS)
+		private func transferFinished(_ record: TransferRecord) {
+			guard let environment else {
+				return
+			}
+			switch record.kind {
+			case .upload:
+				// The operation continues from the offset the gateway confirms (the delegate expedited it)
+				pokeOutbox()
+			case .download:
+				Task.detached(priority: .utility) { RemoteWork.finishDownload(record, environment: environment) }
+			case .thumbnail:
+				break
+			}
 		}
-		switch record.kind {
-		case .upload:
-			// The operation continues from the offset the gateway confirms (the delegate expedited it)
-			pokeOutbox()
-		case .download:
-			Task.detached(priority: .utility) { RemoteWork.finishDownload(record, environment: environment) }
-		case .thumbnail:
-			break
-		}
-	}
+	#endif
 
 	// MARK: - Folders
 

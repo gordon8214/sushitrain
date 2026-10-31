@@ -25,7 +25,7 @@ import (
 	"github.com/syncthing/syncthing/lib/syncthing"
 )
 
-func newIntegrationClient(t *testing.T) (*Client, string) {
+func newIntegrationClient(t *testing.T, modify ...func(*config.Configuration)) (*Client, string) {
 	t.Helper()
 	dir := t.TempDir()
 	cert, err := syncthing.GenerateCertificate(filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem"))
@@ -56,6 +56,9 @@ func newIntegrationClient(t *testing.T) (*Client, string) {
 	folder.FSWatcherEnabled = false
 	folder.Devices = []config.FolderDeviceConfiguration{{DeviceID: devID}}
 	cfg.Folders = []config.FolderConfiguration{folder}
+	for _, change := range modify {
+		change(&cfg)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	evLogger := events.NewLogger()
@@ -86,7 +89,7 @@ func newIntegrationClient(t *testing.T) (*Client, string) {
 		<-served
 	})
 
-	clt := (&Client{filesPath: dir}).withTestRun(wrapper, app, evLogger)
+	clt := (&Client{filesPath: dir, cert: &cert}).withTestRun(wrapper, app, evLogger)
 	return clt, folderPath
 }
 

@@ -51,6 +51,17 @@ import Testing
 		#expect(!FileNames.isSelfOrDescendant("ab", of: "a"))
 	}
 
+	@Test func platformMetadataNames() {
+		#if os(macOS)
+			for name in [".DS_Store", "._photo.jpg", ".Spotlight-V100", ".fseventsd", ".Trashes", ".TemporaryItems", "Icon\r"] {
+				#expect(FileNames.isPlatformMetadata(name), "\(name)")
+			}
+		#endif
+		for name in ["DS_Store", ".hidden", "Icon", "_photo.jpg", "notes.txt"] {
+			#expect(!FileNames.isPlatformMetadata(name), "\(name)")
+		}
+	}
+
 	@Test func conflictCopyNames() throws {
 		let date = try #require(
 			Calendar(identifier: .gregorian).date(

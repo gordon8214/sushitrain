@@ -7,7 +7,8 @@ added, renamed, moved and deleted there (and from any app that opens documents t
 gateway, which synchronizes them like any other change.
 
 The Synctrain location exists while a gateway is paired: it is added with the first pairing, and removed when the last
-gateway is forgotten. On macOS there is no location: Synctrain runs Syncthing itself there.
+gateway is forgotten. On a Mac, which runs Syncthing itself, it is an option that needs no gateway: see
+[On macOS](#on-macos).
 
 ## Using it
 
@@ -50,9 +51,6 @@ Everything goes through the gateway over HTTPS, whether or not Synctrain is runn
 The gateway must be reachable (on the local network, a VPN or a public address you set up) for files that are not
 on the phone to open, and for edits to complete.
 
-The gateway must be reachable (on the local network, a VPN or a public address you set up) for files that are not
-on the phone to open, and for edits to complete.
-
 ## Viewing files in the app
 
 The Folders tab browses the same index Files uses, so it also works offline, and follows changes as they arrive. Search
@@ -72,13 +70,51 @@ aren't affected.
 
 - Tags, favorites and the order in Recents are kept on this device only; gateways don't know about them.
 - Symbolic links are not shown. Folders the gateway only lets this phone read are read-only in Files too.
-- There is no macOS version yet.
+
+## On macOS
+
+Synctrain on a Mac can show folders in Finder without keeping all of their files. It is off by default, and folders stay
+synchronized in full until you choose otherwise. It needs no gateway: the Mac's own engine serves Finder, and fetches files
+from your other devices. [macos.md](macos.md#files-in-finder) describes how.
+
+Turn on **Show folders in Finder** under Settings › Files in Finder. macOS then asks you to allow Synctrain, in System
+Settings under General › Login Items & Extensions › File Providers. **Switch to On Demand** next to a folder brings it to
+Finder, under Locations. Files a connected device has are removed from this Mac; those that only this Mac has stay. The
+folder stays where it was, for example in `~/Sync`, holding only those. **Synchronize All** switches back, which downloads
+all of it. Folders of another Mac or a server can be added too: pair with them on the same page, as on an iPhone.
+**Show folders in Finder** can only be turned off again once no folder is on demand or from a gateway, as nothing else
+reaches their files.
+
+Everything that works in Files works in Finder: opening files on demand, editing, adding, renaming, moving and deleting
+them, **Keep on This Device** and **Stop Keeping on This Device**, thumbnails, conflict copies and **Previous Versions…**.
+Because the engine is the Mac's own, some things differ from a folder on a gateway:
+
+- **Opening** a file this Mac doesn't have needs a connected device that has it.
+- **Editing and deleting** such a file need no other device, and download nothing. Saving an edit from an app first
+  downloads the file, as apps read a file before writing it, so an app can't edit a file nobody can supply.
+- **Renaming or moving** an item this Mac doesn't have downloads it first, so the change waits for a device that has it.
+  A directory that would take more than 4 GiB is refused: copy what you need instead.
+- **Previous Versions…** lists what this Mac archived, which is little in a folder it mostly doesn't hold. The versions other
+  devices keep can't be reached through Syncthing.
+- **While Synctrain is not running**, browsing and files on this Mac work, and edits wait. Start it at login to avoid that.
+- **Names** with `*`, control characters, or a space at the start or end can't be changed in an on-demand folder, nor can
+  such files be added there: they stay on this Mac without synchronizing.
+
+Finder's `.DS_Store` and similar files stay on this Mac, and are never sent to other devices. The ones that reached a
+gateway from elsewhere are not shown. Files the location can't synchronize, such as those names, stay in their directory,
+which can't then be deleted from another device until they are removed.
+
+For now, a file edited in Finder stays in the folder as well as in the system's copy, and takes later changes from other
+devices, until the folder is switched back. Deleted paths stay listed in its `.stignore`, so that the deletion stays
+announced.
 
 ## How it works
 
 The extension is a replicated File Provider extension that talks to gateways itself, so Files works while the app isn't
 running. File Provider extensions on iOS may use about 20 MB of memory and only run while the system needs them. The app
-and the extension share the app group container, and don't depend on each other at run time.
+and the extension share the app group container, and don't depend on each other at run time. On a Mac without another
+gateway, the app is the gateway: the extension connects to the remote file service in the app, over the loopback interface.
+The two apps share this code, in `SynctrainClient`.
 
 ### Shared container
 

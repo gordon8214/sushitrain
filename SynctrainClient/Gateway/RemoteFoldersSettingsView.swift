@@ -49,7 +49,7 @@ struct RemoteFoldersSettingsView: View {
 	}
 }
 
-private struct RemoteGatewayRow: View {
+struct RemoteGatewayRow: View {
 	let status: RemoteGatewayStatus
 
 	var body: some View {

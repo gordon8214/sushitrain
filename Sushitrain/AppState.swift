@@ -590,6 +590,7 @@ struct SyncState: Equatable {
 			RemoteCoordinator.shared.start(client: client)
 		#elseif os(macOS)
 			GatewayController.shared.start(client: client)
+			FinderAccess.shared.start(client: client)
 		#endif
 
 		#if os(macOS)

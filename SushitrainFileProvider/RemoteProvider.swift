@@ -26,7 +26,8 @@ private struct DomainReference: @unchecked Sendable {
 ///   the system's next attempt continues the same operation. An upload still running after `foregroundUploadBudget`
 ///   (or when the extension is invalidated) hands its rest to the extension's background session, which sends it while
 ///   neither process runs; whichever process handles the task's end (the app, when the extension does not run) submits
-///   the operation, and the system is told that the change is resolved.
+///   the operation, and the system is told that the change is resolved. macOS has no such session: uploads finish inside
+///   the call, or in the app's outbox.
 /// - Metadata is refreshed in the background when the system enumerates a remote folder (or the extension starts), at
 ///   most every 30 seconds per folder.
 final class RemoteProvider: Sendable {
@@ -94,36 +95,45 @@ final class RemoteProvider: Sendable {
 		domainReference = DomainReference(domain: domain)
 		credentials = KeychainCredentialStore(accessGroup: Self.appGroupIdentifier)
 		scheduler = TransferScheduler(store: context.store, owner: owner)
-		handoff = Self.backgroundTransfers(context: context, credentials: credentials).map {
-			BackgroundHandoff(transfers: $0, foregroundBudget: Self.foregroundUploadBudget)
-		}
+		#if os(iOS)
+			handoff = Self.backgroundTransfers(context: context, credentials: credentials).map {
+				BackgroundHandoff(transfers: $0, foregroundBudget: Self.foregroundUploadBudget)
+			}
+		#else
+			// macOS doesn't start a process to finish a background session's events, and a session with a pinned key
+			// needs one that answers its challenges. Nothing suspends the extension there, and the app takes over an
+			// upload that an extension that stopped left behind.
+			handoff = nil
+		#endif
 		try? storage.createDirectories()
 		Self.current.withLock { $0.provider = self }
 	}
 
-	/// The extension's background session (created on first use of its `session`), nil without the app's bundle
-	/// identifier, which its identifier derives from
-	private static func backgroundTransfers(context: ExtensionContext, credentials: KeychainCredentialStore)
-		-> BackgroundTransfers?
-	{
-		guard let appBundleIdentifier = RemoteSessionIdentifier.appBundleIdentifier() else {
-			return nil
-		}
-		return sessionTransfers.withLock { transfers in
-			if let transfers {
-				return transfers
+	#if os(iOS)
+		/// The extension's background session (created on first use of its `session`), nil without the app's bundle
+		/// identifier, which its identifier derives from
+		private static func backgroundTransfers(context: ExtensionContext, credentials: KeychainCredentialStore)
+			-> BackgroundTransfers?
+		{
+			guard let appBundleIdentifier = RemoteSessionIdentifier.appBundleIdentifier() else {
+				return nil
 			}
-			let created = BackgroundTransfers(
-				identifier: RemoteSessionIdentifier.fileProviderExtension(appBundleIdentifier: appBundleIdentifier),
-				appGroupIdentifier: appGroupIdentifier, store: context.store, storage: context.storage,
-				credentials: credentials
-			) { record in
-				current.withLock { $0.provider }?.backgroundTransferFinished(record)
+			return sessionTransfers.withLock { transfers in
+				if let transfers {
+					return transfers
+				}
+				let created = BackgroundTransfers(
+					identifier: RemoteSessionIdentifier.fileProviderExtension(appBundleIdentifier: appBundleIdentifier),
+					appGroupIdentifier: appGroupIdentifier, store: context.store, storage: context.storage,
+					credentials: credentials
+				) { record in
+					current.withLock { $0.provider }?.backgroundTransferFinished(record)
+				}
+				transfers = created
+				return created
 			}
-			transfers = created
-			return created
 		}
-	}
+	#endif
 
 	/// The app group, which also serves as the Keychain access group the app and the extension share
 	static var appGroupIdentifier: String? {
@@ -642,6 +652,9 @@ final class RemoteProvider: Sendable {
 	func existingFolderRoot(for template: NSFileProviderItem, options: NSFileProviderCreateItemOptions) throws
 		-> IndexItem
 	{
+		if FileNames.isPlatformMetadata(FileNames.normalized(template.filename)) {
+			throw NSFileProviderError(.excludedFromSync)
+		}
 		let key = FileNames.collisionKey(template.filename)
 		if options.contains(.mayAlreadyExist),
 			let root = try context.store.children(of: nil, limit: ExtensionContext.maximumPageSize).first(where: {

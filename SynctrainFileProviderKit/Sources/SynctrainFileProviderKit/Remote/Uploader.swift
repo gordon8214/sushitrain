@@ -87,7 +87,11 @@ public struct RemoteUploader: Sendable {
 	public static func removeReleasedStagedFiles(_ paths: [String], store: IndexStore, storage: RemoteStorage) {
 		for path in paths {
 			let url = storage.url(relativePath: path)
-			try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path(percentEncoded: false))
+			// Staged files are read-only. A partial download is a directory, which this would keep from being entered.
+			if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true {
+				try? FileManager.default.setAttributes(
+					[.posixPermissions: 0o644], ofItemAtPath: url.path(percentEncoded: false))
+			}
 			try? FileManager.default.removeItem(at: url)
 			try? store.forgetStagedFile(path: path)
 		}

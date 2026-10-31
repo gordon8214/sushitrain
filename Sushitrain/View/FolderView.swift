@@ -277,9 +277,25 @@ struct FolderSyncTypePicker: View {
 	@State private var error: ErrorMessage? = nil
 	@State private var loadError: String?
 	@State private var refreshID = UUID()
+	@State private var isOnDemand = false
 	var folder: SushitrainFolder
 
 	var body: some View {
+		Group {
+			if isOnDemand {
+				// Finder shows all of it, and what is selected follows from what was written there
+				LabeledContent("Selection", value: String(localized: "On demand in Finder"))
+			}
+			else {
+				picker
+			}
+		}
+		.onAppear {
+			self.update()
+		}
+	}
+
+	@ViewBuilder private var picker: some View {
 		Picker(
 			"Selection",
 			selection: Binding(
@@ -307,9 +323,6 @@ struct FolderSyncTypePicker: View {
 		}
 		.pickerStyle(.menu)
 		.disabled(changeProhibited)
-		.onAppear {
-			self.update()
-		}
 		.errorAlert($error)
 		if let loadError {
 			Text(loadError).foregroundStyle(.secondary)
@@ -323,6 +336,7 @@ struct FolderSyncTypePicker: View {
 		refreshID = requestID
 		do {
 			isSelective = try folder.checkedIsSelective()
+			isOnDemand = try folder.checkedIsOnDemand()
 			loadError = nil
 		}
 		catch {
@@ -330,7 +344,7 @@ struct FolderSyncTypePicker: View {
 			loadError = error.localizedDescription
 			return
 		}
-		guard isSelective != nil else { return }
+		guard isSelective != nil, !isOnDemand else { return }
 
 		// Only allow changes to selection mode when folder is idle
 		if !folder.isIdleOrSyncing || !self.folder.exists() {
@@ -366,6 +380,7 @@ struct FolderDirectionPicker: View {
 	@Environment(AppState.self) private var appState
 	var folder: SushitrainFolder
 	@State private var changeProhibited: Bool = true
+	@State private var isOnDemand = false
 	@State private var folderType: String? = nil
 
 	var body: some View {
@@ -404,7 +419,8 @@ struct FolderDirectionPicker: View {
 				}
 			}
 			.pickerStyle(.menu)
-			.disabled(changeProhibited || folderType == SushitrainFolderTypeReceiveOnly)
+			// An on-demand folder takes what Finder writes, which a receive-only folder doesn't
+			.disabled(changeProhibited || folderType == SushitrainFolderTypeReceiveOnly || isOnDemand)
 			.onAppear {
 				self.update()
 			}
@@ -419,6 +435,7 @@ struct FolderDirectionPicker: View {
 
 	private func update() {
 		self.folderType = self.folder.folderType()
+		self.isOnDemand = (try? self.folder.checkedIsOnDemand()) == true
 		// Only allow changes to selection mode when folder is idle
 		if !folder.isIdleOrSyncing {
 			changeProhibited = true

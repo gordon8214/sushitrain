@@ -28,7 +28,9 @@ struct ItemTemplate: Sendable {
 		contentType = item.contentType ?? nil
 		contentModificationDate = item.contentModificationDate ?? nil
 		tagData = item.tagData ?? nil
-		favoriteRank = (item.favoriteRank ?? nil).map { Int64(bitPattern: $0.uint64Value) }
+		#if os(iOS)
+			favoriteRank = (item.favoriteRank ?? nil).map { Int64(bitPattern: $0.uint64Value) }
+		#endif
 		lastUsedDate = item.lastUsedDate ?? nil
 	}
 }
@@ -164,7 +166,9 @@ extension RemoteProvider {
 			throw NSFileProviderError(.noSuchItem)
 		}
 		let name = FileNames.normalized(template.filename)
-		guard FileNames.isValid(name), !FileNames.isReserved(name), template.contentType != .symbolicLink else {
+		guard FileNames.isValid(name), !FileNames.isReserved(name), !FileNames.isPlatformMetadata(name),
+			template.contentType != .symbolicLink
+		else {
 			throw NSFileProviderError(.excludedFromSync)
 		}
 		let kind: ItemKind = template.contentType?.conforms(to: .directory) == true ? .directory : .file
@@ -790,7 +794,7 @@ extension RemoteProvider {
 			throw RemoteFailure.cannotSynchronize(String(localized: "Items can only be moved into a folder."))
 		}
 		let name = FileNames.normalized(rawName)
-		guard FileNames.isValid(name), !FileNames.isReserved(name) else {
+		guard FileNames.isValid(name), !FileNames.isReserved(name), !FileNames.isPlatformMetadata(name) else {
 			// Refused by keeping the item as it is: the item returned carries its current name and place, which the
 			// system takes back. An error would leave the system retrying a change that can never be sent.
 			log.info("Not moving \(item.id) to a name reserved for Syncthing")
@@ -896,6 +900,9 @@ extension RemoteProvider {
 					String(localized: "This item just changed on another device. Synctrain tries again shortly."))
 			case RemoteErrorCode.forbidden, RemoteErrorCode.folderReadOnly:
 				throw RemoteFailure.readOnly(gateway: gateway)
+			case RemoteErrorCode.moveTooLarge:
+				throw RemoteFailure.cannotSynchronize(
+					String(localized: "This folder is too large to move here, as all of it would have to be downloaded first."))
 			default:
 				throw RemoteFailure.notAccepted(gateway: gateway)
 			}

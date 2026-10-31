@@ -1051,6 +1051,15 @@ private struct BandwidthSettingsView: View {
 						})
 
 					Tab(
+						value: "finder",
+						content: {
+							FinderAccessSettingsView()
+						},
+						label: {
+							Label("Files in Finder", systemImage: "folder.badge.gearshape")
+						})
+
+					Tab(
 						value: "photo",
 						content: {
 							PhotoBackupSettingsView(photoBackup: appState.photoBackup)
