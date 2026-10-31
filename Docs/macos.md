@@ -202,6 +202,17 @@ runs the [remote file service](gateway.md), which is what the extension speaks t
   folder can't express, as they would stop applying. Switching again finishes one that stopped halfway.
 - **Switching back** removes the folder from Finder, refused while its edits are unresolved, and makes it synchronize in
   full again.
+- **What the location can't synchronize stays on this Mac**, in the system's copy alone: the extension refuses those with
+  `excludedFromSync` (names macOS keeps for itself, names an on-demand folder can't select, paths the folder's ignore
+  patterns exclude), so the index never has them. The system then can't remove the directory such a file is in, and a
+  folder that leaves Finder leaves its own directory at the top level of the location. Before the folder goes,
+  `SystemCopy.unknownPaths` walks the system's copy and lists what the index has no item at, which is what stays, and the
+  settings say how much and where (`FilesLeftovers`). Nothing is removed: these can be files of the user's that never
+  reached another device. The directory of a file the extension refuses is read with `opendir`, as `FileManager` leaves
+  `._name` files out of a listing, which are most of what this looks for. The directory a folder left is offered to the
+  extension as a new item of the top level; `excludedFromSync` keeps it on this Mac, where `cannotSynchronize` would have
+  the system ask again every minute. A folder coming back to a name that directory holds would show nothing of its own,
+  so `FilesLeftovers.moveAside` renames it to "Name (not synchronized)" first.
 - **Changes run one at a time** (`FinderAccess.inOrder`), and the setting can't be turned off while Finder is the way to a
   folder, on demand or from a gateway: its files aren't on this Mac, and removing the location would discard what the
   system's copy holds that hasn't reached the service. A folder that other devices may only read has to allow changes

@@ -26,6 +26,11 @@ import SynctrainFileProviderKit
 	/// Whether some edits are not resolved with their gateways (which rules out rebuilding the Files location)
 	private(set) var hasUnresolvedOperations = false
 	private(set) var isRefreshing = false
+	#if os(macOS)
+		/// What the Synctrain location kept on this Mac when a folder left it or came back, oldest first, for the
+		/// settings to tell the user once (`filesLeftoversAlert`, which takes each one as it is shown)
+		var leftovers: [FilesLeftovers.Report] = []
+	#endif
 
 	@ObservationIgnored private var isStarted = false
 	@ObservationIgnored private var appTransfers: BackgroundTransfers? = nil
@@ -732,6 +737,25 @@ import SynctrainFileProviderKit
 		let endpoint = status.endpoint
 		let activity = BackgroundActivity(name: "Adding a folder")
 		defer { activity.end() }
+		#if os(macOS)
+			// Before the folder is added, as its own root takes the name a directory left by an earlier round holds.
+			// Reported right away: it has happened whether or not the folder is added after it.
+			if localFolderID(serviceID: serviceID, remoteFolderID: remote.id) == nil {
+				let label = remote.label.isEmpty ? remote.id : remote.label
+				switch await moveLeftoversAside(label: label, environment: environment) {
+				case .moved(let report):
+					leftovers.append(report)
+				case .failed:
+					throw .notEligible(
+						String(
+							localized:
+								"Finder's Synctrain location still holds files of \(label) that Synctrain cannot synchronize, and could not move them aside. Move or remove that folder in Finder, then add it again."
+						))
+				case .nothingInTheWay:
+					break
+				}
+			}
+		#endif
 		let result = await Task.detached(priority: .userInitiated) {
 			await RemoteWork.addFolder(remote, endpoint: endpoint, environment: environment)
 		}.value
@@ -748,13 +772,81 @@ import SynctrainFileProviderKit
 		}
 		let activity = BackgroundActivity(name: "Removing a folder")
 		defer { activity.end() }
+		#if os(macOS)
+			// While the folder is still in the index: its items are what tells what the location keeps on this Mac
+			let staying = await stayingFiles(folderID: folderID, environment: environment)
+		#endif
 		let result = await Task.detached(priority: .userInitiated) {
 			RemoteWork.removeFolder(folderID: folderID, environment: environment)
 		}.value
 		FilesDomain.shared.signalWorkingSet()
 		await reloadState()
 		try result.get()
+		#if os(macOS)
+			if let staying {
+				leftovers.append(staying)
+			}
+		#endif
 	}
+
+	#if os(macOS)
+		/// What the location cannot synchronize in the folder, and so keeps in the system's copy when the folder leaves
+		/// Finder, with the directories around it
+		private func stayingFiles(folderID: String, environment: RemoteEnvironment) async -> FilesLeftovers.Report? {
+			let folder = try? environment.store.folder(id: folderID)
+			guard let label = folder?.label,
+				let root = await FilesDomain.shared.userVisibleURL(folderID: folderID, path: "")
+			else {
+				Log.warn("Could not look at what the Synctrain location keeps of \(folderID)")
+				return nil
+			}
+			let store = environment.store
+			let found = await Task.detached(priority: .userInitiated) { () -> SystemCopy.Unknown? in
+				do {
+					return try SystemCopy.unknownPaths(
+						folderID: folderID, root: root, store: store, limit: FilesLeftovers.limit)
+				}
+				catch {
+					Log.warn("Could not read the index to see what the Synctrain location keeps: \(error)")
+					return nil
+				}
+			}.value
+			guard let found, let example = found.paths.first else {
+				return nil
+			}
+			Log.info(
+				"The Synctrain location keeps \(found.paths.count) items of \(folderID) that it cannot synchronize"
+					+ (found.isComplete ? "" : " (at least)"))
+			return FilesLeftovers.Report(
+				folder: label, url: root,
+				kind: .staying(count: found.paths.count, example: example, isComplete: found.isComplete))
+		}
+
+		/// Renames the directory an earlier round of a folder of this label left at the top level of the location, which
+		/// would otherwise keep the folder from showing anything of its own
+		private func moveLeftoversAside(label: String, environment: RemoteEnvironment) async
+			-> FilesLeftovers.Aside<FilesLeftovers.Report>
+		{
+			guard let location = await FilesDomain.shared.locationURL() else {
+				return .nothingInTheWay
+			}
+			let store = environment.store
+			let aside = await Task.detached(priority: .userInitiated) {
+				FilesLeftovers.moveAside(label: label, in: location, store: store)
+			}.value
+			switch aside {
+			case .nothingInTheWay:
+				return .nothingInTheWay
+			case .failed:
+				return .failed
+			case .moved(let name):
+				return .moved(
+					FilesLeftovers.Report(
+						folder: label, url: location.appending(path: name, directoryHint: .isDirectory),
+						kind: .movedAside(name)))
+			}
+		}
+	#endif
 
 	// MARK: - Pairing and forgetting
 

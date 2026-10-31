@@ -1081,6 +1081,8 @@ private struct BandwidthSettingsView: View {
 			.frame(minWidth: 500, minHeight: 450)
 			.windowResizeBehavior(.automatic)
 			.formStyle(.grouped)
+			// On the window, as the pages that switch folders are in it and two alerts would fight over one report
+			.filesLeftoversAlert()
 		}
 	}
 

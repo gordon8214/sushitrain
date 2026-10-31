@@ -63,6 +63,25 @@ extension IndexStore {
 		}
 	}
 
+	/// One connection answers for every path, in chunks, and normalizes them as the index stores them
+	@Test func liveKindsAnswersForEveryPathAtOnce() throws {
+		let store = try makeRemoteStore()
+		try store.snapshot([
+			remoteDirectory("itm_docs", "docs"), remoteFile("itm_a", "docs/a.txt", parent: "itm_docs"),
+		])
+
+		#expect(try store.liveKinds(folderID: "docs", at: []).isEmpty)
+		#expect(
+			try store.liveKinds(folderID: "docs", at: ["docs", "docs/a.txt"]) == [
+				"docs": .directory, "docs/a.txt": .file,
+			])
+		#expect(try store.liveKinds(folderID: "docs", at: ["docs/._a.txt", "other"]).isEmpty)
+		#expect(try store.liveKinds(folderID: "other", at: ["docs"]).isEmpty, "another folder's path")
+		// More paths than one statement takes
+		let many = (0..<1_200).map { "docs/f\($0)" } + ["docs/a.txt"]
+		#expect(try store.liveKinds(folderID: "docs", at: many) == ["docs/a.txt": .file])
+	}
+
 	/// The index names that queries pick with `INDEXED BY`
 	@Test func indexesNamedByQueriesExist() throws {
 		let store = try makeStore()

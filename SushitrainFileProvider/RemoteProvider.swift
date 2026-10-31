@@ -648,13 +648,13 @@ final class RemoteProvider: Sendable {
 		}
 	}
 
-	/// When the system reimports, it asks about the folders themselves; nothing else can be added at the top
+	/// When the system reimports, it asks about the folders themselves; nothing else can be added at the top. Anything
+	/// else stays on this device without synchronizing: the directory of a folder that left the location, which the
+	/// system could not remove because it holds files that cannot be synchronized, is offered as a new item of the top
+	/// level, and an error would have the system ask about it again every minute.
 	func existingFolderRoot(for template: NSFileProviderItem, options: NSFileProviderCreateItemOptions) throws
 		-> IndexItem
 	{
-		if FileNames.isPlatformMetadata(FileNames.normalized(template.filename)) {
-			throw NSFileProviderError(.excludedFromSync)
-		}
 		let key = FileNames.collisionKey(template.filename)
 		if options.contains(.mayAlreadyExist),
 			let root = try context.store.children(of: nil, limit: ExtensionContext.maximumPageSize).first(where: {
@@ -663,7 +663,7 @@ final class RemoteProvider: Sendable {
 		{
 			return root
 		}
-		throw RemoteFailure.cannotSynchronize(String(localized: "Items can only be added inside a folder."))
+		throw NSFileProviderError(.excludedFromSync)
 	}
 
 	/// Whether the file has the same bytes as a staged file (the SHA-256 of the whole file is its `digest`)

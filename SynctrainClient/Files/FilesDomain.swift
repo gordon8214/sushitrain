@@ -165,6 +165,20 @@ import SynctrainFileProviderKit
 		}
 	}
 
+	/// Where the system keeps the location's files, if it has it
+	func locationURL() async -> URL? {
+		guard let manager else {
+			return nil
+		}
+		do {
+			return try await manager.getUserVisibleURL(for: .rootContainer)
+		}
+		catch {
+			Log.warn("Could not find the Synctrain location: \(error.localizedDescription)")
+			return nil
+		}
+	}
+
 	/// Where an item of the index appears in the Files app, if it does
 	func userVisibleURL(folderID: String, path: String) async -> URL? {
 		guard let store = RemoteEnvironment.shared?.store, let manager else {

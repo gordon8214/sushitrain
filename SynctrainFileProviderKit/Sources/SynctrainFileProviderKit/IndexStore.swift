@@ -204,6 +204,38 @@ public struct IndexStore: Sendable {
 		}
 	}
 
+	/// Which of the paths the folder has live items at, and what each one is, in one connection and one read
+	/// transaction for all of them. Paths are normalized as they are stored, so the keys of the result are the paths
+	/// in that form.
+	public func liveKinds(folderID: String, at paths: [String]) throws(IndexError) -> [String: ItemKind] {
+		guard !paths.isEmpty else {
+			return [:]
+		}
+		let normalized = paths.map(FileNames.normalized)
+		return try withConnection { connection throws(IndexError) in
+			try connection.readTransaction { () throws(IndexError) in
+				var found: [String: ItemKind] = [:]
+				var start = normalized.startIndex
+				while start < normalized.endIndex {
+					let chunk = normalized[start..<min(start + Self.maximumPathsPerQuery, normalized.endIndex)]
+					let placeholders = Array(repeating: "?", count: chunk.count).joined(separator: ", ")
+					let values: [any SQLBindable] = [folderID] + chunk.map { $0 as any SQLBindable }
+					for row in try connection.query(
+						"SELECT path, kind FROM items WHERE folder_id = ? AND deleted = 0 AND path IN (\(placeholders))",
+						values, { (path: $0.text(0), kind: ItemKind(rawValue: Int($0.int64(1))) ?? .file) })
+					{
+						found[row.path] = row.kind
+					}
+					start = chunk.endIndex
+				}
+				return found
+			}
+		}
+	}
+
+	/// How many paths one statement of `liveKinds` asks about (SQLite allows far more bound values)
+	static let maximumPathsPerQuery = 500
+
 	/// All live items in ID order, starting after the given ID
 	public func liveItems(after afterID: Int64 = 0, limit: Int) throws(IndexError) -> [IndexItem] {
 		try withConnection { connection throws(IndexError) in

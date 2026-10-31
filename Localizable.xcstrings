@@ -824,6 +824,52 @@
         }
       }
     },
+    "%@ (not synchronized)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (nicht synchronisiert)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (sin sincronizar)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (non sincronizzato)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（未同期）"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (niet gesynchroniseerd)"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (не синхронізовано)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（未同步）"
+          }
+        }
+      }
+    },
     "%@ can't do this right now. Try again in a moment." : {
       "localizations" : {
         "de" : {
@@ -22980,6 +23026,52 @@
         }
       }
     },
+    "Files of %@ that Synctrain cannot synchronize were still in Finder's Synctrain location. They are now in %@, next to the folder, where you can move or remove them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dateien von %@, die Synctrain nicht synchronisieren kann, waren noch im Synctrain-Speicherort im Finder. Sie liegen jetzt in %@, neben dem Ordner, wo Sie sie verschieben oder entfernen können."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos de %@ que Synctrain no puede sincronizar seguían en la ubicación Synctrain del Finder. Ahora están en %@, junto a la carpeta, donde puedes moverlos o eliminarlos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I file di %@ che Synctrain non può sincronizzare erano ancora nella posizione Synctrain del Finder. Ora sono in %@, accanto alla cartella, dove puoi spostarli o rimuoverli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainが同期できない%@のファイルが、FinderのSynctrainの場所に残っていました。これらは現在、フォルダの隣の%@にあり、そこで移動または削除できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestanden van %@ die Synctrain niet kan synchroniseren stonden nog in de Synctrain-locatie in de Finder. Ze staan nu in %@, naast de map, waar je ze kunt verplaatsen of verwijderen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файли з %@, які Synctrain не може синхронізувати, залишалися в розташуванні Synctrain у Finder. Тепер вони в %@, поруч із папкою, де ви можете перемістити або вилучити їх."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法同步的 %@ 中的文件仍在 Finder 的 Synctrain 位置中。它们现在位于文件夹旁边的 %@ 中，你可以在那里移动或删除它们。"
+          }
+        }
+      }
+    },
     "Files on this device" : {
       "localizations" : {
         "de" : {
@@ -23298,6 +23390,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Finder 仍在显示文件夹。请先将它们切换为“全部同步”，或将它们从其网关移除，否则将无法打开其中的文件。"
+          }
+        }
+      }
+    },
+    "Finder's Synctrain location still holds files of %@ that Synctrain cannot synchronize, and could not move them aside. Move or remove that folder in Finder, then add it again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Synctrain-Speicherort im Finder liegen noch Dateien von %@, die Synctrain nicht synchronisieren kann und nicht zur Seite legen konnte. Verschieben oder entfernen Sie diesen Ordner im Finder und fügen Sie ihn dann erneut hinzu."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La ubicación Synctrain del Finder todavía contiene archivos de %@ que Synctrain no puede sincronizar y no ha podido apartar. Mueve o elimina esa carpeta en el Finder y vuelve a añadirla."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La posizione Synctrain del Finder contiene ancora file di %@ che Synctrain non può sincronizzare e non è riuscito a spostare da parte. Sposta o rimuovi quella cartella nel Finder, poi aggiungila di nuovo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FinderのSynctrainの場所には、Synctrainが同期できず、移動もできなかった%@のファイルがまだあります。Finderでそのフォルダを移動または削除してから、もう一度追加してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In de Synctrain-locatie in de Finder staan nog bestanden van %@ die Synctrain niet kan synchroniseren en niet opzij kon zetten. Verplaats of verwijder die map in de Finder en voeg hem daarna opnieuw toe."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У розташуванні Synctrain у Finder досі є файли з %@, які Synctrain не може синхронізувати й не зміг відсунути. Перемістіть або вилучіть цю папку у Finder, а потім додайте її знову."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finder 的 Synctrain 位置中仍有 %@ 的文件，Synctrain 无法同步，也无法将它们移开。请在 Finder 中移动或删除该文件夹，然后重新添加。"
           }
         }
       }
@@ -29710,52 +29848,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不受信任"
-          }
-        }
-      }
-    },
-    "Items can only be added inside a folder." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Objekte können nur innerhalb eines Ordners hinzugefügt werden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los elementos solo se pueden añadir dentro de una carpeta."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gli elementi possono essere aggiunti solo all'interno di una cartella."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "項目はフォルダの中にのみ追加できます。"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Onderdelen kunnen alleen in een map worden toegevoegd."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Елементи можна додавати лише всередину папки."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "项目只能添加到文件夹内。"
           }
         }
       }
@@ -54942,6 +55034,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synctrain 无法连接到 %@ 来下载此文件。"
+          }
+        }
+      }
+    },
+    "Synctrain cannot synchronize %lld of the files in %@, such as %@. They stay in Finder's Synctrain location, in a folder of the same name, where you can move or remove them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kann %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@. Sie bleiben im Synctrain-Speicherort im Finder, in einem Ordner mit demselben Namen, wo Sie sie verschieben oder entfernen können."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no puede sincronizar %lld de los archivos de %@, como %@. Se quedan en la ubicación Synctrain del Finder, en una carpeta con el mismo nombre, donde puedes moverlos o eliminarlos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non può sincronizzare %lld dei file in %@, per esempio %@. Restano nella posizione Synctrain del Finder, in una cartella con lo stesso nome, dove puoi spostarli o rimuoverli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainは%2$@内の%1$lld個のファイル（%3$@など）を同期できません。これらはFinderのSynctrainの場所にある同じ名前のフォルダに残り、そこで移動または削除できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kan %lld van de bestanden in %@ niet synchroniseren, zoals %@. Ze blijven in de Synctrain-locatie in de Finder, in een map met dezelfde naam, waar je ze kunt verplaatsen of verwijderen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не може синхронізувати %lld файлів у %@, наприклад %@. Вони залишаються в розташуванні Synctrain у Finder, у папці з такою самою назвою, де ви можете перемістити або вилучити їх."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法同步 %2$@ 中的 %1$lld 个文件，例如 %3$@。它们保留在 Finder 的 Synctrain 位置中同名的文件夹里，你可以在那里移动或删除它们。"
+          }
+        }
+      }
+    },
+    "Synctrain cannot synchronize more than %lld of the files in %@, such as %@. They stay in Finder's Synctrain location, in a folder of the same name, where you can move or remove them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kann mehr als %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@. Sie bleiben im Synctrain-Speicherort im Finder, in einem Ordner mit demselben Namen, wo Sie sie verschieben oder entfernen können."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no puede sincronizar más de %lld de los archivos de %@, como %@. Se quedan en la ubicación Synctrain del Finder, en una carpeta con el mismo nombre, donde puedes moverlos o eliminarlos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non può sincronizzare più di %lld dei file in %@, per esempio %@. Restano nella posizione Synctrain del Finder, in una cartella con lo stesso nome, dove puoi spostarli o rimuoverli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainは%2$@内の%1$lld個を超えるファイル（%3$@など）を同期できません。これらはFinderのSynctrainの場所にある同じ名前のフォルダに残り、そこで移動または削除できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kan meer dan %lld van de bestanden in %@ niet synchroniseren, zoals %@. Ze blijven in de Synctrain-locatie in de Finder, in een map met dezelfde naam, waar je ze kunt verplaatsen of verwijderen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не може синхронізувати понад %lld файлів у %@, наприклад %@. Вони залишаються в розташуванні Synctrain у Finder, у папці з такою самою назвою, де ви можете перемістити або вилучити їх."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法同步 %2$@ 中超过 %1$lld 个文件，例如 %3$@。它们保留在 Finder 的 Synctrain 位置中同名的文件夹里，你可以在那里移动或删除它们。"
           }
         }
       }
