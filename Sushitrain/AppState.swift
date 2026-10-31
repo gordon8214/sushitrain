@@ -228,6 +228,9 @@ struct EngineMenuState: Equatable {
 	private(set) var isMigratedToNewDatabase: Bool = false
 	private(set) var syncState: SyncState = SyncState(isDownloading: false, isUploading: false, connectedPeerCount: 0)
 	private(set) var engineMenuState = EngineMenuState()
+	/// Follows the engine's events, for the menu bar icon. Apart from EngineMenuState, as it changes with every transfer
+	/// and the app menu doesn't need to know.
+	private(set) var engineStatus = EngineStatus.starting
 	private(set) var launchedAt = Date.now
 	private(set) var maintenanceManager: MaintenanceManager!
 
@@ -905,6 +908,28 @@ struct EngineMenuState: Equatable {
 			#if os(macOS)
 				EngineMenuItems.refreshAppMenu()
 			#endif
+		}
+		self.updateEngineStatus()
+	}
+
+	private func updateEngineStatus() {
+		let client = self.client
+		let folders = self.hasLoadedClient ? (client.folders()?.asArray() ?? []).compactMap { client.folder(withID: $0) } : []
+		var failure: String? = nil
+		if case .error(let message) = self.startupState, !self.isEngineRestarting {
+			failure = message
+		}
+		let next = EngineStatus(
+			isRunning: self.engineMenuState.isRunning,
+			failure: failure,
+			foldersWithErrors: folders.filter(\.isStoppedOnError).map(\.displayName),
+			allDevicesPaused: self.engineMenuState.allDevicesPaused,
+			allFoldersPaused: !folders.isEmpty && folders.allSatisfy { $0.isPaused() },
+			connectedPeerCount: self.syncState.connectedPeerCount,
+			isTransferring: self.syncState.isDownloading || self.syncState.isUploading
+		)
+		if self.engineStatus != next {
+			self.engineStatus = next
 		}
 	}
 

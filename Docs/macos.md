@@ -407,6 +407,27 @@ The app menu and the menu bar menu have what Syncthing.app's menu has:
 - **Open Web GUI** (⌥⌘O) opens the address in the configuration in the default browser, and is unavailable while the web
   GUI is off or on a Unix socket. Until the pages are built in it shows the empty page described above.
 
+## Menu bar status
+
+The menu bar icon says what the engine is doing, and the first line of its menu says it in words, after the engine's
+version. The first row that applies wins (`EngineStatus`):
+
+| Icon | First line says | When |
+| --- | --- | --- |
+| `exclamationmark.triangle.fill` | Error, with the message | The engine failed |
+| `hourglass` | Starting… | The engine isn't running yet, or restarts |
+| `exclamationmark.triangle.fill` | Error in, with the folder | A folder stopped on an error, such as its path being gone |
+| `pause.circle.fill` | All devices are paused | Every other device is paused, by the user or by the app while connectivity is turned off |
+| `pause.circle.fill` | All folders are paused | Every folder is paused |
+| `folder` | Not connected | No other device is connected |
+| `arrow.triangle.2.circlepath` | Synchronizing... | Files are going to or from another device. Scanning doesn't count. |
+| `folder.fill` | Up to date | None of the above |
+
+The status follows the engine's events, with no polling: each one has `AppState` read the engine again, and the
+`MenuBarExtra` follows the result. `MenuBarExtra` has no tooltip, so what Syncthing.app shows in one is on that first line.
+Files that failed in a folder that otherwise runs don't count as an error here yet (syncthing-tools#26). Files in Finder
+mode has no engine, so its icon doesn't change.
+
 ## Signing and releasing
 
 The Mac app is distributed as a disk image, signed with Developer ID and notarized, so that Gatekeeper accepts it on any

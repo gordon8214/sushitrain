@@ -406,7 +406,11 @@ struct SushitrainApp: App {
 				}
 			}.environment(appState)
 
-			MenuBarExtra("Synctrain", systemImage: self.menuIcon, isInserted: $hideInDock) {
+			MenuBarExtra("Synctrain", systemImage: appState.engineStatus.symbol, isInserted: $hideInDock) {
+				Text(verbatim: appState.engineStatus.menuLine)
+
+				Divider()
+
 				if appState.startupState == .started {
 					OverallStatusView()
 						.environment(appState)
@@ -495,26 +499,6 @@ struct SushitrainApp: App {
 
 		private func update() async {
 			self.folders = await appState.folders().filter { $0.isHidden == false }.sorted()
-		}
-
-		private var menuIcon: String {
-			if appState.startupState == .started {
-				if appState.engineMenuState.allDevicesPaused {
-					return "pause.circle.fill"
-				}
-				if appState.client.connectedPeerCount() > 0 {
-					if appState.client.isDownloading() || appState.client.isUploading() {
-						return "folder.fill.badge.gearshape"
-					}
-					return "folder.fill"
-				}
-				else {
-					return "folder"
-				}
-			}
-			else {
-				return "exclamationmark.triangle.fill"
-			}
 		}
 	}
 #endif

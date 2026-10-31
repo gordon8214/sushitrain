@@ -6,6 +6,41 @@
 #if os(macOS)
 	import AppKit
 	import SwiftUI
+	import SynctrainHostKit
+	@preconcurrency import SushitrainCore
+
+	extension EngineStatus {
+		/// The first line of the menu bar menu: which engine this is and what it is doing
+		var menuLine: String {
+			let engine = "Syncthing \(SushitrainVersion())"
+			return String(localized: "\(engine): \(self.title)")
+		}
+
+		private var title: String {
+			switch self {
+			case .starting:
+				return String(localized: "Starting…")
+			case .failed(let message):
+				let error = String(localized: "Error")
+				return message.isEmpty ? error : String(localized: "\(error): \(message)")
+			case .folderErrors(let folders):
+				if folders.count == 1 {
+					return String(localized: "Error in \(folders[0])")
+				}
+				return String(localized: "Folders with errors: \(folders.count)")
+			case .devicesPaused:
+				return String(localized: "All devices are paused")
+			case .foldersPaused:
+				return String(localized: "All folders are paused")
+			case .offline:
+				return String(localized: "Not connected")
+			case .syncing:
+				return String(localized: "Synchronizing...")
+			case .upToDate:
+				return String(localized: "Up to date")
+			}
+		}
+	}
 
 	/// What acts on the engine as a whole, in the app menu and the menu bar menu. Takes the app state explicitly, as the
 	/// environment doesn't reliably reach menus. Restarting has no shortcut, as it interrupts every transfer.

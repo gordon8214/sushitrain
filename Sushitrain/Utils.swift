@@ -95,6 +95,14 @@ extension SushitrainFolder {
 		return s == "idle" || s == "syncing"
 	}
 
+	/// Whether the folder stopped on an error, such as its path being gone. Not for a paused folder, which doesn't run.
+	var isStoppedOnError: Bool {
+		// Not by comparing the state: gomobile returns no value along with an error, so it reads as empty then
+		var error: NSError? = nil
+		_ = self.state(&error)
+		return error != nil
+	}
+
 	var displayName: String {
 		let label = self.label()
 		return label.isEmpty ? self.folderID : label
