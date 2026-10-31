@@ -50714,6 +50714,52 @@
         }
       }
     },
+    "Some files could not be synchronized" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Dateien konnten nicht synchronisiert werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se han podido sincronizar algunos archivos"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alcuni file non sono stati sincronizzati"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部のファイルを同期できませんでした"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sommige bestanden konden niet worden gesynchroniseerd"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Деякі файли не вдалося синхронізувати"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分文件无法同步"
+          }
+        }
+      }
+    },
     "Some files stay on this Mac" : {
       "localizations" : {
         "de" : {
@@ -55038,94 +55084,94 @@
         }
       }
     },
-    "Synctrain cannot synchronize %lld of the files in %@, such as %@. They stay in Finder's Synctrain location, in a folder of the same name, where you can move or remove them." : {
+    "Synctrain cannot synchronize %lld of the files in %@, such as %@, so they never reached another device. macOS may keep them in Finder's Synctrain location, in a folder of the same name, or remove them with the folder." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain kann %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@. Sie bleiben im Synctrain-Speicherort im Finder, in einem Ordner mit demselben Namen, wo Sie sie verschieben oder entfernen können."
+            "value" : "Synctrain kann %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@, sodass sie nie ein anderes Gerät erreicht haben. macOS behält sie möglicherweise im Synctrain-Speicherort im Finder, in einem Ordner mit demselben Namen, oder entfernt sie mit dem Ordner."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain no puede sincronizar %lld de los archivos de %@, como %@. Se quedan en la ubicación Synctrain del Finder, en una carpeta con el mismo nombre, donde puedes moverlos o eliminarlos."
+            "value" : "Synctrain no puede sincronizar %lld de los archivos de %@, como %@, así que nunca han llegado a otro dispositivo. macOS puede conservarlos en la ubicación Synctrain del Finder, en una carpeta con el mismo nombre, o eliminarlos junto con la carpeta."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain non può sincronizzare %lld dei file in %@, per esempio %@. Restano nella posizione Synctrain del Finder, in una cartella con lo stesso nome, dove puoi spostarli o rimuoverli."
+            "value" : "Synctrain non può sincronizzare %lld dei file in %@, per esempio %@, quindi non hanno mai raggiunto un altro dispositivo. macOS può conservarli nella posizione Synctrain del Finder, in una cartella con lo stesso nome, oppure rimuoverli insieme alla cartella."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrainは%2$@内の%1$lld個のファイル（%3$@など）を同期できません。これらはFinderのSynctrainの場所にある同じ名前のフォルダに残り、そこで移動または削除できます。"
+            "value" : "Synctrainは%2$@内の%1$lld個のファイル（%3$@など）を同期できないため、これらは他のデバイスに届いていません。macOSはこれらをFinderのSynctrainの場所にある同じ名前のフォルダに残すことも、フォルダと一緒に削除することもあります。"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain kan %lld van de bestanden in %@ niet synchroniseren, zoals %@. Ze blijven in de Synctrain-locatie in de Finder, in een map met dezelfde naam, waar je ze kunt verplaatsen of verwijderen."
+            "value" : "Synctrain kan %lld van de bestanden in %@ niet synchroniseren, zoals %@, dus ze hebben nooit een ander apparaat bereikt. macOS bewaart ze mogelijk in de Synctrain-locatie in de Finder, in een map met dezelfde naam, of verwijdert ze samen met de map."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain не може синхронізувати %lld файлів у %@, наприклад %@. Вони залишаються в розташуванні Synctrain у Finder, у папці з такою самою назвою, де ви можете перемістити або вилучити їх."
+            "value" : "Synctrain не може синхронізувати %lld файлів у %@, наприклад %@, тому вони ніколи не потрапили на інший пристрій. macOS може залишити їх у розташуванні Synctrain у Finder, у папці з такою самою назвою, або вилучити їх разом із папкою."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain 无法同步 %2$@ 中的 %1$lld 个文件，例如 %3$@。它们保留在 Finder 的 Synctrain 位置中同名的文件夹里，你可以在那里移动或删除它们。"
+            "value" : "Synctrain 无法同步 %2$@ 中的 %1$lld 个文件，例如 %3$@，因此它们从未到达其他设备。macOS 可能把它们保留在 Finder 的 Synctrain 位置中同名的文件夹里，也可能连同该文件夹一起删除。"
           }
         }
       }
     },
-    "Synctrain cannot synchronize more than %lld of the files in %@, such as %@. They stay in Finder's Synctrain location, in a folder of the same name, where you can move or remove them." : {
+    "Synctrain cannot synchronize more than %lld of the files in %@, such as %@, so they never reached another device. macOS may keep them in Finder's Synctrain location, in a folder of the same name, or remove them with the folder." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain kann mehr als %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@. Sie bleiben im Synctrain-Speicherort im Finder, in einem Ordner mit demselben Namen, wo Sie sie verschieben oder entfernen können."
+            "value" : "Synctrain kann mehr als %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@, sodass sie nie ein anderes Gerät erreicht haben. macOS behält sie möglicherweise im Synctrain-Speicherort im Finder, in einem Ordner mit demselben Namen, oder entfernt sie mit dem Ordner."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain no puede sincronizar más de %lld de los archivos de %@, como %@. Se quedan en la ubicación Synctrain del Finder, en una carpeta con el mismo nombre, donde puedes moverlos o eliminarlos."
+            "value" : "Synctrain no puede sincronizar más de %lld de los archivos de %@, como %@, así que nunca han llegado a otro dispositivo. macOS puede conservarlos en la ubicación Synctrain del Finder, en una carpeta con el mismo nombre, o eliminarlos junto con la carpeta."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain non può sincronizzare più di %lld dei file in %@, per esempio %@. Restano nella posizione Synctrain del Finder, in una cartella con lo stesso nome, dove puoi spostarli o rimuoverli."
+            "value" : "Synctrain non può sincronizzare più di %lld dei file in %@, per esempio %@, quindi non hanno mai raggiunto un altro dispositivo. macOS può conservarli nella posizione Synctrain del Finder, in una cartella con lo stesso nome, oppure rimuoverli insieme alla cartella."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrainは%2$@内の%1$lld個を超えるファイル（%3$@など）を同期できません。これらはFinderのSynctrainの場所にある同じ名前のフォルダに残り、そこで移動または削除できます。"
+            "value" : "Synctrainは%2$@内の%1$lld個を超えるファイル（%3$@など）を同期できないため、これらは他のデバイスに届いていません。macOSはこれらをFinderのSynctrainの場所にある同じ名前のフォルダに残すことも、フォルダと一緒に削除することもあります。"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain kan meer dan %lld van de bestanden in %@ niet synchroniseren, zoals %@. Ze blijven in de Synctrain-locatie in de Finder, in een map met dezelfde naam, waar je ze kunt verplaatsen of verwijderen."
+            "value" : "Synctrain kan meer dan %lld van de bestanden in %@ niet synchroniseren, zoals %@, dus ze hebben nooit een ander apparaat bereikt. macOS bewaart ze mogelijk in de Synctrain-locatie in de Finder, in een map met dezelfde naam, of verwijdert ze samen met de map."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain не може синхронізувати понад %lld файлів у %@, наприклад %@. Вони залишаються в розташуванні Synctrain у Finder, у папці з такою самою назвою, де ви можете перемістити або вилучити їх."
+            "value" : "Synctrain не може синхронізувати понад %lld файлів у %@, наприклад %@, тому вони ніколи не потрапили на інший пристрій. macOS може залишити їх у розташуванні Synctrain у Finder, у папці з такою самою назвою, або вилучити їх разом із папкою."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain 无法同步 %2$@ 中超过 %1$lld 个文件，例如 %3$@。它们保留在 Finder 的 Synctrain 位置中同名的文件夹里，你可以在那里移动或删除它们。"
+            "value" : "Synctrain 无法同步 %2$@ 中超过 %1$lld 个文件，例如 %3$@，因此它们从未到达其他设备。macOS 可能把它们保留在 Finder 的 Synctrain 位置中同名的文件夹里，也可能连同该文件夹一起删除。"
           }
         }
       }

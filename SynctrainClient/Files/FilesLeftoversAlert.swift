@@ -20,7 +20,7 @@
 
 		func body(content: Content) -> some View {
 			content.alert(
-				"Some files stay on this Mac", isPresented: isPresented, presenting: coordinator.leftovers.first
+				"Some files could not be synchronized", isPresented: isPresented, presenting: coordinator.leftovers.first
 			) { report in
 				Button("Show in Finder") {
 					ClientLifecycle.show(report.url)
@@ -47,12 +47,12 @@
 			case .staying(let count, let example, let isComplete):
 				if isComplete {
 					Text(
-						"Synctrain cannot synchronize \(count) of the files in \(report.folder), such as \(example). They stay in Finder's Synctrain location, in a folder of the same name, where you can move or remove them."
+						"Synctrain cannot synchronize \(count) of the files in \(report.folder), such as \(example), so they never reached another device. macOS may keep them in Finder's Synctrain location, in a folder of the same name, or remove them with the folder."
 					)
 				}
 				else {
 					Text(
-						"Synctrain cannot synchronize more than \(count) of the files in \(report.folder), such as \(example). They stay in Finder's Synctrain location, in a folder of the same name, where you can move or remove them."
+						"Synctrain cannot synchronize more than \(count) of the files in \(report.folder), such as \(example), so they never reached another device. macOS may keep them in Finder's Synctrain location, in a folder of the same name, or remove them with the folder."
 					)
 				}
 			case .movedAside(let name):

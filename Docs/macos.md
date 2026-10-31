@@ -206,9 +206,10 @@ runs the [remote file service](gateway.md), which is what the extension speaks t
   `excludedFromSync` (names macOS keeps for itself, names an on-demand folder can't select, paths the folder's ignore
   patterns exclude), so the index never has them. The system then can't remove the directory such a file is in, and a
   folder that leaves Finder leaves its own directory at the top level of the location. Before the folder goes,
-  `SystemCopy.unknownPaths` walks the system's copy and lists what the index has no item at, which is what stays, and the
-  settings say how much and where (`FilesLeftovers`). Nothing is removed: these can be files of the user's that never
-  reached another device. The directory of a file the extension refuses is read with `opendir`, as `FileManager` leaves
+  `SystemCopy.unknownPaths` walks the system's copy and lists what the index has no item at, which is what the folder
+  never had, and the settings say how much and where (`FilesLeftovers`). Nothing is removed: these can be files of the
+  user's that never reached another device. macOS removes them with the folder where it can, and otherwise leaves the
+  folder's directory behind, so the message says both. The directory of a file the extension refuses is read with `opendir`, as `FileManager` leaves
   `._name` files out of a listing, which are most of what this looks for. The directory a folder left is offered to the
   extension as a new item of the top level; `excludedFromSync` keeps it on this Mac, where `cannotSynchronize` would have
   the system ask again every minute. A folder coming back to a name that directory holds would show nothing of its own,
