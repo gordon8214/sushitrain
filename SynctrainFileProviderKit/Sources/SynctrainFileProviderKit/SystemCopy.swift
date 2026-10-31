@@ -8,8 +8,8 @@ import Foundation
 
 /// The system's copy of a folder of the Files location, as the Files app or Finder keeps it on this device. The items
 /// of the index are there once the system has asked for them, and what the extension refused with `excludedFromSync`
-/// (names macOS keeps for itself, names an on-demand folder cannot select, paths a folder's ignore patterns exclude)
-/// is there and nowhere else, as the system keeps those on the device without synchronizing them.
+/// (names macOS keeps for itself, paths a folder's ignore patterns exclude) is there and nowhere else, as the system
+/// keeps those on the device without synchronizing them.
 public enum SystemCopy {
 	/// What the system's copy of a folder holds that the folder itself does not
 	public struct Unknown: Sendable, Equatable {
@@ -35,11 +35,11 @@ public enum SystemCopy {
 	/// subtree is listed: what is inside it goes with it. Finder's `.DS_Store` is left out, as the system removes its
 	/// own with the directory it is in.
 	///
-	/// The walk stops at `limit` paths or after `budget`, as folders can be large and this only tells the user where
-	/// their files are. It reads directory listings, so nothing of the folder is downloaded, and it only walks into
-	/// directories the folder has, so it stays inside what the index describes. Names are matched as the index stores
-	/// them, which is how the system writes its copy; a name that differs from the index only in case (which the
-	/// volume cannot tell apart) is reported as unknown.
+	/// The walk stops at `limit` paths or after `budget`, as folders can be large, and `isComplete` says so: a caller
+	/// that decides anything from this has to look at that. It reads directory listings, so nothing of the folder is
+	/// downloaded, and it only walks into directories the folder has, so it stays inside what the index describes. Names
+	/// are matched as the index stores them, which is how the system writes its copy; a name that differs from the index
+	/// only in case (which the volume cannot tell apart) is reported as unknown.
 	public static func unknownPaths(
 		folderID: String, root: URL, store: IndexStore, limit: Int = 100, budget: TimeInterval = 10
 	) throws(IndexError) -> Unknown {
@@ -114,6 +114,14 @@ public enum SystemCopy {
 	/// The names in a directory, as the file system has them; empty when it cannot be read
 	public static func names(in directory: URL) -> [String] {
 		names(at: directory.path(percentEncoded: false)) ?? []
+	}
+
+	/// Whether a directory holds nothing, or isn't there. One that can't be read may hold anything.
+	public static func holdsNothing(_ directory: URL) -> Bool {
+		guard let names = names(at: directory.path(percentEncoded: false)) else {
+			return errno == ENOENT
+		}
+		return names.isEmpty
 	}
 
 	/// `FileManager` leaves out the `._name` files that macOS keeps a file's metadata in, which are exactly what the

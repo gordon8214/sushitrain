@@ -23,23 +23,27 @@ import (
 func SelectiveFolders(app *syncthing.App, cfg config.Wrapper) func(folderID string) bool {
 	return func(folderID string) bool {
 		_, patterns, err := app.Internals.Ignores(folderID)
-		if err != nil {
-			// Syncthing has no patterns for folders that don't run (paused ones): read them from the folder
-			folder, ok := cfg.Folder(folderID)
-			if !ok {
-				return true
-			}
-			ffs := folder.Filesystem()
-			matcher := ignore.New(ffs)
-			// Only a file that isn't there means no patterns, which a link to a missing file doesn't say
-			if err := matcher.Load(".stignore"); err != nil {
-				if _, statErr := ffs.Lstat(".stignore"); !errors.Is(statErr, os.ErrNotExist) {
-					return true
-				}
-			}
-			patterns = matcher.Patterns()
+		if err == nil && len(patterns) > 0 {
+			return slices.ContainsFunc(patterns, ignoresEverything)
 		}
-		return slices.ContainsFunc(patterns, ignoresEverything)
+		// Syncthing has no patterns for folders that don't run (paused ones) and none after failing to load them, which
+		// it doesn't report: only the folder says
+		folder, ok := cfg.Folder(folderID)
+		if !ok {
+			return true
+		}
+		ffs := folder.Filesystem()
+		// Only a file that isn't there means no patterns, which a folder that isn't there (on a volume that isn't mounted)
+		// doesn't say. This runs for every request, so it looks at the root without listing it.
+		if _, err := ffs.Lstat(".stignore"); errors.Is(err, os.ErrNotExist) {
+			_, err := ffs.Stat(".")
+			return err != nil
+		}
+		matcher := ignore.New(ffs)
+		if err := matcher.Load(".stignore"); err != nil {
+			return true
+		}
+		return slices.ContainsFunc(matcher.Patterns(), ignoresEverything)
 	}
 }
 

@@ -55,24 +55,21 @@
 						"Synctrain cannot synchronize more than \(count) of the files in \(report.folder), such as \(example), so they never reached another device. They are now in \(place), where you can move or remove them."
 					)
 				}
-			case .staying(let count, let example, let isComplete):
-				if isComplete {
-					Text(
-						"Synctrain cannot synchronize \(count) of the files in \(report.folder), such as \(example), so they never reached another device. macOS may keep them in Finder's Synctrain location, in a folder of the same name, or remove them with the folder."
-					)
-				}
-				else {
-					Text(
-						"Synctrain cannot synchronize more than \(count) of the files in \(report.folder), such as \(example), so they never reached another device. macOS may keep them in Finder's Synctrain location, in a folder of the same name, or remove them with the folder."
-					)
-				}
+			case .partlyMovedOut(let moved, let count, let example, let place):
+				Text(
+					"Synctrain cannot synchronize \(count) of the files in \(report.folder), such as \(example), so they never reached another device. \(moved) of them are now in \(place). The others are still in Finder's Synctrain location, so the folder stays until they are moved."
+				)
+			case .staying(let count, let example):
+				Text(
+					"Synctrain cannot synchronize \(count) of the files in \(report.folder), such as \(example), so they never reached another device. They are still in Finder's Synctrain location, so the folder stays until they are moved."
+				)
 			case .movedAside(let name):
 				Text(
 					"Files of \(report.folder) that Synctrain cannot synchronize were still in Finder's Synctrain location. They are now in \(name), next to the folder, where you can move or remove them."
 				)
 			case .keptBySystem:
 				Text(
-					"macOS kept files from Finder's Synctrain location that never reached a gateway. They are in \(report.url.lastPathComponent), where you can move or remove them."
+					"macOS kept files from Finder's Synctrain location that never reached a gateway. They are in \((report.url.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath), where you can move or remove them."
 				)
 			}
 		}

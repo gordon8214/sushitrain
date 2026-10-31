@@ -10,6 +10,8 @@ import SynctrainFileProviderKit
 enum GatewayFolderError: LocalizedError, Sendable {
 	case notEligible(String)
 	case unresolvedOperations
+	/// The location holds files that are nowhere else, which could not all be taken out of it
+	case filesLeftBehind
 	case store(IndexError)
 	case remote(RemoteError)
 
@@ -21,6 +23,11 @@ enum GatewayFolderError: LocalizedError, Sendable {
 			return String(
 				localized:
 					"Edits made in this folder have not been confirmed by the gateway. Wait until they are sent, or export or discard them, then try again."
+			)
+		case .filesLeftBehind:
+			return String(
+				localized:
+					"Finder's Synctrain location still holds files that Synctrain could not move out of it. Move them somewhere else in Finder, then try again."
 			)
 		case .store(let error):
 			return error.userDescription

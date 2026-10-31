@@ -18,7 +18,8 @@
 			// Before anything reads them
 			TestRun.redirectPreferences()
 
-			if AppMode.resolve() == .synchronize {
+			AppMode.current = AppMode.resolve()
+			if AppMode.current == .synchronize {
 				SushitrainApp.main()
 			}
 			else {

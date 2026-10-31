@@ -1168,15 +1168,6 @@ private struct BrowserItemsView: View {
 							)
 						)
 					}
-					else if folder.isNativeFilesystem() {
-						ContentUnavailableView(
-							"There are no files in this folder to show",
-							systemImage: "line.3.horizontal.decrease",
-							description: Text(
-								"Only files that are on this device are displayed."
-							)
-						)
-					}
 					else {
 						ContentUnavailableView(
 							"There are currently no files in this folder.",
@@ -1246,6 +1237,7 @@ private struct BrowserItemsView: View {
 					files = files.filter { $0.isLocallyPresent() }
 					directories = directories.filter { $0.isLocallyPresent() }
 				}
+				files.sort(by: request.sort.isOrderedBefore)
 				return (true, folder.isPaused(), directories, files)
 			}.value
 

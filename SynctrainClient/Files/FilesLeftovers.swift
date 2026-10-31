@@ -11,48 +11,62 @@
 	/// the like), and paths a folder's ignore patterns exclude. The extension refuses those with `excludedFromSync`, so
 	/// they stay in the system's copy alone and the index never has them (`SystemCopy.unknownPaths` finds them).
 	///
-	/// The system cannot remove the directory of such a file, so a folder that leaves Finder leaves its directory at
-	/// the top level of the location, with those files inside. The user is told where it is, and `moveAside` renames it
-	/// when the folder comes back, as a folder whose name is taken shows nothing of its own. Nothing is ever removed:
-	/// these can be files of the user's that never reached another device.
+	/// macOS removes its copy of a folder with everything in it, including these, so they are taken out before a folder
+	/// leaves (`moveOut`), and a folder they can't all be taken out of stays. Should a directory be left at the top level
+	/// of the location all the same, `moveAside` renames it when the folder comes back, as a folder whose name is taken
+	/// shows nothing of its own. Nothing is ever removed: these can be files of the user's that never reached another
+	/// device.
 	enum FilesLeftovers {
-		/// How many paths are looked for at most
-		static let limit = 100
+		/// How long looking through a folder may take: what it finds decides what survives, so it isn't meant to stop
+		static let walkBudget: TimeInterval = 600
 		/// How many folders of the location `moveAside` looks at; it gives up rather than take one of them for a
 		/// leftover
 		private static let folderLimit = 1000
 		/// How many names `moveAside` tries before it gives up
 		private static let attempts = 100
 
-		/// What the location keeps on this Mac, for the settings to tell the user once
-		struct Report: Sendable, Equatable {
+		/// What the location keeps on this Mac, for the app's window to tell the user once
+		struct Report: Sendable, Equatable, Codable {
 			/// The folder as the location shows it
 			let folder: String
 			/// What to show in Finder: the directory that stays, or the one it was moved to
 			let url: URL
 			let kind: Kind
 
-			enum Kind: Sendable, Equatable {
+			enum Kind: Sendable, Equatable, Codable {
 				/// How many files of a folder that leaves were taken out of the location, with one of their paths
 				/// relative to the folder's root and where they are now. `isComplete` is false when the folder's copy
 				/// was not looked at in full, so that there can be more than `count`.
 				case movedOut(count: Int, example: String, isComplete: Bool, place: String)
-				/// The same, for files that could not be taken out and stay in the system's copy
-				case staying(count: Int, example: String, isComplete: Bool)
+				/// Some of them could not be taken out, and stay in the system's copy
+				case partlyMovedOut(moved: Int, count: Int, example: String, place: String)
+				/// None of them could be taken out
+				case staying(count: Int, example: String)
 				/// The name the directory of an earlier round has now, next to the folder that came back
 				case movedAside(String)
 				/// What the system kept of the location when it went, which is `url`
 				case keptBySystem
 			}
+		}
 
-			/// Whether all of what the folder held on this Mac alone left the location
-			var isComplete: Bool {
-				switch kind {
-				case .movedOut(_, _, let isComplete, _): return isComplete
-				case .staying: return false
-				case .movedAside, .keptBySystem: return true
-				}
-			}
+		/// What came of taking a folder's files out of the location
+		struct Takeout: Sendable {
+			var report: Report?
+			/// Whether it's known that nothing is left behind. Not being able to tell doesn't count.
+			var isComplete: Bool
+
+			static let nothing = Takeout(report: nil, isComplete: true)
+			static let couldNotLook = Takeout(report: nil, isComplete: false)
+		}
+
+		private static let reportsKey = "filesLeftoverReports"
+
+		static var savedReports: [Report] {
+			UserDefaults.standard.data(forKey: reportsKey).flatMap { try? JSONDecoder().decode([Report].self, from: $0) } ?? []
+		}
+
+		static func save(_ reports: [Report]) {
+			UserDefaults.standard.set(try? JSONEncoder().encode(reports), forKey: reportsKey)
 		}
 
 		/// Takes what the location cannot synchronize out of a folder that is leaving it, into a directory of this Mac,

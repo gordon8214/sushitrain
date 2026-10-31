@@ -9,11 +9,13 @@ package gateway
 import (
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -100,6 +102,29 @@ func (e *testEngine) wantFiles(files map[string]string) {
 			e.t.Fatalf("%s holds %q (%v), want %q", name, got, ok, contents)
 		}
 	}
+}
+
+// filesHolding returns every file in the folder with these contents, temporary files included
+func (e *testEngine) filesHolding(contents string) []string {
+	e.t.Helper()
+	var found []string
+	err := filepath.WalkDir(e.folderPath, func(p string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		if data, err := os.ReadFile(p); err == nil && string(data) == contents {
+			rel, err := filepath.Rel(e.folderPath, p)
+			if err != nil {
+				return err
+			}
+			found = append(found, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return found
 }
 
 // wantGone fails if the folder holds anything at these paths
@@ -454,4 +479,131 @@ func TestOperationRecoveryOfAPartlyDoneDelete(t *testing.T) {
 			e.wantScanAgrees(e.sequence())
 		})
 	}
+}
+
+// A delete that stopped can't tell what it checked from what is new when its record is missing or no longer describes
+// the index. It stops: what it removed stays removed, and nothing else goes.
+func TestResumedDeleteWithoutAUsableRecord(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		record func(*journalData)
+	}{
+		{"recorded by a version that kept no sequence", func(data *journalData) { data.DeleteSequence = 0 }},
+		{"the index lost its latest commits", func(data *journalData) { data.DeleteSequence += 1000 }},
+		{"the index is another one", func(data *journalData) { data.DeleteIndexID++ }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newTestEngine(t, "docs", nil)
+			e.write("dir/a.txt", "a")
+			e.write("dir/sub/b.txt", "b")
+			ts := newTestService(t, e, "")
+			ts.export(true)
+			token := ts.pair(map[string]string{"docs": "write"})
+			dir := ts.itemAt(token, "dir")
+
+			ts.journalHook = func(opID string, state string) error {
+				if state != journalPublishing {
+					return nil
+				}
+				op, _, err := ts.loadOperation(ts.store.db, opID)
+				if err != nil {
+					t.Error(err)
+				}
+				tc.record(&op.data)
+				encoded, err := json.Marshal(op.data)
+				if err != nil {
+					t.Error(err)
+				}
+				if _, err := ts.store.db.Exec(`UPDATE operations SET journal_data = ? WHERE op_id = ?`, string(encoded),
+					opID); err != nil {
+					t.Error(err)
+				}
+				if err := os.Remove(filepath.Join(e.folderPath, "dir", "sub", "b.txt")); err != nil &&
+					!errors.Is(err, os.ErrNotExist) {
+					t.Error(err)
+				}
+				return errors.New("simulated crash")
+			}
+			resp, data := ts.do("POST", "/v1/operations", token, deleteRequest(dir))
+			if resp.StatusCode != http.StatusAccepted {
+				t.Fatalf("interrupted operation: %d %s", resp.StatusCode, data)
+			}
+			var pending Operation
+			if err := json.Unmarshal(data, &pending); err != nil {
+				t.Fatal(err)
+			}
+			ts.Close()
+
+			ts2 := newTestService(t, e, ts.home)
+			waitFor(t, operationTimeout, "recovery", func() bool {
+				op, ok, _ := ts2.loadOperation(ts2.store.db, pending.Operation)
+				return ok && op.state != stateResultPending
+			})
+			var done Operation
+			ts2.json("GET", "/v1/operations/"+pending.Operation, token, nil, http.StatusOK, &done)
+			wantRefused(t, done, codeRevisionMismatch)
+			e.wantFiles(map[string]string{"dir/a.txt": "a"})
+			if local, ok, _ := e.backend.LocalFile("docs", "dir/sub/b.txt"); !ok || !local.Deleted {
+				t.Fatalf("what it removed is not indexed as deleted: %+v", local)
+			}
+			if local, ok, _ := e.backend.LocalFile("docs", "dir/a.txt"); !ok || local.Deleted {
+				t.Fatalf("what it left is not indexed: %+v", local)
+			}
+		})
+	}
+}
+
+// An edit that stopped once it was staged, when the item moved to another directory before it ran again. The edit
+// finishes beside the path it was staged for, as one file. Staged again beside the item's new path, it would be published
+// in a directory the journal doesn't name, which can't be indexed: it would never finish, and leave a copy every time.
+func TestOperationRecoveryOfAnEditWhoseItemMoved(t *testing.T) {
+	e := newTestEngine(t, "docs", nil)
+	e.write("from/doc.txt", "original")
+	e.write("to/other.txt", "other")
+	ts := newTestService(t, e, "")
+	ts.export(true)
+	token := ts.pair(map[string]string{"docs": "write"})
+	doc := ts.itemAt(token, "from/doc.txt")
+	to := ts.itemAt(token, "to")
+
+	// The move happens while the edit is stopped here, so that nothing runs the edit again before it
+	var stopped atomic.Bool
+	ts.journalHook = func(_ string, state string) error {
+		if state != journalStaged || !stopped.CompareAndSwap(false, true) {
+			return nil
+		}
+		if op := ts.operate(token, moveRequest(doc, to, "doc.txt")); op.State != stateResultCommitted {
+			t.Errorf("the move: %+v (%+v)", op, op.Error)
+		}
+		return errors.New("simulated crash")
+	}
+	upload, digest := ts.upload(token, []byte("edited"))
+	resp, data := ts.do("POST", "/v1/operations", token, OperationRequest{ID: newUUID(), Kind: opReplace, FolderID: "docs",
+		ItemID: doc.ID, BaseRevision: doc.Revision, Upload: upload, UploadDigest: digest})
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("interrupted operation: %d %s", resp.StatusCode, data)
+	}
+	var pending Operation
+	if err := json.Unmarshal(data, &pending); err != nil {
+		t.Fatal(err)
+	}
+	ts.Close()
+
+	ts2 := newTestService(t, e, ts.home)
+	waitFor(t, operationTimeout, "recovery", func() bool {
+		ts2.sync()
+		op, ok, _ := ts2.loadOperation(ts2.store.db, pending.Operation)
+		return ok && op.state != stateResultPending
+	})
+	var done Operation
+	ts2.json("GET", "/v1/operations/"+pending.Operation, token, nil, http.StatusOK, &done)
+	if done.State != stateResultConflict || done.Item == nil || done.Item.Path != "to/doc.txt" || done.ConflictItem == nil ||
+		parentPath(done.ConflictItem.Path) != "from" {
+		t.Fatalf("recovered operation: %+v (%+v)", done, done.Error)
+	}
+	if got := e.filesHolding("edited"); !slices.Equal(got, []string{done.ConflictItem.Path}) {
+		t.Fatalf("the edit is in %v, want %s", got, done.ConflictItem.Path)
+	}
+	e.wantFiles(map[string]string{"to/doc.txt": "original"})
+	e.wantScanAgrees(e.sequence())
 }

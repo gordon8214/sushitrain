@@ -75,34 +75,44 @@ import SynctrainFileProviderKit
 		await refreshState()
 	}
 
-	/// Removes the location, and with it the system's copy of its files. Only for when no gateway is left. On a Mac the
-	/// system keeps what never reached a gateway, which can be files that are nowhere else (`FilesLeftovers`), and this
-	/// returns where, if it kept anything. It also leaves a failure in `lastError`.
+	/// Removes the location, and with it the system's copy of its files. On a Mac the system keeps changes it hasn't
+	/// handed to the extension, and this returns where, if it kept any. It does not keep what the extension refused, which
+	/// has to be taken out first (`RemoteCoordinator.takeFilesOut`). This also leaves a failure in `lastError`. A location
+	/// that doesn't exist counts as removed.
 	@discardableResult func remove() async throws -> URL? {
 		guard ClientLifecycle.allowsSharedState else {
 			return nil
 		}
 		do {
-			#if os(macOS)
-				// The system names a place also when it had nothing to keep
-				let kept = try await NSFileProviderManager.remove(Self.domain, mode: .preserveDirtyUserData).flatMap { url in
-					(try? FileManager.default.contentsOfDirectory(atPath: url.path(percentEncoded: false)))?.isEmpty == false
-						? url : nil
-				}
-			#else
-				try await NSFileProviderManager.remove(Self.domain)
-				let kept: URL? = nil
-			#endif
+			let kept = try await removeFromSystem()
 			lastError = nil
 			await refreshState()
 			return kept
 		}
 		catch {
+			if Self.isDomainMissing(error) {
+				await refreshState()
+				return nil
+			}
 			Log.warn("Could not remove the File Provider domain: \(error.localizedDescription)")
 			lastError = error.localizedDescription
 			await refreshState()
 			throw error
 		}
+	}
+
+	/// The system names a place also when it had nothing to keep, which isn't there then. One it can't read may well hold
+	/// something.
+	private func removeFromSystem() async throws -> URL? {
+		#if os(macOS)
+			return try await NSFileProviderManager.remove(Self.domain, mode: .preserveDirtyUserData).flatMap { url in
+				Log.info("The system kept what the Synctrain location held in \(url.path(percentEncoded: false))")
+				return SystemCopy.holdsNothing(url) ? nil : url
+			}
+		#else
+			try await NSFileProviderManager.remove(Self.domain)
+			return nil
+		#endif
 	}
 
 	func refreshState() async {
@@ -116,8 +126,8 @@ import SynctrainFileProviderKit
 	}
 
 	/// Removes the location (and the system's copy of its files) and sets it up again. Files on the gateways are not
-	/// affected, but changes the system has not handed to the extension yet are lost (see `pendingItemCount`). The user
-	/// has to enable the location again in Files.
+	/// affected. Changes the system has not handed to the extension yet are lost on iOS (see `pendingItemCount`), and
+	/// kept by the system on a Mac. The user has to enable the location again in Files.
 	func rebuild() async {
 		guard !isRebuilding, let store = RemoteEnvironment.shared?.store else {
 			return
@@ -138,8 +148,26 @@ import SynctrainFileProviderKit
 			isRebuilding = false
 		}
 		Log.info("Rebuilding the File Provider domain")
+		#if os(macOS)
+			do throws(GatewayFolderError) {
+				let coordinator = RemoteCoordinator.shared
+				for folderID in coordinator.bindings.keys.sorted() {
+					try await coordinator.takeFilesOut(folderID: folderID)
+				}
+			}
+			catch {
+				lastError = error.localizedDescription
+				return
+			}
+		#endif
 		do {
-			try await NSFileProviderManager.remove(Self.domain)
+			let kept = try await removeFromSystem()
+			#if os(macOS)
+				if let kept {
+					RemoteCoordinator.shared.leftovers.append(
+						FilesLeftovers.Report(folder: "Synctrain", url: kept, kind: .keptBySystem))
+				}
+			#endif
 		}
 		catch {
 			Log.warn("Could not remove the File Provider domain: \(error.localizedDescription)")

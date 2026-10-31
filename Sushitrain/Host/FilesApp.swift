@@ -7,6 +7,7 @@
 	import AppIntents
 	import SwiftUI
 	import SynctrainFileProviderKit
+	import SynctrainHostKit
 
 	/// The app in Files in Finder mode, and at a first start until a mode is chosen. No engine runs: this keeps track of
 	/// gateways for the File Provider extension, which browsing and opening files need nothing else for. Edits it could
@@ -19,7 +20,11 @@
 		@State private var mode: AppMode?
 		@State private var model: AppModel
 
+		/// The one window there is: opening a group by value shows the window that has it, where by id alone it adds one
+		private static let window = "files"
+
 		init() {
+			AppLocations.prepareCurrent()
 			let mode = AppMode.resolve()
 			let model = AppModel()
 			_mode = State(initialValue: mode)
@@ -38,8 +43,10 @@
 		}
 
 		var body: some Scene {
-			WindowGroup(id: "files") {
+			WindowGroup(id: Self.window, for: String.self) { _ in
 				FilesWindowContent(model: model, mode: $mode, hideInDock: $hideInDock)
+			} defaultValue: {
+				Self.window
 			}
 			.commandsRemoved()
 			.commands {
@@ -65,7 +72,7 @@
 
 			MenuBarExtra("Synctrain", systemImage: "folder", isInserted: $hideInDock) {
 				Button("Open Synctrain", systemImage: "macwindow") {
-					openWindow(id: "files")
+					openWindow(id: Self.window, value: Self.window)
 					NSApp.activate()
 				}
 				Button("Show in Finder", systemImage: "folder") {
@@ -101,6 +108,9 @@
 			alert.messageText = String(localized: "Synctrain cannot import files in Files in Finder mode")
 			alert.informativeText = String(localized: "Put them in a folder in Finder's Synctrain location instead.")
 			alert.runModal()
+			for handoff in Set(urls.compactMap({ AppLocations.current.shareHandoffDirectory(containing: $0) })) {
+				try? FileManager.default.removeItem(at: handoff)
+			}
 		}
 	}
 
@@ -123,7 +133,7 @@
 						} description: {
 							Text("The storage it shares with Finder is not available.")
 						} actions: {
-							SwitchToSynchronizeButton()
+							SwitchToSynchronizeButton(keepsLocation: true)
 						}
 					case .loading:
 						ProgressView()
@@ -136,7 +146,7 @@
 							Button("Try Again") {
 								Task { await model.start() }
 							}
-							SwitchToSynchronizeButton()
+							SwitchToSynchronizeButton(keepsLocation: true)
 						}
 					case .needsGateway, .needsFolders, .ready:
 						NavigationStack {
@@ -187,19 +197,26 @@
 		}
 	}
 
-	/// Leaves Files in Finder mode (`ModeSwitch`), having said what happens to changes that didn't reach Synctrain
+	/// Leaves Files in Finder mode (`ModeSwitch`), having said what happens to changes that didn't reach Synctrain. With
+	/// `keepsLocation` nothing is taken apart, as nothing can be read to do that by.
 	private struct SwitchToSynchronizeButton: View {
+		let keepsLocation: Bool
 		private var coordinator = RemoteCoordinator.shared
 		@State private var isConfirming = false
 		@State private var isWorking = false
 		@State private var pendingItemCount: Int? = 0
 		@State private var errorMessage: String? = nil
 
+		init(keepsLocation: Bool = false) {
+			self.keepsLocation = keepsLocation
+		}
+
 		var body: some View {
 			Button("Switch to Synchronize Mode…") {
 				Task {
 					// Without a gateway there is no location to ask
-					pendingItemCount = coordinator.gateways.isEmpty ? 0 : await FilesDomain.shared.pendingItemCount()
+					let hasNoLocation = keepsLocation || coordinator.gateways.isEmpty
+					pendingItemCount = hasNoLocation ? 0 : await FilesDomain.shared.pendingItemCount()
 					isConfirming = true
 				}
 			}
@@ -211,7 +228,12 @@
 					leave()
 				}
 			} message: {
-				if let count = pendingItemCount, count > 0 {
+				if keepsLocation {
+					Text(
+						"Synctrain could not read its gateways, so Finder's Synctrain location stays as it is. Synctrain then restarts and synchronizes the folders of this Mac. Switch back to Files in Finder to remove the location."
+					)
+				}
+				else if let count = pendingItemCount, count > 0 {
 					Text(
 						"Changes to \(count) items made in Finder have not reached Synctrain yet. macOS keeps them when the location goes, outside of Finder's Synctrain location."
 					)
@@ -235,6 +257,10 @@
 		}
 
 		private func leave() {
+			if keepsLocation {
+				ModeSwitch.abandonFilesInFinder()
+				return
+			}
 			isWorking = true
 			Task {
 				defer { isWorking = false }

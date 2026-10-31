@@ -298,13 +298,6 @@ enum PhotoBackupProgress {
 				}
 			}
 
-			// Pause the folder while backing up, so that it scans everything that was saved when it resumes
-			let folderWasPaused = folder.isPaused()
-			try folder.setPaused(true)
-			defer {
-				try? folder.setPaused(folderWasPaused)
-			}
-
 			// Get local path for destination folder
 			var err: NSError? = nil
 			let folderPath = folder.localNativePath(&err)
@@ -332,6 +325,11 @@ enum PhotoBackupProgress {
 			guard let album = fetchResult.firstObject else {
 				DispatchQueue.main.async { self.progress = .error(String(localized: "Could not find selected album")) }
 				return
+			}
+
+			// Have the folder pick up everything that was saved, however the export ends
+			defer {
+				try? folder.rescanSubdirectory(subDirectoryPath.pathInFolder)
 			}
 
 			try await self.backupAlbum(

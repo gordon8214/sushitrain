@@ -27,6 +27,9 @@ import SynctrainFileProviderKit
 	}
 
 	private var load = Load.notDone
+	#if os(macOS)
+		@ObservationIgnored private var cacheTrim: Task<Void, Never>? = nil
+	#endif
 	private let isAvailable = RemoteEnvironment.shared != nil
 
 	var phase: Phase {
@@ -65,6 +68,16 @@ import SynctrainFileProviderKit
 				ContentOpener.removeViewingCopies()
 			#endif
 			Task.detached(priority: .utility) { environment.storage.trimContent(toBytes: CacheSettings.limit) }
+			#if os(macOS)
+				// A Mac can stay up for weeks, and the extension doesn't trim what it downloads
+				cacheTrim?.cancel()
+				cacheTrim = Task.detached(priority: .utility) {
+					while !Task.isCancelled {
+						try? await Task.sleep(for: .seconds(3600))
+						environment.storage.trimContent(toBytes: CacheSettings.limit)
+					}
+				}
+			#endif
 			if !endpoints.isEmpty {
 				await FilesDomain.shared.register()
 			}

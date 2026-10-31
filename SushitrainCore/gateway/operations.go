@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/syncthing/syncthing/lib/protocol"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -82,6 +83,8 @@ type journalData struct {
 	Method string `json:"method,omitempty"`
 	// The highest sequence of what a delete checked before removing anything: what is newer isn't its to remove
 	DeleteSequence int64 `json:"deleteSequence,omitempty"`
+	// The index that sequence is of
+	DeleteIndexID protocol.IndexID `json:"deleteIndexID,omitempty"`
 	// Failed attempts with server errors, which are retried a limited number of times
 	Attempts int `json:"attempts,omitempty"`
 	// The modification time a written file gets once it is in place (Unix nanoseconds)

@@ -28,8 +28,11 @@ import SynctrainFileProviderKit
 	private(set) var isRefreshing = false
 	#if os(macOS)
 		/// What the Synctrain location kept on this Mac when a folder left it or came back, oldest first, for the
-		/// settings to tell the user once (`filesLeftoversAlert`, which takes each one as it is shown)
-		var leftovers: [FilesLeftovers.Report] = []
+		/// app's window to tell the user once (`filesLeftoversAlert`, which takes each one as it is shown). They last
+		/// until then, across starts, as they can be the only word of where files went.
+		var leftovers: [FilesLeftovers.Report] = FilesLeftovers.savedReports {
+			didSet { FilesLeftovers.save(leftovers) }
+		}
 	#endif
 
 	@ObservationIgnored private var isStarted = false
@@ -756,34 +759,27 @@ import SynctrainFileProviderKit
 	}
 
 	/// Removes a folder from this device; it stays on its gateway. Refused while its edits are unresolved. On macOS, what
-	/// the location cannot synchronize is taken out of it first, into a new directory of this Mac. Returns whether all of
-	/// that left the location.
-	@discardableResult func removeFolder(folderID: String) async throws(GatewayFolderError) -> Bool {
+	/// the location cannot synchronize is taken out of it first, and the folder stays if any of that can't be.
+	func removeFolder(folderID: String) async throws(GatewayFolderError) {
+		#if os(macOS)
+			try await takeFilesOut(folderID: folderID)
+		#endif
+		try await dropFolder(folderID: folderID)
+	}
+
+	/// Takes a folder out of the index, whatever the system's copy still holds. Refused while its edits are unresolved.
+	func dropFolder(folderID: String) async throws(GatewayFolderError) {
 		guard let environment else {
-			return true
+			return
 		}
 		let activity = BackgroundActivity(name: "Removing a folder")
 		defer { activity.end() }
-		#if os(macOS)
-			// While the folder is still in the index: its items are what tells what the location cannot synchronize
-			let report = await takeFilesOutOfTheLocation(folderID: folderID, environment: environment)
-		#endif
 		let result = await Task.detached(priority: .userInitiated) {
 			RemoteWork.removeFolder(folderID: folderID, environment: environment)
 		}.value
 		FilesDomain.shared.signalWorkingSet()
 		await reloadState()
-		#if os(macOS)
-			// Whether or not the folder went: the files have moved by now
-			if let report {
-				leftovers.append(report)
-			}
-			try result.get()
-			return report?.isComplete ?? true
-		#else
-			try result.get()
-			return true
-		#endif
+		try result.get()
 	}
 
 	/// Removes the Files location, and tells the user what the system kept of it
@@ -797,31 +793,85 @@ import SynctrainFileProviderKit
 	}
 
 	#if os(macOS)
-		/// What the location cannot synchronize in the folder, taken out of it before it leaves Finder: macOS removes
-		/// its copy of a folder with everything in it, these files included, and they are nowhere else
-		private func takeFilesOutOfTheLocation(
-			folderID: String, environment: RemoteEnvironment
-		) async -> FilesLeftovers.Report? {
-			let folder = try? environment.store.folder(id: folderID)
-			guard let label = folder?.label,
-				let root = await FilesDomain.shared.userVisibleURL(folderID: folderID, path: "")
-			else {
-				Log.warn("Could not look at what the Synctrain location keeps of \(folderID)")
-				return nil
+		/// Takes what the location cannot synchronize out of a folder that is about to leave it, while the folder is still
+		/// in the index, whose items are what tells what that is: macOS removes its copy of a folder with everything in
+		/// it, these files included, and they are nowhere else. Refuses unless all of it is accounted for, which leaves
+		/// the folder as it was, so this can be repeated. Unresolved edits come first, as the folder would stay then, and
+		/// without these files.
+		func takeFilesOut(folderID: String) async throws(GatewayFolderError) {
+			guard let environment else {
+				return
 			}
 			let store = environment.store
+			let unresolved = await Task.detached(priority: .userInitiated) {
+				(try? store.hasUnresolvedMutations(folderID: folderID)) ?? true
+			}.value
+			guard !unresolved else {
+				throw .unresolvedOperations
+			}
+			let activity = BackgroundActivity(name: "Removing a folder")
+			defer { activity.end() }
+			let takeout = await takeFilesOutOfTheLocation(folderID: folderID, environment: environment)
+			if let report = takeout.report {
+				leftovers.append(report)
+			}
+			guard takeout.isComplete else {
+				throw .filesLeftBehind
+			}
+		}
+
+		/// Where the system keeps a folder, if it holds anything of it. It has no URL for a folder it never showed, or
+		/// with the location turned off, and nothing can be there then.
+		private func systemCopy(folderID: String, label: String) async -> (root: URL?, isKnown: Bool) {
+			let domain = FilesDomain.shared
+			if let root = await domain.userVisibleURL(folderID: folderID, path: "") {
+				return (root, true)
+			}
+			guard let location = await domain.locationURL() else {
+				await domain.refreshState()
+				return (nil, domain.isEnabled != true)
+			}
+			let root = location.appending(path: label, directoryHint: .isDirectory)
+			return (FileManager.default.fileExists(atPath: root.path(percentEncoded: false)) ? root : nil, true)
+		}
+
+		private func takeFilesOutOfTheLocation(
+			folderID: String, environment: RemoteEnvironment
+		) async -> FilesLeftovers.Takeout {
+			let store = environment.store
+			let folder: IndexFolder?
+			do throws(IndexError) {
+				folder = try store.folder(id: folderID)
+			}
+			catch {
+				Log.warn("Could not read the index to see what the Synctrain location keeps: \(error)")
+				return .couldNotLook
+			}
+			guard let label = folder?.label else {
+				return .nothing
+			}
+			let copy = await systemCopy(folderID: folderID, label: label)
+			guard let root = copy.root else {
+				if !copy.isKnown {
+					Log.warn("Could not look at what the Synctrain location keeps of \(folderID)")
+				}
+				return copy.isKnown ? .nothing : .couldNotLook
+			}
 			let found = await Task.detached(priority: .userInitiated) { () -> SystemCopy.Unknown? in
 				do {
 					return try SystemCopy.unknownPaths(
-						folderID: folderID, root: root, store: store, limit: FilesLeftovers.limit)
+						folderID: folderID, root: root, store: store, limit: .max, budget: FilesLeftovers.walkBudget)
 				}
 				catch {
 					Log.warn("Could not read the index to see what the Synctrain location keeps: \(error)")
 					return nil
 				}
 			}.value
-			guard let found, let example = found.paths.first else {
-				return nil
+			guard let found else {
+				return .couldNotLook
+			}
+			guard let example = found.paths.first else {
+				return found.isComplete ? .nothing : .couldNotLook
 			}
 			Log.info(
 				"The Synctrain location cannot synchronize \(found.paths.count) items of \(folderID)"
@@ -837,17 +887,25 @@ import SynctrainFileProviderKit
 			else {
 				moved = 0
 			}
-			guard moved == paths.count, let place else {
-				// What stays is the system's to keep or to remove with the folder
-				return FilesLeftovers.Report(
-					folder: label, url: root,
-					kind: .staying(count: paths.count, example: example, isComplete: found.isComplete))
+			guard let place, moved > 0 else {
+				return FilesLeftovers.Takeout(
+					report: FilesLeftovers.Report(
+						folder: label, url: root, kind: .staying(count: paths.count, example: example)),
+					isComplete: false)
 			}
-			return FilesLeftovers.Report(
-				folder: label, url: place,
-				kind: .movedOut(
-					count: moved, example: example, isComplete: found.isComplete,
-					place: (place.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath))
+			let shown = (place.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
+			guard moved == paths.count else {
+				return FilesLeftovers.Takeout(
+					report: FilesLeftovers.Report(
+						folder: label, url: place,
+						kind: .partlyMovedOut(moved: moved, count: paths.count, example: example, place: shown)),
+					isComplete: false)
+			}
+			return FilesLeftovers.Takeout(
+				report: FilesLeftovers.Report(
+					folder: label, url: place,
+					kind: .movedOut(count: moved, example: example, isComplete: found.isComplete, place: shown)),
+				isComplete: found.isComplete)
 		}
 
 		/// Renames the directory an earlier round of a folder of this label left at the top level of the location, which

@@ -28,6 +28,7 @@ struct IgnoresView: View {
 	@State var ignoreLines: [String] = []
 	@State var error: ErrorMessage? = nil
 	@State var loading = true
+	@State var loadError: String? = nil
 	@State var showSaveConfirmation = false
 
 	private static let prependedLine = "# Synctrain user-defined ignore file"
@@ -41,7 +42,18 @@ struct IgnoresView: View {
 			AboutIgnoresSection()
 
 			Section {
-				if ignoreLines.isEmpty {
+				if let loadError {
+					ContentUnavailableView {
+						Label("Unable to load ignore patterns", systemImage: "exclamationmark.triangle")
+					} description: {
+						Text(loadError)
+					} actions: {
+						Button("Retry") {
+							self.update()
+						}
+					}
+				}
+				else if ignoreLines.isEmpty && !loading {
 					Text("No ignore patterns defined")
 				}
 
@@ -206,7 +218,7 @@ struct IgnoresView: View {
 
 	private func update() {
 		do {
-			self.error = nil
+			self.loadError = nil
 			self.loading = true
 			var lines = (try self.folder.ignoreLines()).asArray()
 			Log.info("Got lines: \(lines)")
@@ -218,7 +230,7 @@ struct IgnoresView: View {
 		catch {
 			self.ignoreLines = []
 			Log.warn("failed to read ignore file: \(error)")
-			self.error = ErrorMessage(error)
+			self.loadError = error.localizedDescription
 			// Remain in the loading state, as saving would replace a file that could not be read
 			return
 		}

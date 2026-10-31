@@ -27,7 +27,7 @@ Everything goes through the gateway over HTTPS, whether or not Synctrain is runn
   Synctrain runs; Files shows it as waiting until the gateway has committed it. A save that leaves the contents as the
   phone downloaded them (an app saving a file it only opened) sends nothing, so the file and its history on the
   gateway stay as they are. An edit based on a version that changed meanwhile is kept as a conflict copy. Edits that
-  could not be sent are listed on the Files app page with **Export…** (a copy of the edit) and **Discard**.
+  could not be sent are listed on the gateways page in Settings with **Export…** (a copy of the edit) and **Discard**.
 - **Opening**: files are downloaded from the gateway in verified parts and kept as long as the system keeps them.
   **Keep on This Device** downloads an item, **Stop Keeping on This Device** removes the downloaded copy (never one
   with an edit that wasn't sent). Thumbnails come from the gateway.
@@ -92,13 +92,14 @@ Finder: Synctrain's window is for gateways and folders.
 - **Files opened with Synctrain**, or shared to it, aren't taken in: put them in the location instead.
 
 Finder's `.DS_Store` and similar files stay on this Mac, and are never sent to a gateway. The ones that reached a gateway from
-elsewhere are not shown. Files the location can't synchronize stay in their directory, which can't then be deleted from
-another device until they are removed.
+elsewhere are not shown. Files the location can't synchronize stay on this Mac, and a delete from another device doesn't take
+the directory they are in until they are removed.
 
 When its folder leaves Finder, Synctrain takes such files out of the location first, as macOS removes its copy of a folder
 with everything in it, these included, and they are nowhere else. They go to a new directory named after the folder in
-`~/Sync`, keeping the place they had in it. Synctrain says how many there were and where they are now, and removes nothing.
-What could not be moved stays in the location, where macOS may keep or remove it; a directory left there that way is kept on
+`~/Sync`, or in your home folder if `~/Sync` is itself synchronized, keeping the place they had in it. Synctrain says how many
+there were and where they are now, and removes nothing. If any can't be moved, or Synctrain can't tell, the folder stays, so
+that you can move them yourself and try again. A directory of such files that is left in the location all the same is kept on
 this Mac without synchronizing, and when the folder comes back it is renamed to "Name (not synchronized)" and stays next to
 the folder, which shows all of its own files again.
 

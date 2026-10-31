@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"os"
 	"path"
@@ -315,10 +314,11 @@ func (s *Service) executeWriteFile(ctx context.Context, op *operationRecord) (Op
 		return Operation{}, errWaiting
 	}
 
-	// Staging copies the upload next to the target: it can take long, so it happens outside the folder lock
+	// Staging copies the upload next to the journal's target, where publishing looks for it, whether or not the item
+	// moved since. It can take long, so it happens outside the folder lock.
 	var blocks []protocol.BlockInfo
 	if op.journal == journalIntent || op.journal == journalStaged || op.journal == journalPublishing {
-		blocks, err = s.stage(ctx, op, root, parentPath(target))
+		blocks, err = s.stage(ctx, op, root, parentPath(op.data.Target))
 		if err != nil {
 			return Operation{}, err
 		}
@@ -719,11 +719,6 @@ func freeConflictName(h syncthing.FolderHandle, pdir *dir, target string) (strin
 	return "", newAPIError(http.StatusConflict, codeNameConflict, "no free conflict copy name")
 }
 
-// fileInfoFor builds the index entry of a published file or directory
-func fileInfoFor(ctx context.Context, h syncthing.FolderHandle, name string, blocks []protocol.BlockInfo) (protocol.FileInfo, error) {
-	return scanner.FileInfoFor(ctx, h.ScanConfig(), name, blocks)
-}
-
 // indexFile commits the published file's index entry (with blocks, when known, else hashing it), checking that the
 // file on disk is still the staged one
 func (s *Service) indexFile(ctx context.Context, op *operationRecord, h syncthing.FolderHandle, pdir *dir, target string,
@@ -736,7 +731,7 @@ func (s *Service) indexFile(ctx context.Context, op *operationRecord, h syncthin
 	if !st.exists || st.id.dev != op.data.Device || st.id.ino != op.data.Inode {
 		return s.keepAsConflict(ctx, op, h, target)
 	}
-	fi, err := fileInfoFor(ctx, h, target, blocks)
+	fi, err := scanner.FileInfoFor(ctx, h.ScanConfig(), target, blocks)
 	if err != nil {
 		return err
 	}
@@ -881,7 +876,7 @@ func (s *Service) executeCreateDirectory(ctx context.Context, op *operationRecor
 		if local, ok, err := h.CurrentFile(target); err == nil && ok && !local.Deleted && local.IsDirectory() {
 			return s.saveJournal(op, journalIndexed)
 		}
-		fi, err := fileInfoFor(ctx, h, target, nil)
+		fi, err := scanner.FileInfoFor(ctx, h.ScanConfig(), target, nil)
 		if err != nil {
 			return err
 		}
@@ -916,7 +911,8 @@ type subtreeEntry struct {
 //
 // A delete that stopped partway passes the highest sequence it checked. What it can't find on disk is then what it
 // removed, and anything with a higher sequence reached this device after it checked, which isn't its to remove. Those
-// sequences only go up, so one number says this of everything it looked at, however large the directory.
+// sequences only go up in one index (deleteRecordHolds), so one number says this of everything it looked at, however
+// large the directory.
 func (s *Service) collectSubtree(ctx context.Context, h syncthing.FolderHandle, root *dir, row itemRow, current *Item,
 	checked int64,
 ) ([]subtreeEntry, error) {
@@ -1046,14 +1042,6 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 	current := row.toItem(true)
 	// A run that stopped while removing items finishes removing them; the preconditions held when it started
 	resuming := op.journal == journalPublishing
-	checked := int64(0)
-	if resuming {
-		checked = op.data.DeleteSequence
-		if checked == 0 {
-			// Recorded by a version that kept none: all that is known is that it began
-			checked = math.MaxInt64
-		}
-	}
 	if !resuming && row.kind == protocol.FileInfoTypeDirectory &&
 		(op.req.SubtreeGeneration == nil || *op.req.SubtreeGeneration != row.subtreeGen) {
 		return Operation{}, revisionMismatch(&current)
@@ -1065,6 +1053,17 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 			return err
 		}
 		defer done()
+		if resuming {
+			// Before anything else that goes by the index, which may no longer know the item
+			holds, err := s.deleteRecordHolds(op)
+			if err != nil {
+				return err
+			}
+			if !holds {
+				_ = h.Scan(ctx, []string{row.path})
+				return revisionMismatch(&current)
+			}
+		}
 		global, live, err := liveEntry(h, row.path)
 		if err != nil {
 			return err
@@ -1078,12 +1077,15 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 			item := fresh.toItem(true)
 			return revisionMismatch(&item)
 		}
-		entries, err := s.collectSubtree(ctx, h, root, row, &current, checked)
+		entries, err := s.collectSubtree(ctx, h, root, row, &current, op.data.DeleteSequence)
 		if err != nil {
 			return err
 		}
 		op.data.Method = methodDelete
 		if !resuming {
+			if op.data.DeleteIndexID, err = s.backend.IndexID(op.folder); err != nil {
+				return err
+			}
 			for _, e := range entries {
 				op.data.DeleteSequence = max(op.data.DeleteSequence, e.local.Sequence)
 			}
@@ -1130,6 +1132,22 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 		return Operation{}, err
 	}
 	return s.deleteResult(op, row)
+}
+
+// deleteRecordHolds reports whether the sequence a delete that stopped recorded still says what is newer. It doesn't if
+// the delete recorded none (older versions of the service didn't), or if the index isn't the one it was recorded from:
+// Syncthing's database can be reset, or lose its latest commits in a power cut while the service's keeps them. Such a
+// delete stops and reports what is left as a mismatch, which loses nothing.
+func (s *Service) deleteRecordHolds(op *operationRecord) (bool, error) {
+	sequence, err := s.backend.LocalSequence(op.folder)
+	if err != nil {
+		return false, err
+	}
+	indexID, err := s.backend.IndexID(op.folder)
+	if err != nil {
+		return false, err
+	}
+	return op.data.DeleteSequence > 0 && sequence >= op.data.DeleteSequence && indexID == op.data.DeleteIndexID, nil
 }
 
 func (s *Service) deleteResult(op *operationRecord, row itemRow) (Operation, error) {
@@ -1283,6 +1301,7 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 		}
 		// Index the new paths, keeping each file's block list
 		added := make([]protocol.FileInfo, 0, len(entries))
+		cfg := h.ScanConfig()
 		for _, e := range entries {
 			newPath := dest + strings.TrimPrefix(e.path, row.path)
 			if local, ok, err := h.CurrentFile(newPath); err == nil && ok && !local.Deleted &&
@@ -1293,7 +1312,7 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 			if !e.local.IsDirectory() {
 				blocks = e.local.Blocks
 			}
-			fi, err := fileInfoFor(ctx, h, newPath, blocks)
+			fi, err := scanner.FileInfoFor(ctx, cfg, newPath, blocks)
 			if err != nil {
 				return err
 			}

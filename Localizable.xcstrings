@@ -11472,6 +11472,52 @@
         }
       }
     },
+    "Changes are not saved yet" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen sind noch nicht gesichert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los cambios aún no se han guardado"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le modifiche non sono ancora state salvate"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "変更はまだ保存されていません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzigingen zijn nog niet bewaard"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зміни ще не збережено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改尚未保存"
+          }
+        }
+      }
+    },
     "Changes being saved" : {
       "localizations" : {
         "de" : {
@@ -11790,52 +11836,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 Finder 中对 %lld 个项目所做的更改尚未到达 Synctrain。位置被移除时，macOS 会将它们保留在 Finder 的“Synctrain”位置之外。"
-          }
-        }
-      }
-    },
-    "Changes to %lld items made in Finder have not reached Synctrain yet. Rebuilding the location discards them." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Änderungen an %lld Objekten im Finder haben Synctrain noch nicht erreicht. Beim Neuaufbau des Speicherorts werden sie verworfen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los cambios en %lld elementos hechos en Finder aún no han llegado a Synctrain. Al reconstruir la ubicación se descartarán."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le modifiche a %lld elementi fatte nel Finder non hanno ancora raggiunto Synctrain. Ricreando la posizione verranno scartate."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Finderで行った%lld項目の変更はまだSynctrainに届いていません。場所を再構築すると破棄されます。"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wijzigingen aan %lld onderdelen in Finder hebben Synctrain nog niet bereikt. Als je de locatie opnieuw opbouwt, gaan ze verloren."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Зміни в %lld елементах, зроблені у Finder, ще не дійшли до Synctrain. Перебудова розташування їх відкине."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Finder 中对 %lld 个项目所做的更改尚未到达 Synctrain。重建位置会放弃这些更改。"
           }
         }
       }
@@ -34588,52 +34588,6 @@
         }
       }
     },
-    "Only files that are on this device are displayed." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Es werden nur Dateien angezeigt, die sich auf diesem Gerät befinden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Solo se muestran los archivos que están en este dispositivo."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vengono visualizzati solo i file che sono su questo dispositivo."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "このデバイスにあるファイルのみが表示されます。"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alleen bestanden die op dit apparaat staan worden weergegeven."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Відображаються лише файли, які є на цьому пристрої."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仅显示此设备上的文件。"
-          }
-        }
-      }
-    },
     "Only folders that are kept on this Mac in full can be changed from other devices." : {
       "localizations" : {
         "de" : {
@@ -52068,48 +52022,48 @@
         }
       }
     },
-    "Synctrain cannot synchronize %lld of the files in %@, such as %@, so they never reached another device. macOS may keep them in Finder's Synctrain location, in a folder of the same name, or remove them with the folder." : {
+    "Synctrain cannot synchronize %lld of the files in %@, such as %@, so they never reached another device. %lld of them are now in %@. The others are still in Finder's Synctrain location, so the folder stays until they are moved." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain kann %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@, sodass sie nie ein anderes Gerät erreicht haben. macOS behält sie möglicherweise im Synctrain-Speicherort im Finder, in einem Ordner mit demselben Namen, oder entfernt sie mit dem Ordner."
+            "value" : "Synctrain kann %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@, sodass sie nie ein anderes Gerät erreicht haben. %lld davon liegen jetzt in %@. Die übrigen liegen noch im Speicherort „Synctrain“ im Finder, daher bleibt der Ordner bestehen, bis sie verschoben sind."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain no puede sincronizar %lld de los archivos de %@, como %@, así que nunca han llegado a otro dispositivo. macOS puede conservarlos en la ubicación Synctrain del Finder, en una carpeta con el mismo nombre, o eliminarlos junto con la carpeta."
+            "value" : "Synctrain no puede sincronizar %lld de los archivos de %@, como %@, así que nunca han llegado a otro dispositivo. %lld de ellos están ahora en %@. Los demás siguen en la ubicación Synctrain de Finder, así que la carpeta permanece hasta que se muevan."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain non può sincronizzare %lld dei file in %@, per esempio %@, quindi non hanno mai raggiunto un altro dispositivo. macOS può conservarli nella posizione Synctrain del Finder, in una cartella con lo stesso nome, oppure rimuoverli insieme alla cartella."
+            "value" : "Synctrain non può sincronizzare %lld dei file in %@, per esempio %@, quindi non hanno mai raggiunto un altro dispositivo. %lld di questi sono ora in %@. Gli altri sono ancora nella posizione Synctrain del Finder, quindi la cartella resta finché non vengono spostati."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrainは%2$@内の%1$lld個のファイル（%3$@など）を同期できないため、これらは他のデバイスに届いていません。macOSはこれらをFinderのSynctrainの場所にある同じ名前のフォルダに残すことも、フォルダと一緒に削除することもあります。"
+            "value" : "Synctrainは%2$@内の%1$lld個のファイル（%3$@など）を同期できないため、これらは他のデバイスに届いていません。そのうち%4$lld個は現在%5$@にあります。残りはFinderの「Synctrain」の場所に残っているため、移動されるまでフォルダはそのまま残ります。"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain kan %lld van de bestanden in %@ niet synchroniseren, zoals %@, dus ze hebben nooit een ander apparaat bereikt. macOS bewaart ze mogelijk in de Synctrain-locatie in de Finder, in een map met dezelfde naam, of verwijdert ze samen met de map."
+            "value" : "Synctrain kan %lld van de bestanden in %@ niet synchroniseren, zoals %@, dus ze hebben nooit een ander apparaat bereikt. %lld daarvan staan nu in %@. De andere staan nog in de locatie Synctrain in Finder, dus de map blijft staan totdat ze zijn verplaatst."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain не може синхронізувати %lld файлів у %@, наприклад %@, тому вони ніколи не потрапили на інший пристрій. macOS може залишити їх у розташуванні Synctrain у Finder, у папці з такою самою назвою, або вилучити їх разом із папкою."
+            "value" : "Synctrain не може синхронізувати %lld файлів у %@, наприклад %@, тому вони ніколи не потрапили на інший пристрій. %lld з них тепер у %@. Решта досі в розташуванні Synctrain у Finder, тому папка залишається, доки їх не буде переміщено."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain 无法同步 %2$@ 中的 %1$lld 个文件，例如 %3$@，因此它们从未到达其他设备。macOS 可能把它们保留在 Finder 的 Synctrain 位置中同名的文件夹里，也可能连同该文件夹一起删除。"
+            "value" : "Synctrain 无法同步 %2$@ 中的 %1$lld 个文件，例如 %3$@，因此它们从未到达其他设备。其中 %4$lld 个现在位于 %5$@。其余文件仍在 Finder 的“Synctrain”位置中，因此在移走它们之前文件夹会保留。"
           }
         }
       }
@@ -52160,48 +52114,48 @@
         }
       }
     },
-    "Synctrain cannot synchronize more than %lld of the files in %@, such as %@, so they never reached another device. macOS may keep them in Finder's Synctrain location, in a folder of the same name, or remove them with the folder." : {
+    "Synctrain cannot synchronize %lld of the files in %@, such as %@, so they never reached another device. They are still in Finder's Synctrain location, so the folder stays until they are moved." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain kann mehr als %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@, sodass sie nie ein anderes Gerät erreicht haben. macOS behält sie möglicherweise im Synctrain-Speicherort im Finder, in einem Ordner mit demselben Namen, oder entfernt sie mit dem Ordner."
+            "value" : "Synctrain kann %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@, sodass sie nie ein anderes Gerät erreicht haben. Sie liegen noch im Speicherort „Synctrain“ im Finder, daher bleibt der Ordner bestehen, bis sie verschoben sind."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain no puede sincronizar más de %lld de los archivos de %@, como %@, así que nunca han llegado a otro dispositivo. macOS puede conservarlos en la ubicación Synctrain del Finder, en una carpeta con el mismo nombre, o eliminarlos junto con la carpeta."
+            "value" : "Synctrain no puede sincronizar %lld de los archivos de %@, como %@, así que nunca han llegado a otro dispositivo. Siguen en la ubicación Synctrain de Finder, así que la carpeta permanece hasta que se muevan."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain non può sincronizzare più di %lld dei file in %@, per esempio %@, quindi non hanno mai raggiunto un altro dispositivo. macOS può conservarli nella posizione Synctrain del Finder, in una cartella con lo stesso nome, oppure rimuoverli insieme alla cartella."
+            "value" : "Synctrain non può sincronizzare %lld dei file in %@, per esempio %@, quindi non hanno mai raggiunto un altro dispositivo. Sono ancora nella posizione Synctrain del Finder, quindi la cartella resta finché non vengono spostati."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrainは%2$@内の%1$lld個を超えるファイル（%3$@など）を同期できないため、これらは他のデバイスに届いていません。macOSはこれらをFinderのSynctrainの場所にある同じ名前のフォルダに残すことも、フォルダと一緒に削除することもあります。"
+            "value" : "Synctrainは%2$@内の%1$lld個のファイル（%3$@など）を同期できないため、これらは他のデバイスに届いていません。これらはFinderの「Synctrain」の場所に残っているため、移動されるまでフォルダはそのまま残ります。"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain kan meer dan %lld van de bestanden in %@ niet synchroniseren, zoals %@, dus ze hebben nooit een ander apparaat bereikt. macOS bewaart ze mogelijk in de Synctrain-locatie in de Finder, in een map met dezelfde naam, of verwijdert ze samen met de map."
+            "value" : "Synctrain kan %lld van de bestanden in %@ niet synchroniseren, zoals %@, dus ze hebben nooit een ander apparaat bereikt. Ze staan nog in de locatie Synctrain in Finder, dus de map blijft staan totdat ze zijn verplaatst."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain не може синхронізувати понад %lld файлів у %@, наприклад %@, тому вони ніколи не потрапили на інший пристрій. macOS може залишити їх у розташуванні Synctrain у Finder, у папці з такою самою назвою, або вилучити їх разом із папкою."
+            "value" : "Synctrain не може синхронізувати %lld файлів у %@, наприклад %@, тому вони ніколи не потрапили на інший пристрій. Вони досі в розташуванні Synctrain у Finder, тому папка залишається, доки їх не буде переміщено."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synctrain 无法同步 %2$@ 中超过 %1$lld 个文件，例如 %3$@，因此它们从未到达其他设备。macOS 可能把它们保留在 Finder 的 Synctrain 位置中同名的文件夹里，也可能连同该文件夹一起删除。"
+            "value" : "Synctrain 无法同步 %2$@ 中的 %1$lld 个文件，例如 %3$@，因此它们从未到达其他设备。它们仍在 Finder 的“Synctrain”位置中，因此在移走它们之前文件夹会保留。"
           }
         }
       }
@@ -52386,52 +52340,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synctrain 无法确定在 Finder 中所做的更改是否已到达。位置被移除时，macOS 会将尚未到达的更改保留在 Finder 的“Synctrain”位置之外。"
-          }
-        }
-      }
-    },
-    "Synctrain could not find out whether changes made in Finder have reached it. Rebuilding the location discards any that have not." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Synctrain konnte nicht feststellen, ob Änderungen im Finder es erreicht haben. Beim Neuaufbau des Speicherorts werden alle verworfen, die es nicht erreicht haben."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Synctrain no ha podido saber si los cambios hechos en Finder han llegado. Al reconstruir la ubicación se descartan los que no hayan llegado."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Synctrain non è riuscito a stabilire se le modifiche fatte nel Finder lo hanno raggiunto. Ricreando la posizione verranno scartate quelle che non l'hanno fatto."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Finderで行った変更がSynctrainに届いたかどうかを確認できませんでした。場所を再構築すると、届いていない変更は破棄されます。"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Synctrain kon niet achterhalen of wijzigingen in Finder het hebben bereikt. Als je de locatie opnieuw opbouwt, gaan wijzigingen die het niet hebben bereikt verloren."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Synctrain не вдалося з'ясувати, чи дійшли зміни, зроблені у Finder. Перебудова розташування відкине всі, що не дійшли."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Synctrain 无法确定在 Finder 中所做的更改是否已到达。重建位置会放弃尚未到达的更改。"
           }
         }
       }
@@ -52708,6 +52616,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synctrain 无法连接到 %@。请检查网络连接，然后重试。"
+          }
+        }
+      }
+    },
+    "Synctrain could not read its gateways, so Finder's Synctrain location stays as it is. Synctrain then restarts and synchronizes the folders of this Mac. Switch back to Files in Finder to remove the location." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain konnte seine Gateways nicht lesen, daher bleibt der Speicherort „Synctrain“ im Finder unverändert. Synctrain startet dann neu und synchronisiert die Ordner dieses Mac. Wechseln Sie zurück zu „Dateien im Finder“, um den Speicherort zu entfernen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no ha podido leer sus puertas de enlace, así que la ubicación Synctrain de Finder se queda como está. Synctrain se reinicia y sincroniza las carpetas de este Mac. Vuelve a Archivos en Finder para eliminar la ubicación."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non è riuscito a leggere i suoi gateway, quindi la posizione Synctrain del Finder resta com'è. Synctrain si riavvia e sincronizza le cartelle di questo Mac. Torna a File nel Finder per rimuovere la posizione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainはゲートウェイを読み取れなかったため、Finderの「Synctrain」の場所はそのまま残ります。Synctrainは再起動し、このMacのフォルダを同期します。場所を削除するには、Finderのファイルに戻してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kon zijn gateways niet lezen, dus de locatie Synctrain in Finder blijft zoals die is. Synctrain start daarna opnieuw op en synchroniseert de mappen van deze Mac. Schakel terug naar Bestanden in Finder om de locatie te verwijderen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не вдалося прочитати свої шлюзи, тому розташування Synctrain у Finder залишається без змін. Потім Synctrain перезапуститься й синхронізуватиме папки цього Mac. Щоб вилучити розташування, поверніться до режиму Файли у Finder."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法读取其网关，因此 Finder 的“Synctrain”位置将保持原样。随后 Synctrain 会重新启动并同步此 Mac 的文件夹。要移除该位置，请切换回 Finder 中的文件。"
           }
         }
       }
@@ -59428,52 +59382,6 @@
         }
       }
     },
-    "There are no files in this folder to show" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In diesem Ordner gibt es keine Dateien zum Anzeigen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No hay archivos en esta carpeta para mostrar"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Non ci sono file in questa cartella da mostrare"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "このフォルダには表示するファイルがありません"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Er zijn geen bestanden in deze map om te tonen"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "У цій папці немає файлів для показу"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此文件夹中没有文件可显示"
-          }
-        }
-      }
-    },
     "There are no folders that can be exported." : {
       "localizations" : {
         "de" : {
@@ -63673,6 +63581,52 @@
         }
       }
     },
+    "Unable to load ignore patterns" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignoriermuster können nicht geladen werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pueden cargar los patrones de exclusión"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare i modelli di esclusione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無視パターンを読み込めません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Negeerpatronen kunnen niet worden geladen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося завантажити шаблони ігнорування"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载忽略模式"
+          }
+        }
+      }
+    },
     "Unchanged" : {
       "localizations" : {
         "de" : {
@@ -67721,48 +67675,48 @@
         }
       }
     },
-    "When the app detects that the system's internet connection is of the selected types, it will temporarily disable network connections to other devices. This will cause synchronization to be paused, and on-demand access to be disabled." : {
+    "When the app detects that the system's internet connection is of the selected types, it will temporarily disable network connections to other devices. This will cause synchronization to be paused, and files that are not on this device yet cannot be streamed." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wenn die App erkennt, dass die Internetverbindung des Systems von den ausgewählten Typen ist, werden die Netzwerkverbindungen zu anderen Geräten vorübergehend deaktiviert. Dadurch wird die Synchronisierung pausiert und der On-Demand-Zugriff deaktiviert."
+            "value" : "Wenn die App erkennt, dass die Internetverbindung des Systems von den ausgewählten Typen ist, werden die Netzwerkverbindungen zu anderen Geräten vorübergehend deaktiviert. Dadurch wird die Synchronisierung pausiert, und Dateien, die noch nicht auf diesem Gerät sind, können nicht gestreamt werden."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cuando la aplicación detecta que la conexión a Internet del sistema es de los tipos seleccionados, desactivará temporalmente las conexiones de red a otros dispositivos. Esto hará que la sincronización se pause y el acceso bajo demanda se deshabilite."
+            "value" : "Cuando la aplicación detecta que la conexión a Internet del sistema es de los tipos seleccionados, desactivará temporalmente las conexiones de red a otros dispositivos. Esto hará que la sincronización se pause y que los archivos que aún no están en este dispositivo no se puedan transmitir."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quando l'app rileva che la connessione internet del sistema è di uno dei tipi selezionati, disabiliterà temporaneamente le connessioni di rete ad altri dispositivi. Questo causerà la pausa della sincronizzazione e la disabilitazione dell'accesso su richiesta."
+            "value" : "Quando l'app rileva che la connessione internet del sistema è di uno dei tipi selezionati, disabiliterà temporaneamente le connessioni di rete ad altri dispositivi. Questo causerà la pausa della sincronizzazione e i file non ancora su questo dispositivo non potranno essere riprodotti in streaming."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "アプリがシステムのインターネット接続が選択されたタイプであることを検出すると、他のデバイスへのネットワーク接続が一時的に無効になります。これにより、同期が一時停止され、オンデマンドアクセスが無効になります。"
+            "value" : "アプリがシステムのインターネット接続が選択されたタイプであることを検出すると、他のデバイスへのネットワーク接続が一時的に無効になります。これにより、同期が一時停止され、まだこのデバイスにないファイルはストリーミングできなくなります。"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wanneer de app detecteert dat de internetverbinding van het systeem een van de geselecteerde typen is, worden netwerkverbindingen met andere apparaten tijdelijk uitgeschakeld. Dit zorgt ervoor dat synchronisatie wordt gepauzeerd en on-demand toegang wordt uitgeschakeld."
+            "value" : "Wanneer de app detecteert dat de internetverbinding van het systeem een van de geselecteerde typen is, worden netwerkverbindingen met andere apparaten tijdelijk uitgeschakeld. Dit zorgt ervoor dat synchronisatie wordt gepauzeerd en bestanden die nog niet op dit apparaat staan niet kunnen worden gestreamd."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Коли додаток виявляє, що підключення до Інтернету системи належить до вибраних типів, воно тимчасово відключає мережеві з'єднання з іншими пристроями. Це призведе до призупинення синхронізації та відключення доступу за запитом."
+            "value" : "Коли додаток виявляє, що підключення до Інтернету системи належить до вибраних типів, воно тимчасово відключає мережеві з'єднання з іншими пристроями. Це призведе до призупинення синхронізації, а файли, яких ще немає на цьому пристрої, не можна буде передавати потоком."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当应用检测到系统的互联网连接属于所选类型时，将暂时禁用与其他设备的网络连接。这将导致同步暂停，并禁用按需访问。"
+            "value" : "当应用检测到系统的互联网连接属于所选类型时，将暂时禁用与其他设备的网络连接。这将导致同步暂停，并且尚未在此设备上的文件将无法流式传输。"
           }
         }
       }

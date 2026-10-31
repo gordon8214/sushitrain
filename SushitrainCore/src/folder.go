@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/syncthing/syncthing/lib/config"
@@ -656,7 +655,8 @@ func (fld *Folder) SetFolderType(folderType string) error {
 }
 
 // IsSelective reports whether the folder's ignore patterns keep only a selection of its files on this device, as the
-// remote file service sees it on every host, or an error if the engine isn't running.
+// remote file service sees it on every host, or an error if the engine isn't running. It follows the engine's copy of
+// the patterns, so a hand edit of .stignore shows at the next scan.
 func (fld *Folder) IsSelective() (bool, error) {
 	if fld.client == nil {
 		return false, errNoClient
@@ -856,125 +856,13 @@ func deleteEmptyParentDirectories(ffs fs.Filesystem, path string) {
 	}
 }
 
-// What operating systems leave in directories, which nobody misses when a directory is removed
-var systemFileNames = []string{
-	".DS_Store", "Thumbs.db", "desktop.ini", ".Trashes", ".Spotlight-V100", ".DocumentRevisions-V100", ".TemporaryItems",
-	"$RECYCLE.BIN", "@eaDir",
-}
-
-func (fld *Folder) removeRedundantChildren(ffs fs.Filesystem, path string) error {
-	ignores, err := fld.loadIgnores()
-	if err != nil {
-		return err
-	}
-
-	slog.Info("remove redundant children", "path", path)
-	toDelete := make([]string, 0)
-
-	err = ffs.Walk(path, func(childPath string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		slog.Debug("remove redundant children", "childPath", childPath)
-
-		// Leave internal files alone
-		if fs.IsInternal(childPath) || childPath == ignoreFileName {
-			slog.Debug("remove redundant children skip, is internal", "childPath", childPath)
-			return nil
-		}
-
-		// Syncthing's temporary files and what systems leave behind would keep their directory from being removed
-		if fs.IsTemporary(childPath) || slices.Contains(systemFileNames, filepath.Base(childPath)) {
-			slog.Info("deleting temporary or system file", "childPath", childPath)
-			toDelete = append(toDelete, childPath)
-			return nil
-		}
-
-		// Check file ignore status
-		ignoreStatus := ignores.Match(childPath)
-		if ignoreStatus.IsIgnored() {
-			// Check remote availability
-			entry, err := fld.GetFileInformation(childPath)
-			if err != nil {
-				return err
-			}
-
-			if entry == nil || entry.IsDeleted() {
-				// File is not known in the global index at all. Leave it in place except when it is an empty directory
-				if info.IsDir() {
-					toDelete = append(toDelete, childPath)
-				}
-				return nil
-			}
-
-			lst, err := entry.PeersWithFullCopy()
-			if err != nil {
-				return err
-			}
-
-			if lst.Count() > 0 {
-				toDelete = append(toDelete, childPath)
-			} else {
-				// File is not available elsewhere, skip it
-				slog.Info("refusing to delete file because there are no peers with a full copy", "path", childPath)
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Scan complete, sort the list of paths to be deleted from long to short so we can delete them in child-first orer
-	sort.Strings(toDelete)
-	slices.Reverse(toDelete)
-
-	slog.Info("delete", "toDeleteLen", len(toDelete))
-
-	var deletionErrors []error
-	for _, delPath := range toDelete {
-		err = ffs.Remove(delPath)
-		if err != nil && !fs.IsNotExist(err) {
-			// Nonempty directories contain children deliberately retained above.
-			// Do not suppress the same error from trashing a file (e.g. a collision).
-			if errors.Is(err, syscall.ENOTEMPTY) || errors.Is(err, syscall.EEXIST) {
-				if info, statErr := ffs.Lstat(delPath); statErr == nil && info.IsDir() {
-					continue
-				}
-			}
-			deletionErrors = append(deletionErrors, fmt.Errorf("remove %q: %w", delPath, err))
-		}
-		deleteEmptyParentDirectories(ffs, delPath)
-	}
-	return errors.Join(deletionErrors...)
-}
-
-// If `path` points to a file, remove it. If `path` points to a subdirectory, delete children that we are reasonably sure
-// are also on other devices, then try to remove the subdirectory if empty. Finally, remove any empty parent directories.
-func (fld *Folder) deleteLocalFileAndRedundantChildren(path string) error {
+// Remove the file at `path`, then the parent directories that leaves empty. A directory that isn't empty stays, with an
+// error.
+func (fld *Folder) deleteLocalFile(path string) error {
 	ffs := fld.folderConfiguration().Filesystem()
-
-	stat, err := ffs.Lstat(path)
-	if err != nil {
+	if err := ffs.Remove(path); err != nil && !fs.IsNotExist(err) {
 		return err
 	}
-
-	// Try to recursively remove children that are ignored and available on other peers
-	if stat.IsDir() {
-		err = fld.removeRedundantChildren(ffs, path)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Removing the last child of a directory takes the directory with it
-	err = ffs.Remove(path)
-	if err != nil && !fs.IsNotExist(err) {
-		return err
-	}
-
 	deleteEmptyParentDirectories(ffs, path)
 	return nil
 }

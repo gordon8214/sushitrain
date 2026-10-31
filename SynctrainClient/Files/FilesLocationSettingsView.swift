@@ -107,8 +107,7 @@ struct FilesLocationSettingsView: View {
 			}
 		}
 		.confirmationDialog(
-			"Discard changes that were not saved?", isPresented: $showPendingItemsConfirmation,
-			titleVisibility: .visible
+			pendingItemsTitle, isPresented: $showPendingItemsConfirmation, titleVisibility: .visible
 		) {
 			Button("Rebuild Anyway", role: .destructive) {
 				Task {
@@ -119,12 +118,12 @@ struct FilesLocationSettingsView: View {
 			#if os(macOS)
 				if let pendingItemCount {
 					Text(
-						"Changes to \(pendingItemCount) items made in Finder have not reached Synctrain yet. Rebuilding the location discards them."
+						"Changes to \(pendingItemCount) items made in Finder have not reached Synctrain yet. macOS keeps them when the location goes, outside of Finder's Synctrain location."
 					)
 				}
 				else {
 					Text(
-						"Synctrain could not find out whether changes made in Finder have reached it. Rebuilding the location discards any that have not."
+						"Synctrain could not find out whether changes made in Finder have reached it. macOS keeps any that have not when the location goes, outside of Finder's Synctrain location."
 					)
 				}
 			#else
@@ -140,5 +139,13 @@ struct FilesLocationSettingsView: View {
 				}
 			#endif
 		}
+	}
+
+	private var pendingItemsTitle: LocalizedStringKey {
+		#if os(macOS)
+			"Changes are not saved yet"
+		#else
+			"Discard changes that were not saved?"
+		#endif
 	}
 }

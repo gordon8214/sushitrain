@@ -61,6 +61,27 @@ func TestSelectiveFolders(t *testing.T) {
 	if selective("docs") {
 		t.Fatal("a folder with ordinary patterns")
 	}
+	e.setIgnores("// Nothing but a comment")
+	if selective("docs") {
+		t.Fatal("a folder whose file holds no patterns")
+	}
+	ignoreFile := filepath.Join(e.folderPath, ".stignore")
+
+	// The engine drops its patterns when it can't load the file, and tells nobody but the scan: there is no telling what
+	// they are
+	if err := os.WriteFile(ignoreFile, []byte("#include missing.txt\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.app.Internals.ScanFolderSubdirs("docs", nil); err == nil {
+		t.Fatal("a scan took in patterns that include a missing file")
+	}
+	if _, patterns, err := e.app.Internals.Ignores("docs"); len(patterns) != 0 || err != nil {
+		t.Fatalf("the engine's patterns: %v, %v", patterns, err)
+	}
+	if !selective("docs") {
+		t.Fatal("a running folder whose patterns include a missing file")
+	}
+
 	e.setIgnores("!/keep.txt", "*")
 	if !selective("docs") {
 		t.Fatal("a folder whose patterns ignore everything")
@@ -71,7 +92,6 @@ func TestSelectiveFolders(t *testing.T) {
 	if !selective("docs") {
 		t.Fatal("a paused folder whose patterns ignore everything")
 	}
-	ignoreFile := filepath.Join(e.folderPath, ".stignore")
 	if err := os.WriteFile(ignoreFile, []byte("*.tmp\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +103,19 @@ func TestSelectiveFolders(t *testing.T) {
 	}
 	if selective("docs") {
 		t.Fatal("a paused folder without patterns")
+	}
+
+	// Nor does a missing file say anything about patterns when the folder itself isn't there, as on a volume that isn't
+	// mounted
+	away := e.folderPath + ".away"
+	if err := os.Rename(e.folderPath, away); err != nil {
+		t.Fatal(err)
+	}
+	if !selective("docs") {
+		t.Fatal("a paused folder that isn't there")
+	}
+	if err := os.Rename(away, e.folderPath); err != nil {
+		t.Fatal(err)
 	}
 
 	// The file is there, but what it includes isn't: there is no telling what the patterns are

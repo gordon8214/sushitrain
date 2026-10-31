@@ -47,13 +47,20 @@
 
 		/// Where files of a folder that the Synctrain location cannot synchronize go when the folder leaves it: a new
 		/// directory in `~/Sync`, as a Mac with the location runs no engine to ask, and never one that exists already.
+		/// `~/Sync` can be a folder of the engine, which would send these to its devices the day this Mac switches back, so
+		/// they go in the home directory then, as new folders do.
 		static func directoryForFilesOutsideTheLocation(named label: String) -> URL? {
-			let home = EngineLocations.testRoot ?? FileManager.default.homeDirectoryForCurrentUser
-			let parent = home.appending(path: "Sync", directoryHint: .isDirectory)
-			let name = String(localized: "\(FileNames.directoryName(forLabel: label)) (not synchronized)")
+			let fileManager = FileManager.default
+			let home = EngineLocations.testRoot ?? fileManager.homeDirectoryForCurrentUser
+			var parent = home.appending(path: "Sync", directoryHint: .isDirectory)
+			if fileManager.fileExists(atPath: parent.appending(path: ".stfolder").path(percentEncoded: false)) {
+				parent = home
+			}
+			let base = FileNames.directoryName(forLabel: label)
+			let name = String(localized: "\(base.isEmpty ? "Synctrain" : base) (not synchronized)")
 			for attempt in 1...directoryNameAttempts {
 				let directory = parent.appending(path: attempt == 1 ? name : "\(name) \(attempt)", directoryHint: .isDirectory)
-				if !FileManager.default.fileExists(atPath: directory.path(percentEncoded: false)) {
+				if !fileManager.fileExists(atPath: directory.path(percentEncoded: false)) {
 					return directory
 				}
 			}

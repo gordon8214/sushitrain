@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/syncthing/syncthing/lib/fs"
@@ -221,6 +222,12 @@ func walkEntries(prefix string, entries []*model.TreeEntry, block func(prefix st
 	return nil
 }
 
+// What operating systems leave in directories, which devices tend to ignore: holding a directory doesn't take them
+var systemFileNames = []string{
+	".DS_Store", "Thumbs.db", "desktop.ini", ".Trashes", ".Spotlight-V100", ".DocumentRevisions-V100", ".TemporaryItems",
+	"$RECYCLE.BIN", "@eaDir",
+}
+
 func (entry *Entry) PeersWithFullCopy() (*ListOfStrings, error) {
 	if entry.IsDeleted() {
 		return nil, errors.New("file was deleted")
@@ -262,8 +269,8 @@ func (entry *Entry) PeersWithFullCopy() (*ListOfStrings, error) {
 				return true, nil
 			}
 
-			// Don't bother with Syncthing's temporary files
-			if fs.IsTemporary(leaf.Name) {
+			// Don't bother with Syncthing's temporary files, or what systems leave behind
+			if fs.IsTemporary(leaf.Name) || slices.Contains(systemFileNames, leaf.Name) {
 				return true, nil
 			}
 
@@ -544,7 +551,7 @@ func (entry *Entry) MIMEType() string {
 
 func (entry *Entry) Remove() error {
 	path := entry.Path()
-	err := entry.Folder.deleteLocalFileAndRedundantChildren(path)
+	err := entry.Folder.deleteLocalFile(path)
 	if err != nil {
 		return err
 	}

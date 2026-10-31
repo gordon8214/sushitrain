@@ -478,6 +478,8 @@ struct FolderEntity: AppEntity, Equatable {
 
 struct FolderEntityQuery: EntityQuery, EntityStringQuery, EnumerableEntityQuery {
 	func allEntities() async throws -> [FolderEntity] {
+		try AppMode.requireEngine()
+		try await appState.waitForAppStarted()
 		return await appState.folders().map {
 			FolderEntity(folder: $0)
 		}
@@ -512,6 +514,7 @@ struct FolderEntityQuery: EntityQuery, EntityStringQuery, EnumerableEntityQuery 
 
 struct DeviceEntityQuery: EntityQuery, EntityStringQuery, EnumerableEntityQuery {
 	func allEntities() async throws -> [DeviceEntity] {
+		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		return await appState.peers().filter { !$0.isSelf() }.map {
 			DeviceEntity(peer: $0)

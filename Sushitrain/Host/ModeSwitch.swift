@@ -12,7 +12,6 @@
 	@MainActor enum ModeSwitch {
 		enum Refusal: LocalizedError {
 			case unresolvedEdits
-			case filesLeftBehind
 
 			var errorDescription: String? {
 				switch self {
@@ -21,14 +20,12 @@
 						localized:
 							"Edits of folders are still being sent or wait for review. Wait until they are sent, or export or discard them, then try again."
 					)
-				case .filesLeftBehind:
-					return String(
-						localized:
-							"Finder's Synctrain location still holds files that Synctrain could not move out of it. Move them somewhere else in Finder, then try again."
-					)
 				}
 			}
 		}
+
+		/// A switch out of Files in Finder is under way, which a window that was closed and opened again can't tell
+		private static var isLeaving = false
 
 		/// Asks whether to stop synchronizing, and does. Nothing has to be undone: folders stay where they are, and pick
 		/// up where they were when this Mac switches back.
@@ -52,11 +49,18 @@
 			}
 		}
 
-		/// Takes every folder out of Finder and the location with them, and starts the app again with its engine. The mode
-		/// changes last: stopping anywhere leaves this Mac in Files in Finder mode, which sets up the location again, and
-		/// this can be repeated. What only the system's copy holds is the user's, and is moved out or left for the system
-		/// to keep, never removed.
+		/// Takes every folder out of Finder and the location with them, and starts the app again with its engine. What only
+		/// the system's copy holds is the user's, so the order matters. What the extension refused is taken out first, as the
+		/// system doesn't keep it, and any doubt about that stops the switch with every folder in place. The location goes
+		/// next, as the system keeps changes it hasn't handed to the extension then, where removing a folder discards them,
+		/// and the index follows. The mode changes last: stopping anywhere leaves this Mac in Files in Finder mode, which sets
+		/// up the location again, and this can be repeated.
 		static func leaveFilesInFinder() async throws {
+			guard !isLeaving else {
+				return
+			}
+			isLeaving = true
+			defer { isLeaving = false }
 			let coordinator = RemoteCoordinator.shared
 			if let environment = RemoteEnvironment.shared {
 				let store = environment.store
@@ -67,22 +71,31 @@
 					throw Refusal.unresolvedEdits
 				}
 				await coordinator.reloadState()
-				for folderID in coordinator.bindings.keys.sorted() {
-					guard try await coordinator.removeFolder(folderID: folderID) else {
-						throw Refusal.filesLeftBehind
-					}
+				let folders = coordinator.bindings.keys.sorted()
+				for folderID in folders {
+					try await coordinator.takeFilesOut(folderID: folderID)
 				}
 				try await coordinator.removeLocation()
+				for folderID in folders {
+					try await coordinator.dropFolder(folderID: folderID)
+				}
 				await Task.detached(priority: .userInitiated) {
 					try? store.reset()
 					environment.outbox().removeReleasedTokens()
 					environment.storage.trimContent(toBytes: 0)
 				}.value
 			}
-			// These only exist in this process, and tell where files went
+			// Saved until they are seen, which the switch waits for
 			while !coordinator.leftovers.isEmpty {
 				try await Task.sleep(for: .milliseconds(200))
 			}
+			AppMode.choose(.synchronize)
+			AppRelauncher.relaunch()
+		}
+
+		/// Starts the app again with its engine when what Files in Finder knows can't be read, and so can't be taken apart.
+		/// The location stays as it is, and the app says so once the engine has started (`removeLeftoverLocation`).
+		static func abandonFilesInFinder() {
 			AppMode.choose(.synchronize)
 			AppRelauncher.relaunch()
 		}

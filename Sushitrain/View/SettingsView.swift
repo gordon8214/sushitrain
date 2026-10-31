@@ -979,7 +979,7 @@ private struct BandwidthSettingsView: View {
 				Text("Limit connectivity")
 			} footer: {
 				Text(
-					"When the app detects that the system's internet connection is of the selected types, it will temporarily disable network connections to other devices. This will cause synchronization to be paused, and on-demand access to be disabled."
+					"When the app detects that the system's internet connection is of the selected types, it will temporarily disable network connections to other devices. This will cause synchronization to be paused, and files that are not on this device yet cannot be streamed."
 				)
 			}
 

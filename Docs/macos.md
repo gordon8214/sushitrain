@@ -212,13 +212,19 @@ so that stopping anywhere leaves a Mac in Files in Finder mode, which sets up th
 
 1. It is refused while edits are unresolved, and when that can't be told. It asks first if the system has changes the
    extension hasn't accepted, or can't say.
-2. Each folder is removed from the location, as on the page of its gateway. This needs no gateway: one that is gone for good
-   doesn't keep a folder here.
-3. It stops if what the location can't synchronize could not all be moved out, or wasn't looked at in full.
-4. The location goes, with `.preserveDirtyUserData`, as the default removes everything the system holds. What the system
-   keeps is reported.
+2. What the location can't synchronize is taken out of every folder (below). It stops here if any of it could not be moved,
+   or if it can't be told what there is, with every folder still in place.
+3. The location goes, with `.preserveDirtyUserData`, as the default removes everything the system holds. This comes before the
+   index, as removing a folder discards changes the system hasn't handed to the extension, and this keeps them, in
+   `~/Library/CloudStorage/Synctrain-Synctrain (date)`. They are reported. It does not keep what the extension refused, which
+   is why that left in step 2, and it names a directory that doesn't exist when it had nothing to keep.
+4. Each folder leaves the index. This needs no gateway: one that is gone for good doesn't keep a folder here.
 5. The index starts a new generation, and released upload tokens and downloaded content go. Pairings stay.
-6. What was moved or kept is reported, which only this process knows, and the app waits for the user.
+6. What was moved or kept is reported, and the app waits for the user. Reports are saved until they are seen, as they can be
+   the only word of where files went.
+
+**When the index can't be read** none of that can be done, so the window offers the switch without it: the location stays as
+it is, and the next paragraph finds it.
 
 **A location left over** in Synchronize mode, as after a failed removal or with restored preferences, is looked for once the
 engine has started (`ModeSwitch.removeLeftoverLocation`). Without folders or unresolved edits it is removed. Otherwise the
@@ -227,18 +233,25 @@ app says so and removes nothing, as what it holds may be nowhere else.
 ### What the location can't synchronize
 
 Names macOS keeps for itself (such as `._name`) and paths the folder's ignore patterns exclude stay on this Mac, in the
-system's copy alone: the extension refuses them with `excludedFromSync`, so the index never has them. The system then can't
-remove the directory such a file is in, and a folder that leaves Finder leaves its own directory at the top level of the
-location. Before the folder goes, `SystemCopy.unknownPaths` walks the system's copy and lists what the index has no item at,
-and `FilesLeftovers.moveOut` takes those out of the location, keeping the paths they had in it, into a new directory named
-after the folder in `~/Sync` (`ClientLifecycle.directoryForFilesOutsideTheLocation`). macOS removes its copy of a folder with
-everything in it, these files included, and they are nowhere else, so leaving them would lose them. Nothing is removed, and
-the app says how many there were and where they are now. What could not be moved stays, and macOS then keeps or removes
-it. The directory of a file the extension refuses is read with `opendir`, as `FileManager` leaves `._name` files out of a
-listing, which are most of what this looks for. The directory a folder left is offered to the extension as a new item of the
-top level; `excludedFromSync` keeps it on this Mac, where `cannotSynchronize` would have the system ask again every minute.
-A folder coming back to a name that directory holds would show nothing of its own, so `FilesLeftovers.moveAside` renames it
-to "Name (not synchronized)" first.
+system's copy alone: the extension refuses them with `excludedFromSync`, so the index never has them. macOS removes its copy
+of a folder with everything in it, these files included, and they are nowhere else. So before a folder leaves, whether on
+the page of its gateway or by switching modes, `SystemCopy.unknownPaths` walks the system's copy and lists what the index has
+no item at, and `FilesLeftovers.moveOut` takes those out of the location, keeping the paths they had in it. They go to a new
+directory named after the folder (`ClientLifecycle.directoryForFilesOutsideTheLocation`): in `~/Sync`, or in the home directory
+when `~/Sync` is a folder of the engine, which would send them to its devices. Nothing is removed, and the app says how many
+there were and where they are now. Unresolved edits are checked first, as they would keep the folder here without these
+files.
+
+Rebuilding the location takes them out the same way first. The folder stays, and removing it can be tried again, if any of
+this fails: a file that can't be moved, a walk that doesn't finish, or a copy that can't be looked at. Not being able to tell
+never counts as there being nothing to save. The only folder that needs no walk is one the system has no copy of, which a
+location that exists without its directory shows, or a location that is turned off.
+
+The directory of a file the extension refuses is read with `opendir`, as `FileManager` leaves `._name` files out of a listing,
+which are most of what this looks for. Should a directory be left at the top level of the location all the same, it is offered
+to the extension as a new item; `excludedFromSync` keeps it on this Mac, where `cannotSynchronize` would have the system ask
+again every minute. A folder coming back to a name that directory holds would show nothing of its own, so
+`FilesLeftovers.moveAside` renames it to "Name (not synchronized)" first.
 
 ### The system's part
 

@@ -154,6 +154,28 @@ import Testing
 		#expect(found.paths.isEmpty && !found.isComplete)
 	}
 
+	@Test func holdsNothingCountsWhatFileManagerHides() throws {
+		let root = try makeTree(["._a.txt"])
+
+		#expect(try FileManager.default.contentsOfDirectory(atPath: root.path(percentEncoded: false)).isEmpty)
+		#expect(!SystemCopy.holdsNothing(root))
+	}
+
+	@Test func holdsNothingOfAnEmptyOrMissingDirectory() throws {
+		let root = try makeTree([])
+
+		#expect(SystemCopy.holdsNothing(root))
+		#expect(SystemCopy.holdsNothing(root.appending(path: "nowhere")))
+	}
+
+	@Test func holdsNothingIsNotSaidOfADirectoryThatCannotBeRead() throws {
+		let root = try makeTree(["docs/"])
+		#expect(chmod(root.path(percentEncoded: false) + "/docs", 0) == 0)
+		defer { chmod(root.path(percentEncoded: false) + "/docs", 0o755) }
+
+		#expect(!SystemCopy.holdsNothing(root.appending(path: "docs")))
+	}
+
 	@Test func namesReadsWhatFileManagerHides() throws {
 		let root = try makeTree(["a.txt", "._a.txt", "deep/"])
 

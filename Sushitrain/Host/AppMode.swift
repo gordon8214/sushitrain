@@ -17,6 +17,9 @@
 
 		private static let storageKey = "appMode"
 
+		/// What this process started as, whatever the mode is by the time it asks: nil at the chooser
+		nonisolated(unsafe) static var current: AppMode? = nil
+
 		/// The mode to run in, or nil when the user has yet to choose one: only a Mac that never ran the engine does. A
 		/// mode that follows from what is on this Mac stays, so that a later change can't turn it into a question.
 		static func resolve() -> AppMode? {
@@ -41,7 +44,7 @@
 		/// For the app's actions, and what looks things up for them, which reach for the engine's state. They run in
 		/// either mode, and can't be hidden in one of them.
 		static func requireEngine() throws {
-			guard resolve() == .synchronize else {
+			guard current == .synchronize else {
 				throw EngineNotRunning()
 			}
 		}

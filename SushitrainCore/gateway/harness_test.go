@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -365,15 +364,6 @@ func waitFor(t *testing.T, timeout time.Duration, what string, cond func() bool)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-}
-
-func hasPrefixItem(items []Item, prefix string) bool {
-	for _, item := range items {
-		if strings.HasPrefix(item.Path, prefix) {
-			return true
-		}
-	}
-	return false
 }
 
 // addFolder adds another folder of this device, shared with nobody, and returns its path

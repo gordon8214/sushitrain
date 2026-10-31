@@ -292,7 +292,9 @@ struct RemoteGatewayFoldersSection: View {
 		} label: {
 			VStack(alignment: .leading) {
 				Text(coordinator.folders.first { $0.folderID == binding.folderID }?.label ?? binding.remoteFolderID)
-				Text("Not listed by the gateway").font(.caption).foregroundStyle(.secondary)
+				if coordinator.status(serviceID: serviceID)?.folders != nil {
+					Text("Not listed by the gateway").font(.caption).foregroundStyle(.secondary)
+				}
 			}
 		}
 	}
