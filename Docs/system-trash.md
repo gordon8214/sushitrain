@@ -2,12 +2,12 @@
 
 Native folders have an opt-in **Move deleted files to system Trash** setting in
 advanced folder settings. Existing folders default to permanent deletion. The
-setting applies to deselection, selection cleanup, explicit deletion, and ordinary
-unversioned deletions received during synchronization. Removing the whole folder
-moves its root to Trash after pausing synchronization.
+setting applies to explicit deletion and ordinary unversioned deletions received
+during synchronization. Removing the whole folder moves its root to Trash after
+pausing synchronization.
 
 Files in Trash still occupy disk space. This setting therefore changes how much
-space deselection can immediately reclaim. Recovery is through the system's file
+space a deletion can immediately reclaim. Recovery is through the system's file
 manager; Synctrain does not empty Trash or provide its own retention policy.
 
 ## Filesystem integration
@@ -35,10 +35,8 @@ traversal, and symlinked parents are rejected before handing a native path to th
 bridge. The leaf symlink itself is moved, not its target.
 
 There is no permanent-deletion fallback. A missing bridge or native Trash error
-leaves the item in place and is reported to the caller. Deselection can already
-have updated the ignore file; use selection cleanup to retry removing retained
-local files. Failure to trash an entire folder leaves it configured and paused so
-removal can be retried.
+leaves the item in place and is reported to the caller. Failure to trash an entire
+folder leaves it configured and paused so removal can be retried.
 
 ## Versioning and scope
 

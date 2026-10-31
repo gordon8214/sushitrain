@@ -7746,52 +7746,6 @@
         }
       }
     },
-    "Apply patterns and clean folder" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Muster anwenden und Ordner bereinigen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aplicar patrones y limpiar carpeta"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applica modelli e pulisci cartella"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "パターンを適用してフォルダをクリーン"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Patronen toepassen en map opschonen"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Застосувати шаблони та очистити папку"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "应用模式并清理文件夹"
-          }
-        }
-      }
-    },
     "Approve" : {
       "localizations" : {
         "de" : {
@@ -8068,48 +8022,48 @@
         }
       }
     },
-    "Are you sure you want to save the patterns? Files and subdirectories that match the patterns will not be synchronized with other devices. If you choose to also clean the folder now, files and folders matching the patterns will be permanently removed from this device. Files may be lost if they are not available on other devices." : {
+    "Are you sure you want to save the patterns? Files and subdirectories that match the patterns will not be synchronized with other devices." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sind Sie sicher, dass Sie die Muster speichern möchten? Dateien und Unterverzeichnisse, die den Mustern entsprechen, werden nicht mit anderen Geräten synchronisiert. Wenn Sie sich dafür entscheiden, den Ordner jetzt zu bereinigen, werden Dateien und Ordner, die den Mustern entsprechen, dauerhaft von diesem Gerät entfernt. Dateien können verloren gehen, wenn sie auf anderen Geräten nicht verfügbar sind."
+            "value" : "Sind Sie sicher, dass Sie die Muster speichern möchten? Dateien und Unterverzeichnisse, die den Mustern entsprechen, werden nicht mit anderen Geräten synchronisiert."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Estás seguro de que deseas guardar los patrones? Los archivos y subdirectorios que coincidan con los patrones no se sincronizarán con otros dispositivos. Si decides limpiar la carpeta ahora, los archivos y carpetas que coincidan con los patrones se eliminarán permanentemente de este dispositivo. Es posible que los archivos se pierdan si no están disponibles en otros dispositivos."
+            "value" : "¿Estás seguro de que deseas guardar los patrones? Los archivos y subdirectorios que coincidan con los patrones no se sincronizarán con otros dispositivos."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sei sicuro di voler salvare i modelli? I file e le sottodirectory che corrispondono ai modelli non verranno sincronizzati con altri dispositivi. Se scegli di pulire anche la cartella ora, i file e le cartelle che corrispondono ai modelli verranno rimossi definitivamente da questo dispositivo. I file potrebbero andare persi se non sono disponibili su altri dispositivi."
+            "value" : "Sei sicuro di voler salvare i modelli? I file e le sottodirectory che corrispondono ai modelli non verranno sincronizzati con altri dispositivi."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "パターンを保存してもよろしいですか？ パターンに一致するファイルおよびサブディレクトリは、他のデバイスと同期されなくなります。今すぐフォルダをクリーンアップすることを選択した場合、パターンに一致するファイルとフォルダはこのデバイスから完全に削除されます。他のデバイスにファイルが存在しない場合、ファイルが失われる可能性があります。"
+            "value" : "パターンを保存してもよろしいですか？ パターンに一致するファイルおよびサブディレクトリは、他のデバイスと同期されなくなります。"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weet je zeker dat je de patronen wilt opslaan? Bestanden en submappen die overeenkomen met de patronen worden niet gesynchroniseerd met andere apparaten. Als je ervoor kiest om nu ook de map op te schonen, worden bestanden en mappen die overeenkomen met de patronen permanent van dit apparaat verwijderd. Bestanden kunnen verloren gaan als ze niet beschikbaar zijn op andere apparaten."
+            "value" : "Weet je zeker dat je de patronen wilt opslaan? Bestanden en submappen die overeenkomen met de patronen worden niet gesynchroniseerd met andere apparaten."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ви впевнені, що хочете зберегти шаблони? Файли та підкаталоги, що відповідають шаблонам, не будуть синхронізовані з іншими пристроями. Якщо ви виберете також очистити папку зараз, файли та папки, що відповідають шаблонам, будуть безповоротно видалені з цього пристрою. Файли можуть бути втрачені, якщо вони недоступні на інших пристроях."
+            "value" : "Ви впевнені, що хочете зберегти шаблони? Файли та підкаталоги, що відповідають шаблонам, не будуть синхронізовані з іншими пристроями."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "您确定要保存这些模式吗？与模式匹配的文件和子目录将不会与其他设备同步。如果您现在选择清理文件夹，与模式匹配的文件和文件夹将从此设备中永久删除。如果文件在其他设备上不可用，可能会丢失。"
+            "value" : "您确定要保存这些模式吗？与模式匹配的文件和子目录将不会与其他设备同步。"
           }
         }
       }

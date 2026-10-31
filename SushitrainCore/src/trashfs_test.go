@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -14,7 +13,6 @@ import (
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/events"
 	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/ignore"
 	"github.com/syncthing/syncthing/lib/protocol"
 	"github.com/syncthing/syncthing/lib/versioner"
 )
@@ -245,34 +243,6 @@ func TestTrashFilesystemVersioning(t *testing.T) {
 				t.Fatalf("versioning polluted Trash: %v", h.paths)
 			}
 		})
-	}
-}
-
-func TestTrashSelectionCleanup(t *testing.T) {
-	h := installTestTrash(t)
-	root := t.TempDir()
-	ffs := fs.NewFilesystem(filesystemTypeTrash, root)
-	for _, name := range []string{"dir/last-copy", "dir/remote-copy"} {
-		writeTrashTestFile(t, root, name)
-	}
-	matcher := ignore.New(ffs)
-	if err := matcher.Parse(strings.NewReader("*\n"), ignoreFileName); err != nil {
-		t.Fatal(err)
-	}
-	if err := cleanSelection(ffs, matcher, ".stfolder", true, func(name string) (bool, error) {
-		return name == "dir/remote-copy", nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ffs.Lstat("dir/last-copy"); err != nil {
-		t.Fatalf("lost last copy: %v", err)
-	}
-	if data, err := os.ReadFile(filepath.Join(h.root, "0")); err != nil || string(data) != "dir/remote-copy" {
-		t.Fatalf("deselected file not recoverable: %q, %v", data, err)
-	}
-	h.err = errors.New("native trash failure")
-	if err := cleanSelection(ffs, matcher, ".stfolder", false, nil); !errors.Is(err, h.err) {
-		t.Fatalf("cleanup swallowed failure: %v", err)
 	}
 }
 

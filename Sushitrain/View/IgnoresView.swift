@@ -146,7 +146,7 @@ struct IgnoresView: View {
 					}
 					.disabled(self.loading)
 					.confirmationDialog(
-						"Are you sure you want to save the patterns? Files and subdirectories that match the patterns will not be synchronized with other devices. If you choose to also clean the folder now, files and folders matching the patterns will be permanently removed from this device. Files may be lost if they are not available on other devices.",
+						"Are you sure you want to save the patterns? Files and subdirectories that match the patterns will not be synchronized with other devices.",
 						isPresented: $showSaveConfirmation, titleVisibility: .visible
 					) {
 						Button("Apply patterns") {
@@ -158,16 +158,6 @@ struct IgnoresView: View {
 								}
 							}
 						}.disabled(self.loading)
-
-						Button("Apply patterns and clean folder", role: .destructive) {
-							Task {
-								await self.applyAndClean()
-								if self.error == nil {
-									self.dismiss()
-									self.showSaveConfirmation = false
-								}
-							}
-						}.disabled(self.loading)
 					}
 				})
 
@@ -176,28 +166,6 @@ struct IgnoresView: View {
 			}
 		}
 		.errorAlert($error)
-	}
-
-	private func applyAndClean() async {
-		self.loading = true
-		await self.write()
-		if self.error == nil {
-			await Task {
-				do {
-					try await Task.detached(priority: .userInitiated) {
-						try self.folder.cleanSelection(true)
-					}.value
-				}
-				catch {
-					Log.warn("failed to clean selection: \(error)")
-					self.error = ErrorMessage(error)
-				}
-				self.loading = false
-			}.value
-		}
-		else {
-			self.loading = false
-		}
 	}
 
 	private func write() async {
