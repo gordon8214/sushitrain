@@ -281,17 +281,15 @@ func (mp *miniPuller) downloadInto(ctx context.Context, w io.Writer, folderID st
 	parallellism := 2
 
 	chans := make([]chan []byte, parallellism)
-	errChan := make(chan error, 1)
+	// Room for an error from each worker, as nobody reads these anymore once a write has failed
+	errChan := make(chan error, parallellism)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// Spawn `parallellism` goroutines, each will fetch block i + n*parallellism
 	for threadIndex := range parallellism {
 		chans[threadIndex] = make(chan []byte, 1)
-		go func() {
-			wg.Add(1)
-			defer wg.Done()
-
+		wg.Go(func() {
 			var i = threadIndex
 			for i < len(info.Blocks) {
 				// Check if we were cancelled
@@ -308,18 +306,27 @@ func (mp *miniPuller) downloadInto(ctx context.Context, w io.Writer, folderID st
 					return
 				}
 				slog.Debug("done block", "index", i, "threadIndex", threadIndex)
-				// this will block until the  previous block we produced was read
-				chans[threadIndex] <- buf
+				// this will block until the  previous block we produced was read, or until we are canceled
+				select {
+				case chans[threadIndex] <- buf:
+				case <-ctx.Done():
+					slog.Debug("download worker canceled with a block to hand over", "index", i, "threadIndex", threadIndex)
+					return
+				}
 				i += parallellism
 			}
-		}()
+		})
 	}
 
+	// Runs before the deferred cancel, so anything returning early needs to have canceled the workers already
 	defer wg.Wait()
 
 	// Read the blocks in order
 	for blockNo, _ := range info.Blocks {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
 		case err := <-errChan:
 			slog.Info("download into error", "cause", err)
 			cancel()
