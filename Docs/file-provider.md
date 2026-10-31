@@ -104,11 +104,13 @@ Finder's `.DS_Store` and similar files stay on this Mac, and are never sent to o
 gateway from elsewhere are not shown. Files the location can't synchronize, such as those names, stay in their directory,
 which can't then be deleted from another device until they are removed.
 
-When its folder leaves Finder, Synctrain says how many such files there are and where, as they never reached another
-device, and removes nothing itself. macOS then either removes them with the folder, or keeps the folder's directory in
-the location because it can't remove a directory that holds them. A directory left that way is kept on this Mac without
-synchronizing, and when the folder comes back it is renamed to "Name (not synchronized)" and stays next to the folder,
-which shows all of its own files again.
+When its folder leaves Finder, Synctrain takes such files out of the location first, as macOS removes its copy of a
+folder with everything in it, these included, and they are nowhere else. They go into the folder's own directory, where
+they would have been had the folder never been on demand, keeping the place they had in it; a folder of a gateway, which
+has no directory here, gets a new one next to where new folders are created. Synctrain says how many there were and
+where they are now, and removes nothing. What could not be moved stays in the location, where macOS may keep or remove
+it; a directory left there that way is kept on this Mac without synchronizing, and when the folder comes back it is
+renamed to "Name (not synchronized)" and stays next to the folder, which shows all of its own files again.
 
 For now, a file edited in Finder stays in the folder as well as in the system's copy, and takes later changes from other
 devices, until the folder is switched back. Deleted paths stay listed in its `.stignore`, so that the deletion stays

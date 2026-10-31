@@ -34,12 +34,39 @@
 			let kind: Kind
 
 			enum Kind: Sendable, Equatable {
-				/// How many files of a folder that leaves stay in the system's copy, with one of their paths relative
-				/// to the folder's root. `isComplete` is false when there can be more than `count`.
+				/// How many files of a folder that leaves were taken out of the location, with one of their paths
+				/// relative to the folder's root and where they are now. `isComplete` is false when the folder's copy
+				/// was not looked at in full, so that there can be more than `count`.
+				case movedOut(count: Int, example: String, isComplete: Bool, place: String)
+				/// The same, for files that could not be taken out and stay in the system's copy
 				case staying(count: Int, example: String, isComplete: Bool)
 				/// The name the directory of an earlier round has now, next to the folder that came back
 				case movedAside(String)
 			}
+		}
+
+		/// Takes what the location cannot synchronize out of a folder that is leaving it, into a directory of this Mac,
+		/// keeping the paths the files have in the folder. macOS removes its copy of a folder with everything in it,
+		/// including files it keeps on this device alone, so a file that is nowhere else would be gone. Returns how
+		/// many were moved; the rest stay where they are.
+		static func moveOut(_ paths: [String], from root: URL, to destination: URL) -> Int {
+			let fileManager = FileManager.default
+			var moved = 0
+			for path in paths {
+				let source = root.appending(path: path, directoryHint: .inferFromPath)
+				let target = destination.appending(path: path, directoryHint: .inferFromPath)
+				do {
+					try fileManager.createDirectory(
+						at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+					try fileManager.moveItem(at: source, to: target)
+					moved += 1
+				}
+				catch {
+					Log.warn(
+						"Could not take a file the Synctrain location cannot synchronize out of it: \(error.localizedDescription)")
+				}
+			}
+			return moved
 		}
 
 		/// What `moveAside` did with the directory a folder of the label left behind: its new name, or what the

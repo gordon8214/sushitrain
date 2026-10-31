@@ -765,16 +765,19 @@ import SynctrainFileProviderKit
 		return try result.get()
 	}
 
-	/// Removes a folder from this device; it stays on its gateway. Refused while its edits are unresolved.
-	func removeFolder(folderID: String) async throws(GatewayFolderError) {
+	/// Removes a folder from this device; it stays on its gateway. Refused while its edits are unresolved. On macOS,
+	/// what the location cannot synchronize is taken out of it first, into `keeping` (the folder's own directory, for a
+	/// folder of this Mac) or else a new directory of this Mac.
+	func removeFolder(folderID: String, keeping destination: URL? = nil) async throws(GatewayFolderError) {
 		guard let environment else {
 			return
 		}
 		let activity = BackgroundActivity(name: "Removing a folder")
 		defer { activity.end() }
 		#if os(macOS)
-			// While the folder is still in the index: its items are what tells what the location keeps on this Mac
-			let staying = await stayingFiles(folderID: folderID, environment: environment)
+			// While the folder is still in the index: its items are what tells what the location cannot synchronize
+			let report = await takeFilesOutOfTheLocation(
+				folderID: folderID, environment: environment, keeping: destination)
 		#endif
 		let result = await Task.detached(priority: .userInitiated) {
 			RemoteWork.removeFolder(folderID: folderID, environment: environment)
@@ -783,16 +786,19 @@ import SynctrainFileProviderKit
 		await reloadState()
 		try result.get()
 		#if os(macOS)
-			if let staying {
-				leftovers.append(staying)
+			if let report {
+				leftovers.append(report)
 			}
 		#endif
 	}
 
 	#if os(macOS)
-		/// What the location cannot synchronize in the folder, and so keeps in the system's copy when the folder leaves
-		/// Finder, with the directories around it
-		private func stayingFiles(folderID: String, environment: RemoteEnvironment) async -> FilesLeftovers.Report? {
+		/// What the location cannot synchronize in the folder, taken out of it before it leaves Finder: macOS removes
+		/// its copy of a folder with everything in it, these files included, and they are nowhere else. They go to the
+		/// folder's own directory where it has one, and otherwise to a new directory of this Mac.
+		private func takeFilesOutOfTheLocation(
+			folderID: String, environment: RemoteEnvironment, keeping destination: URL?
+		) async -> FilesLeftovers.Report? {
 			let folder = try? environment.store.folder(id: folderID)
 			guard let label = folder?.label,
 				let root = await FilesDomain.shared.userVisibleURL(folderID: folderID, path: "")
@@ -815,11 +821,30 @@ import SynctrainFileProviderKit
 				return nil
 			}
 			Log.info(
-				"The Synctrain location keeps \(found.paths.count) items of \(folderID) that it cannot synchronize"
+				"The Synctrain location cannot synchronize \(found.paths.count) items of \(folderID)"
 					+ (found.isComplete ? "" : " (at least)"))
+			let place = destination ?? ClientLifecycle.directoryForFilesOutsideTheLocation(named: label)
+			let paths = found.paths
+			let moved: Int
+			if let place {
+				moved = await Task.detached(priority: .userInitiated) {
+					FilesLeftovers.moveOut(paths, from: root, to: place)
+				}.value
+			}
+			else {
+				moved = 0
+			}
+			guard moved == paths.count, let place else {
+				// What stays is the system's to keep or to remove with the folder
+				return FilesLeftovers.Report(
+					folder: label, url: root,
+					kind: .staying(count: paths.count, example: example, isComplete: found.isComplete))
+			}
 			return FilesLeftovers.Report(
-				folder: label, url: root,
-				kind: .staying(count: found.paths.count, example: example, isComplete: found.isComplete))
+				folder: label, url: place,
+				kind: .movedOut(
+					count: moved, example: example, isComplete: found.isComplete,
+					place: (place.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath))
 		}
 
 		/// Renames the directory an earlier round of a folder of this label left at the top level of the location, which

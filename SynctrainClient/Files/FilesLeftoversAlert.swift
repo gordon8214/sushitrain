@@ -44,6 +44,17 @@
 
 		@ViewBuilder private func message(_ report: FilesLeftovers.Report) -> some View {
 			switch report.kind {
+			case .movedOut(let count, let example, let isComplete, let place):
+				if isComplete {
+					Text(
+						"Synctrain cannot synchronize \(count) of the files in \(report.folder), such as \(example), so they never reached another device. They are now in \(place), where you can move or remove them."
+					)
+				}
+				else {
+					Text(
+						"Synctrain cannot synchronize more than \(count) of the files in \(report.folder), such as \(example), so they never reached another device. They are now in \(place), where you can move or remove them."
+					)
+				}
 			case .staying(let count, let example, let isComplete):
 				if isComplete {
 					Text(

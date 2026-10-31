@@ -55130,6 +55130,52 @@
         }
       }
     },
+    "Synctrain cannot synchronize %lld of the files in %@, such as %@, so they never reached another device. They are now in %@, where you can move or remove them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kann %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@, sodass sie nie ein anderes Gerät erreicht haben. Sie liegen jetzt in %@, wo Sie sie verschieben oder entfernen können."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no puede sincronizar %lld de los archivos de %@, como %@, así que nunca han llegado a otro dispositivo. Ahora están en %@, donde puedes moverlos o eliminarlos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non può sincronizzare %lld dei file in %@, per esempio %@, quindi non hanno mai raggiunto un altro dispositivo. Ora sono in %@, dove puoi spostarli o rimuoverli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainは%2$@内の%1$lld個のファイル（%3$@など）を同期できないため、これらは他のデバイスに届いていません。これらは現在%4$@にあり、そこで移動または削除できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kan %lld van de bestanden in %@ niet synchroniseren, zoals %@, dus ze hebben nooit een ander apparaat bereikt. Ze staan nu in %@, waar je ze kunt verplaatsen of verwijderen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не може синхронізувати %lld файлів у %@, наприклад %@, тому вони ніколи не потрапили на інший пристрій. Тепер вони в %@, де ви можете перемістити або вилучити їх."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法同步 %2$@ 中的 %1$lld 个文件，例如 %3$@，因此它们从未到达其他设备。它们现在位于 %4$@，你可以在那里移动或删除它们。"
+          }
+        }
+      }
+    },
     "Synctrain cannot synchronize more than %lld of the files in %@, such as %@, so they never reached another device. macOS may keep them in Finder's Synctrain location, in a folder of the same name, or remove them with the folder." : {
       "localizations" : {
         "de" : {
@@ -55172,6 +55218,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synctrain 无法同步 %2$@ 中超过 %1$lld 个文件，例如 %3$@，因此它们从未到达其他设备。macOS 可能把它们保留在 Finder 的 Synctrain 位置中同名的文件夹里，也可能连同该文件夹一起删除。"
+          }
+        }
+      }
+    },
+    "Synctrain cannot synchronize more than %lld of the files in %@, such as %@, so they never reached another device. They are now in %@, where you can move or remove them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kann mehr als %lld der Dateien in %@ nicht synchronisieren, zum Beispiel %@, sodass sie nie ein anderes Gerät erreicht haben. Sie liegen jetzt in %@, wo Sie sie verschieben oder entfernen können."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain no puede sincronizar más de %lld de los archivos de %@, como %@, así que nunca han llegado a otro dispositivo. Ahora están en %@, donde puedes moverlos o eliminarlos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain non può sincronizzare più di %lld dei file in %@, per esempio %@, quindi non hanno mai raggiunto un altro dispositivo. Ora sono in %@, dove puoi spostarli o rimuoverli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainは%2$@内の%1$lld個を超えるファイル（%3$@など）を同期できないため、これらは他のデバイスに届いていません。これらは現在%4$@にあり、そこで移動または削除できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain kan meer dan %lld van de bestanden in %@ niet synchroniseren, zoals %@, dus ze hebben nooit een ander apparaat bereikt. Ze staan nu in %@, waar je ze kunt verplaatsen of verwijderen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain не може синхронізувати понад %lld файлів у %@, наприклад %@, тому вони ніколи не потрапили на інший пристрій. Тепер вони в %@, де ви можете перемістити або вилучити їх."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 无法同步 %2$@ 中超过 %1$lld 个文件，例如 %3$@，因此它们从未到达其他设备。它们现在位于 %4$@，你可以在那里移动或删除它们。"
           }
         }
       }

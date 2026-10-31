@@ -63,7 +63,7 @@
 		/// Whether something is being changed: changes run one after the other
 		private(set) var isWorking = false
 
-		@ObservationIgnored private var client: SushitrainClient? = nil
+		@ObservationIgnored private(set) var client: SushitrainClient? = nil
 		@ObservationIgnored private var queue: Task<Void, Never>? = nil
 
 		private static let enabledKey = "finderAccessEnabled"
@@ -319,7 +319,9 @@
 				throw Failure.unavailable
 			}
 			if let localID = localFolderID(folderID) {
-				try await RemoteCoordinator.shared.removeFolder(folderID: localID)
+				// What the location cannot synchronize goes into the folder's own directory, where it would have been
+				// had the folder never been on demand, and is synchronized from now on like anything else in it
+				try await RemoteCoordinator.shared.removeFolder(folderID: localID, keeping: folder.localNativeURL)
 			}
 			let controller = GatewayController.shared
 			if let clientID = controller.thisMacClientID {

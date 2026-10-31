@@ -40,6 +40,25 @@
 			NSWorkspace.shared.activateFileViewerSelecting([url])
 		}
 
+		/// Where files of a folder that the Synctrain location cannot synchronize go when the folder leaves it and has
+		/// no directory of its own on this Mac (a folder of a gateway). It is a new directory where new folders are
+		/// created, which the engine picks: in the configured default folder path, or else `~/Sync` or the home
+		/// directory, never inside a folder, and never one that exists already.
+		static func directoryForFilesOutsideTheLocation(named name: String) -> URL? {
+			guard let client = FinderAccess.shared.client else {
+				return nil
+			}
+			var error: NSError? = nil
+			// The engine names a new folder's directory after the folder, so the name is given as the folder
+			let path = client.defaultFolderPath(String(localized: "\(name) (not synchronized)"), error: &error)
+			guard error == nil, !path.isEmpty else {
+				Log.warn(
+					"Could not find a place for what the Synctrain location cannot synchronize: \(error?.localizedDescription ?? "-")")
+				return nil
+			}
+			return URL(filePath: path, directoryHint: .isDirectory)
+		}
+
 		/// Opens the settings where macOS asks the user to allow the Synctrain location
 		static func showLocationSettings() {
 			if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
