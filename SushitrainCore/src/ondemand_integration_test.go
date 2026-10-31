@@ -305,3 +305,61 @@ func TestOnDemandGlobalIgnoresReadLikeTheEngine(t *testing.T) {
 		}
 	}
 }
+
+// What the service does with a real engine's selection: gateway/ondemand_test.go covers when it does it
+func TestOnDemandKeepAndDeselect(t *testing.T) {
+	mac := newOnDemandDevice(t)
+	if err := os.WriteFile(filepath.Join(mac.root, ".stignore"),
+		[]byte("(?d).DS_Store\n!*.sync-conflict-*\n!/selected\n*\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	folder := mac.client.FolderWithID("test")
+	var recorded []string
+	record := func(added []string) error {
+		recorded = append(recorded, added...)
+		return nil
+	}
+	if err := folder.keepSelected([]string{"selected/child", "written/file", "written/other"}, record); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(recorded, []string{"written/file", "written/other"}) {
+		t.Fatalf("recorded %q", recorded)
+	}
+	// The line that was there isn't for the service to take away, and a record that failed selects nothing
+	failed := errors.New("could not record")
+	if err := folder.keepSelected([]string{"unrecorded"}, func([]string) error { return failed }); !errors.Is(err, failed) {
+		t.Fatalf("failing to record: %v", err)
+	}
+	if onDemand, err := folder.IsOnDemand(); !onDemand || err != nil {
+		t.Fatalf("on demand: %v %v", onDemand, err)
+	}
+	ignored, err := folder.deselectKept([]string{"written/file", "selected/child"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]bool{
+		"written/file": true, "written/other": false, "unrecorded": true, "selected/child": false,
+		"written/x.sync-conflict-20260101-000000-ABCDEFG.txt": false, ".DS_Store": true,
+	} {
+		if got := ignored(path); got != want {
+			t.Errorf("%s: %v", path, got)
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(mac.root, ".stignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "(?d).DS_Store\n!*.sync-conflict-*\n!/selected\n!/written/other\n*\n"; string(data) != want {
+		t.Fatalf("patterns %q", data)
+	}
+	// Nothing to take out: it only says what the patterns ignore
+	if ignored, err := folder.deselectKept(nil); err != nil || ignored("written/other") {
+		t.Fatalf("reading the patterns: %v", err)
+	}
+	if err := folder.SetSelective(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := folder.deselectKept([]string{"written/other"}); err == nil {
+		t.Fatal("deselected in a folder that isn't on demand")
+	}
+}

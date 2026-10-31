@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -84,8 +85,19 @@ type RemoteFileBackend interface {
 	// syncthing.ErrVersionNotFound. It doesn't wait for the folder loop.
 	OpenFileVersion(folder, name string, versionTime time.Time) (fs.File, error)
 	// KeepSelected selects paths of an on-demand folder, so that the engine goes on offering what the service wrote
-	// there. It runs in RunInFolderLoop and doesn't wait for the folder. Paths selected already change nothing.
-	KeepSelected(folder string, paths []string) error
+	// there. It runs in RunInFolderLoop and doesn't wait for the folder. Paths selected already change nothing; it calls
+	// record with the others, before it selects them.
+	KeepSelected(folder string, paths []string, record func(added []string) error) error
+	// DeselectKept takes paths out of the selection of an on-demand folder, and returns what its patterns ignore after
+	// that, for names in the form a scan matches them with. What a parent selects stays selected. It runs in
+	// RunInFolderLoop and doesn't wait for the folder.
+	DeselectKept(folder string, paths []string) (func(name string) bool, error)
+	// Peers returns the other devices the folder is shared with
+	Peers(folder string) []protocol.DeviceID
+	// PeerFile returns the index entry another device last announced for a file
+	PeerFile(folder string, device protocol.DeviceID, name string) (protocol.FileInfo, bool, error)
+	// IsConnected reports whether this device is connected to another one
+	IsConnected(device protocol.DeviceID) bool
 	// GlobalIgnores returns what excludes a path from an on-demand folder, whether it is selected or not
 	GlobalIgnores(folder string) (func(name string) bool, error)
 	// ScanPaths has the given paths scanned soon
@@ -122,9 +134,10 @@ type EngineBackend struct {
 	Fetch func(ctx context.Context, folder string, file protocol.FileInfo, index int) ([]byte, error)
 	// Optional: whether the folder holds only a selection of its files on this device
 	IsSelective func(folderID string) bool
-	// Optional, for hosts with on-demand folders: all three, or none
+	// Optional, for hosts with on-demand folders: all four, or none
 	IsOnDemand        func(folderID string) bool
-	Select            func(folderID string, paths []string) error
+	Select            func(folderID string, paths []string, record func(added []string) error) error
+	Deselect          func(folderID string, paths []string) (func(name string) bool, error)
 	LoadGlobalIgnores func(folderID string) (func(name string) bool, error)
 
 	scanMutex sync.Mutex
@@ -290,11 +303,34 @@ func (b *EngineBackend) OpenFileVersion(folder, name string, versionTime time.Ti
 	return b.App.Internals.OpenFileVersion(folder, name, versionTime)
 }
 
-func (b *EngineBackend) KeepSelected(folder string, paths []string) error {
+func (b *EngineBackend) KeepSelected(folder string, paths []string, record func(added []string) error) error {
 	if b.Select == nil {
 		return errors.New("this host cannot select paths")
 	}
-	return b.Select(folder, paths)
+	return b.Select(folder, paths, record)
+}
+
+func (b *EngineBackend) DeselectKept(folder string, paths []string) (func(name string) bool, error) {
+	if b.Deselect == nil {
+		return nil, errors.New("this host cannot deselect paths")
+	}
+	return b.Deselect(folder, paths)
+}
+
+func (b *EngineBackend) Peers(folder string) []protocol.DeviceID {
+	fc, ok := b.Config.Folder(folder)
+	if !ok {
+		return nil
+	}
+	return slices.DeleteFunc(fc.DeviceIDs(), func(id protocol.DeviceID) bool { return id == b.ID })
+}
+
+func (b *EngineBackend) PeerFile(folder string, device protocol.DeviceID, name string) (protocol.FileInfo, bool, error) {
+	return b.App.Internals.DeviceFileInfo(folder, device, name)
+}
+
+func (b *EngineBackend) IsConnected(device protocol.DeviceID) bool {
+	return b.App.Internals.IsConnectedTo(device)
 }
 
 func (b *EngineBackend) GlobalIgnores(folder string) (func(name string) bool, error) {

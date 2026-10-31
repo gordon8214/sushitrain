@@ -112,9 +112,10 @@ where they are now, and removes nothing. What could not be moved stays in the lo
 it; a directory left there that way is kept on this Mac without synchronizing, and when the folder comes back it is
 renamed to "Name (not synchronized)" and stays next to the folder, which shows all of its own files again.
 
-For now, a file edited in Finder stays in the folder as well as in the system's copy, and takes later changes from other
-devices, until the folder is switched back. Deleted paths stay listed in its `.stignore`, so that the deletion stays
-announced.
+A file edited in Finder stays in the folder as well as in the system's copy, and takes later changes from other devices,
+until every device that shares the folder has the change. It then goes from the folder, within about a minute. A device
+that is away holds this up until it returns, or until it is removed from the folder. Deleted paths stay listed in
+`.stignore` for as long, so that the deletion stays announced.
 
 ## How it works
 

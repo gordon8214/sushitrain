@@ -139,23 +139,23 @@ func TestKeepSelected(t *testing.T) {
 
 	// Selected already, by itself or through a parent: nothing to save
 	for _, path := range []string{"selected", "selected/child/file"} {
-		if changed, err := sel.keep([]string{path}); changed || err != nil {
-			t.Fatalf("%s: %v %v", path, changed, err)
+		if added, err := sel.keep([]string{path}); len(added) > 0 || err != nil {
+			t.Fatalf("%s: %v %v", path, added, err)
 		}
 	}
 	// Not through a name that only starts the same, also below it
-	if changed, err := sel.keep([]string{"selected2/file"}); !changed || err != nil {
-		t.Fatalf("selected2/file: %v %v", changed, err)
+	if added, err := sel.keep([]string{"selected2/file"}); !slices.Equal(added, []string{"selected2/file"}) || err != nil {
+		t.Fatalf("selected2/file: %v %v", added, err)
 	}
-	if changed, err := sel.keep([]string{"selected2"}); !changed || err != nil {
-		t.Fatalf("selected2: %v %v", changed, err)
+	if added, err := sel.keep([]string{"selected2"}); !slices.Equal(added, []string{"selected2"}) || err != nil {
+		t.Fatalf("selected2: %v %v", added, err)
 	}
 	// A directory with something selected in it, which setExplicitlySelected refuses
 	if _, err := sel.keep([]string{"dir/inside"}); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := sel.keep([]string{"dir"}); !changed || err != nil {
-		t.Fatalf("dir: %v %v", changed, err)
+	if added, err := sel.keep([]string{"dir"}); !slices.Equal(added, []string{"dir"}) || err != nil {
+		t.Fatalf("dir: %v %v", added, err)
 	}
 	if sel.lines[len(sel.lines)-1] != "*" || !sel.isOnDemand() {
 		t.Fatalf("lines %q", sel.lines)
@@ -187,6 +187,36 @@ func TestKeepSelected(t *testing.T) {
 	plain := newSelection([]string{"!/a", "*"})
 	if _, err := plain.keep([]string{"b"}); err == nil {
 		t.Fatal("kept a path in a plain selective folder")
+	}
+}
+
+func TestKeepLetsADirectoryTakeOver(t *testing.T) {
+	sel := newSelection([]string{onDemandPattern, "!/dir/a", "!/dir/b", "!/dir2/c", "*"})
+	if added, err := sel.keep([]string{"dir"}); !slices.Equal(added, []string{"dir"}) || err != nil {
+		t.Fatalf("dir: %v %v", added, err)
+	}
+	if want := []string{onDemandPattern, "!/dir2/c", "!/dir", "*"}; !slices.Equal(sel.lines, want) {
+		t.Fatalf("lines %q", sel.lines)
+	}
+}
+
+func TestDropSelected(t *testing.T) {
+	sel := newSelection([]string{onDemandPattern, "!/a", "!/odd [name]!.txt", "!/dir", "*"})
+	sel.lines = append(sel.lines[:3:3], "!/odd \\[name\\]\\!.txt", "!/dir", "*")
+	if sel.drop([]string{"missing", "dir/below"}) {
+		t.Fatal("dropped what has no line of its own")
+	}
+	if !sel.drop([]string{"a", "odd [name]!.txt"}) {
+		t.Fatal("dropped nothing")
+	}
+	if !sel.isKept("dir/below") || sel.isKept("a") || sel.isKept("odd [name]!.txt") {
+		t.Fatalf("lines %q", sel.lines)
+	}
+	if !sel.isOnDemand() {
+		t.Fatalf("not on demand: %q", sel.lines)
+	}
+	if !sel.drop([]string{"dir"}) || !slices.Equal(sel.lines, []string{onDemandPattern, "!/odd [name]!.txt", "*"}) {
+		t.Fatalf("lines %q", sel.lines)
 	}
 }
 

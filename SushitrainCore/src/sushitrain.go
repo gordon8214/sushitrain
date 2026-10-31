@@ -68,6 +68,7 @@ type Client struct {
 	syncthingHomeLock     *os.File
 	syncthingHomeLockPath string
 	remoteManaged         *remoteManagedSet
+	ignoreCaches          sync.Map     // folder ID => *CachedIgnore
 	startupProblem        atomic.Value // string, one of the StartupProblem constants
 	guiNotice             atomic.Value // string, what the last load changed about the web GUI (GUIStatusMessage)
 	crashLog              string       // the log a crash of this process goes to (reporting.go)

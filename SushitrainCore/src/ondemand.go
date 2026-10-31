@@ -18,14 +18,14 @@ import (
 )
 
 // An on-demand folder is a selective folder that Finder shows in full through the remote file service, on macOS. The
-// engine keeps the global index and only the files that were written here, that no other device has, and conflict
-// copies, which every on-demand folder selects. The service writes to it (see gateway/ondemand.go), which plain
-// selective folders don't allow. Its .stignore says that it is on demand (onDemandPattern), so that nothing else needs
-// to remember it.
+// engine keeps the global index and only the files that were written here and haven't reached every device, that no
+// other device has, and conflict copies, which every on-demand folder selects. The service writes to it (see
+// gateway/ondemand.go), which plain selective folders don't allow. Its .stignore says that it is on demand
+// (onDemandPattern), so that nothing else needs to remember it.
 
 // errOnDemandSelection refuses what would deselect paths of an on-demand folder. A deselected path is marked ignored at
 // the next scan, which also stops announcing it: a deletion made here would then never reach other devices, and an
-// edit they don't have yet would be lost to them.
+// edit they don't have yet would be lost to them. Only the service deselects, once it knows that they have it.
 var errOnDemandSelection = errors.New("the files kept for an on-demand folder can't be deselected")
 
 // How many files that no connected device has can stay selected when a folder switches to on demand. Each one is a
@@ -42,27 +42,61 @@ func (fld *Folder) IsOnDemand() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return newSelection(ignores.Lines()).isOnDemand(), nil
+	_, onDemand := fld.ignoreCache().modeOf(ignores)
+	return onDemand, nil
 }
 
 // keepSelected selects what the remote file service wrote. It runs in the folder's loop, so it must not wait for the
 // folder: saving the patterns only schedules a scan, and no holder of the selection lock waits for the loop of an
-// on-demand folder (deselecting, which can pause it, is refused). Paths that are selected already change nothing, and
-// scan nothing.
-func (fld *Folder) keepSelected(paths []string) error {
+// on-demand folder (deselecting there, which can pause it, is refused). Paths that are selected already change nothing,
+// and scan nothing. The others go to record first: a record without a line comes to nothing, while a line without a
+// record stays for good.
+func (fld *Folder) keepSelected(paths []string, record func(added []string) error) error {
 	unlock := lockSelection(fld.FolderID)
 	defer unlock()
-	fld.cachedIgnore.matcher = nil
+	fld.forgetIgnores()
 	ignores, err := fld.loadIgnores()
 	if err != nil {
 		return err
 	}
 	selection := newSelection(ignores.Lines())
-	changed, err := selection.keep(paths)
-	if err != nil || !changed {
+	added, err := selection.keep(paths)
+	if err != nil || len(added) == 0 {
+		return err
+	}
+	if err := record(added); err != nil {
 		return err
 	}
 	return fld.client.internals().SetIgnores(fld.FolderID, selection.patterns())
+}
+
+// deselectKept takes what the remote file service wrote out of the selection, once other devices have it, and returns
+// what the patterns ignore after that. Like keepSelected it runs in the folder's loop and doesn't wait for the folder.
+// The next scan marks what is deselected ignored, and it loads the patterns first, so the service can remove what it
+// deselected before that scan runs, but not the other way around: a scan that finds a selected file missing announces a
+// deletion.
+func (fld *Folder) deselectKept(paths []string) (func(path string) bool, error) {
+	unlock := lockSelection(fld.FolderID)
+	defer unlock()
+	fld.forgetIgnores()
+	ignores, err := fld.loadIgnores()
+	if err != nil {
+		return nil, err
+	}
+	selection := newSelection(ignores.Lines())
+	if !selection.isOnDemand() {
+		return nil, errors.New("folder is not an on-demand folder")
+	}
+	if selection.drop(paths) {
+		if err := fld.client.internals().SetIgnores(fld.FolderID, selection.patterns()); err != nil {
+			return nil, err
+		}
+		fld.forgetIgnores()
+		if ignores, err = fld.loadIgnores(); err != nil {
+			return nil, err
+		}
+	}
+	return func(path string) bool { return ignores.Match(path).IsIgnored() }, nil
 }
 
 // globalIgnores returns what excludes a path from a selective folder apart from its selection. It reads the patterns

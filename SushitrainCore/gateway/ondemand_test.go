@@ -9,6 +9,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -20,6 +21,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	stfs "github.com/syncthing/syncthing/lib/fs"
+	"github.com/syncthing/syncthing/lib/ignore"
 )
 
 // These tests write to an on-demand folder on a host that doesn't hold its files, next to a real peer that does. What
@@ -35,23 +39,62 @@ type onDemandFixture struct {
 	token      string
 }
 
-// selectPaths does what the app's core does with an on-demand folder's .stignore
-func (e *testEngine) selectPaths(folder string, paths []string) error {
-	lines, _, err := e.app.Internals.Ignores(folder)
+// ignoreLines reads the folder's .stignore as saved: what the engine has loaded lags behind it
+func (e *testEngine) ignoreLines() []string {
+	e.t.Helper()
+	data, err := os.ReadFile(filepath.Join(e.folderPath, ".stignore"))
 	if err != nil {
-		return err
+		e.t.Fatal(err)
 	}
-	changed := false
+	return strings.Split(strings.TrimSpace(string(data)), "\n")
+}
+
+// selectPaths does what the app's core does with an on-demand folder's .stignore
+func (e *testEngine) selectPaths(folder string, paths []string, record func(added []string) error) error {
+	lines := e.ignoreLines()
+	selected := func(path string) bool {
+		for ; path != ""; path = parentPath(path) {
+			if slices.Contains(lines, "!/"+path) {
+				return true
+			}
+		}
+		return false
+	}
+	var added []string
 	for _, path := range paths {
-		if line := "!/" + path; !slices.Contains(lines, line) {
-			lines = append(lines[:len(lines)-1], line, "*")
-			changed = true
+		if !selected(path) {
+			lines = append(lines[:len(lines)-1], "!/"+path, "*")
+			added = append(added, path)
 		}
 	}
-	if !changed {
+	if len(added) == 0 {
 		return nil
 	}
+	if err := record(added); err != nil {
+		return err
+	}
+	for _, path := range added {
+		lines = slices.DeleteFunc(lines, func(line string) bool { return strings.HasPrefix(line, "!/"+path+"/") })
+	}
 	return e.app.Internals.SetIgnores(folder, lines)
+}
+
+// deselectPaths does what the app's core does when the service deselects
+func (e *testEngine) deselectPaths(folder string, paths []string) (func(string) bool, error) {
+	lines := e.ignoreLines()
+	kept := slices.DeleteFunc(slices.Clone(lines), func(line string) bool {
+		return slices.ContainsFunc(paths, func(path string) bool { return line == "!/"+path })
+	})
+	if len(kept) != len(lines) {
+		if err := e.app.Internals.SetIgnores(folder, kept); err != nil {
+			return nil, err
+		}
+	}
+	matcher := ignore.New(stfs.NewFilesystem(stfs.FilesystemTypeBasic, e.folderPath))
+	if err := matcher.Parse(strings.NewReader(strings.Join(kept, "\n")), ".stignore"); err != nil {
+		return nil, err
+	}
+	return func(name string) bool { return matcher.Match(name).IsIgnored() }, nil
 }
 
 func newOnDemand(t *testing.T, files map[string]string) *onDemandFixture {
@@ -64,6 +107,7 @@ func newOnDemand(t *testing.T, files map[string]string) *onDemandFixture {
 	host.backend.IsSelective = func(string) bool { return true }
 	host.backend.IsOnDemand = func(string) bool { return true }
 	host.backend.Select = host.selectPaths
+	host.backend.Deselect = host.deselectPaths
 	host.backend.LoadGlobalIgnores = func(string) (func(string) bool, error) {
 		return func(name string) bool {
 			return name == "globally-ignored" || strings.HasPrefix(name, "globally-ignored/")
@@ -421,7 +465,7 @@ func TestOnDemandLostConflictKeepsTheEdit(t *testing.T) {
 
 func TestOnDemandEditAfterDeselection(t *testing.T) {
 	f := newOnDemand(t, map[string]string{"doc.txt": "original"})
-	if err := f.host.selectPaths("shared", []string{"doc.txt"}); err != nil {
+	if err := f.host.selectPaths("shared", []string{"doc.txt"}, func([]string) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, peerTimeout, "the file on the host", func() bool {
@@ -607,11 +651,11 @@ func TestOnDemandSelectingFailsOnce(t *testing.T) {
 	var failing atomic.Bool
 	failing.Store(true)
 	selectPaths := f.host.backend.Select
-	f.host.backend.Select = func(folder string, paths []string) error {
+	f.host.backend.Select = func(folder string, paths []string, record func(added []string) error) error {
 		if failing.Load() {
 			return errors.New("simulated failure")
 		}
-		return selectPaths(folder, paths)
+		return selectPaths(folder, paths, record)
 	}
 
 	upload, digest := f.ts.upload(f.token, []byte("edited"))
@@ -671,4 +715,463 @@ func TestOnDemandResumedDeleteKeepsNewerVersion(t *testing.T) {
 	})
 	f.settle()
 	f.waitForPeer("doc.txt", "changed meanwhile")
+}
+
+// What follows is about when a path stops being selected: everything above keeps working with any answer to that, as
+// long as nothing is deselected too early
+
+// deselect does what the service does every so often, and what a scan then does with it
+func (f *onDemandFixture) deselect() {
+	f.t.Helper()
+	if err := f.ts.deselectWritten(context.Background(), "shared"); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+func (f *onDemandFixture) selected(path string) bool {
+	f.t.Helper()
+	return slices.Contains(f.host.ignoreLines(), "!/"+path)
+}
+
+func (f *onDemandFixture) wantSelected(paths ...string) {
+	f.t.Helper()
+	for _, path := range paths {
+		if !f.selected(path) {
+			f.t.Fatalf("%s is no longer selected: %q", path, f.host.ignoreLines())
+		}
+	}
+}
+
+func (f *onDemandFixture) waitForDeselection(paths ...string) {
+	f.t.Helper()
+	waitFor(f.t, peerTimeout, "the paths to be deselected", func() bool {
+		f.deselect()
+		return !slices.ContainsFunc(paths, f.selected)
+	})
+}
+
+func (f *onDemandFixture) holds(name string) bool {
+	_, err := os.Lstat(filepath.Join(f.host.folderPath, name))
+	return err == nil
+}
+
+// addPeer shares the folder with another device that has all of it, and that the host knows has it
+func (f *onDemandFixture) addPeer(names ...string) *testEngine {
+	f.t.Helper()
+	other := newTestEngine(f.t, "shared", nil)
+	connect(f.t, f.host, other)
+	connect(f.t, f.peer, other)
+	waitFor(f.t, peerTimeout, "the other peer's index on the host", func() bool {
+		for _, name := range names {
+			global, _, _ := f.host.backend.GlobalFile("shared", name)
+			file, ok, _ := f.host.backend.PeerFile("shared", other.id, name)
+			if !ok || !file.Version.Equal(global.Version) {
+				return false
+			}
+		}
+		return f.host.app.Internals.IsConnectedTo(other.id)
+	})
+	return other
+}
+
+// pauseOnBoth takes a device away from the two others
+func (f *onDemandFixture) pauseOnBoth(other *testEngine, paused bool) {
+	f.t.Helper()
+	setDevicePaused(f.t, f.host, other, paused)
+	setDevicePaused(f.t, f.peer, other, paused)
+	waitFor(f.t, peerTimeout, "the device's connections", func() bool {
+		return f.host.app.Internals.IsConnectedTo(other.id) != paused &&
+			f.peer.app.Internals.IsConnectedTo(other.id) != paused
+	})
+}
+
+func (f *onDemandFixture) read(item Item) string {
+	f.t.Helper()
+	var lease ReadLease
+	f.ts.json("POST", "/v1/items/"+item.ID+"/read-leases", f.token, ReadLeaseRequest{Revision: item.Revision},
+		http.StatusCreated, &lease)
+	_, data := f.ts.do("GET", "/v1/content/"+lease.Lease, lease.Token, nil)
+	return string(data)
+}
+
+func TestOnDemandDeselectsAnEditOnceThePeerHasIt(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"dir/doc.txt": "original"})
+	item := f.item("dir/doc.txt")
+	f.pausePeer(true)
+	if op := f.replace(item, "edited"); op.State != stateResultCommitted {
+		t.Fatalf("replace: %+v", op)
+	}
+	f.deselect()
+	f.deselect()
+	f.wantSelected("dir/doc.txt")
+	if got, _ := f.host.read("dir/doc.txt"); got != "edited" {
+		t.Fatalf("the only copy of the edit holds %q", got)
+	}
+
+	f.pausePeer(false)
+	f.waitForPeer("dir/doc.txt", "edited")
+	before := f.item("dir/doc.txt")
+	f.waitForDeselection("dir/doc.txt")
+	if f.holds("dir/doc.txt") || f.holds("dir") {
+		t.Fatal("the local copy and its empty directory are still here")
+	}
+	// At once: an operation that comes next must not find an entry for a file that is gone
+	local, ok, _ := f.host.backend.LocalFile("shared", "dir/doc.txt")
+	if !ok || !local.IsInvalid() {
+		t.Fatalf("still announced: %+v", local)
+	}
+	f.settle()
+	f.waitForPeer("dir/doc.txt", "edited")
+	f.wantNoConflicts()
+	after := f.item("dir/doc.txt")
+	if after.Revision != before.Revision {
+		t.Fatalf("deselecting changed the item: %s, %s", before.Revision, after.Revision)
+	}
+	if got := f.read(after); got != "edited" {
+		t.Fatalf("read %q", got)
+	}
+
+	// From here on it is a file this device doesn't hold
+	if op := f.replace(after, "edited again"); op.State != stateResultCommitted {
+		t.Fatalf("replace: %+v", op)
+	}
+	f.waitForPeer("dir/doc.txt", "edited again")
+	f.waitForDeselection("dir/doc.txt")
+	f.settle()
+	f.waitForPeer("dir/doc.txt", "edited again")
+	f.wantNoConflicts()
+}
+
+func TestOnDemandDeselectsDeletionsOnceThePeerHasThem(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"gone.txt": "gone", "dir/a.txt": "a", "dir/sub/b.txt": "b", "stays.txt": "s"})
+	file, directory := f.item("gone.txt"), f.item("dir")
+	f.pausePeer(true)
+	if op := f.remove(file); op.State != stateResultCommitted {
+		t.Fatalf("delete: %+v", op)
+	}
+	if op := f.remove(directory); op.State != stateResultCommitted {
+		t.Fatalf("delete directory: %+v", op)
+	}
+	f.deselect()
+	f.wantSelected("gone.txt", "dir")
+	f.pausePeer(false)
+	f.waitForPeerToLose("gone.txt")
+	f.waitForPeerToLose("dir/sub/b.txt")
+	f.waitForDeselection("gone.txt", "dir")
+	f.settle()
+	f.waitForPeerToLose("gone.txt")
+	f.waitForPeerToLose("dir/a.txt")
+	f.waitForPeer("stays.txt", "s")
+	f.wantNoConflicts()
+
+	// The lines no longer take in what appears there
+	f.peer.write("gone.txt", "back")
+	f.peer.scan()
+	waitFor(t, peerTimeout, "the new file on the host", func() bool {
+		f.ts.sync()
+		_, ok, _ := liveItemByPath(f.ts.store.db, "shared", "gone.txt")
+		return ok
+	})
+	f.settle()
+	if f.holds("gone.txt") {
+		t.Fatal("what a peer created at a path that was deleted here came to this device")
+	}
+}
+
+// The peer that is around has it all, and could offer it, but that one may be gone when the device that is away returns
+func TestOnDemandWaitsForADeviceThatIsAway(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"doc.txt": "original", "gone.txt": "gone", "stays.txt": "s"})
+	away := f.addPeer("doc.txt", "gone.txt", "stays.txt")
+	item, deleted := f.item("doc.txt"), f.item("gone.txt")
+	f.pauseOnBoth(away, true)
+	if op := f.replace(item, "edited"); op.State != stateResultCommitted {
+		t.Fatalf("replace: %+v", op)
+	}
+	if op := f.remove(deleted); op.State != stateResultCommitted {
+		t.Fatalf("delete: %+v", op)
+	}
+	f.waitForPeer("doc.txt", "edited")
+	f.waitForPeerToLose("gone.txt")
+	waitFor(t, peerTimeout, "the peer's index on the host", func() bool {
+		local, _, _ := f.host.backend.LocalFile("shared", "gone.txt")
+		file, ok, _ := f.host.backend.PeerFile("shared", f.peer.id, "gone.txt")
+		return ok && file.Version.Equal(local.Version)
+	})
+	for range 3 {
+		f.deselect()
+		f.host.scan()
+	}
+	f.wantSelected("doc.txt", "gone.txt")
+	if got, _ := f.host.read("doc.txt"); got != "edited" {
+		t.Fatalf("the file holds %q", got)
+	}
+
+	f.pauseOnBoth(away, false)
+	f.waitForDeselection("doc.txt", "gone.txt")
+	waitFor(t, peerTimeout, "the changes on the device that was away", func() bool {
+		got, ok := away.read("doc.txt")
+		_, there := away.read("gone.txt")
+		return ok && got == "edited" && !there
+	})
+	if f.holds("doc.txt") {
+		t.Fatal("the local copy is still here")
+	}
+	f.settle()
+	f.waitForPeer("doc.txt", "edited")
+	if found := conflictCopies(t, away); len(found) > 0 {
+		t.Fatalf("conflict copies: %v", found)
+	}
+}
+
+// Nobody else ever had an entry for it, so nobody will ever add one: a device that is back needs nothing
+func TestOnDemandDeselectsWhatWasGoneBeforeAnyoneSawIt(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"stays.txt": "s"})
+	root := f.item("")
+	f.pausePeer(true)
+	if op := f.create(root, "temporary.tmp", "short-lived"); op.State != stateResultCommitted {
+		t.Fatalf("create: %+v", op)
+	}
+	if op := f.remove(f.item("temporary.tmp")); op.State != stateResultCommitted {
+		t.Fatalf("delete: %+v", op)
+	}
+	f.deselect()
+	f.wantSelected("temporary.tmp")
+	f.pausePeer(false)
+	f.waitForDeselection("temporary.tmp")
+	f.settle()
+	f.waitForPeerToLose("temporary.tmp")
+}
+
+// A device that ignores a file says that it has seen this version, not that it has the file
+func TestOnDemandKeepsWhatNoOtherDeviceHolds(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"stays.txt": "s"})
+	if err := os.WriteFile(filepath.Join(f.peer.folderPath, ".stignore"), []byte("only-here.txt\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.peer.scan()
+	if op := f.create(f.item(""), "only-here.txt", "only here"); op.State != stateResultCommitted {
+		t.Fatalf("create: %+v", op)
+	}
+	waitFor(t, peerTimeout, "the peer's entry on the host", func() bool {
+		local, _, _ := f.host.backend.LocalFile("shared", "only-here.txt")
+		file, ok, _ := f.host.backend.PeerFile("shared", f.peer.id, "only-here.txt")
+		return ok && file.IsInvalid() && file.Version.Equal(local.Version)
+	})
+	f.deselect()
+	f.wantSelected("only-here.txt")
+	if got, _ := f.host.read("only-here.txt"); got != "only here" {
+		t.Fatalf("the only copy holds %q", got)
+	}
+}
+
+// Only what the service selected is the service's to deselect
+func TestOnDemandLeavesWhatTheUserSelected(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"pinned.txt": "pinned", "written.txt": "written"})
+	if err := f.host.selectPaths("shared", []string{"pinned.txt"}, func([]string) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, peerTimeout, "the file on the host", func() bool {
+		f.host.scan()
+		got, _ := f.host.read("pinned.txt")
+		return got == "pinned"
+	})
+	if op := f.replace(f.item("pinned.txt"), "pinned, edited"); op.State != stateResultCommitted {
+		t.Fatalf("replace: %+v", op)
+	}
+	if op := f.replace(f.item("written.txt"), "edited"); op.State != stateResultCommitted {
+		t.Fatalf("replace: %+v", op)
+	}
+	f.waitForPeer("pinned.txt", "pinned, edited")
+	f.waitForPeer("written.txt", "edited")
+	f.waitForDeselection("written.txt")
+	f.wantSelected("pinned.txt")
+	if got, _ := f.host.read("pinned.txt"); got != "pinned, edited" {
+		t.Fatalf("the selected file holds %q", got)
+	}
+}
+
+func TestOnDemandDeselectsADirectoryWithAllInIt(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"stays.txt": "s"})
+	lines := append([]string{"(?d)excluded.txt"}, f.host.ignoreLines()...)
+	if err := f.host.app.Internals.SetIgnores("shared", lines); err != nil {
+		t.Fatal(err)
+	}
+	f.host.scan()
+	op := f.finish(OperationRequest{ID: newUUID(), Kind: opCreate, FolderID: "shared", ParentID: f.item("").ID,
+		Name: "made", ItemKind: kindDirectory})
+	if op.State != stateResultCommitted {
+		t.Fatalf("create directory: %+v", op)
+	}
+	if op := f.create(f.item("made"), "a.txt", "a"); op.State != stateResultCommitted {
+		t.Fatalf("create: %+v", op)
+	}
+	f.waitForPeer("made/a.txt", "a")
+	// What arrives in a selected directory goes with it. What the folder's patterns exclude stays, and what no scan has
+	// seen yet holds it up
+	f.peer.write("made/from the peer/b.txt", "b")
+	f.peer.scan()
+	waitFor(t, peerTimeout, "the peer's file on the host", func() bool {
+		got, _ := f.host.read("made/from the peer/b.txt")
+		return got == "b"
+	})
+	f.host.write("made/excluded.txt", "stays here")
+	f.host.write("made/not scanned.txt", "only here so far")
+	for range 3 {
+		f.deselect()
+		time.Sleep(200 * time.Millisecond)
+	}
+	f.wantSelected("made")
+	if got, _ := f.host.read("made/not scanned.txt"); got != "only here so far" {
+		t.Fatalf("the only copy holds %q", got)
+	}
+	f.host.scan()
+	f.waitForPeer("made/not scanned.txt", "only here so far")
+	f.waitForDeselection("made")
+	if f.holds("made/a.txt") || f.holds("made/from the peer") || f.holds("made/not scanned.txt") {
+		t.Fatal("the local copies are still here")
+	}
+	if got, _ := f.host.read("made/excluded.txt"); got != "stays here" {
+		t.Fatalf("what is excluded holds %q", got)
+	}
+	f.settle()
+	f.waitForPeer("made/a.txt", "a")
+	f.waitForPeer("made/from the peer/b.txt", "b")
+	f.waitForPeer("made/not scanned.txt", "only here so far")
+	f.wantNoConflicts()
+}
+
+// What changed on disk isn't what the index says the peer has
+func TestOnDemandWaitsForAScanOfAChangedFile(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"doc.txt": "original"})
+	if op := f.replace(f.item("doc.txt"), "edited"); op.State != stateResultCommitted {
+		t.Fatalf("replace: %+v", op)
+	}
+	f.waitForPeer("doc.txt", "edited")
+	f.host.write("doc.txt", "changed on disk, and longer")
+	waitFor(t, peerTimeout, "the peer's index on the host", func() bool {
+		local, _, _ := f.host.backend.LocalFile("shared", "doc.txt")
+		file, ok, _ := f.host.backend.PeerFile("shared", f.peer.id, "doc.txt")
+		return ok && file.Version.Equal(local.Version)
+	})
+	f.deselect()
+	f.wantSelected("doc.txt")
+	if got, _ := f.host.read("doc.txt"); got != "changed on disk, and longer" {
+		t.Fatalf("the file holds %q", got)
+	}
+	f.host.scan()
+	f.waitForPeer("doc.txt", "changed on disk, and longer")
+	f.waitForDeselection("doc.txt")
+	f.settle()
+	f.waitForPeer("doc.txt", "changed on disk, and longer")
+	f.wantNoConflicts()
+}
+
+// An operation may be waiting for the engine to fetch what it selected
+func TestOnDemandDeselectionWaitsForOperations(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"old.txt": "moved contents"})
+	root, file := f.item(""), f.item("old.txt")
+	f.pausePeer(true)
+	resp, data := f.ts.do("POST", "/v1/operations", f.token, OperationRequest{ID: newUUID(), Kind: opMove, FolderID: "shared",
+		ItemID: file.ID, ParentID: root.ID, Name: "new.txt", BaseRevision: file.Revision})
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("move: %d %s", resp.StatusCode, data)
+	}
+	var pending Operation
+	if err := json.Unmarshal(data, &pending); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, peerTimeout, "the file to be selected", func() bool { return f.selected("old.txt") })
+	f.deselect()
+	f.wantSelected("old.txt")
+	f.pausePeer(false)
+	waitFor(t, peerTimeout, "the move", func() bool {
+		f.ts.sync()
+		f.ts.json("GET", "/v1/operations/"+pending.Operation, f.token, nil, http.StatusOK, &pending)
+		return pending.State != stateResultPending
+	})
+	if pending.State != stateResultCommitted {
+		t.Fatalf("move: %+v", pending)
+	}
+	f.waitForPeer("new.txt", "moved contents")
+	f.waitForPeerToLose("old.txt")
+	f.waitForDeselection("old.txt", "new.txt")
+	f.settle()
+	f.waitForPeer("new.txt", "moved contents")
+	f.waitForPeerToLose("old.txt")
+	f.wantNoConflicts()
+}
+
+func TestOnDemandGroupsTheLinesOfADirectory(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"dir/a.txt": "a", "dir/sub/b.txt": "b", "mixed/a.txt": "a", "mixed/b.txt": "b",
+		"mixed/other.txt": "other"})
+	items := []Item{f.item("dir/a.txt"), f.item("dir/sub/b.txt"), f.item("mixed/a.txt"), f.item("mixed/b.txt")}
+	f.pausePeer(true)
+	for _, item := range items {
+		if op := f.replace(item, "edited"); op.State != stateResultCommitted {
+			t.Fatalf("replace: %+v", op)
+		}
+	}
+	f.deselect()
+	// In dir there is nothing else, but two paths are needed for it to take over, one level up from each
+	f.wantSelected("dir/a.txt", "dir/sub/b.txt", "mixed/a.txt", "mixed/b.txt")
+	if op := f.create(f.item("dir/sub"), "c.txt", "c"); op.State != stateResultCommitted {
+		t.Fatalf("create: %+v", op)
+	}
+	f.deselect()
+	f.wantSelected("dir/a.txt", "dir/sub", "mixed/a.txt", "mixed/b.txt")
+	if f.selected("dir/sub/b.txt") || f.selected("dir/sub/c.txt") {
+		t.Fatalf("patterns %q", f.host.ignoreLines())
+	}
+	f.deselect()
+	f.wantSelected("dir", "mixed/a.txt", "mixed/b.txt")
+	if f.selected("dir/a.txt") || f.selected("dir/sub") {
+		t.Fatalf("patterns %q", f.host.ignoreLines())
+	}
+	f.settle()
+	if f.holds("mixed/other.txt") {
+		t.Fatal("selecting the directory downloaded a file that wasn't written")
+	}
+	f.pausePeer(false)
+	f.waitForPeer("dir/sub/c.txt", "c")
+	f.waitForPeer("mixed/b.txt", "edited")
+	f.waitForDeselection("dir", "mixed/a.txt", "mixed/b.txt")
+	f.settle()
+	if f.holds("dir/sub/c.txt") || f.holds("mixed/a.txt") {
+		t.Fatal("the local copies are still here")
+	}
+	f.waitForPeer("dir/a.txt", "edited")
+	f.waitForPeer("dir/sub/b.txt", "edited")
+	f.wantNoConflicts()
+}
+
+func TestOnDemandDeselectionSurvivesARestart(t *testing.T) {
+	f := newOnDemand(t, map[string]string{"doc.txt": "original"})
+	item := f.item("doc.txt")
+	f.pausePeer(true)
+	if op := f.replace(item, "edited"); op.State != stateResultCommitted {
+		t.Fatalf("replace: %+v", op)
+	}
+	f.ts.Close()
+	f.ts = newTestService(t, f.host, f.ts.home)
+	f.deselect()
+	f.wantSelected("doc.txt")
+	f.pausePeer(false)
+	f.waitForPeer("doc.txt", "edited")
+	f.waitForDeselection("doc.txt")
+	if f.holds("doc.txt") {
+		t.Fatal("the local copy is still here")
+	}
+}
+
+func TestOnDemandDeselectsByItself(t *testing.T) {
+	interval := deselectInterval
+	deselectInterval = 50 * time.Millisecond
+	t.Cleanup(func() { deselectInterval = interval })
+	f := newOnDemand(t, map[string]string{"doc.txt": "original"})
+	if op := f.replace(f.item("doc.txt"), "edited"); op.State != stateResultCommitted {
+		t.Fatalf("replace: %+v", op)
+	}
+	f.waitForPeer("doc.txt", "edited")
+	waitFor(t, peerTimeout, "the path to be deselected", func() bool { return !f.selected("doc.txt") })
+	waitFor(t, peerTimeout, "the local copy to go", func() bool { return !f.holds("doc.txt") })
 }

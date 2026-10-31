@@ -155,6 +155,11 @@ func (d *dir) remove(name string) error {
 	return unix.Unlinkat(d.fd, name, 0)
 }
 
+// rmdir removes the empty directory name in d
+func (d *dir) rmdir(name string) error {
+	return unix.Unlinkat(d.fd, name, unix.AT_REMOVEDIR)
+}
+
 func (d *dir) chmod(name string, mode uint32) error {
 	return unix.Fchmodat(d.fd, name, mode, 0)
 }

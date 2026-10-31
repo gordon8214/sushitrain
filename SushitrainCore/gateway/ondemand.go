@@ -8,13 +8,19 @@ package gateway
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"maps"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
+	"github.com/syncthing/syncthing/lib/fs"
+	"github.com/syncthing/syncthing/lib/osutil"
 	"github.com/syncthing/syncthing/lib/protocol"
 	"github.com/syncthing/syncthing/lib/scanner"
 	"github.com/syncthing/syncthing/lib/syncthing"
@@ -37,6 +43,16 @@ import (
 //     committing would let a scan index the file with the wrong version, in a restart.
 //   - h.IsIgnored can't tell: the selection's last pattern matches every path that isn't selected, and it shows the
 //     patterns as they were when the callback started. See isExcluded.
+//
+// What was written doesn't stay selected for good, as .stignore and the folder would go on growing, and a line for a
+// path takes in what other devices do there. The service records what it selected, and deselects it once it no longer
+// has to announce it. See deselectWritten.
+
+// How often the service looks for what it can deselect in on-demand folders
+var deselectInterval = time.Minute
+
+// How many of a directory's paths have to be selected on their own before the directory can take over from them
+const minGroupedPaths = 2
 
 // How much a move of a directory may have to download. Moving contents takes having them: an entry at the new path
 // without a file behind it would be announced as something this device can't provide, and turn into a deletion.
@@ -213,7 +229,432 @@ func (s *Service) keepSelected(info FolderInfo, paths ...string) error {
 	if !info.OnDemand {
 		return nil
 	}
-	return s.backend.KeepSelected(info.ID, paths)
+	return s.backend.KeepSelected(info.ID, paths, func(added []string) error { return s.recordWritten(info.ID, added) })
+}
+
+// recordWritten notes paths the service selected. Only these are its to deselect: the others in .stignore are what the
+// user selected, and what no other device had when the folder became on demand. Which version has to reach other
+// devices is not part of it: that is what the local index says at the time, which a scan or a pull may have moved on.
+func (s *Service) recordWritten(folder string, paths []string) error {
+	return s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		for _, path := range paths {
+			if _, err := tx.Exec(`INSERT OR IGNORE INTO written_paths (folder_id, path) VALUES (?, ?)`, folder, path); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (s *Service) forgetWritten(folder string, paths []string) error {
+	return s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		for _, path := range paths {
+			if _, err := tx.Exec(`DELETE FROM written_paths WHERE folder_id = ? AND path = ?`, folder, path); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (s *Service) writtenPaths(folder string) ([]string, error) {
+	return queryStrings(s.store.db, `SELECT path FROM written_paths WHERE folder_id = ? ORDER BY path`, folder)
+}
+
+func queryStrings(q queryer, query string, args ...any) ([]string, error) {
+	rows, err := q.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var values []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
+
+// runDeselection deselects what the service wrote to on-demand folders, once it can
+func (s *Service) runDeselection(ctx context.Context) {
+	ticker := time.NewTicker(deselectInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		folders, err := queryStrings(s.store.db, `SELECT DISTINCT folder_id FROM written_paths`)
+		if err != nil && ctx.Err() == nil {
+			s.log.Warn("Could not list what was written to on-demand folders", "error", err)
+		}
+		for _, folder := range folders {
+			if err := s.deselectWritten(ctx, folder); err != nil && ctx.Err() == nil {
+				s.log.Warn("Could not deselect what other devices have", "folder", folder, "error", err)
+			}
+		}
+	}
+}
+
+// deselectWritten deselects the paths the service selected in a folder that this device no longer has to announce, and
+// removes their local copies: they open through Finder from then on, as what was never written here does. A deselected
+// path stops being announced at the next scan, and this device passes on only its own entries, so it isn't enough for
+// one device to have a change: a device that is behind may never meet that one. Every device that shares the folder
+// has to have got there first (caughtUp), which means that one that is away for good holds this up until it is removed
+// from the folder.
+//
+// It runs in the folder's loop, where neither a scan nor a pull can move what it checks, and not next to operations, some
+// of which wait for what they selected. A first look outside the loop leaves the folder alone while there is nothing to
+// do, which is most of the time when a device is away.
+func (s *Service) deselectWritten(ctx context.Context, folder string) error {
+	paths, err := s.writtenPaths(folder)
+	if err != nil || len(paths) == 0 {
+		return err
+	}
+	info, ok := s.backend.Folder(folder)
+	if !ok {
+		return s.forgetWritten(folder, paths)
+	}
+	if !info.OnDemand || info.Paused {
+		return nil
+	}
+	settled, err := s.settledPaths(folder, paths, func(name string) (protocol.FileInfo, bool, error) {
+		return s.backend.LocalFile(folder, name)
+	})
+	if err != nil {
+		return err
+	}
+	directories, err := s.groupableDirectories(folder, paths)
+	if err != nil || len(settled) == 0 && len(directories) == 0 {
+		return err
+	}
+	lock := s.folderLock(folder)
+	if !lock.TryLock() {
+		// An operation is at work: there is always a next time
+		return nil
+	}
+	defer lock.Unlock()
+	pending, err := s.pendingOperationIDs(folder)
+	if err != nil || len(pending) > 0 {
+		return err
+	}
+	root, err := openRoot(info.NativePath)
+	if err != nil {
+		return err
+	}
+	defer root.close()
+	return s.backend.RunInFolderLoop(ctx, folder, func(ctx context.Context, h syncthing.FolderHandle) error {
+		done, err := s.beginPublish()
+		if err != nil {
+			return err
+		}
+		defer done()
+		paths, err := s.writtenPaths(folder)
+		if err != nil {
+			return err
+		}
+		deselected, err := s.deselectSettled(ctx, h, root, info, paths)
+		if err != nil {
+			return err
+		}
+		gone := make(map[string]struct{}, len(deselected))
+		for _, path := range deselected {
+			gone[path] = struct{}{}
+		}
+		return s.groupWritten(h, info, slices.DeleteFunc(paths, func(path string) bool {
+			_, ok := gone[path]
+			return ok
+		}))
+	})
+}
+
+// caughtUp reports whether this device can stop announcing its entry for name: every device that shares the folder has
+// got at least as far, whether it keeps the file or ignores it, and one of them has the file, unless it is a deletion. A
+// device whose entry conflicts with this one hasn't got there yet. An entry that isn't announced has nothing to wait for.
+func (s *Service) caughtUp(folder, name string, local protocol.FileInfo, ok bool, peers []protocol.DeviceID) (bool, error) {
+	if !ok || local.IsInvalid() {
+		return true, nil
+	}
+	held := local.Deleted
+	for _, peer := range peers {
+		file, ok, err := s.backend.PeerFile(folder, peer, name)
+		switch {
+		case err != nil:
+			return false, err
+		case !ok:
+			// A device keeps no entry for the deletion of what it never had, as with a temporary file that was gone before
+			// it got to it. One that is away may have the file from a third device, without this one knowing yet.
+			if !local.Deleted || !s.backend.IsConnected(peer) {
+				return false, nil
+			}
+		case !file.Version.GreaterEqual(local.Version):
+			return false, nil
+		case !file.IsInvalid():
+			held = true
+		}
+	}
+	return held, nil
+}
+
+// settledPaths returns those of paths whose entries and those of all below them are caught up, going by what current
+// says this device has
+func (s *Service) settledPaths(folder string, paths []string,
+	current func(name string) (protocol.FileInfo, bool, error),
+) ([]string, error) {
+	peers := s.backend.Peers(folder)
+	settled := func(path string) (bool, error) {
+		local, ok, err := current(path)
+		if err != nil {
+			return false, err
+		}
+		return s.caughtUp(folder, path, local, ok, peers)
+	}
+	var candidates []string
+	below := make(map[string][]string)
+	for _, path := range paths {
+		ok, err := settled(path)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			candidates = append(candidates, path)
+			below[path] = nil
+		}
+	}
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+	// A selected directory selects all that is in it, and deleted entries are no longer on disk to find
+	err := s.backend.GlobalEntries(folder, func(entry GlobalEntry) error {
+		for parent := parentPath(entry.Name); parent != ""; parent = parentPath(parent) {
+			if names, ok := below[parent]; ok {
+				below[parent] = append(names, entry.Name)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := candidates[:0]
+next:
+	for _, path := range candidates {
+		for _, name := range below[path] {
+			ok, err := settled(name)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				continue next
+			}
+		}
+		result = append(result, path)
+	}
+	return result, nil
+}
+
+// A file or directory that goes with a deselected path
+type localCopy struct {
+	name      string
+	directory bool
+}
+
+// localCopiesOf lists what is on disk at and below path, directories before what is in them, and reports whether
+// removing it would lose nothing: what the index doesn't have, or has differently, is all there is of it until a scan
+// has looked at it. What the folder's patterns ignore is left out, and stays.
+func (s *Service) localCopiesOf(h syncthing.FolderHandle, root *dir, info FolderInfo, path string,
+	ignored func(name string) bool,
+) ([]localCopy, bool, error) {
+	var copies []localCopy
+	complete := true
+	err := h.Filesystem().Walk(path, func(walked string, fi fs.FileInfo, err error) error {
+		if err != nil {
+			complete = complete && fs.IsNotExist(err)
+			return nil
+		}
+		name := osutil.NormalizedFilename(walked)
+		switch {
+		case IsSyncthingPrivatePath(name, info.MarkerName) || ignored(name):
+			if fi.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		case fi.IsDir():
+			copies = append(copies, localCopy{name: name, directory: true})
+			return nil
+		}
+		local, ok, err := h.CurrentFile(name)
+		if err != nil {
+			return err
+		}
+		st, err := entryAt(root, name)
+		if err != nil {
+			return err
+		}
+		symlink := st.exists && st.kind == unix.S_IFLNK && local.IsSymlink()
+		if !isIndexed(local, ok) || !symlink && !matchesIndex(st, local, h.ModTimeWindow()) {
+			complete = false
+			return nil
+		}
+		copies = append(copies, localCopy{name: name})
+		return nil
+	})
+	return copies, complete, err
+}
+
+// deselectPaths takes paths out of the selection, and returns what the patterns ignore then. Without paths it says what
+// they ignore now.
+func (s *Service) deselectPaths(folder string, paths []string) (func(name string) bool, error) {
+	ignores, err := s.backend.DeselectKept(folder, paths)
+	if err != nil {
+		return nil, err
+	}
+	return func(name string) bool {
+		normalized, err := scanner.NameFor(name)
+		return err == nil && ignores(normalized)
+	}, nil
+}
+
+// deselectSettled deselects those of paths that are settled and whose local copies can go, removes the copies, and
+// returns the paths. The lines go first: a scan that finds a file gone that is still selected announces a deletion.
+// Stopping in between leaves a file that nothing refers to, as switching to on demand again would clear up. The scan
+// the new patterns schedule would mark the entries ignored anyway, but an operation may get to the folder first, and
+// find an entry that says this device has what it doesn't. Copies are unlinked rather than deleted through the folder's
+// filesystem, which for a folder that uses the Trash would put a file there that is safe on other devices.
+func (s *Service) deselectSettled(ctx context.Context, h syncthing.FolderHandle, root *dir, info FolderInfo, paths []string,
+) ([]string, error) {
+	settled, err := s.settledPaths(info.ID, paths, h.CurrentFile)
+	if err != nil || len(settled) == 0 {
+		return nil, err
+	}
+	ignored, err := s.deselectPaths(info.ID, nil)
+	if err != nil {
+		return nil, err
+	}
+	var deselected []string
+	var copies []localCopy
+	for _, path := range settled {
+		found, complete, err := s.localCopiesOf(h, root, info, path, ignored)
+		if err != nil {
+			return nil, err
+		}
+		if complete {
+			deselected = append(deselected, path)
+			copies = append(copies, found...)
+		}
+	}
+	if len(deselected) == 0 {
+		return nil, nil
+	}
+	if ignored, err = s.deselectPaths(info.ID, deselected); err != nil {
+		return nil, err
+	}
+	_ = h.Scan(ctx, deselected)
+	for _, c := range copies {
+		if !c.directory && ignored(c.name) {
+			if err := removeCopy(root, c.name, (*dir).remove); err != nil {
+				s.log.Warn("Could not remove the local copy of what other devices have", "path", c.name, "error", err)
+			}
+		}
+	}
+	// Directories that are left empty, deepest first, up to what is still selected
+	for _, c := range slices.Backward(copies) {
+		if c.directory && ignored(c.name) {
+			_ = removeCopy(root, c.name, (*dir).rmdir)
+		}
+	}
+	for _, path := range deselected {
+		for parent := parentPath(path); parent != "" && ignored(parent); parent = parentPath(parent) {
+			if err := removeCopy(root, parent, (*dir).rmdir); err != nil {
+				break
+			}
+		}
+	}
+	return deselected, s.forgetWritten(info.ID, deselected)
+}
+
+func removeCopy(root *dir, name string, remove func(d *dir, name string) error) error {
+	parent, err := root.openDir(parentPath(name))
+	if err != nil {
+		return err
+	}
+	defer parent.close()
+	return remove(parent, baseName(name))
+}
+
+// groupableDirectories returns the directories that could be selected in place of paths below them without selecting
+// anything more, parents first. Selecting a directory takes in all of it, so that in most directories every path needs
+// a line of its own, and a directory that has nothing else has to wait for a device that is away with as many lines as
+// it had paths.
+func (s *Service) groupableDirectories(folder string, paths []string) ([]string, error) {
+	written := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		written[path] = struct{}{}
+	}
+	children := make(map[string]int)
+	for _, path := range paths {
+		parent := parentPath(path)
+		if _, ok := written[parent]; !ok && parent != "" && SelectablePath(parent) {
+			children[parent]++
+		}
+	}
+	maps.DeleteFunc(children, func(_ string, count int) bool { return count < minGroupedPaths })
+	if len(children) == 0 {
+		return nil, nil
+	}
+	err := s.backend.GlobalEntries(folder, func(entry GlobalEntry) error {
+		if entry.Deleted || entry.Invalid {
+			return nil
+		}
+		for path := entry.Name; path != ""; path = parentPath(path) {
+			if _, ok := written[path]; ok {
+				return nil
+			}
+		}
+		for parent := parentPath(entry.Name); parent != ""; parent = parentPath(parent) {
+			delete(children, parent)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return slices.Sorted(maps.Keys(children)), nil
+}
+
+// groupWritten selects directories in place of the paths written below them, where that selects nothing more. Their
+// lines go with it, and the directory's record takes over from theirs.
+func (s *Service) groupWritten(h syncthing.FolderHandle, info FolderInfo, paths []string) error {
+	directories, err := s.groupableDirectories(info.ID, paths)
+	if err != nil {
+		return err
+	}
+	for _, directory := range directories {
+		global, live, err := liveEntry(h, directory)
+		if err != nil {
+			return err
+		}
+		if !live || !global.IsDirectory() {
+			continue
+		}
+		if err := s.keepSelected(info, directory); err != nil {
+			return err
+		}
+		var below []string
+		for _, path := range paths {
+			if isDescendantPath(path, directory) {
+				below = append(below, path)
+			}
+		}
+		if err := s.forgetWritten(info.ID, below); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // exclusions returns what keeps a path from being written, by the folder's patterns. In an on-demand folder, its

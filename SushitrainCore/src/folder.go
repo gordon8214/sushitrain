@@ -15,6 +15,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -40,15 +41,39 @@ const (
 	VersioningTypeExternal  = "external"
 )
 
+// CachedIgnore is what a folder's .stignore says, as of the modification time of the file. Reading the file means
+// compiling every line, and going through the lines again to tell what mode the folder is in.
 type CachedIgnore struct {
+	mutex   sync.Mutex
 	matcher *ignore.Matcher
 	modTime time.Time
+
+	// The folder's mode, as the patterns of modeOf say
+	modeFor             *ignore.Matcher
+	selective, onDemand bool
+}
+
+// modeOf returns whether the patterns are those of a selective and of an on-demand folder
+func (cache *CachedIgnore) modeOf(ignores *ignore.Matcher) (selective bool, onDemand bool) {
+	cache.mutex.Lock()
+	defer cache.mutex.Unlock()
+	if cache.modeFor != ignores {
+		selection := newSelection(ignores.Lines())
+		cache.modeFor, cache.selective, cache.onDemand = ignores, selection.isSelectiveIgnore(), selection.isOnDemand()
+	}
+	return cache.selective, cache.onDemand
+}
+
+// forget makes the next load read the file
+func (cache *CachedIgnore) forget() {
+	cache.mutex.Lock()
+	defer cache.mutex.Unlock()
+	cache.matcher = nil
 }
 
 type Folder struct {
-	client       *Client
-	FolderID     string
-	cachedIgnore CachedIgnore
+	client   *Client
+	FolderID string
 }
 
 func (fld *Folder) folderConfiguration() *config.FolderConfiguration {
@@ -570,7 +595,7 @@ func (fld *Folder) SetSelective(selective bool) error {
 	if fld.client.internals() == nil {
 		return errNoClient
 	}
-	fld.cachedIgnore.matcher = nil // Purge our cache
+	fld.forgetIgnores()
 
 	return fld.whilePaused(func() error {
 		_, err := fld.changeSelection(func(selection *selection) error {
@@ -733,7 +758,8 @@ func (fld *Folder) IsSelective() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return newSelection(ignores.Lines()).isSelectiveIgnore(), nil
+	selective, _ := fld.ignoreCache().modeOf(ignores)
+	return selective, nil
 }
 
 func (fld *Folder) LocalNativePath() (string, error) {
@@ -756,10 +782,22 @@ func (fld *Folder) loadIgnores() (*ignore.Matcher, error) {
 		return nil, errors.New("folder does not exist")
 	}
 
-	return loadIgnoreMatcher(cfg.Filesystem(), &fld.cachedIgnore)
+	return loadIgnoreMatcher(cfg.Filesystem(), fld.ignoreCache())
+}
+
+// ignoreCache returns the folder's cache, which is the client's: FolderWithID returns a new Folder for every call
+func (fld *Folder) ignoreCache() *CachedIgnore {
+	cache, _ := fld.client.ignoreCaches.LoadOrStore(fld.FolderID, &CachedIgnore{})
+	return cache.(*CachedIgnore)
+}
+
+func (fld *Folder) forgetIgnores() {
+	fld.ignoreCache().forget()
 }
 
 func loadIgnoreMatcher(ffs fs.Filesystem, cache *CachedIgnore) (*ignore.Matcher, error) {
+	cache.mutex.Lock()
+	defer cache.mutex.Unlock()
 	stat, statErr := ffs.Lstat(ignoreFileName)
 	if statErr != nil && !fs.IsNotExist(statErr) {
 		return nil, statErr
@@ -790,7 +828,7 @@ func loadIgnoreMatcher(ffs fs.Filesystem, cache *CachedIgnore) (*ignore.Matcher,
 		if _, checkErr := ffs.Lstat(ignoreFileName); !fs.IsNotExist(checkErr) {
 			return nil, err
 		}
-		*cache = CachedIgnore{}
+		cache.matcher, cache.modTime = nil, time.Time{}
 		return ignores, nil
 	}
 	if statErr == nil {
@@ -1006,7 +1044,7 @@ func (fld *Folder) RemoveSuperfluousSelectionEntries() error {
 	unlock := lockSelection(fld.FolderID)
 	defer unlock()
 
-	fld.cachedIgnore.matcher = nil // Purge our cache
+	fld.forgetIgnores()
 	state, err := fld.State()
 	if err != nil {
 		return err
@@ -1026,7 +1064,8 @@ func (fld *Folder) RemoveSuperfluousSelectionEntries() error {
 		return errors.New("folder is not a selective folder")
 	}
 	if selection.isOnDemand() {
-		// A path that was deleted here is not on disk, but stays selected so that the deletion stays announced
+		// A path that was deleted here is not on disk, but stays selected so that the deletion stays announced, until the
+		// remote file service knows that other devices have it
 		return nil
 	}
 
@@ -1263,7 +1302,7 @@ func (fld *Folder) SetIgnoreLines(lines *ListOfStrings) error {
 	}
 
 	slog.Info("set ignore", "lines", len(lines.data))
-	fld.cachedIgnore.matcher = nil // Purge our cache
+	fld.forgetIgnores()
 
 	state, err := fld.State()
 	if err != nil {
@@ -1337,7 +1376,7 @@ func (fld *Folder) changeSelectionLocked(block func(sel *selection) error) (*ign
 		return nil, err
 	}
 
-	fld.cachedIgnore.matcher = nil // Purge our cache
+	fld.forgetIgnores()
 
 	// Delete files if necessary
 	ignores, err = fld.loadIgnores()
@@ -1356,7 +1395,7 @@ func (fld *Folder) changeSelectionLocked(block func(sel *selection) error) (*ign
 func (fld *Folder) setExplicitlySelected(paths map[string]bool) error {
 	slog.Info("set explicitly selected", "paths", paths)
 
-	fld.cachedIgnore.matcher = nil // Purge our cache
+	fld.forgetIgnores()
 	state, err := fld.State()
 	var lowDiskSpace = false
 

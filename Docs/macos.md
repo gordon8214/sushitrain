@@ -176,18 +176,39 @@ runs the [remote file service](gateway.md), which is what the extension speaks t
   starts or its certificate changes. The extension connects to it like to any gateway, and paired gateways work next to
   this Mac, in the same list.
 - **An on-demand folder is a selective folder** whose `.stignore` also has the line `!*.sync-conflict-*`, which marks it
-  (`onDemandPattern`). It stays where it is, for example in `~/Sync`. Its directory holds only what was written here, what
-  no other device has, and conflict copies, which that line selects. Nothing keeps a record of it elsewhere.
+  (`onDemandPattern`). It stays where it is, for example in `~/Sync`. Its directory holds only what was written here and
+  hasn't reached every device, what no other device had when the folder became on demand, and conflict copies, which that
+  line selects. Nothing keeps a record of it elsewhere.
 - **The service writes to on-demand folders**, which it refuses for plain selective folders (`gateway/ondemand.go`). Three
   things differ from a complete replica. A new version builds on the global one, as this device usually has an ignored
   entry or none, and a scan would start a version vector that conflicts on every device. What was written is selected in
-  the callback that commits it, and stays selected: a scan marks an ignored entry invalid, deletions included, and other
-  devices then keep their old copy. So `RemoveSuperfluousSelectionEntries` leaves these folders alone, and deselecting is
-  refused. And `!*.sync-conflict-*` keeps conflict copies indexed: when another device wins a conflict, the engine renames
-  this device's edit to a conflict copy, which the last pattern would otherwise ignore, so that it would never reach
-  anyone. What a write builds on is journaled when its preconditions hold (`writeBase`), as other devices' changes reach
-  the index without going through the folder loop: a version that arrives before the file is indexed, even across a
-  restart, stays concurrent with it, and devices keep both.
+  the callback that commits it, and stays selected until other devices have it (below): a scan marks an ignored entry
+  invalid, deletions included, and other devices then keep their old copy. So `RemoveSuperfluousSelectionEntries` leaves
+  these folders alone, and deselecting by hand is refused. And `!*.sync-conflict-*` keeps conflict copies indexed: when
+  another device wins a conflict, the engine renames this device's edit to a conflict copy, which the last pattern would
+  otherwise ignore, so that it would never reach anyone. What a write builds on is journaled when its preconditions hold
+  (`writeBase`), as other devices' changes reach the index without going through the folder loop: a version that arrives
+  before the file is indexed, even across a restart, stays concurrent with it, and devices keep both.
+- **What was written is deselected once every device has it** (`deselectWritten`), so that `.stignore` and the folder don't
+  go on growing, and an edited file isn't kept twice on this Mac. The service records the paths it selects
+  (`written_paths`, in its own database), as only those are its to deselect: other lines are what the user selected, and
+  what no other device had at the switch. It looks once a minute. A path goes when every device that shares the folder has
+  announced this device's entry for it or something newer, valid or ignored, and for anything but a deletion at least one
+  of them has it as a valid entry, which goes for all that is below a directory too. This device passes on only its own
+  entries, so one device having a change isn't enough: a device that is behind may never meet that one. So a device that
+  is away holds a path back until it returns, and one that is gone for good until it is removed from the folder. A
+  deletion is the exception, as a device keeps no entry for the deletion of what it never had: a connected device without
+  an entry counts as having it, or the line of a temporary file would stay for good. The version is not recorded, as the
+  local index says what has to arrive, which a scan or a pull may have moved on. What is on disk must be what the index
+  says, or the path stays: a file no scan has seen may be all there is of it. The folder has to have no operation waiting,
+  as moving what isn't here selects it and waits for the engine. The line goes before the file, as a scan that finds a
+  selected file gone announces a deletion. A file that is unlinked here is safe on other devices, so it doesn't go to the
+  Trash in a folder that uses it. Stopping between the two leaves a file nothing refers to, which switching to on demand
+  again clears up.
+- **A directory can take over from its paths** when two or more of them are selected and nothing else exists in it, while
+  they wait for a device that is away. Elsewhere every path needs its own line, as selecting a directory would download
+  all of it. Each line still means a rewrite of `.stignore` and a scan, so writing many files into a directory that has
+  other files costs about one scan per file for now.
 - **Deleting a file or directory this Mac doesn't have** downloads nothing. Moving does: an index entry without a file
   behind it would be announced as something this device can't provide. The item is selected, the operation waits until
   the engine has it, and it then moves as in a complete replica. A directory that would take more than 4 GiB is refused

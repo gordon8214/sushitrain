@@ -167,12 +167,19 @@ func (clt *Client) StartRemoteFileService(settingsJSON []byte) (*RemoteFileServi
 			}
 			return false
 		},
-		Select: func(folderID string, paths []string) error {
+		Select: func(folderID string, paths []string, record func(added []string) error) error {
 			folder := clt.FolderWithID(folderID)
 			if folder == nil {
 				return errors.New("folder does not exist")
 			}
-			return folder.keepSelected(paths)
+			return folder.keepSelected(paths, record)
+		},
+		Deselect: func(folderID string, paths []string) (func(string) bool, error) {
+			folder := clt.FolderWithID(folderID)
+			if folder == nil {
+				return nil, errors.New("folder does not exist")
+			}
+			return folder.deselectKept(paths)
 		},
 		LoadGlobalIgnores: func(folderID string) (func(string) bool, error) {
 			folder := clt.FolderWithID(folderID)

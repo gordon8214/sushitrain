@@ -211,6 +211,12 @@ var addedSchema = []string{
 		PRIMARY KEY (folder_id, item_id)
 	)`,
 	`CREATE INDEX IF NOT EXISTS moved_out_changes ON moved_out(folder_id, change_seq)`,
+	// What the service selected in on-demand folders, until other devices have it (ondemand.go)
+	`CREATE TABLE IF NOT EXISTS written_paths (
+		folder_id TEXT NOT NULL,
+		path TEXT NOT NULL,
+		PRIMARY KEY (folder_id, path)
+	) WITHOUT ROWID`,
 }
 
 func (s *store) migrate() error {

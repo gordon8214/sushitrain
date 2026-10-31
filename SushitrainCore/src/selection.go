@@ -293,7 +293,8 @@ func (sel *selection) setExplicitlySelected(paths map[string]bool) error {
 		line := ignoreLineForSelectingPath(path)
 		slog.Info("Edit ignore line", "selected", selectPath, "line", line)
 
-		// What the remote file service wrote stays selected, or its changes would stop reaching other devices
+		// What the remote file service wrote stays selected until it knows that other devices have it, or its changes
+		// would stop reaching them
 		if !selectPath && sel.isOnDemand() {
 			return errOnDemandSelection
 		}
@@ -436,24 +437,42 @@ func (sel *selection) isKept(path string) bool {
 }
 
 // keep selects paths the remote file service wrote in an on-demand folder, whatever is selected around them: unlike
-// setExplicitlySelected, a selected parent or child is fine. It reports whether the selection changed.
-func (sel *selection) keep(paths []string) (bool, error) {
+// setExplicitlySelected, a selected parent or child is fine, and a directory takes over the lines of what is below it.
+// It returns the paths it selected, leaving out those that already were.
+func (sel *selection) keep(paths []string) ([]string, error) {
 	if !sel.isOnDemand() {
-		return false, errors.New("folder is not an on-demand folder")
+		return nil, errors.New("folder is not an on-demand folder")
 	}
-	changed := false
+	var added []string
 	for _, path := range paths {
 		if sel.isKept(path) {
 			continue
 		}
 		line := ignoreLineForSelectingPath(path)
 		if !gateway.SelectablePath(path) || !isSelectionPattern(line) {
-			return false, fmt.Errorf("the path '%s' cannot be selected", path)
+			return nil, fmt.Errorf("the path '%s' cannot be selected", path)
 		}
 		sel.lines = append(sel.lines[:len(sel.lines)-1], line, "*")
-		changed = true
+		added = append(added, path)
 	}
-	return changed, nil
+	if len(added) > 0 {
+		selected := lineSet(sel.lines)
+		sel.lines = Filter(sel.lines, func(line string) bool { return !hasSelectedParent(line, selected) })
+	}
+	return added, nil
+}
+
+// drop deselects paths of an on-demand folder, and reports whether the selection changed. What a parent selects stays
+// selected.
+func (sel *selection) drop(paths []string) bool {
+	dropped := lineSet(Map(paths, ignoreLineForSelectingPath))
+	kept := Filter(sel.lines, func(line string) bool {
+		_, ok := dropped[line]
+		return !ok
+	})
+	changed := len(kept) != len(sel.lines)
+	sel.lines = kept
+	return changed
 }
 
 // Escape special characters: https://docs.syncthing.net/users/ignoring.html

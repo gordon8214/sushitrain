@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/events"
@@ -124,6 +125,52 @@ func TestLoadIgnoreMatcherPermissionRecovery(t *testing.T) {
 	}
 	if len(matcher.Lines()) != 0 || cache.matcher != nil {
 		t.Fatal("missing ignore file retained stale patterns")
+	}
+}
+
+// FolderWithID returns a new Folder for every call, and the service asks for a folder's mode for every access check
+func TestIgnoresAreCachedPerFolderUntilTheFileChanges(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ignoreFileName)
+	if err := os.WriteFile(path, []byte("!/a\n*\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.New(protocol.EmptyDeviceID)
+	cfg.Folders = []config.FolderConfiguration{{ID: "test", Path: root, FilesystemType: config.FilesystemTypeBasic}}
+	client := (&Client{}).withTestRun(config.Wrap("", cfg, protocol.EmptyDeviceID, events.NoopLogger),
+		&syncthing.App{Internals: &syncthing.Internals{}}, nil)
+	first, err := (&Folder{client: client, FolderID: "test"}).loadIgnores()
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := &Folder{client: client, FolderID: "test"}
+	second, err := folder.loadIgnores()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatal("the patterns were read again")
+	}
+	if selective, onDemand := folder.ignoreCache().modeOf(second); !selective || onDemand {
+		t.Fatalf("mode: %v %v", selective, onDemand)
+	}
+	if err := os.WriteFile(path, []byte(onDemandPattern+"\n!/a\n*\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	later := time.Now().Add(time.Minute)
+	if err := os.Chtimes(path, later, later); err != nil {
+		t.Fatal(err)
+	}
+	if onDemand, err := folder.IsOnDemand(); !onDemand || err != nil {
+		t.Fatalf("a new file: %v %v", onDemand, err)
+	}
+	third, err := folder.loadIgnores()
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder.forgetIgnores()
+	if fourth, err := folder.loadIgnores(); fourth == third || err != nil {
+		t.Fatalf("forgotten patterns came back: %v", err)
 	}
 }
 
