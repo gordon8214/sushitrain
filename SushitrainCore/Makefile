@@ -33,7 +33,7 @@ BUILDER_LDFLAGS = -X $(SYNCTHING_BUILD).User=synctrain -X $(SYNCTHING_BUILD).Hos
 
 # The engine's version in the app, which its GUI, other devices and logs all show. Raise N when go.mod moves to another
 # commit of the fork. The engine won't start on a version lib/build can't parse.
-ENGINE_VERSION = v2.1.7-synctrain.4
+ENGINE_VERSION = v2.1.7-synctrain.5
 ENGINE_LDFLAGS = -X $(SYNCTHING_BUILD).Version=$(ENGINE_VERSION) -X $(SYNCTHING_BUILD).Tags=noupgrade,synctrain \
 	$(BUILDER_LDFLAGS)
 

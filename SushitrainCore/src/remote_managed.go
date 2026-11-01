@@ -103,10 +103,11 @@ func (s *remoteManagedSet) set(folderID string, managed bool) error {
 	return nil
 }
 
-// writeFileSynced replaces a file with data through a temporary file that is flushed before it takes the file's place
+// writeFileSynced replaces a file with data through a new temporary file, only the user can read, that is flushed before
+// it takes the file's place
 func writeFileSynced(path string, data []byte) error {
-	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	dir := filepath.Dir(path)
+	f, err := os.CreateTemp(dir, filepath.Base(path)+".tmp")
 	if err != nil {
 		return err
 	}
@@ -117,11 +118,19 @@ func writeFileSynced(path string, data []byte) error {
 	if closeErr := f.Close(); err == nil {
 		err = closeErr
 	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
 	if err != nil {
-		_ = os.Remove(tmp)
+		_ = os.Remove(f.Name())
 		return err
 	}
-	return os.Rename(tmp, path)
+	// So that the new name survives a crash too, where the filesystem can do this
+	if directory, err := os.Open(dir); err == nil {
+		_ = directory.Sync()
+		_ = directory.Close()
+	}
+	return nil
 }
 
 // enforce pauses every remote-managed folder in a configuration being changed

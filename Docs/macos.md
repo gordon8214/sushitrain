@@ -155,6 +155,29 @@ accepting folders from an untrusted device.
   which could lock a device out, so they are checked.
 - **Connection options.** Advanced settings link to this page. Everything on it applies at once, including the local
   discovery port and address, so it only offers a restart for changes made elsewhere.
+- **Proxy.** Advanced settings link to this page. Syncthing reads `ALL_PROXY` when the framework loads, too early for the
+  app to set it, so the fork's `dialer.SetProxy` takes a proxy from code instead. The engine sets it each time it starts,
+  before anything connects, so the proxy changes with an engine restart and not an app relaunch (`proxy.go`). Saving the
+  page does that restart, after asking: a saved proxy that waits for one would leave the page saying "on" while the
+  engine connects directly.
+  - **Stored** in `proxy.json` next to `config.xml`, as Syncthing's configuration has no field for it, readable only by
+    the user, like `key.pem`, as it holds the password. It follows the configuration when the settings choose another
+    folder, unless that folder has its own, and out of the old sandbox container. Taking over Syncthing's home doesn't
+    bring one, and neither does going back to the default location after a chosen folder's disk went missing.
+  - **Fails closed.** The engine doesn't start from a file it can't use, as starting anyway could connect directly while
+    the user asked for a proxy. The startup error offers to show the file, or to rename it and turn the proxy off.
+  - **No fallback.** Outgoing TCP to anything not on the list goes through the proxy or nowhere, unlike `ALL_PROXY`
+    without `ALL_PROXY_NO_FALLBACK`. The list starts with this device, `*.local` and the private networks. It is compared
+    with what is dialed, so a host name doesn't match the network it resolves to.
+  - **Not carried.** A proxy only carries outgoing TCP. QUIC leaves alone what would go through it. STUN stops, its server
+    lookup included, as all it finds is how others can reach this device without the proxy. Listeners, local discovery,
+    port mapping and logging in to an LDAP server for the web GUI go on as they were.
+  - **The address stays private as far as the engine can help it.** Discovery servers only hear of relays, as a mapped
+    port or a LAN address in the announcement would tell them, and whoever asks them, what the proxy hides. So devices
+    that can't reach this one on the local network connect through a relay. Peer names go to the proxy unresolved, with
+    the exception of a device with allowed networks, whose check has to resolve them here.
+  - **Relays.** A relay addressed by name that leaves the session's address to the client can't be used through a proxy,
+    as the client only knows that address from its connection. Relays from the pool are addressed by IP.
 - **Defaults.** Advanced settings link to the defaults for new folders and devices, and the default ignore patterns, with
   the same sections. The engine checks a folder's settings only when it starts one, so the page refuses what would break
   every new folder: a relative location, patterns it can't read, and receive-encrypted as the type, which can't be changed

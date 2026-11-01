@@ -48,6 +48,7 @@ private final class MigrationFixture {
 		try write("index-v2/main.db", "database")
 		try write("index-v2/main.db-wal", "journal")
 		try write("remote-managed.json", "[]")
+		try write("proxy.json", "{}")
 		try write("synctrain-gateway/service.sqlite", "service")
 		try write("synctrain-gateway/content/spool", "spool")
 		try write("synctrain-gateway/thumbnails/a.jpg", "thumbnail")
@@ -72,7 +73,7 @@ private final class MigrationFixture {
 	for (path, contents) in [
 		("config.xml", "<configuration version=\"52\"/>"), ("cert.pem", "certificate"), ("key.pem", "key"),
 		("index-v2/main.db", "database"), ("index-v2/main.db-wal", "journal"), ("remote-managed.json", "[]"),
-		("synctrain-gateway/service.sqlite", "service"), ("RemoteFileService/certificate.pem", "chosen certificate"),
+		("proxy.json", "{}"), ("synctrain-gateway/service.sqlite", "service"), ("RemoteFileService/certificate.pem", "chosen certificate"),
 	] {
 		#expect(f.read(path) == contents, "\(path)")
 		#expect(f.read(path, in: f.source) == contents, "\(path) left in the container")

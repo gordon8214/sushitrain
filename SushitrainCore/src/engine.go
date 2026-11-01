@@ -76,6 +76,7 @@ type engineRun struct {
 	firstRun    bool
 	stopTimeout atomic.Bool // the app did not stop in time; its configuration and logger are left alone
 	guiStarted  bool        // whether the configuration had the web GUI on when the run started
+	proxy       *proxyFile  // the proxy settings the run started with
 	auditLog    *os.File    // what the app writes the audit log to; closed once the app stopped
 	auditNotice string      // says where the audit log goes, or why it can't be written (AuditStatusMessage)
 
@@ -217,6 +218,11 @@ func (clt *Client) prepareRun() (_ *engineRun, err error) {
 			<-r.logDone
 		}
 	}()
+
+	// Before anything that can connect, reporting a crash included
+	if r.proxy, err = clt.applyProxy(); err != nil {
+		return nil, err
+	}
 
 	// Loading finishes interrupted folder moves, which must not be under way meanwhile
 	relocationMutex.Lock()

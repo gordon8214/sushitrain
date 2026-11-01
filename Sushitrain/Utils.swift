@@ -709,6 +709,7 @@ extension SushitrainFolderSettings: @unchecked @retroactive Sendable {}
 extension SushitrainVersioningSettings: @unchecked @retroactive Sendable {}
 extension SushitrainDeviceSettings: @unchecked @retroactive Sendable {}
 extension SushitrainConnectionOptions: @unchecked @retroactive Sendable {}
+extension SushitrainProxySettings: @unchecked @retroactive Sendable {}
 extension SushitrainObservedDevice: @unchecked @retroactive Sendable {}
 extension SushitrainFailedItem: @unchecked @retroactive Sendable {}
 extension SushitrainFileVersion: @unchecked @retroactive Sendable {}

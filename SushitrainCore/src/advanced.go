@@ -648,8 +648,13 @@ func (clt *Client) SaveAdvancedSection(section *AdvancedSection) error {
 }
 
 // IsEngineRestartRequired reports whether saved changes only take effect when the engine restarts (RestartEngine):
-// changes the engine says so of, or turning the GUI on or off, as that starts and stops with the engine
+// changes the engine says so of, turning the GUI on or off, as that starts and stops with the engine, or the proxy
 func (clt *Client) IsEngineRestartRequired() bool {
 	r := clt.currentRun()
-	return r != nil && r.config != nil && (r.config.RequiresRestart() || r.config.GUI().Enabled != r.guiStarted)
+	if r == nil || r.config == nil {
+		return false
+	}
+	saved := clt.proxy.Load()
+	proxyChanged := saved != nil && r.proxy != nil && !saved.sameProxy(r.proxy)
+	return proxyChanged || r.config.RequiresRestart() || r.config.GUI().Enabled != r.guiStarted
 }

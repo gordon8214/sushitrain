@@ -854,6 +854,8 @@ github.com/googleapis/go-type-adapters v1.0.0/go.mod h1:zHW75FOG2aur7gAO2B+MLby+
 github.com/googleapis/google-cloud-go-testing v0.0.0-20200911160855-bcd43fbb19e8/go.mod h1:dvDLG8qkwmyD9a/MJJN3XJcT3xFxOKAvTZGvuZmac9g=
 github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261101034659-668d79ccccf6 h1:YtdHmN+iNepN0izX+zKUBd2fgAKQYbTyIhDOLCfjObo=
 github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261101034659-668d79ccccf6/go.mod h1:wSdb2/9JRf1H/nrTOihHzUKwGC0YoJh/dfXC9O08LfE=
+github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261101061024-5f6fcfaf625a h1:Is7+c9te/0vl+f3b4oSGs3AY4ZiTltFC7A3mJ9eHWd8=
+github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261101061024-5f6fcfaf625a/go.mod h1:wSdb2/9JRf1H/nrTOihHzUKwGC0YoJh/dfXC9O08LfE=
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0/go.mod h1:hgWBS7lorOAVIJEQMi4ZsPv9hVvWI6+ch50m39Pf2Ks=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3/go.mod h1:o//XUCC/F+yRGJoPO/VU0GSB0f8Nhgmxx0VIRUvaC0w=

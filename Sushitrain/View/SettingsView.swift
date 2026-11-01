@@ -6,6 +6,7 @@
 import Foundation
 import SwiftUI
 import SushitrainCore
+import SynctrainHostKit
 
 #if os(iOS)
 	private struct ExportButtonView: View {
@@ -197,14 +198,26 @@ import SushitrainCore
 						return
 					}
 					bookmark = data
+					self.keepProxy(in: url)
 				}
 				UserDefaults.standard.setValue(bookmark, forKey: ConfigDirectorySetting.bookmarkKey)
 			}
 			else {
+				self.keepProxy(in: url ?? EngineLocations.current.configDirectory)
 				ConfigDirectorySetting.choose(url)
 			}
 			self.updatePath()
 			self.showRestartAlert = true
+		}
+
+		/// The proxy is kept with the configuration, and must not end because the configuration moved
+		private func keepProxy(in folder: URL) {
+			do {
+				try appState.client.copyProxySettings(folder.path(percentEncoded: false))
+			}
+			catch {
+				Log.warn("Could not copy the proxy settings to \(folder): \(error.localizedDescription)")
+			}
 		}
 
 		private func updatePath() {
@@ -500,6 +513,14 @@ struct AdvancedSettingsView: View {
 					}
 				} footer: {
 					Text("Limits, priorities, reconnecting, local discovery and port mapping.")
+				}
+
+				Section {
+					NavigationLink("Proxy") {
+						ProxySettingsView()
+					}
+				} footer: {
+					Text("A SOCKS5 or HTTP proxy for the engine's outgoing connections.")
 				}
 
 				Section {

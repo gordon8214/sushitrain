@@ -15,6 +15,7 @@ struct StartupErrorView: View {
 	@State private var confirmNewConfiguration = false
 	@State private var confirmNewIdentity = false
 	@State private var confirmDefaultLocation = false
+	@State private var confirmProxyOff = false
 	@State private var isRetrying = false
 	@State private var errorMessage: ErrorMessage? = nil
 
@@ -35,6 +36,15 @@ struct StartupErrorView: View {
 					Button("Show in Finder") {
 						let file = URL(fileURLWithPath: appState.client.configurationFilePath())
 						NSWorkspace.shared.activateFileViewerSelecting([file])
+					}
+				}
+				if problem == SushitrainStartupProblemDamagedProxySettings {
+					Button("Show in Finder") {
+						let file = URL(fileURLWithPath: appState.client.proxySettingsFilePath())
+						NSWorkspace.shared.activateFileViewerSelecting([file])
+					}
+					Button("Turn the proxy off", role: .destructive) {
+						confirmProxyOff = true
 					}
 				}
 			#endif
@@ -96,6 +106,22 @@ struct StartupErrorView: View {
 			)
 		}
 		#if os(macOS)
+			.alert("Turn the proxy off?", isPresented: $confirmProxyOff) {
+				Button("Turn the proxy off", role: .destructive) {
+					do {
+						try appState.client.setProxySettingsAside()
+						exit(0)
+					}
+					catch {
+						errorMessage = ErrorMessage(error)
+					}
+				}
+				Button("Cancel", role: .cancel) {}
+			} message: {
+				Text(
+					"The proxy settings are renamed and kept next to the configuration. The app then closes; when you open it again, it starts without a proxy and connects directly."
+				)
+			}
 			.alert("Use the default configuration location?", isPresented: $confirmDefaultLocation) {
 				Button("Use default configuration location", role: .destructive) {
 					ConfigDirectorySetting.choose(nil)

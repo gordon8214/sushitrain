@@ -67,10 +67,11 @@ type Client struct {
 	syncthingHomeLock     *os.File
 	syncthingHomeLockPath string
 	remoteManaged         *remoteManagedSet
-	ignoreCaches          sync.Map     // folder ID => *CachedIgnore
-	startupProblem        atomic.Value // string, one of the StartupProblem constants
-	guiNotice             atomic.Value // string, what the last load changed about the web GUI (GUIStatusMessage)
-	crashLog              string       // the log a crash of this process goes to (reporting.go)
+	proxy                 atomic.Pointer[proxyFile] // the saved settings, from Load on; a run starts with them
+	ignoreCaches          sync.Map                  // folder ID => *CachedIgnore
+	startupProblem        atomic.Value              // string, one of the StartupProblem constants
+	guiNotice             atomic.Value              // string, what the last load changed about the web GUI (GUIStatusMessage)
+	crashLog              string                    // the log a crash of this process goes to (reporting.go)
 
 	// The engine, restarted in place (engine.go). lifecycle serializes loading, starting, restarting and stopping, and
 	// is never held while calling the delegate.
@@ -145,6 +146,8 @@ const (
 	StartupProblemDamagedIdentity = "damaged-identity"
 	// The configuration directory does not exist, as when the disk of one the user chose is not connected
 	StartupProblemMissingConfigurationDirectory = "missing-configuration-directory"
+	// The proxy settings can't be read or used; they can be set aside (Client.SetProxySettingsAside)
+	StartupProblemDamagedProxySettings = "damaged-proxy-settings"
 )
 
 // ErrMissingConfigurationDirectory is returned (wrapped, with the directory) when the configuration directory does not
@@ -765,6 +768,13 @@ func (clt *Client) Load(resetDeltaIdxs bool) error {
 		return err
 	}
 	clt.remoteManaged = remoteManaged
+
+	proxy, err := loadProxyFile(proxyFilePath())
+	if err != nil {
+		clt.startupProblem.Store(StartupProblemDamagedProxySettings)
+		return err
+	}
+	clt.proxy.Store(proxy)
 
 	clt.resetRunState()
 	clt.resetDeltaIdxs = resetDeltaIdxs

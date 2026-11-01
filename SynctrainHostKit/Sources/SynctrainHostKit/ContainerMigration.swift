@@ -67,7 +67,7 @@ public struct ContainerMigration: Sendable {
 	/// file service's state. Anything else there is left behind.
 	static let engineItems = [
 		"config.xml", "cert.pem", "key.pem", "https-cert.pem", "https-key.pem", "index-v2", "index-v0.14.0.db",
-		"remote-managed.json", "synctrain-gateway", "RemoteFileService",
+		"remote-managed.json", "proxy.json", "synctrain-gateway", "RemoteFileService",
 	]
 
 	/// Caches inside `engineItems`, which are rebuilt elsewhere

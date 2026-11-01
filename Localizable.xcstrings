@@ -4778,6 +4778,52 @@
         }
       }
     },
+    "A SOCKS5 or HTTP proxy for the engine's outgoing connections." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein SOCKS5- oder HTTP-Proxy für die ausgehenden Verbindungen der Engine."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un proxy SOCKS5 o HTTP para las conexiones salientes del motor."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un proxy SOCKS5 o HTTP per le connessioni in uscita del motore."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エンジンの送信接続に使う SOCKS5 または HTTP プロキシです。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een SOCKS5- of HTTP-proxy voor de uitgaande verbindingen van de engine."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проксі SOCKS5 або HTTP для вихідних з'єднань рушія."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于引擎传出连接的 SOCKS5 或 HTTP 代理。"
+          }
+        }
+      }
+    },
     "About ignore patterns" : {
       "localizations" : {
         "de" : {
@@ -14692,6 +14738,52 @@
         }
       }
     },
+    "Connect directly" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direkt verbinden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conectar directamente"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connetti direttamente"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "直接接続"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechtstreeks verbinden"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підключатися напряму"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "直接连接"
+          }
+        }
+      }
+    },
     "Connect with this device only from these networks, one per line, such as 192.168.0.0/16. The first that matches decides, and ! in front of one refuses it. With none, it can connect from anywhere." : {
       "localizations" : {
         "de" : {
@@ -15240,6 +15332,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "与其他设备的连接已暂时禁用，因为您已将Synctrain配置为不使用当前可用的网络连接类型和/或在低电量模式下禁用连接。"
+          }
+        }
+      }
+    },
+    "Connections to other devices, relays and discovery servers go through this proxy, and fail when it can't be reached. The address starts with socks5, http or https and ends with the port, such as socks5://127.0.0.1:1080. A proxy can't carry QUIC or STUN, so those are not used for what goes through it, and discovery servers only hear of relays, not of this device's addresses. Connections from other devices and local discovery don't use it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbindungen zu anderen Geräten, Relays und Discovery-Servern laufen über diesen Proxy und schlagen fehl, wenn er nicht erreichbar ist. Die Adresse beginnt mit socks5, http oder https und endet mit dem Port, etwa socks5://127.0.0.1:1080. Ein Proxy kann weder QUIC noch STUN übertragen, daher werden sie für alles, was über ihn läuft, nicht verwendet, und Discovery-Server erfahren nur von Relays, nicht von den Adressen dieses Geräts. Verbindungen von anderen Geräten und die lokale Erkennung verwenden ihn nicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las conexiones con otros dispositivos, relés y servidores de descubrimiento pasan por este proxy, y fallan si no se puede acceder a él. La dirección empieza por socks5, http o https y termina con el puerto, como socks5://127.0.0.1:1080. Un proxy no puede transportar QUIC ni STUN, así que no se usan para lo que pasa por él, y los servidores de descubrimiento solo conocen los relés, no las direcciones de este dispositivo. Las conexiones desde otros dispositivos y el descubrimiento local no lo usan."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le connessioni verso altri dispositivi, relay e server di discovery passano da questo proxy e non riescono se non è raggiungibile. L'indirizzo inizia con socks5, http o https e termina con la porta, come socks5://127.0.0.1:1080. Un proxy non può trasportare QUIC né STUN, quindi non vengono usati per ciò che passa da esso, e i server di discovery vengono a sapere solo dei relay, non degli indirizzi di questo dispositivo. Le connessioni da altri dispositivi e l'individuazione locale non lo usano."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "他のデバイス、リレー、ディスカバリサーバーへの接続はこのプロキシを経由し、プロキシに接続できない場合は失敗します。アドレスは socks5://127.0.0.1:1080 のように socks5、http、https のいずれかで始まり、ポートで終わります。プロキシは QUIC と STUN を転送できないため、プロキシを経由する通信ではこれらを使用しません。また、ディスカバリサーバーに通知されるのはリレーのみで、このデバイスのアドレスは通知されません。他のデバイスからの接続とローカル探索はプロキシを使用しません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbindingen met andere apparaten, relays en discovery-servers lopen via deze proxy en mislukken als die niet bereikbaar is. Het adres begint met socks5, http of https en eindigt met de poort, zoals socks5://127.0.0.1:1080. Een proxy kan geen QUIC of STUN doorgeven, dus die worden niet gebruikt voor wat via de proxy loopt, en discovery-servers horen alleen van relays, niet van de adressen van dit apparaat. Verbindingen vanaf andere apparaten en lokale ontdekking gebruiken de proxy niet."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "З'єднання з іншими пристроями, ретрансляторами та серверами виявлення проходять через цей проксі й завершуються помилкою, якщо він недоступний. Адреса починається з socks5, http або https і закінчується портом, наприклад socks5://127.0.0.1:1080. Проксі не може передавати QUIC і STUN, тому вони не використовуються для того, що проходить через нього, а сервери виявлення дізнаються лише про ретранслятори, а не про адреси цього пристрою. З'єднання від інших пристроїв і локальне виявлення його не використовують."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "与其他设备、中继和发现服务器的连接都会通过此代理，无法访问代理时连接会失败。地址以 socks5、http 或 https 开头，以端口结尾，例如 socks5://127.0.0.1:1080。代理无法传输 QUIC 和 STUN，因此通过代理的内容不会使用它们；发现服务器也只会获知中继，不会获知此设备的地址。来自其他设备的连接和本地发现不使用代理。"
           }
         }
       }
@@ -45353,6 +45491,98 @@
         }
       }
     },
+    "Proxy" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxy"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxy"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxy"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プロキシ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxy"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проксі"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代理"
+          }
+        }
+      }
+    },
+    "Proxy address" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxy-Adresse"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dirección del proxy"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indirizzo del proxy"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プロキシのアドレス"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxyadres"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Адреса проксі"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代理地址"
+          }
+        }
+      }
+    },
     "Public URL" : {
       "localizations" : {
         "de" : {
@@ -51776,6 +52006,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存照片"
+          }
+        }
+      }
+    },
+    "Saving restarts the engine, which interrupts its connections for a moment." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Speichern wird die Engine neu gestartet, wodurch ihre Verbindungen kurz unterbrochen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al guardar se reinicia el motor, lo que interrumpe sus conexiones un momento."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il salvataggio riavvia il motore, interrompendo per un momento le sue connessioni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存するとエンジンが再起動し、接続が一時的に中断されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bij opslaan start de engine opnieuw, waardoor zijn verbindingen even worden onderbroken."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Під час збереження рушій перезапуститься, і його з'єднання ненадовго перервуться."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存时会重启引擎，其连接将短暂中断。"
           }
         }
       }
@@ -67938,6 +68214,98 @@
         }
       }
     },
+    "The proxy receives this password unencrypted, unless its address starts with https." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Proxy erhält dieses Passwort unverschlüsselt, sofern seine Adresse nicht mit https beginnt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El proxy recibe esta contraseña sin cifrar, salvo que su dirección empiece por https."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il proxy riceve questa password non cifrata, a meno che il suo indirizzo non inizi con https."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アドレスが https で始まらない限り、プロキシにはこのパスワードが暗号化されずに送信されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De proxy ontvangt dit wachtwoord onversleuteld, tenzij zijn adres met https begint."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проксі отримує цей пароль незашифрованим, якщо його адреса не починається з https."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "除非代理地址以 https 开头，否则代理将以未加密的方式收到此密码。"
+          }
+        }
+      }
+    },
+    "The proxy settings are renamed and kept next to the configuration. The app then closes; when you open it again, it starts without a proxy and connects directly." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Proxy-Einstellungen werden umbenannt und neben der Konfiguration aufbewahrt. Die App wird dann geschlossen; wenn Sie sie wieder öffnen, startet sie ohne Proxy und verbindet sich direkt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los ajustes del proxy se renombran y se conservan junto a la configuración. Después la app se cierra; cuando la abras de nuevo, se iniciará sin proxy y se conectará directamente."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le impostazioni del proxy vengono rinominate e conservate accanto alla configurazione. L'app si chiude; quando la riapri, si avvia senza proxy e si connette direttamente."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プロキシの設定は名前を変更して構成の隣に保存されます。その後アプリは終了し、次に開くとプロキシなしで起動して直接接続します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De proxy-instellingen krijgen een andere naam en blijven naast de configuratie bewaard. De app sluit daarna; als je hem opnieuw opent, start hij zonder proxy en maakt hij rechtstreeks verbinding."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Налаштування проксі буде перейменовано й збережено поруч із конфігурацією. Після цього застосунок закриється; коли ви відкриєте його знову, він запуститься без проксі й підключатиметься напряму."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代理设置将被重命名并保留在配置旁边。随后应用会关闭；再次打开时，它将不使用代理启动并直接连接。"
+          }
+        }
+      }
+    },
     "The record of the switch is incomplete." : {
       "localizations" : {
         "de" : {
@@ -69268,6 +69636,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有新的项目需要保存。"
+          }
+        }
+      }
+    },
+    "These don't use the proxy: addresses, networks such as 192.168.0.0/16, host names, and zones such as *.example.com. One per line." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese verwenden den Proxy nicht: Adressen, Netzwerke wie 192.168.0.0/16, Hostnamen und Zonen wie *.example.com. Ein Eintrag pro Zeile."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estos no usan el proxy: direcciones, redes como 192.168.0.0/16, nombres de host y zonas como *.example.com. Uno por línea."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questi non usano il proxy: indirizzi, reti come 192.168.0.0/16, nomi host e zone come *.example.com. Uno per riga."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次のものはプロキシを使用しません: アドレス、192.168.0.0/16 のようなネットワーク、ホスト名、*.example.com のようなゾーン。1 行に 1 つずつ入力します。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze gebruiken de proxy niet: adressen, netwerken zoals 192.168.0.0/16, hostnamen en zones zoals *.example.com. Eén per regel."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ці записи не використовують проксі: адреси, мережі на зразок 192.168.0.0/16, імена хостів і зони на зразок *.example.com. По одному в рядку."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以下内容不使用代理：地址、网络（例如 192.168.0.0/16）、主机名和区域（例如 *.example.com）。每行一个。"
           }
         }
       }
@@ -73425,6 +73839,98 @@
         }
       }
     },
+    "Turn the proxy off" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxy ausschalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactivar el proxy"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disattiva il proxy"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プロキシをオフにする"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxy uitschakelen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вимкнути проксі"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭代理"
+          }
+        }
+      }
+    },
+    "Turn the proxy off?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxy ausschalten?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Desactivar el proxy?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disattivare il proxy?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プロキシをオフにしますか？"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proxy uitschakelen?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вимкнути проксі?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要关闭代理吗？"
+          }
+        }
+      }
+    },
     "Type" : {
       "localizations" : {
         "de" : {
@@ -74801,6 +75307,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "URL"
+          }
+        }
+      }
+    },
+    "Use a proxy" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einen Proxy verwenden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar un proxy"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa un proxy"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プロキシを使用"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een proxy gebruiken"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Використовувати проксі"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用代理"
           }
         }
       }
