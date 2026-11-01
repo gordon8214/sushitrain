@@ -60,6 +60,7 @@ struct SushitrainApp: App {
 			client.applyLogLevels(UserDefaults.standard.string(forKey: "keptLogLevels") ?? "")
 		}
 		#if os(macOS)
+			EnginePriority.stored.apply()
 			for message in containerMigration.messages {
 				Log.info(message)
 			}

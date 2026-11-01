@@ -10112,6 +10112,52 @@
         }
       }
     },
+    "Background" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hintergrund"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segundo plano"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In background"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックグラウンド"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Achtergrond"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фоновий"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后台"
+          }
+        }
+      }
+    },
     "Background processing is restricted by the system. Check device restrictions in Settings; you may need help from your device administrator." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -30375,6 +30421,52 @@
         }
       }
     },
+    "How hashing files competes with your other work. Normal runs at full speed. Utility gives way when this Mac is busy. Background uses only the efficiency cores and gives way to other disk use, which saves energy but can make large scans much slower. Transfers are not affected. Changes take effect at once." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wie das Hashen von Dateien mit Ihrer übrigen Arbeit konkurriert. Normal läuft mit voller Geschwindigkeit. Reduziert tritt zurück, wenn dieser Mac ausgelastet ist. Hintergrund nutzt nur die Effizienzkerne und tritt hinter andere Festplattenzugriffe zurück. Das spart Energie, kann große Scans aber deutlich verlangsamen. Übertragungen sind nicht betroffen. Änderungen gelten sofort."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cómo compite el cálculo de hashes de archivos con el resto de tu trabajo. Normal funciona a toda velocidad. Reducida cede cuando este Mac está ocupado. Segundo plano usa solo los núcleos de eficiencia y cede ante otros usos del disco, lo que ahorra energía, pero puede hacer que los escaneos grandes sean mucho más lentos. Las transferencias no se ven afectadas. Los cambios se aplican de inmediato."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Come il calcolo degli hash dei file compete con il resto del tuo lavoro. Normale funziona alla massima velocità. Ridotta cede il passo quando questo Mac è occupato. In background usa solo i core per l'efficienza e cede il passo ad altri usi del disco: risparmia energia, ma può rendere le scansioni grandi molto più lente. I trasferimenti non sono interessati. Le modifiche hanno effetto subito."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルのハッシュ計算が他の作業とどのように競合するかを指定します。「通常」は最大速度で実行します。「低め」はこのMacの負荷が高いときに処理を譲ります。「バックグラウンド」は高効率コアのみを使用し、他のディスク使用に処理を譲ります。省エネルギーになりますが、大規模なスキャンが大幅に遅くなることがあります。転送には影響しません。変更はすぐに反映されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoe het hashen van bestanden concurreert met je andere werk. Normaal draait op volle snelheid. Beperkt maakt plaats als deze Mac het druk heeft. Achtergrond gebruikt alleen de efficiency-cores en maakt plaats voor ander schijfgebruik. Dat bespaart energie, maar kan grote scans veel trager maken. Overdrachten worden niet beïnvloed. Wijzigingen gaan meteen in."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Як хешування файлів конкурує з іншою вашою роботою. «Звичайний» працює на повній швидкості. «Знижений» поступається, коли цей Mac зайнятий. «Фоновий» використовує лише енергоефективні ядра та поступається іншому використанню диска, що заощаджує енергію, але може значно сповільнити великі сканування. Це не впливає на передачі. Зміни набувають чинності одразу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件哈希计算与你的其他工作如何竞争资源。“正常”以全速运行。“较低”在这台 Mac 繁忙时让出资源。“后台”仅使用能效核心，并让位于其他磁盘操作，这样可以节省能源，但可能使大型扫描明显变慢。传输不受影响。更改立即生效。"
+          }
+        }
+      }
+    },
     "How long a port mapping on the router lasts, when it is renewed, and how long the router gets to answer. How often to start refreshing what STUN learned. STUN itself is turned on and off in the advanced settings." : {
       "localizations" : {
         "de" : {
@@ -39404,6 +39496,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拥有此文件的设备均未连接。"
+          }
+        }
+      }
+    },
+    "Normal" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通常"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normaal"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Звичайний"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正常"
           }
         }
       }
@@ -52432,6 +52570,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "扫描"
+          }
+        }
+      }
+    },
+    "Scanning priority" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan-Priorität"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prioridad de escaneo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Priorità di scansione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スキャンの優先度"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scanprioriteit"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пріоритет сканування"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫描优先级"
           }
         }
       }
@@ -76399,6 +76583,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用 Syncthing 的配置时会先进行备份，然后 Synctrain 以该配置重新启动；此后不应再运行 Syncthing.app。导入副本会将 Syncthing 的配置、密钥和数据库放入 Synctrain 自己的文件夹，Syncthing 的原件保持不变。新配置会给此 Mac 一个新的设备 ID。"
+          }
+        }
+      }
+    },
+    "Utility" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reduziert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reducida"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ridotta"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低め"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beperkt"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Знижений"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "较低"
           }
         }
       }

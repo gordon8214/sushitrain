@@ -116,8 +116,67 @@ changes it, and what the web GUI or the REST API changed meanwhile stays too. Mo
   engine, and it is on by default, as in Syncthing. It is measurably in force (the process has a nice value of 9) but
   makes little difference on macOS. In a normally launched app the main thread stayed at priority 46 and the engine's
   threads at 31 with either value, and two processes spinning on every core, one at nice 9, did the same work (measured
-  on October 30, 2026). A process can't lower its nice value again, so turning this off takes an app restart. A real
-  priority setting is a separate matter (Syncthing.app sets the QoS of the backend process it launches).
+  on October 30, 2026). A process can't lower its nice value again, so turning this off takes an app restart. What does
+  have an effect is [Scanning priority](#scanning-priority).
+
+## Scanning priority
+
+General settings has a Scanning priority of Normal, Utility or Background, per Mac, in the `enginePriority` preference.
+It defaults to Background, as in Syncthing.app, and a change reaches a scan in progress, within 256 KiB of each file.
+
+Syncthing.app sets the QoS of a separate process. The engine runs inside this app, so the options were measured on
+November 1, 2026, on an M4 Max (12 performance and 4 efficiency cores), with eight hashers beside a stand-in for the
+main thread that calls into Go every 10 ms. Each ran through `open`, as a process started from a shell has other
+priorities, both on an idle Mac and with a normal app spinning on every core.
+
+| Option | Result |
+| --- | --- |
+| `setLowPriority` (nice 9) | No effect on anything measured. |
+| `PRIO_DARWIN_BG` for the process | Takes the main thread to priority 4. It woke 100 ms late on an idle Mac, and managed one frame in 8 seconds on a busy one. |
+| QoS on the hashers' Go threads, with `LockOSThread` | Works, but calls into Go from the main thread stalled for 150 ms up to 5 seconds on a busy Mac. Hashing through cgo cut the pauses of the garbage collector, but left stalls of up to 1.5 seconds. |
+| QoS on hashing only, with Go's threads left alone | Works, and with the stand-in on a busy Mac no call into Go took over 0.2 ms. |
+| A helper process for the engine | Not tried. The app calls the engine in-process throughout, and the option above leaves nothing for it to solve. |
+
+Go threads can't go below the default priority. Go's scheduler runs on all of them, so one that the system starves
+while it holds a P or a runtime lock stalls every goroutine, and every call the main thread makes into Go, as Go's locks
+don't pass on priority. A thread at Background gets almost nothing while the Mac is busy, so this is not rare there. So
+hashing never runs Go below the default priority (`enginepriority_darwin.go`, and `scanner.SetHasherHash` in the fork):
+
+- At Normal a hasher hashes on its own thread, through CommonCrypto, as fast as Go does. At Utility and Background it
+  hands 256 KiB at a time to a Grand Central Dispatch queue of that class, and waits in a cgo call, which holds no P.
+  Stopping the engine waits for one such piece: quitting during a starved scan took 0.9 seconds, although the system
+  promises a Background queue no progress at all.
+- A read of a file's data gets the disk policy of the class's tier in XNU: `IOPOL_STANDARD` for Utility and
+  `IOPOL_UTILITY` for Background. The policy is set on the thread (`setiopolicy_np`), which stays locked for the read,
+  and goes back to the default straight after. Left on, it would cover opening the next file, under a lock in
+  `lib/fs/casefs.go` that the app's own calls take, and a throttled thread must not hold that. A thread can also be
+  throttled when it next faults in a page, so the policy mustn't reach code that holds a P.
+
+The rest of the engine stays at the default priority: walking the folder, the database, transfers, checking blocks as
+they arrive, and hashing a temporary file again when a pull resumes. They hold the locks that calls from the app wait
+for, and hashing is what a scan of changed files spends its time on, with half the cores by default on macOS. A scan
+with little to hash is therefore no gentler than before.
+
+Hashing 8 GB of files in the page cache, through the app with the engine, with every byte confirmed by
+`syncthing_scanner_hashed_bytes_total`:
+
+| | Normal | Utility | Background |
+| --- | --- | --- | --- |
+| Idle Mac | 14.8 GB/s | 12.0 GB/s | 2.4 to 6.0 GB/s |
+| Every core busy | 8.9 GB/s | 50 MiB/s | 2 MiB/s |
+| Worst call into Go from the main thread, every core busy | 17.8 ms | 0.25 ms | 4.1 ms |
+
+The main thread was never more than 8.4 ms late, and at the two lower levels never more than 2.1 ms. At Background a
+scan all but stops while the Mac is busy, and on an idle Mac it uses the efficiency cores only, so its rate depends on
+what else wants those. The top of the range is the best run. With a Time Machine backup running it was mostly 2.4 to
+3.1 GB/s, which is also what the stand-in got at that time, without reading any files. Utility pays about a fifth of its
+rate on an idle Mac for the trips to its queue.
+
+The disk policy has no measurable effect on the internal SSD, which reads at 6.5 GB/s and which eight readers can't
+saturate. On a USB SSD, eight readers at the default policy took a foreground read of 128 KiB from 1.2 ms to about 6 ms,
+and its throughput from 112 MiB/s to 21 MiB/s. With `IOPOL_UTILITY` that read took about 0.7 ms at 160 to 180 MiB/s,
+while the eight fell from about 340 MiB/s to 13 MiB/s. `IOPOL_THROTTLE` did the same, and `IOPOL_STANDARD` gave the
+foreground about the same and left them about 35 MiB/s.
 
 ## Folder, device and connection settings
 

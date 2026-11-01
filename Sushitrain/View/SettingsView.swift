@@ -818,6 +818,21 @@ struct GeneralSettingsView: View {
 			}
 
 			Section {
+				Picker("Scanning priority", selection: userSettings.$enginePriority) {
+					Text("Normal").tag(EnginePriority.normal)
+					Text("Utility").tag(EnginePriority.utility)
+					Text("Background").tag(EnginePriority.background)
+				}
+				.onChange(of: userSettings.enginePriority) { _, priority in
+					priority.apply()
+				}
+			} footer: {
+				Text(
+					"How hashing files competes with your other work. Normal runs at full speed. Utility gives way when this Mac is busy. Background uses only the efficiency cores and gives way to other disk use, which saves energy but can make large scans much slower. Transfers are not affected. Changes take effect at once."
+				)
+			}
+
+			Section {
 				AutoStartToggleView()
 			}
 

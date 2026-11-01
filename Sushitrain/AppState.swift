@@ -30,6 +30,31 @@ enum FolderMetric: String {
 		// Always open the folder in the app
 		case browser = "browser"
 	}
+
+	/// How hashing files competes with other work on this Mac. Syncthing.app offers the same three for its backend
+	/// process, and the default is the same, but the engine runs inside the app here, so this reaches hashing only
+	/// (Docs/macos.md, Scanning priority).
+	enum EnginePriority: String, Hashable {
+		// These are the stored preference and what SetEnginePriority in the core takes
+		case normal = "normal"
+		case utility = "utility"
+		case background = "background"
+
+		static let storageKey = "enginePriority"
+		static let defaultValue = Self.background
+
+		static var stored: Self {
+			UserDefaults.standard.string(forKey: storageKey).flatMap(Self.init(rawValue:)) ?? defaultValue
+		}
+
+		func apply() {
+			var error: NSError? = nil
+			_ = SushitrainSetEnginePriority(self.rawValue, &error)
+			if let error {
+				Log.warn("Could not set the engine's priority: \(error.localizedDescription)")
+			}
+		}
+	}
 #endif
 
 enum AppStartupState: Equatable {
@@ -108,6 +133,9 @@ class SushitrainDelegate: NSObject {
 	#if os(macOS)
 		// The action to perform when a user clicks a folder in the dock menu
 		@AppStorage("menuFolderAction") var menuFolderAction: MenuFolderAction = .finder
+
+		// How hashing files competes with other work
+		@AppStorage(EnginePriority.storageKey) var enginePriority: EnginePriority = EnginePriority.defaultValue
 	#endif
 
 	// First run time
