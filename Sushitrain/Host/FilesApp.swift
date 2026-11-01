@@ -15,8 +15,9 @@
 	/// menu bar or the Dock when its window closes. A plain `Window` scene would quit it instead.
 	struct FilesApp: App {
 		@NSApplicationDelegateAdaptor(FilesAppDelegate.self) private var delegate
+		@Environment(\.scenePhase) private var scenePhase
 		@Environment(\.openWindow) private var openWindow
-		@AppStorage("hideInDock") private var hideInDock = false
+		@AppStorage(AppPresence.storageKey) private var presence = AppPresence.standard
 		@State private var mode: AppMode?
 		@State private var model: AppModel
 
@@ -25,6 +26,7 @@
 
 		init() {
 			AppLocations.prepareCurrent()
+			AppPresence.adoptHideInDock(in: .standard)
 			let mode = AppMode.resolve()
 			let model = AppModel()
 			_mode = State(initialValue: mode)
@@ -36,15 +38,15 @@
 			AppDependencyManager.shared.add { () async throws -> AppState in
 				throw EngineNotRunning()
 			}
-			let hideInDock = self.hideInDock
+			let activationPolicy = self.presence.activationPolicy
 			DispatchQueue.main.async {
-				NSApp.setActivationPolicy(hideInDock ? .accessory : .regular)
+				NSApp.setActivationPolicy(activationPolicy)
 			}
 		}
 
 		var body: some Scene {
 			WindowGroup(id: Self.window, for: String.self) { _ in
-				FilesWindowContent(model: model, mode: $mode, hideInDock: $hideInDock)
+				FilesWindowContent(model: model, mode: $mode, presence: $presence)
 			} defaultValue: {
 				Self.window
 			}
@@ -57,9 +59,15 @@
 				}
 			}
 			.restorationBehavior(.disabled)
-			.defaultLaunchBehavior(hideInDock ? .suppressed : .presented)
-			.onChange(of: hideInDock) { _, hide in
-				NSApp.setActivationPolicy(hide ? .accessory : .regular)
+			.defaultLaunchBehavior(presence.inDock ? .presented : .suppressed)
+			.onChange(of: scenePhase, initial: true) { _, _ in
+				// Retain the scene's action once, for the delegate
+				if delegate.openWindow == nil {
+					delegate.openWindow = { [openWindow] in openWindow(id: Self.window, value: Self.window) }
+				}
+			}
+			.onChange(of: presence.activationPolicy) { _, policy in
+				NSApp.setActivationPolicy(policy)
 				NSApp.activate()
 			}
 
@@ -70,7 +78,7 @@
 			.restorationBehavior(.disabled)
 			.defaultLaunchBehavior(.suppressed)
 
-			MenuBarExtra("Synctrain", systemImage: "folder", isInserted: $hideInDock) {
+			MenuBarExtra("Synctrain", systemImage: "folder", isInserted: $presence.inMenuBar) {
 				Button("Open Synctrain", systemImage: "macwindow") {
 					openWindow(id: Self.window, value: Self.window)
 					NSApp.activate()
@@ -83,8 +91,8 @@
 					NSApp.activate()
 				}
 				Divider()
-				Toggle(isOn: $hideInDock) {
-					Label("Hide in dock", systemImage: "eye.slash")
+				Toggle(isOn: $presence.inDock) {
+					Label("Show in Dock", systemImage: "dock.rectangle")
 				}
 				Button("Quit Synctrain", systemImage: "multiply.circle") {
 					NSApp.terminate(nil)
@@ -103,6 +111,16 @@
 
 	/// Files reach the app from document types and the Share extension, for the folders of the engine
 	@MainActor final class FilesAppDelegate: NSObject, NSApplicationDelegate {
+		var openWindow: (() -> Void)?
+
+		func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+			AppPresence.reopen(hasVisibleWindows: hasVisibleWindows) { openWindow?() }
+		}
+
+		func applicationDidResignActive(_ notification: Notification) {
+			AppPresence.restoreActivationPolicy()
+		}
+
 		func application(_ application: NSApplication, open urls: [URL]) {
 			let alert = NSAlert()
 			alert.messageText = String(localized: "Synctrain cannot import files in Files in Finder mode")
@@ -118,7 +136,7 @@
 	private struct FilesWindowContent: View {
 		let model: AppModel
 		@Binding var mode: AppMode?
-		@Binding var hideInDock: Bool
+		@Binding var presence: AppPresence
 
 		var body: some View {
 			Group {
@@ -157,9 +175,7 @@
 									}
 									.disabled(RemoteCoordinator.shared.gateways.isEmpty)
 									AutoStartToggleView()
-									Toggle(isOn: $hideInDock) {
-										Label("Hide dock menu icon", systemImage: "eye.slash")
-									}
+									AppPresenceToggles(presence: $presence)
 								}
 								Section {
 									SwitchToSynchronizeButton()

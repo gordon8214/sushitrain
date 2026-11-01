@@ -12,6 +12,7 @@
 
 import SwiftUI
 @preconcurrency import SushitrainCore
+import SynctrainHostKit
 
 class QuickActionService: ObservableObject {
 	@MainActor static let shared = QuickActionService()
@@ -109,6 +110,15 @@ class QuickActionService: ObservableObject {
 					finish(false)
 				}
 			}
+		}
+
+		func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+			// This window shows why the engine didn't start, where the menu bar's own doesn't
+			AppPresence.reopen(hasVisibleWindows: hasVisibleWindows) { openWindow?(id: "main") }
+		}
+
+		func applicationDidResignActive(_ notification: Notification) {
+			AppPresence.restoreActivationPolicy()
 		}
 
 		func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {

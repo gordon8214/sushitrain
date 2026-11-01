@@ -31,13 +31,14 @@ struct SushitrainApp: App {
 		@NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 		@Environment(\.scenePhase) private var scenePhase
 		@Environment(\.openWindow) private var openWindow
-		@AppStorage("hideInDock") var hideInDock: Bool = false
+		@AppStorage(AppPresence.storageKey) var presence = AppPresence.standard
 	#endif
 
 	init() {
 		// The first start outside the sandbox takes over the sandboxed app's preferences and engine data
 		#if os(macOS)
 			let containerMigration = ContainerMigrator.run()
+			AppPresence.adoptHideInDock(in: .standard)
 		#endif
 
 		// Find out all the relevant locations we need to access
@@ -112,7 +113,7 @@ struct SushitrainApp: App {
 
 		// Start Syncthing node in the background
 		#if os(macOS)
-			let hideInDock = self.hideInDock
+			let activationPolicy = self.presence.activationPolicy
 		#endif
 
 		// Check if we need to show onboarding
@@ -126,7 +127,7 @@ struct SushitrainApp: App {
 
 		#if os(macOS)
 			DispatchQueue.main.async {
-				NSApp.setActivationPolicy(hideInDock ? .accessory : .regular)
+				NSApp.setActivationPolicy(activationPolicy)
 			}
 		#endif
 	}
@@ -205,6 +206,9 @@ struct SushitrainApp: App {
 					initialColumnVisibility: folderID.wrappedValue == nil ? .doubleColumn : .detailOnly
 				).environment(appState)
 			}
+			// As the first scene, this is the one that opens at launch and when reopening the app from the Dock
+			.defaultLaunchBehavior(presence.inDock ? .automatic : .suppressed)
+			.restoredOnlyWithDockIcon(in: presence)
 
 			WindowGroup(id: "bookmark", for: URL.self) { [appState] bookmarkURL in
 				MainView(
@@ -213,6 +217,7 @@ struct SushitrainApp: App {
 				).environment(appState)
 			}
 			.defaultLaunchBehavior(.suppressed)
+			.restoredOnlyWithDockIcon(in: presence)
 
 			WindowGroup(id: "preview", for: Preview.self) { [appState] preview in
 				if appState.startupState == .started {
@@ -223,10 +228,12 @@ struct SushitrainApp: App {
 				}
 			}
 			.windowManagerRole(.associated)
+			.restoredOnlyWithDockIcon(in: presence)
 
 			WindowGroup(id: "decrypter") {
 				DecrypterView()
 			}
+			.restoredOnlyWithDockIcon(in: presence)
 		#endif
 
 		WindowGroup(id: "main") { [appState] in
@@ -261,13 +268,13 @@ struct SushitrainApp: App {
 				}
 			}
 
-			.onChange(of: hideInDock, initial: true) { _ov, nv in
-				NSApp.setActivationPolicy(nv ? .accessory : .regular)
+			.onChange(of: presence.activationPolicy, initial: true) { _ov, nv in
+				NSApp.setActivationPolicy(nv)
 				NSApp.activate(ignoringOtherApps: true)
 			}
 
-			.defaultLaunchBehavior(hideInDock ? .suppressed : .presented)
-			.restorationBehavior(hideInDock ? .disabled : .automatic)
+			.defaultLaunchBehavior(.suppressed)
+			.restoredOnlyWithDockIcon(in: presence)
 
 		#endif
 
@@ -285,6 +292,7 @@ struct SushitrainApp: App {
 				AboutView().environment(appState)
 			}
 			.windowResizability(.contentSize)
+			.restoredOnlyWithDockIcon(in: presence)
 
 			// Support window
 			Window("Questions, support & feedback", id: "support") {
@@ -293,14 +301,15 @@ struct SushitrainApp: App {
 				}.environment(appState)
 			}
 			.windowResizability(.contentSize)
+			.restoredOnlyWithDockIcon(in: presence)
 
 			// Pass app state object explicitly, as sometimes Environment fails to resolve
 			// for some reason...
-			MenuBarExtraView(appState: appState, hideInDock: $hideInDock)
+			MenuBarExtraView(appState: appState, presence: $presence)
 
 			Settings {
 				NavigationStack {
-					TabbedSettingsView(hideInDock: $hideInDock)
+					TabbedSettingsView(presence: $presence)
 				}.environment(appState)
 			}
 			.windowResizability(.contentSize)
@@ -311,6 +320,7 @@ struct SushitrainApp: App {
 				}
 				.environment(appState)
 			}
+			.restoredOnlyWithDockIcon(in: presence)
 
 			// Not restored: the engine isn't running yet when a window comes back
 			Window("Syncthing Web GUI", id: WebGUIWindow.id) {
@@ -326,6 +336,7 @@ struct SushitrainApp: App {
 					.frame(minWidth: 320, maxWidth: 320, minHeight: 320)
 			}
 			.windowResizability(.contentSize)
+			.restoredOnlyWithDockIcon(in: presence)
 
 			Window("Synctrain", id: "singleMain") {
 				if appState.startupState == .started {
@@ -333,6 +344,7 @@ struct SushitrainApp: App {
 				}
 			}
 			.windowResizability(.contentSize)
+			.restoredOnlyWithDockIcon(in: presence)
 		#endif
 	}
 
@@ -409,7 +421,7 @@ struct SushitrainApp: App {
 
 	struct MenuBarExtraView: Scene {
 		let appState: AppState
-		@Binding var hideInDock: Bool
+		@Binding var presence: AppPresence
 		@Environment(\.openWindow) private var openWindow
 
 		@State private var folders: [SushitrainFolder] = []
@@ -417,11 +429,13 @@ struct SushitrainApp: App {
 		var body: some Scene {
 			Window("Settings...", id: "appSettings") {
 				NavigationStack {
-					TabbedSettingsView(hideInDock: $hideInDock)
+					TabbedSettingsView(presence: $presence)
 				}
-			}.environment(appState)
+			}
+			.environment(appState)
+			.restoredOnlyWithDockIcon(in: presence)
 
-			MenuBarExtra("Synctrain", systemImage: appState.engineStatus.symbol, isInserted: $hideInDock) {
+			MenuBarExtra("Synctrain", systemImage: appState.engineStatus.symbol, isInserted: $presence.inMenuBar) {
 				Text(verbatim: appState.engineStatus.menuLine)
 
 				Divider()
@@ -448,6 +462,13 @@ struct SushitrainApp: App {
 								}
 							}
 						}
+					}
+
+					Divider()
+				}
+				else {
+					Button("Open Synctrain", systemImage: "macwindow") {
+						openStartWindow()
 					}
 
 					Divider()
@@ -480,14 +501,28 @@ struct SushitrainApp: App {
 
 				Divider()
 
-				Toggle(isOn: $hideInDock) {
-					Label("Hide in dock", systemImage: "eye.slash")
+				Toggle(isOn: $presence.inDock) {
+					Label("Show in Dock", systemImage: "dock.rectangle")
 				}
 
 				Button("Quit Synctrain", systemImage: "multiply.circle") {
 					NSApplication.shared.terminate(nil)
 				}
 			}
+			.onChange(of: appState.startupState, initial: true) { _, state in
+				// Nothing else opens a window here, and without one the engine would wait for good
+				if !presence.inDock && state.needsWindow {
+					openStartWindow()
+				}
+			}
+		}
+
+		/// Shows how the start is going, which only the main window does. A group adds a window each time it is opened.
+		private func openStartWindow() {
+			if !NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeMain }) {
+				openWindow(id: "main")
+			}
+			NSApplication.shared.activate()
 		}
 
 		private func openFolder(_ fld: SushitrainFolder) {

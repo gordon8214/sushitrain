@@ -54,6 +54,18 @@ enum AppStartupState: Equatable {
 	case started
 }
 
+#if os(macOS)
+	extension AppStartupState {
+		/// The engine waits for the user or could not start, which only a window says
+		var needsWindow: Bool {
+			switch self {
+			case .notStarted, .started: false
+			case .engineSetup, .onboarding, .error: true
+			}
+		}
+	}
+#endif
+
 class SushitrainDelegate: NSObject {
 	fileprivate var appState: AppState
 
@@ -434,6 +446,7 @@ struct EngineMenuState: Equatable {
 				}
 				self.containerMigrationError = outcome.error
 				self.containerMigrationNotice = outcome.notice ?? self.containerMigrationNotice
+				AppPresence.adoptHideInDock(in: .standard)
 			}
 		#endif
 		self.startupState = .notStarted

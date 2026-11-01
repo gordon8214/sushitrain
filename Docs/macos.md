@@ -555,6 +555,34 @@ the next start.
 
 There is no separate Stop and Start: the engine runs for as long as the app does.
 
+## Dock and menu bar
+
+**Show in menu bar** and **Show in Dock** choose where the app shows itself, in Settings › General, or in its window in
+Files in Finder mode. The menu bar menu has Show in Dock too. Both are on at first. Having neither would leave no way back
+to the app, and `AppPresence` can't express it: it holds the three combinations there are, so turning off the one that
+is left turns on the other. The same goes for ⌘-dragging the item out of the menu bar while there is no Dock icon, which
+SwiftUI reports through `isInserted`.
+
+Without a Dock icon the app behaves like Syncthing.app: it has no app menu, and starts without a window. The first scene
+in `SushitrainApp` is the one that opens at launch and when reopening from the Dock, so that is where this is set. The
+`main` scene never opens by itself, as the two would open together. No window is restored either, except one that was
+open when the Dock icon went away, once. **Folder access from menu** applies whenever the menu bar item is shown.
+
+The exception is a start that can't go on by itself. Only `MainView` shows onboarding, the Syncthing takeover and a failed
+start, and the engine waits for the first two, so the main window then opens by itself (`AppStartupState.needsWindow`),
+and the menu has **Open Synctrain** until the engine runs.
+
+macOS can still leave the item out, as in a full menu bar. Opening the app from Finder then opens a window
+(`AppPresence.reopen`). macOS also makes a running app a regular one when it is opened, with a Dock icon and an app menu.
+That lasts until another app comes forward (`AppPresence.restoreActivationPolicy`), as setting the policy right away makes
+the app inactive, and it can't then come to the front by itself, which would leave the window behind other apps.
+
+`LSUIElement` would avoid this, and is what Syncthing.app has, but Synctrain chooses at run time. With the key, a launch
+that wants a Dock icon wasn't activated, and could come up with no window at all (macOS 27.2).
+
+A stored `hideInDock` is taken over once (`AppPresence.adoptHideInDock`), so that the app looks as it did: on means the
+menu bar only, off means the Dock only. Without one the app starts with both.
+
 ## Menu commands
 
 The app menu and the menu bar menu have what Syncthing.app's menu has:

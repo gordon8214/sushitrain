@@ -1052,7 +1052,7 @@ private struct BandwidthSettingsView: View {
 #if os(macOS)
 	struct TabbedSettingsView: View {
 		@Environment(AppState.self) private var appState
-		@Binding var hideInDock: Bool
+		@Binding var presence: AppPresence
 		@State private var selection: String = "general"
 
 		var body: some View {
@@ -1061,7 +1061,7 @@ private struct BandwidthSettingsView: View {
 					Tab(
 						value: "general",
 						content: {
-							GeneralSettingsView(userSettings: appState.userSettings, hideInDock: $hideInDock)
+							GeneralSettingsView(userSettings: appState.userSettings, presence: $presence)
 						},
 						label: {
 							Label("General", systemImage: "app.badge.checkmark.fill")
@@ -1113,7 +1113,7 @@ private struct BandwidthSettingsView: View {
 	struct GeneralSettingsView: View {
 		@Environment(AppState.self) private var appState
 		@ObservedObject var userSettings: AppUserSettings
-		@Binding var hideInDock: Bool
+		@Binding var presence: AppPresence
 
 		var body: some View {
 			Form {
@@ -1131,9 +1131,7 @@ private struct BandwidthSettingsView: View {
 				}
 
 				Section {
-					Toggle(isOn: $hideInDock) {
-						Label("Hide dock menu icon", systemImage: "eye.slash")
-					}
+					AppPresenceToggles(presence: $presence)
 				}
 
 				Section {
@@ -1141,7 +1139,7 @@ private struct BandwidthSettingsView: View {
 						Text("Do not show folders").tag(MenuFolderAction.hide)
 						Text("Open in Finder").tag(MenuFolderAction.finder)
 						Text("Open in the app").tag(MenuFolderAction.browser)
-					}.disabled(!hideInDock)
+					}.disabled(!presence.inMenuBar)
 				}
 
 				Section {
