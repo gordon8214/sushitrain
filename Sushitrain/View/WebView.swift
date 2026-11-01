@@ -45,6 +45,10 @@ struct WebView: UIViewRepresentable {
 	var trustFingerprints: [Data] = []
 	var cookies: [HTTPCookie] = []
 	var verticallyCenter: Bool = false
+	/// For a web app at `url` rather than a page: it stays at that origin, and what would leave it goes to the system, as
+	/// the view has no way back. Its cookies are kept apart from those of the other pages the app shows, some of which are
+	/// the user's synced files.
+	var isWebApp: Bool = false
 
 	@State var isOpaque: Bool = false
 	@Environment(\.showToast) private var showToast
@@ -74,7 +78,54 @@ struct WebView: UIViewRepresentable {
 			if navigationAction.shouldPerformDownload {
 				return .download
 			}
+			if parent.isWebApp, navigationAction.targetFrame?.isMainFrame == true, let url = navigationAction.request.url,
+				!self.isInWebApp(url)
+			{
+				Self.openInSystem(url)
+				return .cancel
+			}
 			return .allow
+		}
+
+		func webView(
+			_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+			for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures
+		) -> WKWebView? {
+			if parent.isWebApp, let url = navigationAction.request.url {
+				if self.isInWebApp(url) {
+					webView.load(navigationAction.request)
+				}
+				else {
+					Self.openInSystem(url)
+				}
+			}
+			return nil
+		}
+
+		/// Goes by the app's own URL, not the one showing, which a page can change
+		private func isInWebApp(_ url: URL) -> Bool {
+			let app = parent.url
+			guard let host = url.host?.lowercased(), host == app.host?.lowercased() else {
+				return false
+			}
+			return url.scheme == app.scheme && Self.port(of: url) == Self.port(of: app)
+		}
+
+		private static func port(of url: URL) -> Int {
+			url.port ?? (url.scheme == "https" ? 443 : 80)
+		}
+
+		/// Only what a web page may ask of the system: other schemes can open files and apps
+		private static func openInSystem(_ url: URL) {
+			guard let scheme = url.scheme?.lowercased(), ["http", "https", "mailto", "sms"].contains(scheme) else {
+				Log.warn("Not opening a URL from a web app: \(url.scheme ?? "no scheme")")
+				return
+			}
+			#if os(macOS)
+				NSWorkspace.shared.open(url)
+			#else
+				UIApplication.shared.open(url)
+			#endif
 		}
 
 		func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async
@@ -477,6 +528,8 @@ struct WebView: UIViewRepresentable {
 		#endif
 	}
 
+	private static let webAppDataStore = UUID(uuidString: "91EE853C-BEB3-4749-9BEE-70418F70CC4B")!
+
 	func makeCoordinator() -> WebViewCoordinator {
 		return WebViewCoordinator(self)
 	}
@@ -484,6 +537,10 @@ struct WebView: UIViewRepresentable {
 	private var config: WKWebViewConfiguration {
 		let config = WKWebViewConfiguration()
 		config.limitsNavigationsToAppBoundDomains = false
+		if self.isWebApp {
+			config.websiteDataStore = WKWebsiteDataStore(forIdentifier: Self.webAppDataStore)
+			config.preferences.javaScriptCanOpenWindowsAutomatically = false
+		}
 		for cookie in self.cookies {
 			Log.info("Adding cookie \(cookie)")
 			config.websiteDataStore.httpCookieStore.setCookie(cookie)

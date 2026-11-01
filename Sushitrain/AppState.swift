@@ -180,6 +180,10 @@ struct EngineMenuState: Equatable {
 	var allDevicesPaused = false
 	/// Where a browser can open the web GUI: nil when it is off, or on a Unix socket
 	var webGUIURL: URL? = nil
+	/// Whether its password is still one nobody knows, which leaves its sign-in page impassable
+	var webGUINeedsPassword = false
+	/// Changes with its configuration
+	var webGUIRevision = ""
 }
 
 @Observable @MainActor class AppState {
@@ -190,6 +194,10 @@ struct EngineMenuState: Equatable {
 	@ObservationIgnored var changePublisher = PassthroughSubject<Void, Never>()
 	@ObservationIgnored var pathMonitor: NWPathMonitor? = nil
 	@ObservationIgnored var pingTimer: Timer? = nil
+	#if os(macOS)
+		/// The user asked for the web GUI in the browser, which waits for its window to get a password
+		@ObservationIgnored var webGUIBrowserIsWaiting = false
+	#endif
 
 	var isLoggingToFile: Bool = false
 
@@ -918,6 +926,11 @@ struct EngineMenuState: Equatable {
 			next.allDevicesPaused = !devices.isEmpty && devices.allSatisfy { client.peer(withID: $0)?.isPaused() ?? true }
 			if client.isGUIEnabled(), let url = URL(string: client.guiurl()), url.scheme == "http" || url.scheme == "https" {
 				next.webGUIURL = url
+				next.webGUIRevision = client.guiRevision()
+				// That reads a file, and this runs with every event. The answer only changes with the revision.
+				next.webGUINeedsPassword =
+					next.webGUIRevision == self.engineMenuState.webGUIRevision
+					? self.engineMenuState.webGUINeedsPassword : client.isGUIPasswordUnknown()
 			}
 		}
 		if self.engineMenuState != next {

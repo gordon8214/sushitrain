@@ -95,13 +95,7 @@
 			}
 			.disabled(!state.canRestart)
 
-			Button("Open Web GUI", systemImage: "globe") {
-				if let url = appState.engineMenuState.webGUIURL {
-					NSWorkspace.shared.open(url)
-				}
-			}
-			.keyboardShortcut(self.shortcut("o"))
-			.disabled(!state.isRunning || state.webGUIURL == nil)
+			WebGUIButtons(appState: appState, hasShortcuts: hasShortcuts)
 		}
 
 		private func shortcut(_ key: KeyEquivalent) -> KeyboardShortcut? {

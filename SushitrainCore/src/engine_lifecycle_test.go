@@ -13,6 +13,8 @@
 package sushitrain
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"crypto/tls"
 	"database/sql"
 	"encoding/json"
@@ -420,7 +422,7 @@ func TestEngineServesTheRESTAPI(t *testing.T) {
 	clt, _, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
 		cfg.GUI.Enabled = true
 		cfg.GUI.RawAddress = address
-		protectGUI(&cfg.GUI)
+		protectGUI(&cfg.GUI, guiConfigDir())
 	})
 	if !clt.IsGUIEnabled() || clt.GUIAddress() != address || clt.GUIAPIKey() == "" {
 		t.Fatalf("GUI on %v at %s", clt.IsGUIEnabled(), clt.GUIAddress())
@@ -493,7 +495,7 @@ func TestEngineServesTheWebGUI(t *testing.T) {
 	clt, _, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
 		cfg.GUI.Enabled = true
 		cfg.GUI.RawAddress = address
-		protectGUI(&cfg.GUI)
+		protectGUI(&cfg.GUI, guiConfigDir())
 	})
 	client := &http.Client{Timeout: 5 * time.Second}
 
@@ -680,12 +682,95 @@ func TestEngineSendsTheCrashOfAnEarlierRun(t *testing.T) {
 	}
 }
 
+func TestEngineSaysWhenNobodyKnowsTheGUIPassword(t *testing.T) {
+	address := freeGUIAddress(t)
+	clt, _, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.GUI.Enabled = true
+		cfg.GUI.RawAddress = address
+		protectGUI(&cfg.GUI, guiConfigDir())
+	})
+	if !clt.IsGUIPasswordUnknown() {
+		t.Fatal("nobody knows this password")
+	}
+	revision := clt.GUIRevision()
+	if revision == "" || clt.GUIRevision() != revision {
+		t.Fatalf("revision %q, then %q", revision, clt.GUIRevision())
+	}
+
+	settings := clt.GUISettings()
+	settings.Password = "chosen"
+	if err := clt.SetGUISettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	if clt.IsGUIPasswordUnknown() {
+		t.Fatal("a password was chosen")
+	}
+	if clt.GUIRevision() == revision {
+		t.Fatal("the GUI's revision did not change with its configuration")
+	}
+
+	revision = clt.GUIRevision()
+	settings = clt.GUISettings()
+	settings.LDAPBindDN = "cn=%s,dc=example"
+	if err := clt.SetGUISettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	if clt.GUIRevision() == revision {
+		t.Fatal("the GUI's revision did not change with its LDAP server")
+	}
+}
+
+func TestEngineRecordsAPasswordItMakesForAGUITurnedOn(t *testing.T) {
+	clt, _, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.GUI.Enabled = false
+		cfg.GUI.RawAddress = freeGUIAddress(t)
+	})
+	if clt.IsGUIPasswordUnknown() {
+		t.Fatal("a GUI without a password has none to know")
+	}
+	if err := clt.SetGUIEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	if !clt.IsGUIPasswordUnknown() {
+		t.Fatal("nobody knows the password of a GUI turned on")
+	}
+}
+
+func TestEngineHashesTheCertificateItServes(t *testing.T) {
+	address := freeGUIAddress(t)
+	clt, _, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.GUI.Enabled = true
+		cfg.GUI.RawAddress = address
+		cfg.GUI.RawUseTLS = true
+		protectGUI(&cfg.GUI, guiConfigDir())
+	})
+
+	// The service makes its certificate when it starts to listen
+	var conn *tls.Conn
+	var err error
+	for range 100 {
+		conn, err = tls.Dial("tcp", address, &tls.Config{InsecureSkipVerify: true})
+		if err == nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	served := sha256.Sum256(conn.ConnectionState().PeerCertificates[0].Raw)
+	if got := clt.GUICertificateSHA256(); !bytes.Equal(got, served[:]) {
+		t.Fatalf("hash %x, served %x", got, served)
+	}
+}
+
 func TestEngineChangesGUISettingsWithoutRestarting(t *testing.T) {
 	address := freeGUIAddress(t)
 	clt, recorder, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
 		cfg.GUI.Enabled = true
 		cfg.GUI.RawAddress = address
-		protectGUI(&cfg.GUI)
+		protectGUI(&cfg.GUI, guiConfigDir())
 	})
 	states := recorder.history()
 	clt.guiNotice.Store("The web GUI and REST API are on another port.")

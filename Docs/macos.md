@@ -256,9 +256,39 @@ the same way:
   and about 3 MB to its disk image (now 25 MB), measured on unsigned Release archives, which are arm64 only. The fork's
   `gui` folder as resources of the app would add about 7 MB and 2 MB, and a step of its own to copy it, as the module
   in `go.mod` doesn't hold the folder's `vendor` scripts.
-- A new configuration's password is one nobody knows, so the web GUI stops at Syncthing's sign-in page until a user and
-  password are chosen on the settings page above. The REST API needs only the key, for example
-  `curl -H "X-API-Key: <key>" http://127.0.0.1:8384/rest/system/status`.
+- A new configuration's password is one nobody knows, so the web GUI's sign-in page can't be passed until a user and
+  password are chosen. The configuration can't tell that password from a chosen one, so its hash is kept in
+  `synctrain-gui-generated-password` next to it; any other way of changing the password ends that. The REST API needs
+  only the key, for example `curl -H "X-API-Key: <key>" http://127.0.0.1:8384/rest/system/status`.
+
+### Web GUI window
+
+The Syncthing Web GUI window shows the GUI inside the app, at the address and with the TLS of the configuration. Its
+self-signed certificate is trusted by its fingerprint, from `https-cert.pem`. The window opens with **Open Web GUI**
+(⌥⌘O), and **Open Web GUI in Browser** (⌥⇧⌘O) and the window's Open in Browser use the default browser. Both are in the
+app menu, the menu bar menu and the settings, under Engine access, and are unavailable while the web GUI is off or on a
+Unix socket. iOS doesn't get them: it has no engine, and a gateway's web GUI belongs to the system that runs it.
+
+- What the window shows follows the engine and the configuration, so it never keeps a page of a service that went away.
+  An engine that restarts, from the GUI's own Restart button too, takes the page along, and a new one loads once it runs
+  again; a session survives that. Any change to the GUI's configuration loads a new page as well, wherever it was made,
+  which covers a new address, TLS, and signing in being turned on or off.
+- The service listens a moment after such a change, so a page that doesn't load is tried again for about five seconds,
+  before the window says why and offers Try Again. WebKit refuses some ports outright (as 1), which then shows here.
+- With a password nobody knows, the window asks for a user and password instead of showing the sign-in page, whichever
+  entry opened it. Open Web GUI in Browser then opens the window to ask, and the browser follows once the page loads. The
+  window's toolbar also leads to the settings page, for a sign-in that can't be passed otherwise: a forgotten password,
+  or a generated one from before the app kept its hash.
+- "Use the browser's sign-in prompt" brings no prompt here, as `WKWebView` has none: the window shows the sign-in page.
+- The window stays at the GUI's own origin, as it has no way back. Anything else goes to the default browser, or to Mail
+  or Messages for the GUI's Share by Email and SMS, and other kinds of URLs go nowhere, as they could open files and
+  apps. Pages can't open windows by themselves. An address on a DNS name over plain HTTP doesn't load here, as App
+  Transport Security refuses it; Open in Browser still works.
+- Its cookies are kept apart from the other pages the app shows, some of which are the user's synced files, so that those
+  can't read the GUI's session. Syncthing's cookies aren't tied to a port.
+- The support bundle goes to Downloads, like any download in the app; the first one makes macOS ask for access to that
+  folder, and the app waits for the answer.
+- The window isn't restored at launch, when the engine isn't running yet.
 
 On iOS they stay off in the configurations the app makes, and the app has no setting for them (a custom configuration
 can have them on; they can be turned off, not on). iOS gives the app no steady time in the background to serve them.
@@ -514,9 +544,8 @@ The app menu and the menu bar menu have what Syncthing.app's menu has:
   while all are paused, the menu offers to pause it too.
 - **Rescan All Folders** (⌥⌘R) rescans each folder, as Rescan does for one.
 - **Restart Syncthing** has no shortcut, as it interrupts every transfer.
-- **Open Web GUI** (⌥⌘O) opens the address in the configuration in the default browser, and is unavailable while the web
-  GUI is off or on a Unix socket. On a new configuration it stops at the sign-in page until a user and password are
-  chosen ([Web GUI and REST API](#web-gui-and-rest-api)).
+- **Open Web GUI** (⌥⌘O) and **Open Web GUI in Browser** (⌥⇧⌘O) open the GUI in its own window or in the default browser
+  ([Web GUI window](#web-gui-window)).
 
 ## Menu bar status
 

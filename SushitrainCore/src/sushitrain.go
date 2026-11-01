@@ -864,12 +864,13 @@ func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) error {
 // them. They move off an address in use and back; the second result says what was done about them.
 func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger, filesPath string,
 	remoteManaged *remoteManagedSet, ios bool) (config.Wrapper, string, error) {
+	configDir := path.Dir(cfgFile)
 	cfg, _, err := sthome.LoadConfig(cfgFile, cert, logger, false, func(conf *config.Configuration) {
 		// The iOS app has its own interface
 		conf.GUI.Enabled = !ios
 		if !ios {
 			conf.GUI.RawAddress = defaultGUIAddress
-			protectGUI(&conf.GUI)
+			protectGUI(&conf.GUI, configDir)
 		}
 		applyAppDefaults(conf, ios)
 	})
@@ -894,7 +895,6 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 	journal := relocationJournalPath()
 	var relocationErr error
 	var finished []folderRelocation
-	configDir := path.Dir(cfgFile)
 	var guiState *guiMarker
 	guiNotice := ""
 	reportingReset := false

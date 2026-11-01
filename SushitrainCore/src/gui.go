@@ -6,7 +6,10 @@
 package sushitrain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -21,6 +24,7 @@ import (
 
 	"github.com/syncthing/syncthing/lib/build"
 	"github.com/syncthing/syncthing/lib/config"
+	"github.com/syncthing/syncthing/lib/locations"
 	"github.com/syncthing/syncthing/lib/rand"
 )
 
@@ -31,6 +35,10 @@ import (
 // The file next to the configuration that records that the app turned the web GUI on for it once (so that turning it
 // off later lasts) and, as JSON, where the app moved it when its address was in use (so that it moves back once free)
 const guiEnabledMarkerName = "synctrain-gui-enabled"
+
+// The file next to the configuration with the hash of the password protectGUI made, which the configuration can't tell
+// from one somebody chose
+const guiGeneratedPasswordName = "synctrain-gui-generated-password"
 
 // The GUI user of configurations the app makes, whose password nobody knows: tools use the API key
 const guiUser = "synctrain"
@@ -103,15 +111,35 @@ func guiIsLocalOnly(gui config.GUIConfiguration) bool {
 }
 
 // protectGUI gives a GUI without a password a user and a random password nobody knows, so that only the API key opens
-// it: other users of this computer could otherwise use it through its web pages' CSRF token
-func protectGUI(gui *config.GUIConfiguration) {
+// it: other users of this computer could otherwise use it through its web pages' CSRF token. It records the password
+// next to the configuration in configDir, for guiPasswordIsUnknown.
+func protectGUI(gui *config.GUIConfiguration, configDir string) {
 	if gui.IsAuthEnabled() {
 		return
 	}
 	gui.User = guiUser
 	if err := gui.SetPassword(rand.String(32)); err != nil {
 		slog.Warn("could not set the web GUI's password", "cause", err)
+		return
 	}
+	if err := writeFileSynced(filepath.Join(configDir, guiGeneratedPasswordName), []byte(gui.Password)); err != nil {
+		slog.Warn("could not record the web GUI's password", "cause", err)
+	}
+}
+
+// guiPasswordIsUnknown reports whether signing in to a GUI takes the password protectGUI made, so that nobody can.
+// Any other way of changing the password (the app, the GUI itself, the REST API, the file) ends that.
+func guiPasswordIsUnknown(gui config.GUIConfiguration, configDir string) bool {
+	if gui.AuthMode == config.AuthModeLDAP || !gui.IsAuthEnabled() {
+		return false
+	}
+	generated, err := os.ReadFile(filepath.Join(configDir, guiGeneratedPasswordName))
+	return err == nil && string(generated) == gui.Password
+}
+
+// guiConfigDir is the folder of the running configuration, for what the GUI keeps next to it
+func guiConfigDir() string {
+	return filepath.Dir(locations.Get(locations.ConfigFile))
 }
 
 // prepareGUI readies the web GUI of a configuration being loaded on macOS. It turns the GUI on once, where only this
@@ -138,7 +166,7 @@ func prepareGUI(conf *config.Configuration, configDir string) (*guiMarker, strin
 		if guiIsLocalOnly(conf.GUI) || conf.GUI.IsAuthEnabled() {
 			slog.Info("turning on the web GUI and REST API")
 			conf.GUI.Enabled = true
-			protectGUI(&conf.GUI)
+			protectGUI(&conf.GUI, configDir)
 		} else {
 			notice = fmt.Sprintf("The web GUI and REST API were left off, as other computers could reach them on %s without a password.",
 				conf.GUI.Address())
@@ -271,6 +299,45 @@ func (clt *Client) GUIAPIKey() string {
 	return cfg.GUI().APIKey
 }
 
+// IsGUIPasswordUnknown reports whether the GUI's password is still the one nobody knows, so that its sign-in page can't
+// be passed until somebody chooses one
+func (clt *Client) IsGUIPasswordUnknown() bool {
+	cfg := clt.cfg()
+	return cfg != nil && guiPasswordIsUnknown(cfg.GUI(), guiConfigDir())
+}
+
+// GUIRevision changes with the configuration of the GUI and its LDAP server. Each change makes the service listen
+// again, and can leave a page that was open behind: where it is, or who can sign in, may no longer be what it shows.
+func (clt *Client) GUIRevision() string {
+	cfg := clt.cfg()
+	if cfg == nil {
+		return ""
+	}
+	sum := sha256.Sum256(fmt.Appendf(nil, "%+v %+v", cfg.GUI(), cfg.LDAP()))
+	return hex.EncodeToString(sum[:])
+}
+
+// GUICertificateSHA256 is the hash of the certificate the GUI serves HTTPS with; nil until there is one. It is the
+// engine's own and, unless replaced, self-signed, so the app goes by this hash to trust it.
+func (clt *Client) GUICertificateSHA256() []byte {
+	data, err := os.ReadFile(locations.Get(locations.HTTPSCertFile))
+	if err != nil {
+		return nil
+	}
+	// A file somebody put there can hold other blocks too
+	for {
+		var block *pem.Block
+		block, data = pem.Decode(data)
+		if block == nil {
+			return nil
+		}
+		if block.Type == "CERTIFICATE" {
+			sum := sha256.Sum256(block.Bytes)
+			return sum[:]
+		}
+	}
+}
+
 // GUIStatusMessage says what the last start did about the web GUI (such as moving it off an address in use), if
 // anything
 func (clt *Client) GUIStatusMessage() string {
@@ -289,7 +356,7 @@ func (clt *Client) SetGUIEnabled(enabled bool) error {
 	return clt.changeConfiguration(func(cfg *config.Configuration) {
 		cfg.GUI.Enabled = enabled
 		if enabled && !build.IsIOS {
-			protectGUI(&cfg.GUI)
+			protectGUI(&cfg.GUI, guiConfigDir())
 		}
 	})
 }

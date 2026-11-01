@@ -594,7 +594,7 @@ func checkAdvancedGUI(from *config.Configuration, to *config.Configuration, runn
 	to.GUI = gui
 	to.LDAP.Address = ldap.Address
 	if to.GUI.Enabled && !from.GUI.Enabled {
-		protectGUI(&to.GUI)
+		protectGUI(&to.GUI, guiConfigDir())
 	}
 	return nil
 }

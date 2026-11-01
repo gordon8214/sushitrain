@@ -312,6 +312,14 @@ struct SushitrainApp: App {
 				.environment(appState)
 			}
 
+			// Not restored: the engine isn't running yet when a window comes back
+			Window("Syncthing Web GUI", id: WebGUIWindow.id) {
+				WebGUIWindow().environment(appState)
+			}
+			.defaultSize(width: 1100, height: 800)
+			.defaultLaunchBehavior(.suppressed)
+			.restorationBehavior(.disabled)
+
 			Window("Statistics", id: "stats") {
 				TotalStatisticsView(appPersistentStatistics: appState.appPersistentStatistics)
 					.environment(appState)

@@ -82,6 +82,10 @@
 							Text("Tools and scripts that use the current key lose access until they are given the new one.")
 						}
 					}
+					LabeledContent("Web GUI") {
+						WebGUIButtons(appState: appState)
+							.labelStyle(.titleOnly)
+					}
 				}
 				NavigationLink("Web GUI and REST API settings") {
 					GUISettingsView()

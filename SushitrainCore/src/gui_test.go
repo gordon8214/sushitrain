@@ -6,6 +6,8 @@
 package sushitrain
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"errors"
 	"net"
 	"os"
@@ -15,6 +17,8 @@ import (
 
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/events"
+	"github.com/syncthing/syncthing/lib/locations"
+	"github.com/syncthing/syncthing/lib/tlsutil"
 )
 
 // freeGUIAddress is an address on 127.0.0.1 that nothing listens on right now
@@ -528,5 +532,91 @@ func TestAnAddressFromTheEnvironmentIsLeftAlone(t *testing.T) {
 	path := writeGUIConfig(t, dir, true, address)
 	if gui, notice := loadGUI(t, path, false); gui.RawAddress != address || notice != "" {
 		t.Fatalf("GUI at %s (%q)", gui.RawAddress, notice)
+	}
+}
+
+func TestAGeneratedGUIPasswordIsKnownAsSuch(t *testing.T) {
+	// A new configuration, and one that gets the GUI turned on
+	dir := t.TempDir()
+	testIdentity(t, dir)
+	gui, _ := loadGUI(t, filepath.Join(dir, "config.xml"), false)
+	if gui.User != guiUser || !guiPasswordIsUnknown(gui, dir) {
+		t.Fatalf("user %q, password unknown %v", gui.User, guiPasswordIsUnknown(gui, dir))
+	}
+	dir = t.TempDir()
+	gui, _ = loadGUI(t, writeGUIConfig(t, dir, false, freeGUIAddress(t)), false)
+	if !guiPasswordIsUnknown(gui, dir) {
+		t.Fatal("the password of a GUI turned on is not known to be generated")
+	}
+
+	// Another user keeps the password, which is still nobody's
+	renamed, _, err := applyGUISettings(gui, func(s *GUISettings) { s.User = "you" })
+	if err != nil || !guiPasswordIsUnknown(renamed, dir) {
+		t.Fatalf("renaming the user: unknown %v (%v)", guiPasswordIsUnknown(renamed, dir), err)
+	}
+
+	// Each way of being able to sign in ends it
+	chosen, _, err := applyGUISettings(gui, func(s *GUISettings) { s.Password = "another" })
+	if err != nil || guiPasswordIsUnknown(chosen, dir) {
+		t.Fatalf("a chosen password: unknown %v (%v)", guiPasswordIsUnknown(chosen, dir), err)
+	}
+	open, _, err := applyGUISettings(gui, func(s *GUISettings) { s.User = "" })
+	if err != nil || guiPasswordIsUnknown(open, dir) {
+		t.Fatalf("no user: unknown %v (%v)", guiPasswordIsUnknown(open, dir), err)
+	}
+	ldap := gui
+	ldap.AuthMode = config.AuthModeLDAP
+	if guiPasswordIsUnknown(ldap, dir) {
+		t.Fatal("an LDAP server decides, not the password")
+	}
+}
+
+func TestAGUIThatHasAPasswordKeepsItsOwn(t *testing.T) {
+	dir := t.TempDir()
+	gui := config.GUIConfiguration{User: "me"}
+	if err := gui.SetPassword("mine"); err != nil {
+		t.Fatal(err)
+	}
+	hash := gui.Password
+	protectGUI(&gui, dir)
+	if gui.Password != hash || guiPasswordIsUnknown(gui, dir) {
+		t.Fatalf("password kept %v, unknown %v", gui.Password == hash, guiPasswordIsUnknown(gui, dir))
+	}
+}
+
+func TestTheGUICertificateIsHashedAsServed(t *testing.T) {
+	dir := t.TempDir()
+	certFile := filepath.Join(dir, "https-cert.pem")
+	before := locations.Get(locations.HTTPSCertFile)
+	locations.Set(locations.HTTPSCertFile, certFile)
+	t.Cleanup(func() { locations.Set(locations.HTTPSCertFile, before) })
+
+	clt := &Client{}
+	if hash := clt.GUICertificateSHA256(); hash != nil {
+		t.Fatalf("a hash without a certificate: %x", hash)
+	}
+	cert, err := tlsutil.NewCertificate(certFile, filepath.Join(dir, "https-key.pem"), "syncthing", 1, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := sha256.Sum256(cert.Certificate[0])
+	if got := clt.GUICertificateSHA256(); !bytes.Equal(got, want[:]) {
+		t.Fatalf("hash %x, served %x", got, want)
+	}
+
+	// What comes before the certificate isn't it
+	certificate, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := os.ReadFile(filepath.Join(dir, "https-key.pem"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(certFile, append(key, certificate...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := clt.GUICertificateSHA256(); !bytes.Equal(got, want[:]) {
+		t.Fatalf("with a key in front: hash %x, served %x", got, want)
 	}
 }

@@ -13496,6 +13496,52 @@
         }
       }
     },
+    "Choose a password" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passwort wählen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige una contraseña"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli una password"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パスワードを設定"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies een wachtwoord"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть пароль"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择密码"
+          }
+        }
+      }
+    },
     "Choose a port between 1 and 65535." : {
       "localizations" : {
         "de" : {
@@ -32840,6 +32886,52 @@
         }
       }
     },
+    "It is turned off, or listens on a Unix socket. Its settings are under Engine access." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie ist ausgeschaltet oder lauscht auf einem Unix-Socket. Ihre Einstellungen finden Sie unter „Zugriff auf die Engine“."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Está desactivada o escucha en un socket Unix. Sus ajustes están en Acceso al motor."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "È disattivata o in ascolto su un socket Unix. Le sue impostazioni si trovano in Accesso al motore."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフになっているか、Unixソケットで待ち受けています。設定は「エンジンへのアクセス」にあります。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hij staat uit of luistert op een Unix-socket. De instellingen staan onder Toegang tot de engine."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Його вимкнено, або він слухає на Unix-сокеті. Його налаштування є в розділі «Доступ до рушія»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它已关闭，或正在 Unix 套接字上监听。其设置位于“引擎访问”下。"
+          }
+        }
+      }
+    },
     "Items can only be moved into a folder." : {
       "localizations" : {
         "de" : {
@@ -41074,6 +41166,52 @@
         }
       }
     },
+    "Open in Browser" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Browser öffnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir en el navegador"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri nel browser"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブラウザで開く"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Openen in browser"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відкрити в браузері"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在浏览器中打开"
+          }
+        }
+      }
+    },
     "Open in Files app" : {
       "localizations" : {
         "de" : {
@@ -41761,6 +41899,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开 Web 界面"
+          }
+        }
+      }
+    },
+    "Open Web GUI in Browser" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web-GUI im Browser öffnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir interfaz web en el navegador"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri interfaccia web nel browser"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web GUIをブラウザで開く"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Webinterface in browser openen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відкрити веб-інтерфейс у браузері"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在浏览器中打开 Web 界面"
           }
         }
       }
@@ -47327,6 +47511,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "中继"
+          }
+        }
+      }
+    },
+    "Reload" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neu laden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recargar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricarica"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再読み込み"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opnieuw laden"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перезавантажити"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新加载"
           }
         }
       }
@@ -59934,6 +60164,52 @@
         }
       }
     },
+    "Syncthing is not running" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing läuft nicht"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing no se está ejecutando"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing non è in esecuzione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthingは実行されていません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing is niet actief"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing не запущено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing 未运行"
+          }
+        }
+      }
+    },
     "Syncthing is running" : {
       "localizations" : {
         "de" : {
@@ -60344,6 +60620,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Syncthing 正以此 Mac 的设备身份运行，该身份不能同时运行两次。Syncthing 退出后，Synctrain 才会启动。"
+          }
+        }
+      }
+    },
+    "Syncthing Web GUI" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing-Web-GUI"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaz web de Syncthing"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaccia web di Syncthing"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing Web GUI"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing-webinterface"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Веб-інтерфейс Syncthing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncthing Web 界面"
           }
         }
       }
@@ -68394,6 +68716,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Web 界面会请此服务器验证登录。"
+          }
+        }
+      }
+    },
+    "The web GUI asks you to sign in, and this configuration's password is a random one nobody knows. Choose the user name and password to sign in with." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Web-GUI verlangt eine Anmeldung, und das Passwort dieser Konfiguration ist ein zufälliges, das niemand kennt. Wählen Sie den Benutzernamen und das Passwort für die Anmeldung."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La interfaz web pide iniciar sesión, y la contraseña de esta configuración es una aleatoria que nadie conoce. Elige el nombre de usuario y la contraseña para iniciar sesión."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'interfaccia web richiede l'accesso, e la password di questa configurazione è casuale e nessuno la conosce. Scegli il nome utente e la password con cui accedere."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web GUIにはサインインが必要ですが、この構成のパスワードは誰も知らないランダムなものです。サインインに使うユーザー名とパスワードを設定してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De webinterface vraagt je om aan te melden, en het wachtwoord van deze configuratie is een willekeurig wachtwoord dat niemand kent. Kies de gebruikersnaam en het wachtwoord waarmee je wilt aanmelden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Веб-інтерфейс вимагає входу, а пароль цієї конфігурації випадковий, і його ніхто не знає. Виберіть ім'я користувача та пароль для входу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web 界面要求登录，而此配置的密码是一个无人知晓的随机密码。请选择用于登录的用户名和密码。"
+          }
+        }
+      }
+    },
+    "The web GUI is not available" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Web-GUI ist nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La interfaz web no está disponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'interfaccia web non è disponibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web GUIは利用できません"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De webinterface is niet beschikbaar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Веб-інтерфейс недоступний"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web 界面不可用"
           }
         }
       }
