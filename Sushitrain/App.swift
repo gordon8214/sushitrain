@@ -281,6 +281,16 @@ struct SushitrainApp: App {
 				}
 			}
 
+			// A click on a notification can also be what starts the app. The window waits for the engine, as any open window
+			// keeps the one that says how the start went from opening (`openStartWindow`).
+			.onChange(of: appState.startupState == .started && qaService.wantsConnectionRequests, initial: true) { _, wanted in
+				if wanted {
+					qaService.wantsConnectionRequests = false
+					openWindow(id: "connectionRequests")
+					NSApp.activate()
+				}
+			}
+
 			.defaultLaunchBehavior(.suppressed)
 			.restoredOnlyWithDockIcon(in: presence)
 

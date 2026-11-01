@@ -7,6 +7,7 @@
 	import UIKit
 #elseif os(macOS)
 	import AppKit
+	import UserNotifications
 	import os
 #endif
 
@@ -38,6 +39,9 @@ class QuickActionService {
 		var target: NSWindow? {
 			NSApp.orderedWindows.first { windows.contains($0) && $0.attachedSheet == nil }
 		}
+
+		/// A notification was clicked. The connection requests have a window of their own, so this is no route.
+		var wantsConnectionRequests = false
 	#endif
 }
 
@@ -48,6 +52,11 @@ class QuickActionService {
 		let incomingFiles = IncomingFiles()
 		var openWindow: OpenWindowAction? {
 			didSet { presentIncomingFiles() }
+		}
+
+		func applicationWillFinishLaunching(_ notification: Notification) {
+			// Any later and the click that started the app is lost
+			UNUserNotificationCenter.current().delegate = self
 		}
 
 		func application(_ application: NSApplication, open urls: [URL]) {
@@ -137,6 +146,27 @@ class QuickActionService {
 			guard let url = sender.representedObject as? URL else { return }
 			openWindow?(id: "bookmark", value: url)
 			NSApplication.shared.activate()
+		}
+	}
+
+	extension AppDelegate: UNUserNotificationCenterDelegate {
+		/// Without this, the system keeps a notification to itself while the app is in front
+		nonisolated func userNotificationCenter(
+			_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+			withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+		) {
+			completionHandler([.banner, .list])
+		}
+
+		/// The app's only notifications are about connection requests
+		nonisolated func userNotificationCenter(
+			_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+			withCompletionHandler completionHandler: @escaping () -> Void
+		) {
+			Task { @MainActor in
+				QuickActionService.shared.wantsConnectionRequests = true
+			}
+			completionHandler()
 		}
 	}
 #elseif os(iOS)

@@ -291,14 +291,19 @@ offers Add, Dismiss and Ignore (`pending.go`, `ConnectionRequestsView`). Dismiss
 tries again, which is soon if it keeps trying. Ignoring has the engine turn it away from now on, and can be undone under
 Advanced settings. A device's ignored folders are on its Connection tab.
 
-Outside the app, a request adds to the Dock badge, and gets a notification once, even across restarts, until it ends. More
-than three at once come as one, as a host can make up as many devices as it likes, and each shows the short ID, as a device
-can call itself anything. Permission is asked for with the first request, and a request counts as announced only once the
-system took the notification. Those IDs are kept apart from the user settings, as a change to those reaches the engine.
+A request adds to the Dock badge, and gets a notification once, even across restarts, until it ends. More than three at
+once come as one, as a host can make up as many devices as it likes, and each shows the short ID, as a device can call
+itself anything. Permission is asked for with the first request, and a request counts as announced only once the system
+took the notification. Those IDs are kept apart from the user settings, as a change to those reaches the engine.
 The engine calls `OnPendingDevicesChanged` outside the `IgnoreEvents` gate, as nobody would otherwise hear about one with no
 window open. It reads a database, so the app doesn't ask at every event, and it asks at each start, as no event comes for
-requests from before it. Clicking a notification only brings the app to the front, which `Connection Requests` in the menus
-then takes further: opening that window takes SwiftUI's environment, which a notification handler doesn't have.
+requests from before it.
+
+Clicking a notification opens the Connection requests window, with or without a Dock icon and with no window open, and a
+notification also shows as a banner with the app in front. `AppDelegate` is the notification center's delegate, set before
+launching ends, as a click can be what starts the app. Opening a window takes SwiftUI's environment, so the delegate leaves
+the click in `QuickActionService`, and the `main` scene opens the window. It does so once the engine runs: `openStartWindow`
+only opens a window when none is open, so a window any earlier would hide onboarding, the takeover or a failed start.
 
 ## File versions
 
