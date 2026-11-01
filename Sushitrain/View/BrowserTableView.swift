@@ -19,6 +19,7 @@ import QuickLook
 		@State private var sortOrder = [EntryComparator(order: .forward, sortBy: .name)]
 		@State private var entries: [SushitrainEntry] = []
 		@State private var showDownloaderFor: SushitrainEntry? = nil
+		@State private var showVersionsFor: SushitrainEntry? = nil
 
 		@SceneStorage("BrowserTableViewConfig") private var columnCustomization: TableColumnCustomization<SushitrainEntry>
 		@Environment(\.openURL) private var openURL
@@ -146,6 +147,9 @@ import QuickLook
 			.sheet(item: $showDownloaderFor) { downloadEntry in
 				self.downloaderSheet(entry: downloadEntry)
 			}
+			.sheet(item: $showVersionsFor) { entry in
+				FileVersionsView(folder: self.folder, path: entry.path())
+			}
 		}
 
 		@ViewBuilder private func itemsMenu(items: Set<SushitrainEntry.ID>) -> some View {
@@ -209,6 +213,15 @@ import QuickLook
 						}
 						.labelStyle(.titleAndIcon)
 					}
+
+					#if os(macOS)
+						if oe.canShowVersions {
+							Button("Previous Versions...", systemImage: "clock.arrow.circlepath") {
+								self.showVersionsFor = oe
+							}
+							.labelStyle(.titleAndIcon)
+						}
+					#endif
 
 					// External sharing
 					if oe.hasExternalSharingURL {

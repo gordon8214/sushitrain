@@ -12,7 +12,7 @@ replace google.golang.org/genproto v0.0.0-20220815135757-37a418bb8959 => google.
 // assets with a folder browser, Apple syncable-attribute policy, and the folder coordinator hook and per-file version
 // lookup the remote file service uses, the log facility API of the app's log settings, availability that leaves out
 // devices that ignore a file, and the lookup of what another device announced for a file (branch synctrain/v2.1.7).
-replace github.com/syncthing/syncthing => github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261031065750-727df08df39e
+replace github.com/syncthing/syncthing => github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261101005311-887ac3cbeee1
 
 require (
 	github.com/gofrs/flock v0.13.1

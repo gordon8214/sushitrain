@@ -33,7 +33,7 @@ BUILDER_LDFLAGS = -X $(SYNCTHING_BUILD).User=synctrain -X $(SYNCTHING_BUILD).Hos
 
 # The engine's version in the app, which its GUI, other devices and logs all show. Raise N when go.mod moves to another
 # commit of the fork. The engine won't start on a version lib/build can't parse.
-ENGINE_VERSION = v2.1.7-synctrain.1
+ENGINE_VERSION = v2.1.7-synctrain.3
 ENGINE_LDFLAGS = -X $(SYNCTHING_BUILD).Version=$(ENGINE_VERSION) -X $(SYNCTHING_BUILD).Tags=noupgrade,synctrain \
 	$(BUILDER_LDFLAGS)
 
@@ -49,7 +49,7 @@ clean:
 test:
 	ENGINE_VERSION=$(ENGINE_VERSION) go test ./... -tags noassets -ldflags "$(ENGINE_LDFLAGS)" -timeout 300s
 
-# Starts and restarts the engine; about 30 seconds with the race detector
+# Starts and restarts the engine; about 70 seconds with the race detector
 test-engine:
 	go test -tags noassets,engineintegration -ldflags "$(ENGINE_LDFLAGS)" -race -count=1 -timeout 600s -run Engine ./src
 

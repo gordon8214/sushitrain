@@ -123,6 +123,9 @@ type ClientDelegate interface {
 	// The engine restarted, stopped or failed (one of the EngineState constants, with an error message when it failed).
 	// Called from any thread, and not subject to IgnoreEvents.
 	OnEngineStateChanged(state string, message string)
+	// A device tried to connect without being configured, or stopped being a request. Called from any thread, and not
+	// subject to IgnoreEvents, as the user needs to hear about this with no window open.
+	OnPendingDevicesChanged()
 }
 
 var (
@@ -492,8 +495,17 @@ func (clt *Client) handleEvent(evt events.Event) {
 			clt.mutex.Unlock()
 		}
 
+	case events.PendingDevicesChanged:
+		// The data isn't read: its form differs between the places that send this event
+		clt.mutex.Lock()
+		delegate := clt.Delegate
+		clt.mutex.Unlock()
+		if delegate != nil {
+			delegate.OnPendingDevicesChanged()
+		}
+
 	case events.LocalIndexUpdated, events.DeviceDisconnected, events.ConfigSaved,
-		events.ClusterConfigReceived, events.FolderResumed, events.FolderPaused:
+		events.ClusterConfigReceived, events.FolderResumed, events.FolderPaused, events.FolderErrors:
 		// Just deliver the event
 		clt.mutex.Lock()
 		if !clt.IgnoreEvents && clt.Delegate != nil {
@@ -1147,6 +1159,12 @@ func (clt *Client) AddPeer(deviceID string) error {
 
 	deviceConfig := clt.cfg().DefaultDevice()
 	deviceConfig.DeviceID = addedDevice
+	// The name a device gave when it asked to connect, as in the web GUI
+	if internals := clt.internals(); internals != nil {
+		if pending, err := internals.PendingDevices(); err == nil {
+			deviceConfig.Name = pending[addedDevice].Name
+		}
+	}
 
 	return clt.changeConfiguration(func(cfg *config.Configuration) {
 		cfg.SetDevice(deviceConfig)
@@ -1168,6 +1186,8 @@ func (clt *Client) AddSpecialFolder(folderID string, fsType string, folderPath s
 	folderConfig.Path = folderPath
 	folderConfig.Label = folderID
 	folderConfig.Paused = false
+	// The app keeps these folders in a file system of its own, which the defaults for regular folders say nothing about
+	folderConfig.Versioning = config.VersioningConfiguration{FSType: config.FilesystemTypeBasic}
 
 	// Add to configuration
 	err := clt.changeConfiguration(func(cfg *config.Configuration) {
@@ -1208,26 +1228,26 @@ func (clt *Client) AddFolder(folderID string, folderPath string, createAsReceive
 	if overlapsEngineData(clt.expandHome(folderConfig.Path)) {
 		return ErrFolderOverlapsEngineData
 	}
+	if isInVersionsPath(clt.expandHome(folderConfig.Path), clt.cfg().Folders()) {
+		return ErrFolderInVersionsPath
+	}
 	folderConfig.Paused = false
 
 	if createAsReceiveEncrypted {
 		folderConfig.Type = config.FolderTypeReceiveEncrypted
 	}
 
-	// Add to configuration
-	err := clt.changeConfiguration(func(cfg *config.Configuration) {
-		cfg.SetFolder(folderConfig)
-	})
-	if err != nil {
-		return err
+	// Receive-encrypted folders have no ignore patterns
+	if folderConfig.Type != config.FolderTypeReceiveEncrypted {
+		if err := placeDefaultIgnores(&folderConfig, clt.cfg().DefaultIgnores().Lines); err != nil {
+			return err
+		}
 	}
 
-	if !createAsReceiveEncrypted {
-		// Create empty .stignore anyway because there may be an old one lingering around
-		return clt.internals().SetIgnores(folderID, []string{})
-	} else {
-		return nil
-	}
+	// Add to configuration
+	return clt.changeConfiguration(func(cfg *config.Configuration) {
+		cfg.SetFolder(folderConfig)
+	})
 }
 
 func (clt *Client) SetNATEnabled(enabled bool) error {

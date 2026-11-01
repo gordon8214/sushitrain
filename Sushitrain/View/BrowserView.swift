@@ -143,6 +143,7 @@ struct BrowserView: View {
 	#if os(macOS)
 		@State private var showIgnores = false
 		@State private var showStatusPopover = false
+		@State private var showDeletedFiles = false
 		@State private var isSearching = false
 	#endif
 
@@ -267,6 +268,9 @@ struct BrowserView: View {
 			}
 		}
 		#if os(macOS)
+			.sheet(isPresented: $showDeletedFiles) {
+				DeletedFilesView(folder: folder)
+			}
 			.sheet(isPresented: $showIgnores) {
 				NavigationStack {
 					self.ignoreSheetView()
@@ -715,6 +719,14 @@ struct BrowserView: View {
 					}
 					.disabled(!folder.versioningArchiveExists)
 				}
+
+				#if os(macOS)
+					if folder.canBrowseVersions() {
+						Button("Deleted Files...", systemImage: "trash.circle") {
+							showDeletedFiles = true
+						}
+					}
+				#endif
 			}
 
 			Button("Folder settings...", systemImage: "folder.badge.gearshape") {
@@ -1304,10 +1316,8 @@ extension SushitrainFolder {
 		if !self.exists() {
 			return -1
 		}
-		var error: NSError? = nil
-		let state = self.state(&error)
 		var hasher = Hasher()
-		hasher.combine(state)
+		hasher.combine(self.state())
 		hasher.combine(self.isPaused())
 		return hasher.finalize()
 	}

@@ -235,6 +235,13 @@ struct EngineMenuState: Equatable {
 	private(set) var maintenanceManager: MaintenanceManager!
 
 	fileprivate(set) var discoveredDevices: [String: [String]] = [:]
+	/// Devices that tried to connect without being known here, the most recent first
+	private(set) var pendingDevices: [SushitrainObservedDevice] = []
+	/// For the reads of the requests, which can finish in another order than they started
+	@ObservationIgnored private var pendingDevicesGeneration = 0
+	/// Folders that run, but could not scan or synchronize some items. Followed apart from the rest of the status, as
+	/// listing those takes sorting them all, which isn't for the main thread at every event.
+	@ObservationIgnored private var foldersWithFailedItems: [String] = []
 	fileprivate(set) var resolvedListenAddresses = Set<String>()
 	fileprivate(set) var lastChanges: [SushitrainChange] = []
 	fileprivate(set) var currentNetworkPath: NWPath? = nil
@@ -271,6 +278,9 @@ struct EngineMenuState: Equatable {
 			if let s = self {
 				s.eventCounter += 1
 				s.update()
+				Task {
+					await s.updateFoldersWithFailedItems()
+				}
 			}
 		}
 
@@ -582,6 +592,9 @@ struct EngineMenuState: Equatable {
 
 	/// What follows the engine's first start, also when it first starts after a failed start (Restart Syncthing)
 	private func finishStarting() {
+		#if os(macOS)
+			FileVersionsView.removeOpenedVersions()
+		#endif
 		guard !hasFinishedStarting else { return }
 		hasFinishedStarting = true
 		let client = self.client
@@ -621,6 +634,9 @@ struct EngineMenuState: Equatable {
 
 		self.startupState = .started
 		Log.info("Ready to go")
+		Task {
+			await self.updatePendingDevices()
+		}
 		#if os(macOS)
 			if let notice = self.containerMigrationNotice {
 				self.containerMigrationNotice = nil
@@ -798,6 +814,7 @@ struct EngineMenuState: Equatable {
 			update()
 			Task {
 				await self.updateDeviceSuspension()
+				await self.updatePendingDevices()
 			}
 			#if os(iOS)
 				// Changes made while it restarted were refused
@@ -923,6 +940,7 @@ struct EngineMenuState: Equatable {
 			isRunning: self.engineMenuState.isRunning,
 			failure: failure,
 			foldersWithErrors: folders.filter(\.isStoppedOnError).map(\.displayName),
+			foldersWithFailedItems: self.foldersWithFailedItems,
 			allDevicesPaused: self.engineMenuState.allDevicesPaused,
 			allFoldersPaused: !folders.isEmpty && folders.allSatisfy { $0.isPaused() },
 			connectedPeerCount: self.syncState.connectedPeerCount,
@@ -1065,9 +1083,101 @@ struct EngineMenuState: Equatable {
 		return peerIDs.compactMap { client.peer(withID: $0) }
 	}
 
+	/// Called at the pace the views refresh at, not for every event
+	func updateFoldersWithFailedItems() async {
+		guard self.hasLoadedClient else { return }
+		let client = self.client
+		let names: [String] = await Task.detached {
+			let folders = (client.folders()?.asArray() ?? []).compactMap { client.folder(withID: $0) }
+			return folders.filter { $0.failedItemCount() > 0 }.map(\.displayName)
+		}.value
+		if names != self.foldersWithFailedItems {
+			self.foldersWithFailedItems = names
+			self.updateEngineStatus()
+		}
+	}
+
+	/// Follows the requests to connect. Reads a database, so this isn't for every event; the engine says when they change,
+	/// but not for those that were there when it started. Keeps the last list when the engine can't tell, as while restarting.
+	func updatePendingDevices() async {
+		guard self.hasLoadedClient else { return }
+		self.pendingDevicesGeneration += 1
+		let generation = self.pendingDevicesGeneration
+		let client = self.client
+		let devices: [SushitrainObservedDevice]? = await Task.detached {
+			guard let list = try? client.pendingDevices() else {
+				return nil
+			}
+			return (0..<list.count()).compactMap { list.item(at: $0) }
+		}.value
+		guard let devices, generation == self.pendingDevicesGeneration else { return }
+
+		self.pendingDevices = devices
+		await self.updateBadge()
+		#if os(macOS)
+			await self.announceNewConnectionRequests()
+		#endif
+	}
+
+	#if os(macOS)
+		/// With no window open, a notification is what gets a request noticed. The IDs are kept out of the user settings, as
+		/// a change to those also goes to the engine, which rewrites its configuration, and requests can come in rapidly.
+		private static let announcedRequestsKey = "announcedConnectionRequests"
+		/// Beyond this they come as one: a host can make up as many devices as it likes
+		private static let maxRequestNotifications = 3
+
+		private func announceNewConnectionRequests() async {
+			let defaults = UserDefaults.standard
+			let requests = self.pendingDevices
+			let current = Set(requests.map(\.deviceID))
+			let announced = Set(defaults.stringArray(forKey: Self.announcedRequestsKey) ?? [])
+			let center = UNUserNotificationCenter.current()
+
+			// Who stopped asking can be announced again
+			let ended = announced.subtracting(current)
+			if !ended.isEmpty {
+				center.removeDeliveredNotifications(withIdentifiers: ended.map(Self.notificationIdentifier))
+			}
+
+			let new = requests.filter { !announced.contains($0.deviceID) }
+			var delivered = announced.intersection(current)
+			if !new.isEmpty, (try? await center.requestAuthorization(options: [.alert, .badge])) == true {
+				if new.count > Self.maxRequestNotifications {
+					let content = UNMutableNotificationContent()
+					content.title = String(localized: "Devices want to connect: \(new.count)")
+					let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+					if (try? await center.add(request)) != nil {
+						delivered.formUnion(new.map(\.deviceID))
+					}
+				}
+				else {
+					for device in new {
+						// The short ID too, as a device can call itself anything
+						let content = UNMutableNotificationContent()
+						content.title = String(localized: "A device wants to connect")
+						let shortID = SushitrainShortDeviceID(device.deviceID)
+						content.body = device.name.isEmpty ? shortID : "\(device.name) (\(shortID))"
+						let identifier = Self.notificationIdentifier(device.deviceID)
+						let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+						if (try? await center.add(request)) != nil {
+							delivered.insert(device.deviceID)
+						}
+					}
+				}
+			}
+			if delivered != announced {
+				defaults.set(Array(delivered), forKey: Self.announcedRequestsKey)
+			}
+		}
+
+		private static func notificationIdentifier(_ deviceID: String) -> String {
+			return "connection-\(deviceID)"
+		}
+	#endif
+
 	func updateBadge() async {
 		guard self.hasLoadedClient else { return }
-		let numLongTimeNoSee = (await getPeersNotSeenForALongTime()).count
+		let numLongTimeNoSee = (await getPeersNotSeenForALongTime()).count + self.pendingDevices.count
 
 		#if os(iOS)
 			DispatchQueue.main.async {
@@ -1444,6 +1554,15 @@ extension SushitrainDelegate: SushitrainClientDelegateProtocol {
 		DispatchQueue.main.async {
 			appState.update()
 			appState.changePublisher.send()
+		}
+	}
+
+	func onPendingDevicesChanged() {
+		let appState = self.appState
+		DispatchQueue.main.async {
+			Task {
+				await appState.updatePendingDevices()
+			}
 		}
 	}
 

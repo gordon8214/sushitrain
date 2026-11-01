@@ -11,6 +11,8 @@ public enum EngineStatus: Equatable, Sendable {
 	case failed(message: String)
 	/// The names of the folders that stopped on an error, such as their path being gone
 	case folderErrors(folders: [String])
+	/// The names of the folders that run, but could not scan or synchronize some of their items
+	case failedItems(folders: [String])
 	case devicesPaused
 	case foldersPaused
 	case offline
@@ -20,8 +22,8 @@ public enum EngineStatus: Equatable, Sendable {
 	/// The first that applies wins: what needs the user comes before what explains why nothing is moving, and a pause
 	/// comes before being offline, as it is the reason for that.
 	public init(
-		isRunning: Bool, failure: String?, foldersWithErrors: [String], allDevicesPaused: Bool, allFoldersPaused: Bool,
-		connectedPeerCount: Int, isTransferring: Bool
+		isRunning: Bool, failure: String?, foldersWithErrors: [String], foldersWithFailedItems: [String],
+		allDevicesPaused: Bool, allFoldersPaused: Bool, connectedPeerCount: Int, isTransferring: Bool
 	) {
 		if let failure {
 			self = .failed(message: Self.singleLine(failure))
@@ -31,6 +33,9 @@ public enum EngineStatus: Equatable, Sendable {
 		}
 		else if !foldersWithErrors.isEmpty {
 			self = .folderErrors(folders: foldersWithErrors)
+		}
+		else if !foldersWithFailedItems.isEmpty {
+			self = .failedItems(folders: foldersWithFailedItems)
 		}
 		else if allDevicesPaused {
 			self = .devicesPaused
@@ -54,7 +59,7 @@ public enum EngineStatus: Equatable, Sendable {
 	public var symbol: String {
 		switch self {
 		case .starting: return "hourglass"
-		case .failed, .folderErrors: return "exclamationmark.triangle.fill"
+		case .failed, .folderErrors, .failedItems: return "exclamationmark.triangle.fill"
 		case .devicesPaused, .foldersPaused: return "pause.circle.fill"
 		case .offline: return "folder"
 		case .syncing: return "arrow.triangle.2.circlepath"

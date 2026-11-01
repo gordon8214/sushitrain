@@ -6,7 +6,6 @@
 package sushitrain
 
 import (
-	"maps"
 	"path/filepath"
 	"testing"
 
@@ -53,86 +52,5 @@ func TestSetBandwidthLimitsKeepsUnchangedLimit(t *testing.T) {
 	}
 	if opts.MaxRecvKbps != 1221 {
 		t.Errorf("receive limit is %d KiB/s, want 1221", opts.MaxRecvKbps)
-	}
-}
-
-func TestSetVersioningKeepsUnmanagedSettings(t *testing.T) {
-	tests := []struct {
-		name       string
-		before     config.VersioningConfiguration
-		setType    string
-		wantParams map[string]string
-		wantFSPath string
-	}{
-		{
-			name: "platform history survives a staggered edit",
-			before: config.VersioningConfiguration{
-				Type:   VersioningTypeStaggered,
-				Params: map[string]string{"maxAge": "31536000", "preservePlatformData": "true"},
-				FSType: config.FilesystemTypeBasic,
-			},
-			setType:    VersioningTypeStaggered,
-			wantParams: map[string]string{"maxAge": "2592000", "preservePlatformData": "true"},
-		},
-		{
-			name: "platform history is dropped for another type",
-			before: config.VersioningConfiguration{
-				Type:   VersioningTypeStaggered,
-				Params: map[string]string{"maxAge": "31536000", "preservePlatformData": "true"},
-				FSType: config.FilesystemTypeBasic,
-			},
-			setType:    VersioningTypeSimple,
-			wantParams: map[string]string{"keep": "5", "cleanoutDays": "7"},
-		},
-		{
-			name: "custom versions path survives",
-			before: config.VersioningConfiguration{
-				Type:   VersioningTypeTrashcan,
-				Params: map[string]string{"cleanoutDays": "0"},
-				FSPath: "/elsewhere/versions",
-				FSType: config.FilesystemTypeBasic,
-			},
-			setType:    VersioningTypeTrashcan,
-			wantParams: map[string]string{"cleanoutDays": "7"},
-			wantFSPath: "/elsewhere/versions",
-		},
-		{
-			name:       "enabling versioning",
-			before:     config.VersioningConfiguration{},
-			setType:    VersioningTypeTrashcan,
-			wantParams: map[string]string{"cleanoutDays": "7"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			folder := newFolderBaseTestFolder(t, filepath.Join(t.TempDir(), "folder"), false)
-			if err := folder.changeFolderConfiguration(func(fc *config.FolderConfiguration) {
-				fc.Versioning = tt.before
-			}); err != nil {
-				t.Fatal(err)
-			}
-
-			if err := folder.SetVersioning(tt.setType, 5, 7, 30, 3600); err != nil {
-				t.Fatal(err)
-			}
-
-			got := folder.folderConfiguration().Versioning
-			if got.Type != tt.setType {
-				t.Errorf("type is %q, want %q", got.Type, tt.setType)
-			}
-			if !maps.Equal(got.Params, tt.wantParams) {
-				t.Errorf("params are %v, want %v", got.Params, tt.wantParams)
-			}
-			if got.FSPath != tt.wantFSPath {
-				t.Errorf("versions path is %q, want %q", got.FSPath, tt.wantFSPath)
-			}
-			if got.FSType != config.FilesystemTypeBasic {
-				t.Errorf("versions filesystem type is %q, want basic", got.FSType)
-			}
-			if got.CleanupIntervalS != 3600 {
-				t.Errorf("cleanup interval is %d s, want 3600", got.CleanupIntervalS)
-			}
-		})
 	}
 }

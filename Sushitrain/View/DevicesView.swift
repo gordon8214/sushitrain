@@ -401,6 +401,11 @@ struct LatencyView: View {
 			case discoveredDevice(String)
 		}
 
+		private var pendingDeviceIDs: [String] {
+			let known = Set(self.peers.map { $0.deviceID() })
+			return appState.pendingDevices.map(\.deviceID).filter { !known.contains($0) }
+		}
+
 		@Environment(AppState.self) private var appState
 
 		@State private var loading = true
@@ -599,6 +604,12 @@ struct LatencyView: View {
 						rows: {
 							Section { ForEach(self.peers) { peer in TableRow(DevicesGridRow.connectedDevice(peer)) } }
 
+							if !pendingDeviceIDs.isEmpty {
+								Section("Connection requests") {
+									ForEach(pendingDeviceIDs, id: \.self) { devID in TableRow(DevicesGridRow.discoveredDevice(devID)) }
+								}
+							}
+
 							if !discoveredNewDevices.isEmpty {
 								Section("Discovered devices") {
 									ForEach(discoveredNewDevices, id: \.self) { devID in TableRow(DevicesGridRow.discoveredDevice(devID)) }
@@ -737,7 +748,11 @@ struct LatencyView: View {
 			self.folders = await appState.folders().sorted()
 
 			let peerIDs = peers.map { $0.deviceID() }
-			self.discoveredNewDevices = Array(appState.discoveredDevices.keys).filter({ d in !peerIDs.contains(d) })
+			// A device that asked to connect is listed as such
+			let pendingIDs = appState.pendingDevices.map(\.deviceID)
+			self.discoveredNewDevices = Array(appState.discoveredDevices.keys).filter({ d in
+				!peerIDs.contains(d) && !pendingIDs.contains(d)
+			})
 
 			self.loading = false
 			self.updateMeasurements()

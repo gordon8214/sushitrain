@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -238,24 +237,6 @@ func (fld *Folder) VersioningType() string {
 	return fc.Versioning.Type
 }
 
-func (fld *Folder) VersioningParam(name string) string {
-	fc := fld.folderConfiguration()
-	if fc == nil || fc.Versioning.Params == nil {
-		return ""
-	}
-
-	return fc.Versioning.Params[name]
-}
-
-func (fld *Folder) VersioningCleanupIntervalSeconds() int {
-	fc := fld.folderConfiguration()
-	if fc == nil {
-		return 0
-	}
-
-	return fc.Versioning.CleanupIntervalS
-}
-
 func (fld *Folder) VersioningPath() string {
 	fc := fld.folderConfiguration()
 	if fc == nil || fc.Versioning.Type == "" {
@@ -281,54 +262,27 @@ func (fld *Folder) VersioningPath() string {
 	return ""
 }
 
-func (fld *Folder) SetVersioning(versioningType string, keep int, cleanoutDays int, maxAgeDays int, cleanupIntervalSeconds int) error {
-	return fld.changeFolderConfiguration(func(fc *config.FolderConfiguration) {
-		if versioningType == VersioningTypeNone {
-			fc.Versioning.Reset()
-			return
-		}
-
-		// Keep parameters this function doesn't set (such as preservePlatformData), as the web GUI does
-		params := maps.Clone(fc.Versioning.Params)
-		if params == nil {
-			params = make(map[string]string)
-		}
-		delete(params, "keep")
-		delete(params, "cleanoutDays")
-		delete(params, "maxAge")
-		switch versioningType {
-		case VersioningTypeSimple:
-			params["keep"] = fmt.Sprintf("%d", keep)
-			params["cleanoutDays"] = fmt.Sprintf("%d", cleanoutDays)
-		case VersioningTypeTrashcan:
-			params["cleanoutDays"] = fmt.Sprintf("%d", cleanoutDays)
-		case VersioningTypeStaggered:
-			params["maxAge"] = fmt.Sprintf("%d", maxAgeDays*24*60*60)
-		default:
-			return
-		}
-
-		// The versioner refuses to start with platform history for any other type
-		if versioningType != VersioningTypeStaggered {
-			delete(params, "preservePlatformData")
-		}
-
-		fc.Versioning.Type = versioningType
-		fc.Versioning.Params = params
-		fc.Versioning.CleanupIntervalS = cleanupIntervalSeconds
-		// Keep a custom versions path
-		if fc.Versioning.FSType == "" {
-			fc.Versioning.FSType = config.FilesystemTypeBasic
-		}
-	})
+// State is the folder's state as the engine names it, which is "error" when it stopped on one (see StateError), and empty
+// while the folder isn't running. These are two calls as gomobile returns no value along with an error.
+func (fld *Folder) State() string {
+	state, _ := fld.stateAndError()
+	return state
 }
 
-func (fld *Folder) State() (string, error) {
-	if fld.client.internals() == nil {
+// StateError is the engine's message when the folder stopped on an error, and empty otherwise
+func (fld *Folder) StateError() string {
+	if _, err := fld.stateAndError(); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+func (fld *Folder) stateAndError() (string, error) {
+	internals := fld.client.internals()
+	if internals == nil {
 		return "", nil
 	}
-
-	state, _, err := fld.client.internals().FolderState(fld.FolderID)
+	state, _, err := internals.FolderState(fld.FolderID)
 	return state, err
 }
 
@@ -771,7 +725,7 @@ func (fld *Folder) SetIgnoreLines(lines *ListOfStrings) error {
 	slog.Info("set ignore", "lines", len(lines.data))
 	fld.forgetIgnores()
 
-	state, err := fld.State()
+	state, err := fld.stateAndError()
 	if err != nil {
 		return err
 	}
@@ -942,6 +896,27 @@ func (fld *Folder) IsBlockIndexingEnabled() bool {
 		return false
 	}
 	return fc.BlockIndexing
+}
+
+// changeFolderCopy gives block a copy of the folder's configuration, which replaces it only if block returns no error.
+// That error comes back as it is.
+func (fld *Folder) changeFolderCopy(block func(*config.FolderConfiguration) error) error {
+	var invalid error
+	err := fld.client.changeConfiguration(func(cfg *config.Configuration) {
+		folder, _, ok := cfg.Folder(fld.FolderID)
+		if !ok {
+			invalid = errFolderConfigNotFound
+			return
+		}
+		changed := folder.Copy()
+		if invalid = block(&changed); invalid == nil {
+			cfg.SetFolder(changed)
+		}
+	})
+	if invalid != nil {
+		return invalid
+	}
+	return err
 }
 
 func (fld *Folder) changeFolderConfiguration(modifier func(*config.FolderConfiguration)) error {

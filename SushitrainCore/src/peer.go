@@ -149,6 +149,27 @@ func (peer *Peer) IntroducedBy() *Peer {
 	return peer.client.PeerWithID(did.String())
 }
 
+// changeDeviceCopy gives block a copy of the device's configuration, which replaces it only if block returns no error.
+// That error comes back as it is.
+func (peer *Peer) changeDeviceCopy(block func(*config.DeviceConfiguration) error) error {
+	var invalid error
+	err := peer.client.changeConfiguration(func(cfg *config.Configuration) {
+		device, _, ok := cfg.Device(peer.deviceID)
+		if !ok {
+			invalid = errDeviceConfigNotFound
+			return
+		}
+		changed := device.Copy()
+		if invalid = block(&changed); invalid == nil {
+			cfg.SetDevice(changed)
+		}
+	})
+	if invalid != nil {
+		return invalid
+	}
+	return err
+}
+
 func (peer *Peer) changeDeviceConfiguration(block func(*config.DeviceConfiguration)) error {
 	return peer.client.changeConfiguration(func(cfg *config.Configuration) {
 		dc, ok := cfg.DeviceMap()[peer.deviceID]

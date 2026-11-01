@@ -101,80 +101,78 @@ struct FolderStatusDescription {
 		if !folder.exists() {
 			(self.text, self.systemImage, self.color) = (String(localized: "Folder does not exist"), "trash", .red)
 		}
+		else if folder.isPaused() {
+			(self.text, self.systemImage, self.color) = (String(localized: "Synchronization paused"), "pause.circle", .gray)
+		}
+		else if folder.isStoppedOnError {
+			// Before anything about other devices: a folder that stopped has this to say whether or not they are connected
+			(self.text, self.systemImage, self.color, self.additionalText) = Self.describeError(of: folder)
+		}
 		else {
-			let isAvailable = folder.connectedPeerCount() > 0
+			let peerCount = (folder.sharedWithDeviceIDs()?.count() ?? 1) - 1
+			let peerStatusText = "\(folder.connectedPeerCount())/\(peerCount)"
 
-			if !folder.isPaused() {
-				let peerStatusText: String
-				if folder.exists() {
-					let peerCount = (folder.sharedWithDeviceIDs()?.count() ?? 1) - 1
-					peerStatusText = "\(folder.connectedPeerCount())/\(peerCount)"
-				}
-				else {
-					peerStatusText = ""
-				}
-
-				if !isAvailable {
-					(self.text, self.systemImage, self.color) = (String(localized: "Not connected"), "network.slash", .gray)
-					self.badge = peerStatusText
-				}
-				else {
-					var error: NSError? = nil
-					let status = folder.state(&error)
-
-					switch status {
-					case "idle", "sync-waiting", "scan-waiting", "clean-waiting":
-						(self.text, self.systemImage, self.color) = (String(localized: "Synchronized"), "checkmark.circle.fill", .green)
-						self.badge = peerStatusText
-
-					case "syncing":
-						(self.text, self.systemImage, self.color) = (
-							String(localized: "Synchronizing..."), "bolt.horizontal.circle", .orange
-						)
-
-					case "scanning":
-						(self.text, self.systemImage, self.color) = (String(localized: "Scanning..."), "bolt.horizontal.circle", .orange)
-
-					case "sync-preparing":
-						(self.text, self.systemImage, self.color) = (
-							String(localized: "Preparing to synchronize..."), "bolt.horizontal.circle", .orange
-						)
-
-					case "cleaning":
-						(self.text, self.systemImage, self.color) = (
-							String(localized: "Cleaning up..."), "bolt.horizontal.circle", .orange
-						)
-
-					case "error":
-						(self.text, self.systemImage, self.color) = (String(localized: "Error"), "exclamationmark.triangle.fill", .red)
-						self.additionalText = error?.localizedDescription
-
-					default:
-						if !folder.isDiskSpaceSufficient() {
-							(self.text, self.systemImage, self.color) = (
-								String(localized: "Insufficient free storage space"), "exclamationmark.triangle.fill", .red
-							)
-						}
-						// Error message is "fcntl /private/...: too many open files"
-						else if let err = error, folder.isWatcherEnabled() && err.localizedDescription.contains("too many open files") {
-							(self.text, self.systemImage, self.color) = (
-								String(localized: "Folder too large for watching"), "exclamationmark.triangle.fill", .red
-							)
-							self.additionalText = String(localized: "Disabling 'watch for changes' for this folder may resolve the issue.")
-						}
-						else {
-							(self.text, self.systemImage, self.color) = (
-								String(localized: "Unknown state"), "exclamationmark.triangle.fill", .red
-							)
-							self.additionalText = error?.localizedDescription
-						}
-					}
-				}
+			if folder.connectedPeerCount() == 0 {
+				(self.text, self.systemImage, self.color) = (String(localized: "Not connected"), "network.slash", .gray)
+				self.badge = peerStatusText
 			}
 			else {
-				(self.text, self.systemImage, self.color) = (String(localized: "Synchronization paused"), "pause.circle", .gray)
+				switch folder.state() {
+				case "idle", "sync-waiting", "scan-waiting", "clean-waiting":
+					// A folder that is done with what it could do isn't necessarily done
+					if folder.failedItemCount() > 0 {
+						(self.text, self.systemImage, self.color) = (
+							String(localized: "Out of sync"), "exclamationmark.triangle.fill", .orange
+						)
+					}
+					else {
+						(self.text, self.systemImage, self.color) = (
+							String(localized: "Synchronized"), "checkmark.circle.fill", .green
+						)
+					}
+					self.badge = peerStatusText
+
+				case "syncing":
+					(self.text, self.systemImage, self.color) = (
+						String(localized: "Synchronizing..."), "bolt.horizontal.circle", .orange
+					)
+
+				case "scanning":
+					(self.text, self.systemImage, self.color) = (String(localized: "Scanning..."), "bolt.horizontal.circle", .orange)
+
+				case "sync-preparing":
+					(self.text, self.systemImage, self.color) = (
+						String(localized: "Preparing to synchronize..."), "bolt.horizontal.circle", .orange
+					)
+
+				case "cleaning":
+					(self.text, self.systemImage, self.color) = (
+						String(localized: "Cleaning up..."), "bolt.horizontal.circle", .orange
+					)
+
+				default:
+					(self.text, self.systemImage, self.color) = (
+						String(localized: "Unknown state"), "exclamationmark.triangle.fill", .red
+					)
+				}
 			}
 		}
+	}
+
+	/// Two errors have an explanation of their own. Anything else is best told in the engine's words.
+	private static func describeError(of folder: SushitrainFolder) -> (String, String, Color, String?) {
+		let message = folder.stateError()
+		if !folder.isDiskSpaceSufficient() {
+			return (String(localized: "Insufficient free storage space"), "exclamationmark.triangle.fill", .red, nil)
+		}
+		// Error message is "fcntl /private/...: too many open files"
+		if folder.isWatcherEnabled() && message.contains("too many open files") {
+			return (
+				String(localized: "Folder too large for watching"), "exclamationmark.triangle.fill", .red,
+				String(localized: "Disabling 'watch for changes' for this folder may resolve the issue.")
+			)
+		}
+		return (String(localized: "Error"), "exclamationmark.triangle.fill", .red, message)
 	}
 
 	var fullText: String {
@@ -236,8 +234,7 @@ struct FolderStatusView: View {
 	}
 
 	@concurrent private func update() async {
-		var error: NSError? = nil
-		let status = folder.state(&error)
+		let status = folder.state()
 		let statistics = try? folder.statistics()
 		let folderStatusDescription = FolderStatusDescription(folder)
 
@@ -249,16 +246,17 @@ struct FolderStatusView: View {
 	}
 
 	@ViewBuilder private func statusLabel() -> some View {
-		let folderStatus = FolderStatusDescription(folder)
-
-		#if os(iOS)
-			Label(folderStatus.text, systemImage: folderStatus.systemImage)
-				.foregroundStyle(folderStatus.color)
-				.badge(Text(folderStatus.badge).foregroundStyle(folderStatus.color))
-		#else
-			Label(folderStatus.fullText, systemImage: folderStatus.systemImage)
-				.foregroundStyle(folderStatus.color)
-		#endif
+		// Worked out in update, as it asks the engine for more than a view's body should wait for
+		if let folderStatus = self.folderStatusDescription {
+			#if os(iOS)
+				Label(folderStatus.text, systemImage: folderStatus.systemImage)
+					.foregroundStyle(folderStatus.color)
+					.badge(Text(folderStatus.badge).foregroundStyle(folderStatus.color))
+			#else
+				Label(folderStatus.fullText, systemImage: folderStatus.systemImage)
+					.foregroundStyle(folderStatus.color)
+			#endif
+		}
 	}
 }
 
@@ -671,6 +669,10 @@ struct FolderView: View {
 	}
 
 	@ViewBuilder private func generalSection() -> some View {
+		#if os(macOS)
+			FolderStatusSection(folder: self.folder)
+		#endif
+
 		if self.isPhotoFolder {
 			PhotoFolderSectionView()
 		}
@@ -1174,181 +1176,6 @@ private struct FolderGenerateThumbnailsView: View {
 	}
 }
 
-private struct FolderVersioningSettingsView: View {
-	private enum VersioningType: String, CaseIterable {
-		case disabled = ""
-		case simple = "simple"
-		case trashcan = "trashcan"
-		case staggered = "staggered"
-	}
-
-	private struct VersioningSettings: Equatable {
-		var type = VersioningType.disabled
-		var keep = 5
-		var cleanoutDays = 0
-		var maxAgeDays = 365
-		var cleanupIntervalMinutes = 60
-	}
-
-	let folder: SushitrainFolder
-
-	@State private var settings = VersioningSettings()
-	// What the folder configuration holds, so that showing the loaded settings doesn't write them back
-	@State private var savedSettings: VersioningSettings? = nil
-	@State private var error: ErrorMessage? = nil
-
-	private var versioningDescription: String {
-		switch settings.type {
-		case .disabled:
-			return String(localized: "Synctrain will not keep old copies of files for this folder.")
-		case .simple:
-			return String(
-				localized:
-					"Synctrain moves files replaced or deleted by remote changes into the versions folder and keeps the configured number of old versions per file."
-			)
-		case .trashcan:
-			return String(
-				localized:
-					"Synctrain moves files replaced or deleted by remote changes into the versions folder, replacing any older version with the same name."
-			)
-		case .staggered:
-			return String(
-				localized:
-					"Synctrain moves files replaced or deleted by remote changes into the versions folder, then keeps fewer versions as they age."
-			)
-		}
-	}
-
-	var body: some View {
-		Form {
-			Section {
-				Text(
-					"Versioning applies to changes *received from other devices*. When versioning is enabled, older versions of files that are changed by other devices are saved locally for a while. Versioning does **not** keep older versions of files that are modified locally on this device. See [the Syncthing documentation on versioning](https://docs.syncthing.net/users/versioning.html) for further information."
-				)
-			} header: {
-				Label("About versioning", systemImage: "questionmark.circle")
-			}
-
-			Section {
-				Picker("Versioning", selection: $settings.type) {
-					Text("Disabled").tag(VersioningType.disabled)
-					Text("Simple").tag(VersioningType.simple)
-					Text("Trash can").tag(VersioningType.trashcan)
-					Text("Staggered").tag(VersioningType.staggered)
-				}
-				.pickerStyle(.menu)
-			} footer: {
-				Text(versioningDescription)
-			}
-
-			if settings.type == .simple {
-				Section {
-					Stepper("Keep \(settings.keep) versions", value: $settings.keep, in: 1...999)
-
-					LabeledContent {
-						TextField("", value: $settings.cleanoutDays, format: .number)
-							.multilineTextAlignment(.trailing)
-					} label: {
-						Text("Maximum age (days)")
-					}
-				} footer: {
-					Text("Set maximum age to 0 to keep versions regardless of age.")
-				}
-			}
-			else if settings.type == .trashcan {
-				Section {
-					LabeledContent {
-						TextField("", value: $settings.cleanoutDays, format: .number)
-							.multilineTextAlignment(.trailing)
-					} label: {
-						Text("Maximum age (days)")
-					}
-				} footer: {
-					Text("Set maximum age to 0 to keep deleted files until you remove them manually.")
-				}
-			}
-			else if settings.type == .staggered {
-				Section {
-					LabeledContent {
-						TextField("", value: $settings.maxAgeDays, format: .number)
-							.multilineTextAlignment(.trailing)
-					} label: {
-						Text("Maximum age (days)")
-					}
-				} footer: {
-					Text("Set maximum age to 0 to keep versions regardless of age.")
-				}
-			}
-
-			if settings.type != .disabled {
-				Section {
-					LabeledContent {
-						TextField("", value: $settings.cleanupIntervalMinutes, format: .number)
-							.multilineTextAlignment(.trailing)
-					} label: {
-						Text("Cleanup interval (minutes)")
-					}
-				}
-			}
-		}
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
-		.navigationTitle("File versioning")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
-		.onAppear {
-			load()
-		}
-		.onChange(of: settings) { _, newSettings in save(newSettings) }
-		.errorAlert($error)
-	}
-
-	private func load() {
-		var loaded = VersioningSettings()
-		// A folder without versioning shows the defaults, which enabling versioning then saves
-		if let type = VersioningType(rawValue: folder.versioningType()), type != .disabled {
-			loaded.type = type
-			loaded.keep = intVersioningParam("keep", defaultValue: loaded.keep)
-			loaded.cleanoutDays = intVersioningParam("cleanoutDays", defaultValue: loaded.cleanoutDays)
-
-			// Syncthing keeps staggered versions forever at a maximum age of 0, and doesn't clean up periodically
-			// at a cleanup interval of 0
-			let maxAgeSeconds = intVersioningParam("maxAge", defaultValue: loaded.maxAgeDays * 24 * 60 * 60)
-			loaded.maxAgeDays = maxAgeSeconds > 0 ? max(1, maxAgeSeconds / (24 * 60 * 60)) : 0
-			let cleanupIntervalSeconds = folder.versioningCleanupIntervalSeconds()
-			loaded.cleanupIntervalMinutes = cleanupIntervalSeconds > 0 ? max(1, cleanupIntervalSeconds / 60) : 0
-		}
-		savedSettings = loaded
-		settings = loaded
-	}
-
-	private func intVersioningParam(_ name: String, defaultValue: Int) -> Int {
-		let value = folder.versioningParam(name)
-		return Int(value) ?? defaultValue
-	}
-
-	private func save(_ newSettings: VersioningSettings) {
-		guard let savedSettings, newSettings != savedSettings else {
-			return
-		}
-
-		do {
-			try folder.setVersioning(
-				newSettings.type.rawValue,
-				keep: max(1, newSettings.keep),
-				cleanoutDays: max(0, newSettings.cleanoutDays),
-				maxAgeDays: max(0, newSettings.maxAgeDays),
-				cleanupIntervalSeconds: max(0, newSettings.cleanupIntervalMinutes) * 60)
-			self.savedSettings = newSettings
-		}
-		catch {
-			self.error = ErrorMessage(error)
-		}
-	}
-}
-
 private struct AdvancedFolderSettingsView: View {
 	@Environment(AppState.self) private var appState
 	let folder: SushitrainFolder
@@ -1362,6 +1189,10 @@ private struct AdvancedFolderSettingsView: View {
 	@State private var showThumbnailsSettingsSheet: Bool = false
 	@State private var showVersioningSettingsSheet: Bool = false
 	@State private var showExternalSharingSettingsSheet: Bool = false
+	#if os(macOS)
+		@State private var showSyncSettingsSheet: Bool = false
+		@State private var showMetadataSettingsSheet: Bool = false
+	#endif
 
 	var body: some View {
 		self.subSettingsSection()
@@ -1388,6 +1219,28 @@ private struct AdvancedFolderSettingsView: View {
 						}
 					}
 				}
+			#endif
+
+			#if os(macOS)
+				Button("Synchronization options...", systemImage: "slider.horizontal.3") {
+					showSyncSettingsSheet = true
+				}
+				.sheet(isPresented: $showSyncSettingsSheet) {
+					NavigationStack {
+						FolderSyncSettingsView(folder: folder)
+					}
+				}
+				.buttonStyle(.link)
+
+				Button("Metadata...", systemImage: "tag") {
+					showMetadataSettingsSheet = true
+				}
+				.sheet(isPresented: $showMetadataSettingsSheet) {
+					NavigationStack {
+						FolderMetadataSettingsView(folder: folder)
+					}
+				}
+				.buttonStyle(.link)
 			#endif
 
 			// Thumbnail settings button
@@ -1417,11 +1270,6 @@ private struct AdvancedFolderSettingsView: View {
 				.sheet(isPresented: $showVersioningSettingsSheet) {
 					NavigationStack {
 						FolderVersioningSettingsView(folder: folder)
-							.toolbar {
-								SheetButton(role: .done) {
-									showVersioningSettingsSheet = false
-								}
-							}
 					}
 				}
 				#if os(macOS)

@@ -25,6 +25,10 @@ struct DeviceView: View {
 	@State private var otherFolders: [SushitrainFolder] = []
 	@State private var lastAddress: String = ""
 	@State private var showAddresses: Bool = false
+	#if os(macOS)
+		@State private var showSettings: Bool = false
+		@State private var ignoredFolders: [SushitrainIgnoredFolder] = []
+	#endif
 	@State private var showConfirmUnlink = false
 	@State private var editSharingWith: SushitrainFolder? = nil
 
@@ -291,6 +295,28 @@ struct DeviceView: View {
 		}
 		#if os(macOS)
 			.buttonStyle(.link)
+		#endif
+
+		#if os(macOS)
+			if !device.isSelf() {
+				Button("Connection options...", systemImage: "slider.horizontal.3") {
+					showSettings = true
+				}
+				.sheet(isPresented: $showSettings) {
+					NavigationStack {
+						DeviceSettingsView(device: device)
+					}
+				}
+				.buttonStyle(.link)
+				.task(id: "\(device.deviceID()) \(appState.eventCounter)") {
+					let list = device.ignoredFolders()
+					ignoredFolders = (0..<(list?.count() ?? 0)).compactMap { list?.item(at: $0) }
+				}
+
+				if !ignoredFolders.isEmpty {
+					DeviceIgnoredFoldersSection(device: device, folders: ignoredFolders)
+				}
+			}
 		#endif
 	}
 

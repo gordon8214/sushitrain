@@ -112,7 +112,7 @@ func (o *EngineOptions) MinHomeDiskFreeUnits() *ListOfStrings {
 func (o *EngineOptions) applyTo(opts *config.OptionsConfiguration) error {
 	saved := o.saved
 	if o.MinHomeDiskFree != saved.MinHomeDiskFree || o.MinHomeDiskFreeUnit != saved.MinHomeDiskFreeUnit {
-		size, err := o.minHomeDiskFree()
+		size, err := parseMinDiskFree(o.MinHomeDiskFree, o.MinHomeDiskFreeUnit, o.MinHomeDiskFreeUnits().data)
 		if err != nil {
 			return err
 		}
@@ -164,15 +164,16 @@ func (o *EngineOptions) applyTo(opts *config.OptionsConfiguration) error {
 	return nil
 }
 
-func (o *EngineOptions) minHomeDiskFree() (config.Size, error) {
-	value, err := strconv.ParseFloat(strings.TrimSpace(o.MinHomeDiskFree), 64)
+// parseMinDiskFree reads a minimum of free disk space, in one of the units
+func parseMinDiskFree(text string, unit string, units []string) (config.Size, error) {
+	value, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
 	if err != nil || math.IsNaN(value) || value < 0 {
 		return config.Size{}, errors.New("minimum free disk space: enter a number of 0 or more")
 	}
-	if !slices.Contains(o.MinHomeDiskFreeUnits().data, o.MinHomeDiskFreeUnit) {
+	if !slices.Contains(units, unit) {
 		return config.Size{}, errors.New("minimum free disk space: choose one of the units")
 	}
-	size := config.Size{Value: value, Unit: o.MinHomeDiskFreeUnit}
+	size := config.Size{Value: value, Unit: unit}
 	if math.IsInf(size.BaseValue(), 0) {
 		return config.Size{}, errors.New("minimum free disk space: enter a smaller number")
 	}
@@ -187,12 +188,21 @@ func setNumberOption(label string, text string, saved string, option *int, minim
 	if text == saved {
 		return nil
 	}
-	number, err := strconv.Atoi(strings.TrimSpace(text))
-	if err != nil || number < minimum || number > maximum {
-		return fmt.Errorf("%s: enter a whole number from %d to %d", label, minimum, maximum)
+	number, err := parseNumberOption(label, text, minimum, maximum)
+	if err != nil {
+		return err
 	}
 	*option = number
 	return nil
+}
+
+// parseNumberOption reads a number from minimum to maximum
+func parseNumberOption(label string, text string, minimum int, maximum int) (int, error) {
+	number, err := strconv.Atoi(strings.TrimSpace(text))
+	if err != nil || number < minimum || number > maximum {
+		return 0, fmt.Errorf("%s: enter a whole number from %d to %d", label, minimum, maximum)
+	}
+	return number, nil
 }
 
 // checkAuditFile reports what keeps the audit log from being written where the options say, as that would otherwise
@@ -227,11 +237,21 @@ func (o *EngineOptions) checkAuditFile(folders map[string]config.FolderConfigura
 func isInSynchronizedFolder(path string, folders map[string]config.FolderConfiguration) bool {
 	for _, folder := range folders {
 		root, err := fs.ExpandTilde(folder.Path)
-		if err != nil || !isNativeFilesystem(folder.FilesystemType) {
-			continue
-		}
-		if relative, err := filepath.Rel(root, path); err == nil && filepath.IsLocal(relative) {
+		if err == nil && isNativeFilesystem(folder.FilesystemType) && isAtOrInside(path, root) {
 			return true
+		}
+	}
+	return false
+}
+
+// isAtOrInside reports whether a path is a directory or in it, the way the disk sees that: whatever the case of the
+// letters, and following symbolic links
+func isAtOrInside(p string, directory string) bool {
+	for _, candidate := range withResolved(p) {
+		for _, existing := range withResolved(directory) {
+			if pathKey(candidate) == pathKey(existing) || isInsideDirectory(candidate, existing) {
+				return true
+			}
 		}
 	}
 	return false

@@ -25,6 +25,9 @@ struct EntryInfoView: View {
 	@State private var fullyAvailableOnDevices: [SushitrainPeer]? = nil
 	@State private var availabilityError: Error? = nil
 	@State private var showEncryptionSheet: Bool = false
+	#if os(macOS)
+		@State private var showVersions: Bool = false
+	#endif
 	@State private var conflictingEntries: [SushitrainEntry]? = nil
 	@State private var openWithAppURL: URL? = nil
 	@State private var localPath: String? = nil
@@ -165,6 +168,13 @@ struct EntryInfoView: View {
 				self.copyStreamingURLSheet()
 			}
 
+			#if os(macOS)
+				.sheet(isPresented: $showVersions) {
+					if let folder = self.entry.folder {
+						FileVersionsView(folder: folder, path: self.entry.path())
+					}
+				}
+			#endif
 			.sheet(isPresented: $showEncryptionSheet) {
 				EncryptionView(entry: self.entry)
 			}
@@ -194,6 +204,10 @@ struct EntryInfoView: View {
 								showArchive = self.entry.archive()
 							}
 							.disabled(!self.entry.isArchive())
+
+							if self.entry.canShowVersions {
+								Button("Previous Versions...", systemImage: "clock.arrow.circlepath") { showVersions = true }
+							}
 						} label: {
 							Label("Advanced", systemImage: "ellipsis")
 						}

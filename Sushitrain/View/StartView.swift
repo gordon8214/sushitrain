@@ -693,8 +693,25 @@ struct StartView: View {
 	}
 
 	@ViewBuilder private func deviceIssuesSection() -> some View {
-		if showNoPeersEnabledWarning || !longTimeNotSeenDevices.isEmpty {
+		if showNoPeersEnabledWarning || !longTimeNotSeenDevices.isEmpty || !appState.pendingDevices.isEmpty {
 			Section("Devices that need your attention") {
+				// Devices that asked to connect
+				#if os(macOS)
+					// In a window of its own: this row goes as soon as the last request does, which would close what it opened
+					if !appState.pendingDevices.isEmpty {
+						Button {
+							openWindow(id: "connectionRequests")
+						} label: {
+							Label(
+								"Devices that want to connect: \(appState.pendingDevices.count)",
+								systemImage: "person.crop.circle.badge.plus"
+							)
+							.foregroundStyle(.orange)
+						}
+						.buttonStyle(.link)
+					}
+				#endif
+
 				// All devices are disabled
 				if showNoPeersEnabledWarning {
 					VStack(alignment: .leading, spacing: 5) {
@@ -836,9 +853,7 @@ struct StartView: View {
 			if folder.isPaused() {
 				return false
 			}
-			var error: NSError? = nil
-			let state = folder.state(&error)
-			if !SushitrainFolder.knownGoodStates.contains(state) {
+			if !SushitrainFolder.knownGoodStates.contains(folder.state()) {
 				// Do not list inaccessible external folders twice
 				return !self.inaccessibleExternalFolders.contains(where: { $0.folderID == folder.folderID })
 			}

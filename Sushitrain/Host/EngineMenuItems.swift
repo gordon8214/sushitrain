@@ -28,6 +28,11 @@
 					return String(localized: "Error in \(folders[0])")
 				}
 				return String(localized: "Folders with errors: \(folders.count)")
+			case .failedItems(let folders):
+				if folders.count == 1 {
+					return String(localized: "Failed items in \(folders[0])")
+				}
+				return String(localized: "Folders with failed items: \(folders.count)")
 			case .devicesPaused:
 				return String(localized: "All devices are paused")
 			case .foldersPaused:
@@ -47,6 +52,7 @@
 	struct EngineMenuItems: View {
 		let appState: AppState
 		var hasShortcuts = false
+		@Environment(\.openWindow) private var openWindow
 
 		/// SwiftUI only updates the main menu's items when AppKit asks, as when the menu opens, which it doesn't for a key
 		/// equivalent. A shortcut would otherwise go by the menu as it last opened, and do nothing if the item was disabled
@@ -62,6 +68,13 @@
 		var body: some View {
 			let state = appState.engineMenuState
 			let isPaused = state.allDevicesPausedByUser
+
+			if !appState.pendingDevices.isEmpty {
+				Button("Connection Requests: \(appState.pendingDevices.count)", systemImage: "person.crop.circle.badge.plus") {
+					openWindow(id: "connectionRequests")
+					NSApplication.shared.activate()
+				}
+			}
 
 			Button(
 				isPaused ? "Resume All Devices" : "Pause All Devices", systemImage: isPaused ? "play.circle" : "pause.circle"

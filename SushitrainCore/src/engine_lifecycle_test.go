@@ -26,6 +26,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -45,6 +46,12 @@ type stateRecorder struct {
 	states []string
 	seen   int // states that waitFor has looked at
 	added  chan struct{}
+
+	pendingChanges atomic.Int32
+}
+
+func (s *stateRecorder) pendingDeviceChanges() int {
+	return int(s.pendingChanges.Load())
 }
 
 func newStateRecorder() *stateRecorder {
@@ -57,6 +64,7 @@ func (s *stateRecorder) OnDeviceDiscovered(string, *ListOfStrings) {}
 func (s *stateRecorder) OnListenAddressesChanged(*ListOfStrings)   {}
 func (s *stateRecorder) OnChange(*Change)                          {}
 func (s *stateRecorder) OnMeasurementsUpdated()                    {}
+func (s *stateRecorder) OnPendingDevicesChanged()                  { s.pendingChanges.Add(1) }
 func (s *stateRecorder) OnEngineStateChanged(state string, _ string) {
 	s.mutex.Lock()
 	s.states = append(s.states, state)
@@ -385,8 +393,13 @@ func TestEngineCanBeUsedWhileRestarting(t *testing.T) {
 				}
 				_ = clt.Folders()
 				if folder := clt.FolderWithID("test"); folder != nil {
-					_, _ = folder.State()
+					_ = folder.State()
 					_ = folder.SetLabel("Label")
+					_ = folder.FailedItems()
+					_ = folder.LocalChangedItems()
+					_ = folder.Revert()
+					_, _ = folder.FileVersions("file")
+					_, _ = clt.PendingDevices()
 				}
 				_ = clt.ConnectedPeerCount()
 			}

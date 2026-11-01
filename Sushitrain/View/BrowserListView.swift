@@ -225,6 +225,7 @@ struct EntryContextMenuWrapper<Content: View>: View {
 
 	#if os(macOS)
 		@Environment(\.openWindow) private var openWindow
+		@State private var showVersions = false
 	#endif
 
 	private func previewFile() {
@@ -323,6 +324,12 @@ struct EntryContextMenuWrapper<Content: View>: View {
 				}
 
 				#if os(macOS)
+					if entry.canShowVersions {
+						Button("Previous Versions...", systemImage: "clock.arrow.circlepath") {
+							showVersions = true
+						}.labelStyle(.titleAndIcon)
+					}
+
 					Button("Copy", systemImage: "document.on.document") {
 						self.copy()
 					}
@@ -363,6 +370,13 @@ struct EntryContextMenuWrapper<Content: View>: View {
 					}
 				}
 			}
+			#if os(macOS)
+				.sheet(isPresented: $showVersions) {
+					if let folder = entry.folder {
+						FileVersionsView(folder: folder, path: entry.path())
+					}
+				}
+			#endif
 	}
 
 	private func copy() {

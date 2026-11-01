@@ -8,11 +8,13 @@ import Testing
 @testable import SynctrainHostKit
 
 private func status(
-	isRunning: Bool = true, failure: String? = nil, foldersWithErrors: [String] = [], allDevicesPaused: Bool = false,
-	allFoldersPaused: Bool = false, connectedPeerCount: Int = 1, isTransferring: Bool = false
+	isRunning: Bool = true, failure: String? = nil, foldersWithErrors: [String] = [],
+	foldersWithFailedItems: [String] = [], allDevicesPaused: Bool = false, allFoldersPaused: Bool = false,
+	connectedPeerCount: Int = 1, isTransferring: Bool = false
 ) -> EngineStatus {
 	EngineStatus(
-		isRunning: isRunning, failure: failure, foldersWithErrors: foldersWithErrors, allDevicesPaused: allDevicesPaused,
+		isRunning: isRunning, failure: failure, foldersWithErrors: foldersWithErrors,
+		foldersWithFailedItems: foldersWithFailedItems, allDevicesPaused: allDevicesPaused,
 		allFoldersPaused: allFoldersPaused, connectedPeerCount: connectedPeerCount, isTransferring: isTransferring)
 }
 
@@ -40,6 +42,19 @@ private func status(
 		foldersWithErrors: ["Documents"], allDevicesPaused: true, allFoldersPaused: true, connectedPeerCount: 0,
 		isTransferring: true)
 	#expect(errors == .folderErrors(folders: ["Documents"]))
+}
+
+@Test func failedItemsAreAnErrorBelowAStoppedFolder() {
+	#expect(status(foldersWithFailedItems: ["Photos"]) == .failedItems(folders: ["Photos"]))
+	#expect(status(foldersWithFailedItems: ["Photos"]).symbol == "exclamationmark.triangle.fill")
+	#expect(
+		status(foldersWithErrors: ["Documents"], foldersWithFailedItems: ["Photos"]) == .folderErrors(folders: ["Documents"]))
+}
+
+@Test func failedItemsOutrankWhatExplainsWhyNothingMoves() {
+	let failed = status(
+		foldersWithFailedItems: ["Photos"], allDevicesPaused: true, connectedPeerCount: 0, isTransferring: true)
+	#expect(failed == .failedItems(folders: ["Photos"]))
 }
 
 @Test func anEngineThatIsNotRunningIsStartingAndNotAnError() {

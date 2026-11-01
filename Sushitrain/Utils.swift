@@ -68,13 +68,14 @@ extension SushitrainFolder {
 		"idle", "syncing", "scanning", "sync-preparing", "cleaning", "sync-waiting", "scan-waiting", "clean-waiting",
 	])
 
+	/// What the engine says is wrong with the folder, or else the state it is in; nil when it says neither
 	var issue: String? {
-		var error: NSError? = nil
-		let s = self.state(&error)
-		if error == nil {
-			return s
+		let message = self.stateError()
+		if !message.isEmpty {
+			return message
 		}
-		return nil
+		let state = self.state()
+		return state.isEmpty ? nil : state
 	}
 
 	var isExternal: Bool? {
@@ -90,17 +91,13 @@ extension SushitrainFolder {
 
 	// When true, the folder's direction can be changed (files may be transferring, but otherwise the folder is idle)
 	var isIdleOrSyncing: Bool {
-		var error: NSError? = nil
-		let s = self.state(&error)
+		let s = self.state()
 		return s == "idle" || s == "syncing"
 	}
 
 	/// Whether the folder stopped on an error, such as its path being gone. Not for a paused folder, which doesn't run.
 	var isStoppedOnError: Bool {
-		// Not by comparing the state: gomobile returns no value along with an error, so it reads as empty then
-		var error: NSError? = nil
-		_ = self.state(&error)
-		return error != nil
+		return self.state() == "error"
 	}
 
 	var displayName: String {
@@ -208,7 +205,9 @@ extension SushitrainFolder {
 	}
 
 	var versioningArchiveURL: URL? {
-		if self.versioningType().isEmpty {
+		// External versioning puts files wherever its command does
+		let type = self.versioningType()
+		if type.isEmpty || type == SushitrainVersioningTypeExternal {
 			return nil
 		}
 
@@ -450,6 +449,11 @@ extension SushitrainEntry {
 			return f.isRegularFolder && self.isLocallyPresent()
 		}
 		return false
+	}
+
+	/// Whether its folder can list the older versions of this file
+	var canShowVersions: Bool {
+		return !self.isDirectory() && !self.isSymlink() && (self.folder?.canBrowseVersions() ?? false)
 	}
 
 	@MainActor func showInFinder() throws {
@@ -701,6 +705,15 @@ func openURLInSystemFilesApp(url: URL) {
 extension SushitrainClient: @unchecked @retroactive Sendable {}
 extension SushitrainGUISettings: @unchecked @retroactive Sendable {}
 extension SushitrainEngineOptions: @unchecked @retroactive Sendable {}
+extension SushitrainFolderSettings: @unchecked @retroactive Sendable {}
+extension SushitrainVersioningSettings: @unchecked @retroactive Sendable {}
+extension SushitrainDeviceSettings: @unchecked @retroactive Sendable {}
+extension SushitrainConnectionOptions: @unchecked @retroactive Sendable {}
+extension SushitrainObservedDevice: @unchecked @retroactive Sendable {}
+extension SushitrainFailedItem: @unchecked @retroactive Sendable {}
+extension SushitrainFileVersion: @unchecked @retroactive Sendable {}
+extension SushitrainVersionedFile: @unchecked @retroactive Sendable {}
+extension SushitrainListOfStrings: @unchecked @retroactive Sendable {}
 extension SushitrainAdvancedSection: @unchecked @retroactive Sendable {}
 extension SushitrainChange: @unchecked @retroactive Sendable {}
 extension SushitrainFolder: @unchecked @retroactive Sendable {}
@@ -830,6 +843,15 @@ func goBlocking(_ work: @Sendable @escaping () throws -> Void) async throws {
 	try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
 		DispatchQueue.global(qos: .userInitiated).async {
 			continuation.resume(with: Result { try work() })
+		}
+	}
+}
+
+/// As goBlocking, for a call whose result is needed
+func goBlocking<Result: Sendable>(returning work: @Sendable @escaping () throws -> Result) async throws -> Result {
+	try await withCheckedThrowingContinuation { continuation in
+		DispatchQueue.global(qos: .userInitiated).async {
+			continuation.resume(with: Swift.Result { try work() })
 		}
 	}
 }

@@ -277,6 +277,11 @@ struct AddFolderView: View {
 						"This location overlaps the folder '\(overlapping)'. Folders inside one another are not supported."
 					)
 				}
+				else if FileManager.default.fileExists(
+					atPath: folderPath.appending(path: ".stignore").path(percentEncoded: false))
+				{
+					Text("This location already has a list of files to ignore, which stays. What it lists isn't synchronized.")
+				}
 			}
 			else if let defaultFolderPath = self.defaultFolderPath {
 				Text("The folder will be created at \((defaultFolderPath as NSString).abbreviatingWithTildeInPath).")

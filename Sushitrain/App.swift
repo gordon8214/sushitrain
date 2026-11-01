@@ -305,6 +305,13 @@ struct SushitrainApp: App {
 			}
 			.windowResizability(.contentSize)
 
+			Window("Connection requests", id: "connectionRequests") {
+				NavigationStack {
+					ConnectionRequestsView()
+				}
+				.environment(appState)
+			}
+
 			Window("Statistics", id: "stats") {
 				TotalStatisticsView(appPersistentStatistics: appState.appPersistentStatistics)
 					.environment(appState)

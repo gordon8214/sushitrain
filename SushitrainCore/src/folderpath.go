@@ -42,6 +42,7 @@ const maxNumberedFolderNames = 99
 var (
 	ErrNoDefaultFolderPath      = errors.New("no new folder can be created in the default location; choose a location for the folder")
 	ErrFolderOverlapsEngineData = errors.New("a folder cannot contain or be inside the folder where the app keeps its configuration and database")
+	ErrFolderInVersionsPath     = errors.New("a folder cannot go where another folder keeps its versions: cleaning up there would remove its files")
 	ErrFolderFilesNotRemovable  = errors.New("the files of this folder are not removed with it; unlink the folder, then remove its files yourself")
 )
 

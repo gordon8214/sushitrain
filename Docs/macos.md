@@ -119,6 +119,109 @@ changes it, and what the web GUI or the REST API changed meanwhile stays too. Mo
   on October 30, 2026). A process can't lower its nice value again, so turning this off takes an app restart. A real
   priority setting is a separate matter (Syncthing.app sets the QoS of the backend process it launches).
 
+## Folder, device and connection settings
+
+On macOS every setting has a native page (iOS has no engine). The pages save their settings together, so that a folder
+restarts once. As with Engine options, the core checks only what was edited since the page read it, so that a value the
+page wouldn't accept stays until someone changes it, and what the web GUI or the REST API changed meanwhile stays too
+(`foldersettings.go`, `versioningsettings.go`, `devicesettings.go`, `connectionoptions.go`, `SettingsPage`).
+
+What the engine would silently replace when it prepares a configuration is refused instead, so that a page never ends
+up showing something else than was entered: a watcher delay of 0, more than 256 files written at once, a reconnection
+interval under 5 seconds, a priority over the internet that isn't above the one on the local network, automatically
+accepting folders from an untrusted device.
+
+- **Folders.** The Advanced tab links to Synchronization options and Metadata. The copy method offers what exists on
+  macOS: another method fails every copy of a block, with `ENOTSUP`, as it is compiled for other systems only. A new
+  marker name is checked against the disk first, as the folder would stop. Metadata options follow the folder's type,
+  as in the web GUI: a send-only folder can't apply metadata and a receive-only folder can't send it. Only what is turned
+  on is refused, so a folder that already has such a combination keeps working. Extended attribute rules replace the
+  macOS mode altogether and deny whatever matches none of them, as the page says. Patterns the engine can't read would
+  match nothing, so they are refused.
+- **Versioning.** The page has External versioning, a versions path and the fork's platform history. A type that was
+  just chosen writes all its values as shown, as they were not read from the configuration and would otherwise not count
+  as edited. Whatever is saved, platform history goes unless the type is Staggered with versions in the default place, as
+  the versioner won't start otherwise, and the file system type is set to basic, without which a path is used as it is,
+  with no `~` and not relative to the folder. A versions path can't be in or around a synchronized folder, as versions
+  would reach other devices and cleaning up removes files, nor where another folder keeps its versions, as files of the
+  same name would replace each other. These checks go by what the disk sees: whatever the case of the letters, and
+  following symbolic links. A new folder can't go in a versions path either. Ages that don't fit the engine's durations
+  are refused, and the fork reads them as no limit, as they used to wrap around and remove every version. Ending platform
+  history asks first. What was kept stays on disk,
+  but nothing protects its files in `.stversions/.stversions/platform` from cleaning up anymore, and a version made while
+  it was on may refuse to be restored.
+- **Devices.** The Connection tab links to compression, limits, allowed networks and the rest. Limits are in Mbit/s, like
+  the app's own, and a limit that wasn't edited keeps its exact value in KiB/s. The engine skips a network it can't read,
+  which could lock a device out, so they are checked.
+- **Connection options.** Advanced settings link to this page. Everything on it applies at once, including the local
+  discovery port and address, so it only offers a restart for changes made elsewhere.
+- **Defaults.** Advanced settings link to the defaults for new folders and devices, and the default ignore patterns, with
+  the same sections. The engine checks a folder's settings only when it starts one, so the page refuses what would break
+  every new folder: a relative location, patterns it can't read, and receive-encrypted as the type, which can't be changed
+  afterwards. An empty location is stored as `~/Sync`, as the engine takes no path to mean its working directory for a
+  folder it accepts by itself. It leaves out the marker name, as the engine only creates a marker of the default name, and
+  a versions path, which all new folders would share. Folders in a file system of the app's own don't take default
+  versioning. A new folder gets the default patterns in its `.stignore` before the engine sees it, so that its first scan
+  keeps to them. A `.stignore` that is already there stays, which the add folder screen says, as what it lists isn't
+  synchronized. Receive-encrypted folders have none.
+
+## Folder status and failed items
+
+The General tab of a folder shows its status, with the engine's own message when it stopped on an error. Before, that
+message didn't reach the app: `Folder.State` returned the state and the error together, and gomobile returns no value
+along with an error. It now returns the state, and `StateError` the message.
+
+- **Failed items** are what a folder could not scan or synchronize, from the engine's `FolderErrors`. Each can be shown
+  in Finder, at the nearest place that exists, as what failed may never have reached this device, or in the file browser.
+  A folder with failed items reads as out of sync, and the menu bar shows them (see Menu bar status). The list follows
+  the engine's events. Failures while scanning have no event of their own, so they show when the folder's state changes.
+  A file can fail both a scan and a pull, and then shows once. Reading them takes sorting them all, so the menu bar does
+  that off the main thread, at the pace the views refresh at.
+- **Revert Local Changes** and **Override Changes** show with the number of items they concern, and ask first. Both report
+  why they couldn't run, which the fork added, as the engine's own calls say nothing, and looking at the folder's state
+  afterwards races with the folder. Revert also empties a receive-encrypted folder of what doesn't belong there, under the
+  name Delete Unexpected Items, as in the web GUI. Override deletes on every device what this one doesn't have, so its
+  confirmation says that an empty folder means everything.
+
+## Connection requests
+
+A device that tries to connect without being known here is turned away, and the engine remembers it. The app shows these
+as connection requests, with what the device said about itself, in the start screen, the devices table and the menus, and
+offers Add, Dismiss and Ignore (`pending.go`, `ConnectionRequestsView`). Dismissing forgets a request until the device
+tries again, which is soon if it keeps trying. Ignoring has the engine turn it away from now on, and can be undone under
+Advanced settings. A device's ignored folders are on its Connection tab.
+
+Outside the app, a request adds to the Dock badge, and gets a notification once, even across restarts, until it ends. More
+than three at once come as one, as a host can make up as many devices as it likes, and each shows the short ID, as a device
+can call itself anything. Permission is asked for with the first request, and a request counts as announced only once the
+system took the notification. Those IDs are kept apart from the user settings, as a change to those reaches the engine.
+The engine calls `OnPendingDevicesChanged` outside the `IgnoreEvents` gate, as nobody would otherwise hear about one with no
+window open. It reads a database, so the app doesn't ask at every event, and it asks at each start, as no event comes for
+requests from before it. Clicking a notification only brings the app to the front, which `Connection Requests` in the menus
+then takes further: opening that window takes SwiftUI's environment, which a notification handler doesn't have.
+
+## File versions
+
+Files in a folder with versioning have Previous Versions in their context menu and under Advanced in their info, with the
+version's date and size, to open, save elsewhere or restore. Deleted Files in the folder's menu lists what is gone but has
+versions, to restore in one go (`versions.go`, `FileVersionsView`). External versioning has no such thing, as the engine
+doesn't know where its command puts files, and neither do paused folders, which have no versioner running, and
+receive-encrypted folders, which only have encrypted names.
+
+- Restoring works as in the web GUI: a file in the way becomes a version, and a link is removed. With platform history,
+  its metadata comes back too, and a version from before it was turned on refuses to restore, for which Save As stays
+  available. The fork finds the version before it moves anything, and Trash can reports what went wrong: it used to drop
+  every error, which could take the file out of the folder and report success.
+- Open and Save As copy only the contents. Open uses a temporary copy, so editing that changes nothing in the folder, and
+  the next start of the app removes it. Save As won't replace a file in a synchronized folder, which would keep no version
+  of it, and its temporary file is one that scanning skips.
+- In a receive-only folder a restored file is a local change, which Revert Local Changes would remove, as the confirmation
+  says.
+- Deleted Files walks all of a folder's versions, and one that a cleanup removes during that ends the walk, so it is tried
+  twice. Platform history keeps its own files among the versions, which a listing shows as files, so they are left out. The
+  list shows when a file was last archived, which isn't when it was deleted: a deletion on this device archives nothing, so
+  restoring can bring back an older version, as the confirmation says.
+
 ## Web GUI and REST API
 
 On macOS the engine runs Syncthing's web GUI and REST API, as Syncthing.app does, so that tools and scripts reach it
@@ -417,6 +520,7 @@ version. The first row that applies wins (`EngineStatus`):
 | `exclamationmark.triangle.fill` | Error, with the message | The engine failed |
 | `hourglass` | Starting… | The engine isn't running yet, or restarts |
 | `exclamationmark.triangle.fill` | Error in, with the folder | A folder stopped on an error, such as its path being gone |
+| `exclamationmark.triangle.fill` | Failed items in, with the folder | A folder that runs could not scan or synchronize some items |
 | `pause.circle.fill` | All devices are paused | Every other device is paused, by the user or by the app while connectivity is turned off |
 | `pause.circle.fill` | All folders are paused | Every folder is paused |
 | `folder` | Not connected | No other device is connected |
@@ -425,8 +529,7 @@ version. The first row that applies wins (`EngineStatus`):
 
 The status follows the engine's events, with no polling: each one has `AppState` read the engine again, and the
 `MenuBarExtra` follows the result. `MenuBarExtra` has no tooltip, so what Syncthing.app shows in one is on that first line.
-Files that failed in a folder that otherwise runs don't count as an error here yet (syncthing-tools#26). Files in Finder
-mode has no engine, so its icon doesn't change.
+Files in Finder mode has no engine, so its icon doesn't change.
 
 ## Signing and releasing
 

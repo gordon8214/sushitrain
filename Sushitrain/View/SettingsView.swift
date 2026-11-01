@@ -493,6 +493,30 @@ struct AdvancedSettingsView: View {
 				} footer: {
 					Text("Disk space, performance, the audit log, and usage and crash reporting.")
 				}
+
+				Section {
+					NavigationLink("Connection options") {
+						ConnectionOptionsView()
+					}
+				} footer: {
+					Text("Limits, priorities, reconnecting, local discovery and port mapping.")
+				}
+
+				Section {
+					NavigationLink("Defaults") {
+						DefaultsSettingsView()
+					}
+				} footer: {
+					Text("What new folders and devices start with.")
+				}
+
+				Section {
+					NavigationLink("Ignored devices") {
+						IgnoredDevicesView()
+					}
+				} footer: {
+					Text("Devices whose requests to connect you turned away.")
+				}
 			#endif
 
 			Section {
