@@ -24,7 +24,8 @@ import (
 // this device's engine must not scan, pull or announce changes for it, or both it and the gateway would publish the
 // same edits. The folder stays in the configuration, paused, and the flag is kept separately from the user's pause
 // preference: no change of the configuration may resume the folder while it is remote-managed, whichever code path
-// (Shortcuts, folder settings, a moved folder's resume marker) tries.
+// (Shortcuts, folder settings, a moved folder's resume marker) tries. The app's own changes are refused, so that it can
+// say why; the web GUI and REST API can't, so their changes go through with the folder still paused (engineConfig).
 
 const remoteManagedFileName = "remote-managed.json"
 
@@ -133,14 +134,17 @@ func writeFileSynced(path string, data []byte) error {
 	return nil
 }
 
-// enforce pauses every remote-managed folder in a configuration being changed
-func (s *remoteManagedSet) enforce(conf *config.Configuration) {
+// enforce pauses every remote-managed folder in a configuration being changed, and returns those it had to pause
+func (s *remoteManagedSet) enforce(conf *config.Configuration) []string {
+	var paused []string
 	for _, folder := range conf.Folders {
 		if s.contains(folder.ID) && !folder.Paused {
 			folder.Paused = true
 			conf.SetFolder(folder)
+			paused = append(paused, folder.ID)
 		}
 	}
+	return paused
 }
 
 // VerifyConfiguration rejects a configuration change that resumes a remote-managed folder, or adds one unpaused.

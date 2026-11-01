@@ -240,6 +240,7 @@ func (c *eventCounter) OnListenAddressesChanged(*ListOfStrings)   {}
 func (c *eventCounter) OnChange(*Change)                          {}
 func (c *eventCounter) OnMeasurementsUpdated()                    {}
 func (c *eventCounter) OnPendingDevicesChanged()                  {}
+func (c *eventCounter) OnDevicePausesChanged(_, _ *ListOfStrings) {}
 func (c *eventCounter) OnEngineStateChanged(string, string)       {}
 
 func TestSavingTheProxyWritesAPrivateFileAndAnnouncesIt(t *testing.T) {

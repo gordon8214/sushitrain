@@ -45,12 +45,15 @@ import (
 
 // stateRecorder is a client delegate that records the engine states it is told about
 type stateRecorder struct {
+	pauseRecorder
+
 	mutex  sync.Mutex
 	states []string
 	seen   int // states that waitFor has looked at
 	added  chan struct{}
 
 	pendingChanges atomic.Int32
+	events         sync.Map // event type => true
 }
 
 func (s *stateRecorder) pendingDeviceChanges() int {
@@ -61,7 +64,7 @@ func newStateRecorder() *stateRecorder {
 	return &stateRecorder{added: make(chan struct{}, 1)}
 }
 
-func (s *stateRecorder) OnEvent(string)                            {}
+func (s *stateRecorder) OnEvent(event string)                      { s.events.Store(event, true) }
 func (s *stateRecorder) OnFolderScanFinished(string)               {}
 func (s *stateRecorder) OnDeviceDiscovered(string, *ListOfStrings) {}
 func (s *stateRecorder) OnListenAddressesChanged(*ListOfStrings)   {}
@@ -415,6 +418,122 @@ func TestEngineCanBeUsedWhileRestarting(t *testing.T) {
 	}
 	close(stop)
 	wg.Wait()
+}
+
+// What the web GUI and the REST API change reaches the app, and a remote-managed folder only stops itself
+func TestEngineFollowsTheRESTAPI(t *testing.T) {
+	address := freeGUIAddress(t)
+	peer := testDeviceID("peer")
+	clt, recorder, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.GUI.Enabled = true
+		cfg.GUI.RawAddress = address
+		protectGUI(&cfg.GUI, guiConfigDir())
+		device := cfg.Defaults.Device.Copy()
+		device.DeviceID = peer
+		cfg.Devices = append(cfg.Devices, device)
+		for _, id := range []string{"managed", "other"} {
+			folder := cfg.Folders[0].Copy()
+			folder.ID = id
+			folder.Path = filepath.Join(filepath.Dir(cfg.Folders[0].Path), id)
+			folder.Paused = true
+			if err := os.MkdirAll(folder.Path, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			cfg.Folders = append(cfg.Folders, folder)
+		}
+		if err := writeFileSynced(remoteManagedPath(), []byte(`{"folders":["managed"]}`)); err != nil {
+			t.Fatal(err)
+		}
+	})
+	client := &http.Client{Timeout: 10 * time.Second}
+	send := func(method, path, body string) {
+		t.Helper()
+		request, err := http.NewRequest(method, clt.GUIURL()+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("X-API-Key", clt.GUIAPIKey())
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		answer, _ := io.ReadAll(response.Body)
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("%s %s: %d %s", method, path, response.StatusCode, answer)
+		}
+	}
+	peerID := peer.String()
+	// Sooner than the five seconds these requests take to save the configuration
+	waitForEvent := func(event string) {
+		t.Helper()
+		for start := time.Now(); ; time.Sleep(10 * time.Millisecond) {
+			if _, seen := recorder.events.Load(event); seen {
+				return
+			}
+			if time.Since(start) > 4*time.Second {
+				t.Fatalf("the app was not told about %s", event)
+			}
+		}
+	}
+
+	send(http.MethodPost, "rest/system/pause?device="+peerID, "")
+	recorder.expectPauses(t, []string{peerID}, nil)
+	waitForEvent("DevicePaused")
+	send(http.MethodPost, "rest/system/resume?device="+peerID, "")
+	recorder.expectPauses(t, nil, []string{peerID})
+	waitForEvent("DeviceResumed")
+	send(http.MethodPatch, "rest/config/devices/"+peerID, `{"paused":true}`)
+	recorder.expectPauses(t, []string{peerID}, nil)
+
+	if err := clt.SetDevicesPaused(List([]string{peerID}), false); err != nil {
+		t.Fatal(err)
+	}
+	if clt.PeerWithID(peerID).IsPaused() {
+		t.Fatal("the device was not resumed")
+	}
+	recorder.expectPauses(t, nil, nil)
+
+	// Resume All in the web GUI saves the whole configuration
+	conf := clt.cfg().RawCopy()
+	for i := range conf.Folders {
+		conf.Folders[i].Paused = false
+	}
+	body, err := json.Marshal(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	send(http.MethodPut, "rest/config", string(body))
+	if clt.FolderWithID("other").IsPaused() {
+		t.Fatal("the ordinary folder was not resumed")
+	}
+	if !clt.FolderWithID("managed").IsPaused() {
+		t.Fatal("the remote-managed folder was resumed")
+	}
+	send(http.MethodPatch, "rest/config/folders/managed", `{"paused":false,"label":"Changed"}`)
+	if managed := clt.FolderWithID("managed"); !managed.IsPaused() || managed.Label() != "Changed" {
+		t.Fatalf("the remote-managed folder: paused %v, label %q", managed.IsPaused(), managed.Label())
+	}
+
+	// Patterns set elsewhere count here too, also for whether other devices may write to the folder
+	folder := clt.FolderWithID("test")
+	expectIgnores := func(selective bool, lines ...string) {
+		t.Helper()
+		if err := clt.scanFolderSubdirs("test", nil); err != nil {
+			t.Fatal(err)
+		}
+		got, err := folder.IgnoreLines()
+		if err != nil || !slices.Equal(got.data, lines) {
+			t.Fatalf("lines %v, %v; expected %v", got, err, lines)
+		}
+		if is, err := folder.IsSelective(); is != selective || err != nil {
+			t.Fatalf("selective: %v, %v", is, err)
+		}
+	}
+	send(http.MethodPost, "rest/db/ignores?folder=test", `{"ignore":["!/keep","*"]}`)
+	expectIgnores(true, "!/keep", "*")
+	send(http.MethodPost, "rest/db/ignores?folder=test", `{"ignore":["/skip"]}`)
+	expectIgnores(false, "/skip")
 }
 
 func TestEngineServesTheRESTAPI(t *testing.T) {

@@ -70077,6 +70077,52 @@
         }
       }
     },
+    "These patterns were changed elsewhere while you were editing them. Save again to replace them, or cancel to keep them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Muster wurden anderswo geändert, während Sie sie bearbeitet haben. Speichern Sie erneut, um sie zu ersetzen, oder brechen Sie ab, um sie zu behalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estos patrones se cambiaron en otro lugar mientras los editabas. Guarda de nuevo para reemplazarlos o cancela para conservarlos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questi modelli sono stati cambiati altrove mentre li stavi modificando. Salva di nuovo per sostituirli o annulla per mantenerli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編集中に、これらのパターンが別の場所で変更されました。置き換えるにはもう一度保存し、そのまま残すにはキャンセルしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze patronen zijn elders gewijzigd terwijl je ze bewerkte. Sla opnieuw op om ze te vervangen, of annuleer om ze te behouden."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ці шаблони було змінено деінде, поки ви їх редагували. Збережіть ще раз, щоб замінити їх, або скасуйте, щоб залишити їх."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你编辑时，这些模式已在别处更改。再次保存可替换它们，取消则保留它们。"
+          }
+        }
+      }
+    },
     "This action needs Synchronize mode: this Mac runs no engine in Files in Finder mode." : {
       "localizations" : {
         "de" : {

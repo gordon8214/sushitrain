@@ -275,7 +275,7 @@ func (clt *Client) prepareRun() (_ *engineRun, err error) {
 	if !build.IsIOS {
 		r.startAuditLog(cfg.Options(), &appOptions)
 	}
-	app, err := syncthing.New(cfg, sdb, r.evLogger, *clt.cert, appOptions)
+	app, err := syncthing.New(&engineConfig{Wrapper: cfg, client: clt}, sdb, r.evLogger, *clt.cert, appOptions)
 	if err != nil {
 		return nil, err
 	}

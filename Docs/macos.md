@@ -41,9 +41,33 @@ remote file service stay paused. Loading writes the configuration file only when
 While it runs, the app still changes the configuration in these ways:
 
 - It pauses and resumes devices from its own list of paused devices, and pauses all of them while the app is suspended
-  or connectivity is turned off for the current network. A device paused or resumed in the web GUI can therefore change
-  back; reconciling the two is still to do.
+  or connectivity is turned off for the current network.
 - On iOS it sets the reconnect interval to one second in the foreground and 60 seconds in the background.
+
+Changes from elsewhere fit in with these (`engineconfig.go`). Syncthing's model and its web GUI and REST API hold a
+wrapped configuration, so the core sees each of their changes before it is applied:
+
+- A device paused or resumed anywhere but in the app's list goes in that list as the user's choice, like the switch on
+  the device's page. That covers the web GUI, the REST API (`/rest/system/pause` included, which saves the configuration
+  only seconds later) and the devices table. A new device counts too, so that one removed while paused doesn't come back
+  paused. Only the app's own writes of that list and of its automatic pauses stay out of this, or they would end up in
+  the list.
+- While the app keeps every device paused, a device resumed elsewhere is paused again at once, and connects when the
+  automatic pause ends, as with the switch in the app. A device that is already paused doesn't change, so pausing one
+  elsewhere meanwhile is not recorded; the switch and the Shortcuts action do record it.
+- The web GUI saves the whole configuration with each device's pause as the page last saw it, and the core can't tell
+  that from a click. So a device's edit dialog opened during an automatic pause and saved after it pauses the device for
+  good, and one opened before the device was paused in the app resumes it.
+- A change that resumes a remote-managed folder goes through with the folder still paused, as refusing it would refuse
+  all of it, and the web GUI's Resume All saves the whole configuration. The app's own attempts are still refused, so
+  that it can say why.
+- `.stignore` is no longer the app's to manage: selections are gone with on-demand folders, so patterns can be edited in
+  the web GUI. Whether a folder counts as selective for a remote file service follows the engine's patterns. The app's
+  editor reloads after the scan a change of patterns causes, unless it has unsaved edits, and a paused folder doesn't
+  scan. Saving there checks the file first: patterns changed elsewhere are not replaced until the user saves again.
+- Folder paths are not reset on macOS, as outside the sandbox they come straight from the configuration.
+
+A `config.xml` edited while the app isn't running is the exception: at the next start the app's list wins for devices.
 
 The engine never upgrades itself: the app is updated as a whole. Self-upgrade is turned off at runtime and compiled out
 with the `noupgrade` build tag (the app also logs an error if a build lacks it), so the update settings in a

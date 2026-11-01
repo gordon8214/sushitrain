@@ -127,6 +127,10 @@ type ClientDelegate interface {
 	// A device tried to connect without being configured, or stopped being a request. Called from any thread, and not
 	// subject to IgnoreEvents, as the user needs to hear about this with no window open.
 	OnPendingDevicesChanged()
+	// Devices were paused or resumed by anything but SetDevicesPaused, such as the web GUI or the REST API. Called from any
+	// thread, in the order of the changes for each caller, and not subject to IgnoreEvents, as the app has to keep up with
+	// this while it sleeps too. A change that came in at the same time from elsewhere can come first.
+	OnDevicePausesChanged(paused *ListOfStrings, resumed *ListOfStrings)
 }
 
 var (
@@ -507,8 +511,10 @@ func (clt *Client) handleEvent(evt events.Event) {
 			delegate.OnPendingDevicesChanged()
 		}
 
+	// A device paused through the REST API saves the configuration only seconds later
 	case events.LocalIndexUpdated, events.DeviceDisconnected, events.ConfigSaved,
-		events.ClusterConfigReceived, events.FolderResumed, events.FolderPaused, events.FolderErrors:
+		events.ClusterConfigReceived, events.FolderResumed, events.FolderPaused, events.FolderErrors,
+		events.DevicePaused, events.DeviceResumed:
 		// Just deliver the event
 		clt.mutex.Lock()
 		if !clt.IgnoreEvents && clt.Delegate != nil {
@@ -1117,30 +1123,40 @@ func (clt *Client) PeerWithShortID(shortID string) *Peer {
 }
 
 // This function sets all the listed device to the desired pause state, and all other devices to the opposite state.
+// It is how the app applies its own list and its automatic pauses, which are not the user's choice, so nobody is told.
 func (clt *Client) SetDevicesPaused(peers *ListOfStrings, pause bool) error {
 	ids := peers.data
 
-	return clt.changeConfiguration(func(cfg *config.Configuration) {
-		for _, dc := range cfg.Devices {
-			listed := slices.ContainsFunc(ids, func(v string) bool {
-				did, err := protocol.DeviceIDFromString(v)
-				return err == nil && dc.DeviceID.Equals(did)
-			})
+	return clt.saveConfigurationChange(func(wrapper config.Wrapper) (config.Waiter, error) {
+		return wrapper.Modify(func(cfg *config.Configuration) {
+			for _, dc := range cfg.Devices {
+				listed := slices.ContainsFunc(ids, func(v string) bool {
+					did, err := protocol.DeviceIDFromString(v)
+					return err == nil && dc.DeviceID.Equals(did)
+				})
 
-			shouldPause := listed
-			if !pause {
-				shouldPause = !shouldPause
-			}
+				shouldPause := listed
+				if !pause {
+					shouldPause = !shouldPause
+				}
 
-			if dc.Paused != shouldPause {
-				dc.Paused = shouldPause
-				cfg.SetDevice(dc)
+				if dc.Paused != shouldPause {
+					dc.Paused = shouldPause
+					cfg.SetDevice(dc)
+				}
 			}
-		}
+		})
 	})
 }
 
 func (clt *Client) changeConfiguration(block config.ModifyFunction) error {
+	return clt.saveConfigurationChange(func(wrapper config.Wrapper) (config.Waiter, error) {
+		return clt.modifyFollowingPauses(wrapper, block)
+	})
+}
+
+// saveConfigurationChange waits for a change of the run's configuration and saves it
+func (clt *Client) saveConfigurationChange(modify func(config.Wrapper) (config.Waiter, error)) error {
 	r := clt.currentRun()
 	if r == nil {
 		return ErrStillLoading
@@ -1152,7 +1168,7 @@ func (clt *Client) changeConfiguration(block config.ModifyFunction) error {
 		return clt.errNotRunning()
 	}
 
-	waiter, err := r.config.Modify(block)
+	waiter, err := modify(r.config)
 	if err != nil {
 		return err
 	}

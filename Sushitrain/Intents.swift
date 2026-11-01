@@ -823,12 +823,11 @@ struct ConfigureDeviceIntent: AppIntent {
 		try AppMode.requireEngine()
 		try await appState.waitForAppStarted()
 		for f in self.deviceEntities {
-			// TODO: check if this works correctly with device suspension
 			switch self.enable {
 			case .enabled:
-				try f.peer.setPaused(false)
+				appState.setDevice(f.peer, pausedByUser: false)
 			case .disabled:
-				try f.peer.setPaused(true)
+				appState.setDevice(f.peer, pausedByUser: true)
 			case .doNotChange:
 				break
 			}

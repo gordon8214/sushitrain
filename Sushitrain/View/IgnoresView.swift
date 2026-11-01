@@ -18,6 +18,17 @@ private struct AboutIgnoresSection: View {
 	}
 }
 
+private enum IgnoresError: LocalizedError {
+	case changedElsewhere
+
+	var errorDescription: String? {
+		return String(
+			localized:
+				"These patterns were changed elsewhere while you were editing them. Save again to replace them, or cancel to keep them."
+		)
+	}
+}
+
 /// View for editing the ignore file of a folder
 struct IgnoresView: View {
 	var folder: SushitrainFolder
@@ -26,6 +37,7 @@ struct IgnoresView: View {
 	@Environment(\.dismiss) private var dismiss
 
 	@State var ignoreLines: [String] = []
+	@State private var loadedLines: [String] = []
 	@State var error: ErrorMessage? = nil
 	@State var loading = true
 	@State var loadError: String? = nil
@@ -117,6 +129,12 @@ struct IgnoresView: View {
 		.task {
 			self.update()
 		}
+		// Patterns saved elsewhere meanwhile, as in the web GUI, which scans the folder, unless they are being edited here
+		.onChange(of: appState.folderScanRevisions[self.folder.folderID]) {
+			if self.loadError == nil && self.ignoreLines == self.loadedLines {
+				self.update()
+			}
+		}
 		.navigationTitle("Files to ignore")
 		.toolbar {
 			ToolbarItem(
@@ -153,6 +171,12 @@ struct IgnoresView: View {
 		do {
 			Log.info("writing ignore lines \(self.ignoreLines)")
 			if self.error == nil {
+				// Patterns saved elsewhere meanwhile aren't replaced unseen. They count as seen now, for a second save.
+				let current = try self.readLines()
+				if current != self.loadedLines {
+					self.loadedLines = current
+					throw IgnoresError.changedElsewhere
+				}
 				var lines = self.ignoreLines
 				lines.removeAll { $0.isEmpty }
 				lines.insert(Self.prependedLine, at: 0)
@@ -165,19 +189,26 @@ struct IgnoresView: View {
 		}
 	}
 
+	private func readLines() throws -> [String] {
+		var lines = (try self.folder.ignoreLines()).asArray()
+		Log.info("Got lines: \(lines)")
+		if !lines.isEmpty && lines[0] == Self.prependedLine {
+			lines.remove(at: 0)
+		}
+		return lines
+	}
+
 	private func update() {
 		do {
 			self.loadError = nil
 			self.loading = true
-			var lines = (try self.folder.ignoreLines()).asArray()
-			Log.info("Got lines: \(lines)")
-			if !lines.isEmpty && lines[0] == Self.prependedLine {
-				lines.remove(at: 0)
-			}
+			let lines = try self.readLines()
 			self.ignoreLines = lines
+			self.loadedLines = lines
 		}
 		catch {
 			self.ignoreLines = []
+			self.loadedLines = []
 			Log.warn("failed to read ignore file: \(error)")
 			self.loadError = error.localizedDescription
 			// Remain in the loading state, as saving would replace a file that could not be read

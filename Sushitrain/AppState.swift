@@ -211,6 +211,7 @@ struct EngineMenuState: Equatable {
 	@ObservationIgnored var changePublisher = PassthroughSubject<Void, Never>()
 	@ObservationIgnored var pathMonitor: NWPathMonitor? = nil
 	@ObservationIgnored var pingTimer: Timer? = nil
+	@ObservationIgnored private var deviceSuspensionUpdate: Task<Void, Never>? = nil
 	#if os(macOS)
 		/// The user asked for the web GUI in the browser, which waits for its window to get a password
 		@ObservationIgnored var webGUIBrowserIsWaiting = false
@@ -1064,6 +1065,20 @@ struct EngineMenuState: Equatable {
 		}
 	}
 
+	/// Something other than updateDeviceSuspension paused or resumed devices, as the web GUI, the REST API or a shortcut
+	/// does. That is the user's choice, like the switch on a device's page, so it goes in the list that function goes by,
+	/// which also shows it here. As there too, a pause the app is keeping up stays: a device resumed meanwhile goes on once
+	/// that ends.
+	func followDevicePauses(paused: [String], resumed: [String]) {
+		let next = self.userSettings.userPausedDevices.subtracting(resumed).union(paused)
+		if next != self.userSettings.userPausedDevices {
+			self.userSettings.userPausedDevices = next
+		}
+		Task {
+			await self.updateDeviceSuspension()
+		}
+	}
+
 	/// Pauses or resumes all other devices through the app's list, as for a single device, so that it lasts across
 	/// restarts and agrees with what updateDeviceSuspension does. Resuming clears the whole list, so devices paused one by
 	/// one resume too.
@@ -1234,35 +1249,45 @@ struct EngineMenuState: Equatable {
 		return false
 	}
 
-	nonisolated func updateDeviceSuspension() async {
-		guard await self.hasLoadedClient else { return }
+	/// Applies what the app wants for every device. These run one at a time, each reading all it goes by when its turn
+	/// comes: nothing reports what they change, so an update that waited for the engine and landed after a later one would
+	/// stay that way.
+	func updateDeviceSuspension() async {
+		let previous = self.deviceSuspensionUpdate
+		let update = Task {
+			await previous?.value
+			await self.applyDeviceSuspension()
+		}
+		self.deviceSuspensionUpdate = update
+		await update.value
+	}
+
+	private func applyDeviceSuspension() async {
+		guard self.hasLoadedClient else { return }
+		let client = self.client
+		let devicesEnabled: [String]
+		// All devices are paused when the app is suspended (and unpaused when we get back to the foreground)
+		// This is a trick to force Syncthing to start connecting immediately when we are foregrounded
+		// On macOS, we do this when the device awakens from sleep
+		// Devices are also disabled if the user wants to disable connectivity depending on the network connection type
+		if self.isSuspended || self.shouldDisableConnectivity {
+			devicesEnabled = []
+		}
+		// On macOS and when the app is in the foreground, we unpause any device that is not explicitly suspended
+		// by the user
+		else if let peers = client.peers() {
+			devicesEnabled = Array(Set(peers.asArray()).subtracting(self.userSettings.userPausedDevices))
+		}
+		else {
+			return
+		}
+
 		do {
-			let client = self.client
-			// All devices are paused when the app is suspended (and unpaused when we get back to the foreground)
-			// This is a trick to force Syncthing to start connecting immediately when we are foregrounded
-			// On macOS, we do this when the device awakens from sleep
-			if await self.isSuspended {
-				// This pauses all devices ("pause: false" only applies to the supplied list of devices, the other devices are set to the opposite)
-				try client.setDevicesPaused(SushitrainListOfStrings.from(Array()), pause: false)
-				return
-			}
-
-			// Disable devies if the user wants to disable connectivity depending on the network connection type
-			if await self.shouldDisableConnectivity {
-				// This pauses all devices ("pause: false" only applies to the supplied list of devices, the other devices are set to the opposite)
-				try client.setDevicesPaused(SushitrainListOfStrings.from(Array()), pause: false)
-				return
-			}
-
-			// On macOS and when the app is in the foreground, we unpause any device that is not explicitly suspended
-			// by the user
-			if let peers = self.client.peers() {
-				let devicesEnabled = Set(peers.asArray()).subtracting(await self.userSettings.userPausedDevices)
-				try client.setDevicesPaused(SushitrainListOfStrings.from(Array(devicesEnabled)), pause: false)
-			}
+			// This pauses all other devices ("pause: false" only applies to the supplied list of devices, the other devices are set to the opposite)
+			try await goBlocking { try client.setDevicesPaused(SushitrainListOfStrings.from(devicesEnabled), pause: false) }
 		}
 		catch {
-			Log.warn("Failed to update device suspension (isSuspended=\(await self.isSuspended): \(error.localizedDescription)")
+			Log.warn("Failed to update device suspension (isSuspended=\(self.isSuspended): \(error.localizedDescription)")
 		}
 	}
 
@@ -1409,6 +1434,15 @@ extension SushitrainDelegate: SushitrainClientDelegateProtocol {
 			Task {
 				await appState.updatePendingDevices()
 			}
+		}
+	}
+
+	func onDevicePausesChanged(_ paused: SushitrainListOfStrings?, resumed: SushitrainListOfStrings?) {
+		let appState = self.appState
+		let paused = paused?.asArray() ?? []
+		let resumed = resumed?.asArray() ?? []
+		DispatchQueue.main.async {
+			appState.followDevicePauses(paused: paused, resumed: resumed)
 		}
 	}
 
