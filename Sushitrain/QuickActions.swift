@@ -14,9 +14,31 @@ import SwiftUI
 @preconcurrency import SushitrainCore
 import SynctrainHostKit
 
-class QuickActionService: ObservableObject {
-	@MainActor static let shared = QuickActionService()
-	@Published var action: Route?
+/// What the app's actions ask to see. They run outside any window, and can run before there is one, so a route waits here
+/// until a window takes it.
+@MainActor @Observable
+class QuickActionService {
+	static let shared = QuickActionService()
+	var action: Route?
+
+	#if os(macOS)
+		/// The windows that can show a route, also while the engine starts and they can't do so yet
+		private let windows = NSHashTable<NSWindow>.weakObjects()
+
+		func add(_ window: NSWindow) {
+			windows.add(window)
+		}
+
+		func remove(_ window: NSWindow) {
+			windows.remove(window)
+		}
+
+		/// The one window that takes an action: the frontmost, which is the one the user was in last. A window with a sheet
+		/// is passed over, as moving away from what opened the sheet would discard what is being edited in it.
+		var target: NSWindow? {
+			NSApp.orderedWindows.first { windows.contains($0) && $0.attachedSheet == nil }
+		}
+	#endif
 }
 
 #if os(macOS)

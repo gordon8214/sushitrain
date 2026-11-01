@@ -584,6 +584,25 @@ that wants a Dock icon wasn't activated, and could come up with no window at all
 A stored `hideInDock` is taken over once (`AppPresence.adoptHideInDock`), so that the app looks as it did: on means the
 menu bar only, off means the Dock only. Without one the app starts with both.
 
+## Shortcuts actions that open the app
+
+**Show folder in the app**, **Show file in the app** and **Search files in app** run outside any window, and can run
+before there is one, so `QuickActionService` keeps the route until a window takes it.
+
+The frontmost window with a file browser takes it, whichever scene it came from, and comes forward, also when it was
+minimized (`QuickActionService.target`). That's the window the user was in last, and a window per action would leave one
+more each time a shortcut runs. One with a sheet or an alert is passed over: moving away from what opened a sheet discards
+what is being edited in it.
+
+With no such window the main window opens. That waits for the engine, because a launch window or a restored window comes
+up before it and only takes the route once it runs, and opening one sooner would leave two. Without a Dock icon nothing
+opens at launch, so an action that starts the app gets its window this way.
+
+Getting to the route takes more than setting it (`ContentView.select`). The split view removes the detail column's pages
+when the selection changes, after the update that changed it, so a path set along with the selection is lost whenever
+pages were open. That's also the only way to remove what links opened, as those pages are not in the stack's path: a route
+that is already selected is selected again, through no selection.
+
 ## Menu commands
 
 The app menu and the menu bar menu have what Syncthing.app's menu has:

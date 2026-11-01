@@ -11,25 +11,74 @@ struct MainView: View {
 	@Environment(AppState.self) private var appState
 	@State var topLevelRoute: Route? = .start
 	var initialColumnVisibility: NavigationSplitViewVisibility = .doubleColumn
+	@State var host = WindowReference()
 
 	var body: some View {
-		switch appState.startupState {
-		case .notStarted:
-			LoadingMainView(appState: appState)
+		Group {
+			switch appState.startupState {
+			case .notStarted:
+				LoadingMainView(appState: appState)
 
-		case .engineSetup(let decision):
-			SyncthingTakeoverView(decision: decision)
+			case .engineSetup(let decision):
+				SyncthingTakeoverView(decision: decision)
 
-		case .onboarding:
-			OnboardingView(allowSkip: false)
+			case .onboarding:
+				OnboardingView(allowSkip: false)
 
-		case .error(let e):
-			StartupErrorView(message: e)
-		case .started:
-			ContentView(topLevelRoute: topLevelRoute, initialColumnVisibility: initialColumnVisibility)
-				.showsToast()  // Back-up
+			case .error(let e):
+				StartupErrorView(message: e)
+			case .started:
+				ContentView(topLevelRoute: topLevelRoute, initialColumnVisibility: initialColumnVisibility, host: host)
+					.showsToast()  // Back-up
+			}
+		}
+		.background(
+			WindowReader { window in
+				QuickActionService.shared.add(window)
+				host = WindowReference(window: window)
+			}
+		)
+		// A window comes back with what it showed, as `singleMain` does
+		.onAppear {
+			if let window = host.window {
+				QuickActionService.shared.add(window)
+			}
+		}
+		.onDisappear {
+			if let window = host.window {
+				QuickActionService.shared.remove(window)
+			}
 		}
 	}
+}
+
+/// The window a view is in. A window holds the state of its views, so holding it there would keep both for good.
+struct WindowReference {
+	weak var window: NSWindow?
+}
+
+/// Says which window a view is in
+private struct WindowReader: NSViewRepresentable {
+	let onWindow: (NSWindow) -> Void
+
+	final class Reader: NSView {
+		var onWindow: ((NSWindow) -> Void)?
+
+		override func viewDidMoveToWindow() {
+			super.viewDidMoveToWindow()
+			guard let window, let onWindow else { return }
+			// This happens during a view update, which can't change state
+			DispatchQueue.main.async { onWindow(window) }
+		}
+	}
+
+	func makeNSView(context: Context) -> Reader {
+		let reader = Reader()
+		reader.onWindow = onWindow
+		return reader
+	}
+
+	func updateNSView(_ reader: Reader, context: Context) {}
 }
 
 struct NavigateToAction {
@@ -65,10 +114,23 @@ private struct ContentView: View {
 		var route: [Route] = []
 	}
 	@State private var foldersTabRouteManager = FoldersRouteManager()
+	@State private var afterSelection: (() -> Void)? = nil
 
-	init(topLevelRoute: Route?, initialColumnVisibility: NavigationSplitViewVisibility) {
+	let host: WindowReference
+
+	init(topLevelRoute: Route?, initialColumnVisibility: NavigationSplitViewVisibility, host: WindowReference) {
 		self._topLevelRoute = State(initialValue: topLevelRoute)
 		self._columnVisibility = State(initialValue: initialColumnVisibility)
+		self.host = host
+	}
+
+	/// What an action asks of this window, if it's the window that takes it
+	private var quickAction: Route? {
+		let service = QuickActionService.shared
+		guard let action = service.action, let window = host.window, window === service.target else {
+			return nil
+		}
+		return action
 	}
 
 	@ViewBuilder private func splitBody() -> some View {
@@ -92,12 +154,12 @@ private struct ContentView: View {
 				switch self.topLevelRoute {
 				case .start:
 					NavigationStack {
-						StartOrSearchView(topLevelRoute: $topLevelRoute)
+						StartOrSearchView(topLevelRoute: $topLevelRoute, initialSearchTerm: $initialSearchTerm)
 					}.showsToast()
 
-				case .search:
+				case .search(for: let searchFor):
 					NavigationStack {
-						self.searchView()
+						self.searchView(for: searchFor)
 					}.showsToast()
 
 				case .devices:
@@ -141,6 +203,22 @@ private struct ContentView: View {
 	var body: some View {
 		Group {
 			self.splitBody()
+		}
+		// Initially too: an action that started the app waited for the engine, which this view comes after
+		.onChange(of: quickAction, initial: true) { _, route in
+			guard let route else { return }
+			QuickActionService.shared.action = nil
+			self.navigate(to: route)
+			NSApplication.shared.unhideWithoutActivation()
+			host.window?.makeKeyAndOrderFront(nil)
+			NSApplication.shared.activate()
+		}
+		// The split view removes the pages of the previous selection among the actions this runs with, and this comes after
+		.onChange(of: topLevelRoute) {
+			if let afterSelection {
+				self.afterSelection = nil
+				Task { afterSelection() }
+			}
 		}
 		.onChange(of: scenePhase) { oldPhase, newPhase in
 			self.appState.onScenePhaseChange(from: oldPhase, to: newPhase)
@@ -238,27 +316,42 @@ private struct ContentView: View {
 
 		// The start page has the search field
 		if case .search(for: let searchFor) = route {
-			self.topLevelRoute = .start
-			self.initialSearchTerm = searchFor
+			self.select(.start) {
+				self.initialSearchTerm = searchFor
+			}
 			return
 		}
 
 		if case .folder(folderID: _, prefix: _) = route {
 			let splitted = route.splitted
-			self.topLevelRoute = splitted[0]
-			self.foldersTabRouteManager.route = Array(splitted.dropFirst())
+			self.select(splitted[0]) {
+				self.foldersTabRouteManager.route = Array(splitted.dropFirst())
+			}
 		}
 		else {
-			self.topLevelRoute = route
-			self.foldersTabRouteManager.route = []
+			self.select(route)
 		}
 	}
 
-	@ViewBuilder private func searchView() -> some View {
+	/// Selects a route with nothing in front of it. Pages opened by a link are not in the stack's path, so only a change of
+	/// selection removes them, which is why this goes through no selection when the route is the selection already.
+	private func select(_ route: Route, then action: (() -> Void)? = nil) {
+		self.foldersTabRouteManager.route = []
+		if self.topLevelRoute == route {
+			self.topLevelRoute = nil
+			self.afterSelection = { self.select(route, then: action) }
+		}
+		else {
+			self.topLevelRoute = route
+			self.afterSelection = action
+		}
+	}
+
+	@ViewBuilder private func searchView(for searchFor: String) -> some View {
 		NavigationStack {
 			SearchView(
 				prefix: "",
-				initialSearchText: self.initialSearchTerm
+				initialSearchText: searchFor
 			)
 			.navigationTitle("Search")
 		}
@@ -353,6 +446,7 @@ private struct LoadingView: View {
 private struct StartOrSearchView: View {
 	@Environment(AppState.self) private var appState
 	@Binding var topLevelRoute: Route?
+	@Binding var initialSearchTerm: String
 	@State private var searchText: String = ""
 	@FocusState private var isSearchFieldFocused
 
@@ -385,6 +479,14 @@ private struct StartOrSearchView: View {
 				prompt: "Search all files and folders..."
 			)
 			.autocorrectionDisabled()
+			// Once: coming back to this page later doesn't search again
+			.onChange(of: initialSearchTerm, initial: true) { _, term in
+				if !term.isEmpty {
+					searchText = term
+					initialSearchTerm = ""
+					isSearchFieldFocused = true
+				}
+			}
 	}
 
 	var body: some View {

@@ -272,6 +272,14 @@ struct SushitrainApp: App {
 				NSApp.activate(ignoringOtherApps: true)
 			}
 
+			// An action with no window to take it. While the engine starts, one may be on its way.
+			.onChange(of: appState.startupState == .started ? qaService.action : nil, initial: true) { _, action in
+				if action != nil && qaService.target == nil {
+					openWindow(id: "main")
+					NSApp.activate()
+				}
+			}
+
 			.defaultLaunchBehavior(.suppressed)
 			.restoredOnlyWithDockIcon(in: presence)
 

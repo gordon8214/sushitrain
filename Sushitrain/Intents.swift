@@ -780,7 +780,10 @@ struct OpenFolderInAppIntent: AppIntent {
 	@MainActor
 	func perform() async throws -> some IntentResult {
 		try AppMode.requireEngine()
-		QuickActionService.shared.action = .folder(folderID: folderEntity.folder.folderID, prefix: path)
+		// A route's prefix ends in a slash, and a path doesn't have to
+		let subdirectory = path.withoutStartingSlash.withoutEndingSlash
+		let prefix = subdirectory.isEmpty ? "" : subdirectory + "/"
+		QuickActionService.shared.action = .folder(folderID: folderEntity.folder.folderID, prefix: prefix)
 		return .result()
 	}
 }
