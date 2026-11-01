@@ -6,7 +6,7 @@
 
 // These tests start the engine. Run them with:
 //
-//	go test -tags noassets,engineintegration -race -timeout 600s -run Engine ./src
+//	go test -tags noupgrade,engineintegration -race -timeout 600s -run Engine ./src
 
 //go:build engineintegration
 
@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -484,6 +485,35 @@ func TestEngineServesTheRESTAPI(t *testing.T) {
 	}
 	if _, err := get("rest/system/status", "X-API-Key", clt.GUIAPIKey()); err == nil {
 		t.Fatal("still listening after a restart with the GUI off")
+	}
+}
+
+func TestEngineServesTheWebGUI(t *testing.T) {
+	address := freeGUIAddress(t)
+	clt, _, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.GUI.Enabled = true
+		cfg.GUI.RawAddress = address
+		protectGUI(&cfg.GUI)
+	})
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	// Syncthing's page and themes, the vendored scripts modules leave out, and what only the fork has
+	for path, want := range map[string]string{
+		"":                                       `ng-app="syncthing"`,
+		"theme-assets/dark/assets/css/theme.css": "body",
+		"vendor/angular/angular.js":              "AngularJS",
+		"syncthing/folder/browseFolderModalView.html": "folderBrowser",
+		"syncthing/folder/editFolderModalView.html":   "xattrFilter.macOSMode",
+	} {
+		response, err := client.Get(clt.GUIURL() + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(response.Body)
+		response.Body.Close()
+		if err != nil || response.StatusCode != http.StatusOK || !strings.Contains(string(body), want) {
+			t.Fatalf("/%s: status %d, %d bytes, %v", path, response.StatusCode, len(body), err)
+		}
 	}
 }
 

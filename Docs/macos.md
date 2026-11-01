@@ -249,12 +249,19 @@ the same way:
   does. Clearing the user name turns signing in off and removes the password, and the page warns that any user or
   program on this Mac, or beyond it on a wider address, can then control them through the web pages' CSRF token. While
   `STGUIADDRESS` is set, the address and TLS can't be changed.
-- The web GUI's pages are not built in (the engine is built with `noassets`), so its address shows an empty page. The
-  REST API works in full, for example `curl -H "X-API-Key: <key>" http://127.0.0.1:8384/rest/system/status`.
+- The web GUI's pages are built into the engine, as in the gateway. They are the fork's own, folder browser and metadata
+  settings included: its generated `lib/api/auto/gui.files.go`, from the commit in `go.mod`. Moving to another commit
+  brings its pages along, as long as the fork regenerated that file with any change to `gui/`; nothing checks that yet.
+  A `gui` folder in the configuration directory overrides them, as in Syncthing. They add 2.2 MB to the app (now 60 MB)
+  and about 3 MB to its disk image (now 25 MB), measured on unsigned Release archives, which are arm64 only. The fork's
+  `gui` folder as resources of the app would add about 7 MB and 2 MB, and a step of its own to copy it, as the module
+  in `go.mod` doesn't hold the folder's `vendor` scripts.
+- A new configuration's password is one nobody knows, so the web GUI stops at Syncthing's sign-in page until a user and
+  password are chosen on the settings page above. The REST API needs only the key, for example
+  `curl -H "X-API-Key: <key>" http://127.0.0.1:8384/rest/system/status`.
 
 On iOS they stay off in the configurations the app makes, and the app has no setting for them (a custom configuration
-can have them on; they can be turned off, not on). iOS gives the app no steady time in the background to serve them,
-and there are no pages to serve.
+can have them on; they can be turned off, not on). iOS gives the app no steady time in the background to serve them.
 
 ## Starting the engine
 
@@ -508,7 +515,8 @@ The app menu and the menu bar menu have what Syncthing.app's menu has:
 - **Rescan All Folders** (⌥⌘R) rescans each folder, as Rescan does for one.
 - **Restart Syncthing** has no shortcut, as it interrupts every transfer.
 - **Open Web GUI** (⌥⌘O) opens the address in the configuration in the default browser, and is unavailable while the web
-  GUI is off or on a Unix socket. Until the pages are built in it shows the empty page described above.
+  GUI is off or on a Unix socket. On a new configuration it stops at the sign-in page until a user and password are
+  chosen ([Web GUI and REST API](#web-gui-and-rest-api)).
 
 ## Menu bar status
 

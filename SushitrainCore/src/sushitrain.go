@@ -865,7 +865,7 @@ func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) error {
 func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger, filesPath string,
 	remoteManaged *remoteManagedSet, ios bool) (config.Wrapper, string, error) {
 	cfg, _, err := sthome.LoadConfig(cfgFile, cert, logger, false, func(conf *config.Configuration) {
-		// The iOS app has its own interface, and no web GUI to serve
+		// The iOS app has its own interface
 		conf.GUI.Enabled = !ios
 		if !ios {
 			conf.GUI.RawAddress = defaultGUIAddress

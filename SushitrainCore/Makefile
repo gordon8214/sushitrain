@@ -37,8 +37,11 @@ ENGINE_VERSION = v2.1.7-synctrain.3
 ENGINE_LDFLAGS = -X $(SYNCTHING_BUILD).Version=$(ENGINE_VERSION) -X $(SYNCTHING_BUILD).Tags=noupgrade,synctrain \
 	$(BUILDER_LDFLAGS)
 
+# Without noassets, the app's web GUI is the one built into the fork commit in go.mod, as in the gateway
+ENGINE_TAGS = noupgrade
+
 build/SushitrainCore.xcframework: src/*.go gateway/*.go sthome/*.go Makefile go.mod go.sum notices.html
-	go tool gomobile bind -target macos -tags noassets,noupgrade -trimpath -ldflags "$(ENGINE_LDFLAGS)" \
+	go tool gomobile bind -target macos -tags $(ENGINE_TAGS) -trimpath -ldflags "$(ENGINE_LDFLAGS)" \
 		-o ./build/SushitrainCore.xcframework ./src
 
 install: build
@@ -51,7 +54,7 @@ test:
 
 # Starts and restarts the engine; about 70 seconds with the race detector
 test-engine:
-	go test -tags noassets,engineintegration -ldflags "$(ENGINE_LDFLAGS)" -race -count=1 -timeout 600s -run Engine ./src
+	go test -tags $(ENGINE_TAGS),engineintegration -ldflags "$(ENGINE_LDFLAGS)" -race -count=1 -timeout 600s -run Engine ./src
 
 # The remote file service as a headless executable for Linux hosts, with Syncthing's web GUI
 GATEWAY_VERSION ?= $(shell git describe --always --dirty 2>/dev/null)

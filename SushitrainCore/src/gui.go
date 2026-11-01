@@ -26,7 +26,7 @@ import (
 
 // On macOS the engine runs Syncthing's web GUI and REST API, as Syncthing.app does, on the address in the
 // configuration (for a new configuration 127.0.0.1:8384, with a random API key and password). On iOS they stay off for
-// the configurations the app makes: there is no web GUI to serve, and the app runs only as long as iOS lets it.
+// the configurations the app makes: the app has its own interface, and runs only as long as iOS lets it.
 
 // The file next to the configuration that records that the app turned the web GUI on for it once (so that turning it
 // off later lasts) and, as JSON, where the app moved it when its address was in use (so that it moves back once free)
