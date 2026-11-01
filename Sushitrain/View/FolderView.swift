@@ -1028,7 +1028,7 @@ private struct FolderGenerateThumbnailsView: View {
 
 			do {
 				let folder = self.folder
-				let stats = try await Task.detached(priority: .utility) {
+				let stats = try await Task.detached(priority: .medium) {
 					try folder.statistics()
 				}.value
 				self.totalFiles = stats.global?.files ?? 0

@@ -238,19 +238,19 @@ enum PhotoBackupProgress {
 			}
 
 			// Determine destination folder and check if we can use it
-			guard let folder = appState.client.folder(withID: selectedFolderID) else {
+			guard let folder = atEnginePriority({ appState.client.folder(withID: selectedFolderID) }) else {
 				DispatchQueue.main.async {
 					self.progress = .error(String(localized: "Cannot find selected folder with ID '\(selectedFolderID)'"))
 				}
 				return
 			}
 
-			if !folder.exists() {
+			if !atEnginePriority({ folder.exists() }) {
 				DispatchQueue.main.async { self.progress = .error(String(localized: "Selected folder does not exist")) }
 				return
 			}
 
-			if !folder.isSuitablePhotoBackupDestination {
+			if !atEnginePriority({ folder.isSuitablePhotoBackupDestination }) {
 				DispatchQueue.main.async {
 					self.progress = .error(String(localized: "The selected folder cannot be used to save photos to"))
 				}
@@ -305,7 +305,7 @@ enum PhotoBackupProgress {
 
 			// Get local path for destination folder
 			var err: NSError? = nil
-			let folderPath = folder.localNativePath(&err)
+			let folderPath = atEnginePriority { folder.localNativePath(&err) }
 			if let err = err {
 				DispatchQueue.main.async { self.progress = .error(err.localizedDescription) }
 				return
@@ -334,7 +334,7 @@ enum PhotoBackupProgress {
 
 			// Have the folder pick up everything that was saved, however the export ends
 			defer {
-				try? folder.rescanSubdirectory(subDirectoryPath.pathInFolder)
+				try? atEnginePriority { try folder.rescanSubdirectory(subDirectoryPath.pathInFolder) }
 			}
 
 			let isComplete = try await self.backupAlbum(
@@ -446,7 +446,7 @@ enum PhotoBackupProgress {
 		var assetsSavedSuccessfully: [PHAsset] = []
 		let structure = await self.folderStructure
 		let purgeCutoffDate = await Date.now - Double.maximum(Double(self.purgeAfterDays), 0.0) * 86400.0
-		let myShortDeviceID = appState.client.shortDeviceID()
+		let myShortDeviceID = atEnginePriority { appState.client.shortDeviceID() }
 		let purgeEnabled = await self.purgeEnabled
 		let maxAgeInterval = TimeInterval(Double(await self.maxAgeDays) * 86400.0)
 		let timeZone = await self.timeZone
@@ -481,11 +481,15 @@ enum PhotoBackupProgress {
 				// Check if this photo was saved or deleted before
 				var savedBefore = false
 				if purgeEnabled || !fullExport {
-					if let entry = try? folder.getFileInformation(inFolderPath.pathInFolder) {
+					let saved = atEnginePriority { () -> (modifiedAt: Date?, modifiedBy: String, isDeleted: Bool)? in
+						guard let entry = try? folder.getFileInformation(inFolderPath.pathInFolder) else { return nil }
+						return (entry.modifiedAt()?.date(), entry.modifiedByShortDeviceID(), entry.isDeleted())
+					}
+					if let saved {
 						// If purging is enabled, check if we should remove the photo from the source
 						if purgeEnabled {
-							if let mTime = entry.modifiedAt()?.date(), mTime < purgeCutoffDate {
-								let lastModifiedByShortDeviceID = entry.modifiedByShortDeviceID()
+							if let mTime = saved.modifiedAt, mTime < purgeCutoffDate {
+								let lastModifiedByShortDeviceID = saved.modifiedBy
 								if lastModifiedByShortDeviceID == myShortDeviceID {
 									// The photo is already saved and was last modified by this device; we can delete from source
 									Log.info("Purge entry: \(inFolderPath) \(mTime) \(lastModifiedByShortDeviceID)")
@@ -502,7 +506,7 @@ enum PhotoBackupProgress {
 
 						// If the photo was saved then deleted, do not try to save again (unless we are in full export)
 						if !fullExport {
-							if entry.isDeleted() {
+							if saved.isDeleted {
 								Log.info("Entry at \(inFolderPath) was deleted, not saving again")
 								return
 							}
@@ -584,7 +588,9 @@ enum PhotoBackupProgress {
 					Log.info("Found live photo \(asset.originalFilename) \(liveInFolderPath)")
 
 					// As with the photo: if it was saved then deleted, do not try to save again (unless we are in full export)
-					let liveSavedBefore = !fullExport && (try? folder.getFileInformation(liveInFolderPath.pathInFolder)) != nil
+					let liveSavedBefore = atEnginePriority {
+						!fullExport && (try? folder.getFileInformation(liveInFolderPath.pathInFolder)) != nil
+					}
 					if !liveSavedBefore && !FileManager.default.fileExists(atPath: liveFileURL.path) {
 						let liveDirectoryURL = folderURL.appending(
 							path: asset.livePhotoDirectoryPathInFolder(

@@ -16,13 +16,16 @@ enum FileImport {
 	}
 
 	nonisolated static func copy(_ urls: [URL], folder: SushitrainFolder, prefix: String) throws -> Int {
-		guard folder.exists(), !folder.isPaused(), !folder.isPhotoFolder, !folder.isReceiveEncryptedFolder else {
+		let canReceive = atEnginePriority {
+			folder.exists() && !folder.isPaused() && !folder.isPhotoFolder && !folder.isReceiveEncryptedFolder
+		}
+		guard canReceive else {
 			throw CocoaError(.fileWriteNoPermission)
 		}
 
 		// Find out the native location of our folder
 		var error: NSError? = nil
-		let localNativePath = folder.localNativePath(&error)
+		let localNativePath = atEnginePriority { folder.localNativePath(&error) }
 		if let error = error {
 			throw error
 		}
@@ -46,7 +49,7 @@ enum FileImport {
 			}
 
 			do {
-				try folder.rescanSubdirectory(prefix)
+				try atEnginePriority { try folder.rescanSubdirectory(prefix) }
 			}
 			catch {
 				throw Failure(copiedURLs: copiedURLs, message: error.localizedDescription)
@@ -271,7 +274,7 @@ private struct IncomingFilesView: View {
 		defer { if !Task.isCancelled { loading = false } }
 		let requestedPrefix = prefix
 		do {
-			let names = try await Task.detached(priority: .utility) {
+			let names = try await Task.detached(priority: .medium) {
 				try folder.list(requestedPrefix, directories: true, recurse: false).asArray().sorted()
 			}.value
 			guard !Task.isCancelled else { return }

@@ -178,6 +178,23 @@ and its throughput from 112 MiB/s to 21 MiB/s. With `IOPOL_UTILITY` that read to
 while the eight fell from about 340 MiB/s to 13 MiB/s. `IOPOL_THROTTLE` did the same, and `IOPOL_STANDARD` gave the
 foreground about the same and left them about 35 MiB/s.
 
+The same goes for the app's own code. A Swift task below the default priority that calls into Go runs Go's scheduler on
+its thread, and `Log` calls into Go too. On a Mac busy on every core, the same calls at the same rate held up the main
+thread's calls into Go for 70 to 130 ms from a utility task and for up to 465 ms from a background one, and for under
+1 ms from the default priority, with one run at 6.6 ms. So:
+
+- A task that does nothing but call into Go runs at the default priority (`FolderView`, `FileImport`).
+- Where the rest of a task should stay low, as in exporting photos and copying files, only its calls into Go are raised,
+  through `atEnginePriority` (`Utils.swift`). Over twelve runs of those calls, the worst call from the main thread took
+  2.9 ms, and none took over 16 ms. The same calls without it took up to 356 ms in those rounds, and 39 went over 16 ms.
+
+`atEnginePriority` uses `pthread_override_qos_class_start_np`, which raises the thread where it is, so it works in
+synchronous code such as the closure of `enumerateObjects`. The override took 2 ms of work on a starved Background
+thread from about 360 ms to 2.1 ms. `DispatchQueue.global(qos: .default).sync` left the thread at its class and took
+about as long as not raising it, and `async` to that queue followed by a wait took just as long. Calls from a thread
+below the default leave nothing behind in Go: a thread that Go creates from one starts at the default class.
+`Task.detached` with no priority runs at the default too, even from a background task.
+
 ## Folder, device and connection settings
 
 On macOS every setting has a native page (iOS has no engine). The pages save their settings together, so that a folder

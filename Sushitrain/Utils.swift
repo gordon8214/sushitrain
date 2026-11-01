@@ -661,6 +661,19 @@ extension SushitrainPeer: @unchecked @retroactive Sendable {}
 extension SushitrainArchive: @unchecked @retroactive Sendable {}
 extension SushitrainMeasurement: @unchecked @retroactive Sendable {}
 
+/// Runs a call into the engine at the default priority, for code on a thread below that. Go's scheduler runs on every
+/// thread that enters it, and the system can starve a thread below the default while it holds a P or one of the engine's
+/// locks, which holds up the main thread's calls into Go (Docs/macos.md, Scanning priority). The thread keeps its class
+/// otherwise, and nothing moves to another thread, so that this works in synchronous code.
+func atEnginePriority<T>(_ call: () throws -> T) rethrows -> T {
+	guard qos_class_self().rawValue < QOS_CLASS_DEFAULT.rawValue else {
+		return try call()
+	}
+	let override = pthread_override_qos_class_start_np(pthread_self(), QOS_CLASS_DEFAULT, 0)
+	defer { pthread_override_qos_class_end_np(override) }
+	return try call()
+}
+
 final class Log {
 	/// Whether no engine runs, so that the framework's logger, which starts with it, goes nowhere. Set once, first thing.
 	nonisolated(unsafe) static var usesSystemLog = false
@@ -671,7 +684,7 @@ final class Log {
 			systemLog.info("\(message, privacy: .public)")
 		}
 		else {
-			SushitrainLogInfo(message)
+			atEnginePriority { SushitrainLogInfo(message) }
 		}
 	}
 
@@ -680,7 +693,7 @@ final class Log {
 			systemLog.warning("\(message, privacy: .public)")
 		}
 		else {
-			SushitrainLogWarn(message)
+			atEnginePriority { SushitrainLogWarn(message) }
 		}
 	}
 }
