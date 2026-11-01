@@ -56,8 +56,9 @@ wrapped configuration, so the core sees each of their changes before it is appli
   automatic pause ends, as with the switch in the app. A device that is already paused doesn't change, so pausing one
   elsewhere meanwhile is not recorded; the switch and the Shortcuts action do record it.
 - The web GUI saves the whole configuration with each device's pause as the page last saw it, and the core can't tell
-  that from a click. So a device's edit dialog opened during an automatic pause and saved after it pauses the device for
-  good, and one opened before the device was paused in the app resumes it.
+  that from a click, so the fork's dialogs keep the current value: Edit Device has no pause control, and in Advanced only
+  a value changed there counts. A save in the moment before the page hears of a change can still carry an old value, and
+  so can a `PATCH` of a device, which reads the device before its turn in the configuration's queue.
 - A change that resumes a remote-managed folder goes through with the folder still paused, as refusing it would refuse
   all of it, and the web GUI's Resume All saves the whole configuration. The app's own attempts are still refused, so
   that it can say why.
