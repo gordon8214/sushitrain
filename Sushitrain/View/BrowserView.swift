@@ -10,23 +10,21 @@ import PhotosUI
 @preconcurrency import SushitrainCore
 import SynctrainHostKit
 
-#if os(macOS)
-	struct BrowserRefreshActions {
-		let refresh: @MainActor () async -> Void
-		let rescan: @MainActor () async -> Void
-	}
+struct BrowserRefreshActions {
+	let refresh: @MainActor () async -> Void
+	let rescan: @MainActor () async -> Void
+}
 
-	private struct BrowserRefreshActionsKey: FocusedValueKey {
-		typealias Value = BrowserRefreshActions
-	}
+private struct BrowserRefreshActionsKey: FocusedValueKey {
+	typealias Value = BrowserRefreshActions
+}
 
-	extension FocusedValues {
-		var browserRefreshActions: BrowserRefreshActions? {
-			get { self[BrowserRefreshActionsKey.self] }
-			set { self[BrowserRefreshActionsKey.self] = newValue }
-		}
+extension FocusedValues {
+	var browserRefreshActions: BrowserRefreshActions? {
+		get { self[BrowserRefreshActionsKey.self] }
+		set { self[BrowserRefreshActionsKey.self] = newValue }
 	}
-#endif
+}
 
 enum BrowserViewStyle: String {
 	case grid = "grid"
@@ -126,7 +124,6 @@ struct BrowserView: View {
 	@State private var searchText = ""
 	@State private var localNativeURL: URL? = nil
 	@State private var folderExists = false
-	@State private var showSearch = false
 	@State private var showAddFilePicker = false
 	@State private var showPhotoPicker = false
 	@State private var selectedMedia: [PhotosPickerItem] = []
@@ -140,16 +137,10 @@ struct BrowserView: View {
 	@State private var showNewBookmarkInfo = false
 	@State private var recursive = false
 
-	#if os(macOS)
-		@State private var showIgnores = false
-		@State private var showStatusPopover = false
-		@State private var showDeletedFiles = false
-		@State private var isSearching = false
-	#endif
-
-	#if os(iOS)
-		@State private var showFolderStatistics = false
-	#endif
+	@State private var showIgnores = false
+	@State private var showStatusPopover = false
+	@State private var showDeletedFiles = false
+	@State private var isSearching = false
 
 	private func currentViewStyle() -> Binding<BrowserViewStyle> {
 		return Binding(
@@ -177,24 +168,6 @@ struct BrowserView: View {
 	}
 
 	var body: some View {
-		#if os(iOS)
-			// Syncthing on this device leaves a folder accessed through a gateway alone (paused), so it cannot list it. The
-			// coordinator's state is observed, so that this follows a switch; Syncthing's own answer covers the time before
-			// the coordinator has read it.
-			if RemoteCoordinator.shared.isRemoteManaged(folderID: folder.folderID)
-				|| appState.client.isFolderRemoteManaged(folder.folderID)
-			{
-				RemoteFolderBrowserView(folder: folder, prefix: prefix)
-			}
-			else {
-				self.browser
-			}
-		#else
-			self.browser
-		#endif
-	}
-
-	private var browser: some View {
 		BrowserItemsView(
 			folder: folder,
 			prefix: prefix,
@@ -206,60 +179,23 @@ struct BrowserView: View {
 			showSettings: $showSettings
 		)
 
-		#if os(iOS)
-			.navigationTitle(folderName)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
+		.searchable(
+			text: $searchText,
+			isPresented: $isSearching,
+			placement: SearchFieldPlacement.toolbar,
+			prompt: "Search files in this folder..."
+		)
 
-		#if os(macOS)
-			.searchable(
-				text: $searchText,
-				isPresented: $isSearching,
-				placement: SearchFieldPlacement.toolbar,
-				prompt: "Search files in this folder...")
-		#endif
-
-		#if os(iOS)
-			.sheet(isPresented: $showSearch) {
-				NavigationStack {
-					SearchView(prefix: self.prefix, folder: self.folder)
-					.navigationTitle("Search in this folder")
-					.navigationBarTitleDisplayMode(.inline)
-					.toolbar {
-						SheetButton(role: .cancel) {
-							showSearch = false
-						}
-					}
-				}
-			}
-		#endif
-
-		#if os(macOS)
-			.navigationTitle("")
-		#endif
+		.navigationTitle("")
 
 		.toolbar {
 			self.toolbarContent()
 		}
-		#if os(iOS)
-			.sheet(isPresented: $showFolderStatistics) {
-				NavigationStack {
-					FolderStatisticsView(folder: folder)
-					.toolbar {
-						SheetButton(role: .done) {
-							showFolderStatistics = false
-						}
-					}
-				}
-			}
-		#endif
 		.sheet(isPresented: $showSettings) {
 			NavigationStack {
 				FolderView(folder: self.folder)
-					#if os(macOS)
-						.presentationSizing(.fitted.sticky(horizontal: false, vertical: true))
-						.frame(minWidth: 700, minHeight: 600)
-					#endif
+					.presentationSizing(.fitted.sticky(horizontal: false, vertical: true))
+					.frame(minWidth: 700, minHeight: 600)
 					.toolbar {
 						SheetButton(role: .save) {
 							showSettings = false
@@ -267,32 +203,21 @@ struct BrowserView: View {
 					}
 			}
 		}
-		#if os(macOS)
-			.sheet(isPresented: $showDeletedFiles) {
-				DeletedFilesView(folder: folder)
+		.sheet(isPresented: $showDeletedFiles) {
+			DeletedFilesView(folder: folder)
+		}
+		.sheet(isPresented: $showIgnores) {
+			NavigationStack {
+				self.ignoreSheetView()
 			}
-			.sheet(isPresented: $showIgnores) {
-				NavigationStack {
-					self.ignoreSheetView()
-				}
-			}
-		#endif
+		}
 
-		#if os(macOS)
-			.alert(
-				"This location has been added to your bookmarks. Bookmarked locations can be accessed quickly from the start page.",
-				isPresented: $showNewBookmarkInfo
-			) {
-				Button("OK") {}
-			}
-		#else
-			.alert(
-				"This location has been added to your bookmarks. Bookmarked locations can be accessed quickly from the start page, or by long-tapping the app icon on the home screen.",
-				isPresented: $showNewBookmarkInfo
-			) {
-				Button("OK") {}
-			}
-		#endif
+		.alert(
+			"This location has been added to your bookmarks. Bookmarked locations can be accessed quickly from the start page.",
+			isPresented: $showNewBookmarkInfo
+		) {
+			Button("OK") {}
+		}
 
 		.task {
 			self.update()
@@ -330,31 +255,30 @@ struct BrowserView: View {
 			}
 		}
 
-		#if os(macOS)
-			.contextMenu {
-				if let entry = try? self.folder.getFileInformation(self.prefix.withoutEndingSlash) {
-					NavigationLink(destination: EntryInfoView(entry: entry, showPath: false, siblings: nil)) {
-						Label("Subdirectory properties...", systemImage: entry.systemImage)
-					}
-
+		.contextMenu {
+			if let entry = try? self.folder.getFileInformation(self.prefix.withoutEndingSlash) {
+				NavigationLink(destination: EntryInfoView(entry: entry, showPath: false, siblings: nil)) {
+					Label("Subdirectory properties...", systemImage: entry.systemImage)
 				}
+
 			}
-			.onDrop(
-				of: ["public.file-url"], isTargeted: nil,
-				perform: { providers, _ in
-					Task {
-						self.showAlert = nil
-						do {
-							try await self.onDrop(providers)
-						}
-						catch {
-							Log.warn("Failed to drop: \(error.localizedDescription)")
-							self.showAlert = .error(error.localizedDescription)
-						}
+		}
+		.onDrop(
+			of: ["public.file-url"], isTargeted: nil,
+			perform: { providers, _ in
+				Task {
+					self.showAlert = nil
+					do {
+						try await self.onDrop(providers)
 					}
-					return true
-				})
-		#endif
+					catch {
+						Log.warn("Failed to drop: \(error.localizedDescription)")
+						self.showAlert = .error(error.localizedDescription)
+					}
+				}
+				return true
+			}
+		)
 		.alert(item: $showAlert) { alert in
 			switch alert {
 			case .error(let err):
@@ -386,72 +310,65 @@ struct BrowserView: View {
 	}
 
 	@ToolbarContentBuilder private func toolbarContent() -> some ToolbarContent {
-		#if os(macOS)
-			// On iOS, this is done with .navigationTitle() and the sync status is shown in the view
-			ToolbarItem(placement: .navigation) {
-				let fsd = FolderStatusDescription(folder)
-				HStack(alignment: .center) {
-					Button(fsd.text, systemImage: fsd.systemImage) {
-						showStatusPopover = true
-					}
-					.animation(.spring(), value: fsd.systemImage)
-					.labelStyle(.iconOnly)
-					.foregroundStyle(fsd.color)
-					.accessibilityLabel(fsd.text)
-					.popover(isPresented: $showStatusPopover, arrowEdge: .bottom) {
-						FolderPopoverView(folder: folder)
-					}
-					Text(folderName).font(.headline).padding(.trailing, 20)
+		ToolbarItem(placement: .navigation) {
+			let fsd = FolderStatusDescription(folder)
+			HStack(alignment: .center) {
+				Button(fsd.text, systemImage: fsd.systemImage) {
+					showStatusPopover = true
+				}
+				.animation(.spring(), value: fsd.systemImage)
+				.labelStyle(.iconOnly)
+				.foregroundStyle(fsd.color)
+				.accessibilityLabel(fsd.text)
+				.popover(isPresented: $showStatusPopover, arrowEdge: .bottom) {
+					FolderPopoverView(folder: folder)
+				}
+				Text(folderName).font(.headline).padding(.trailing, 20)
+			}
+		}
+
+		ToolbarItemGroup(placement: .status) {
+			Picker("View as", selection: self.currentViewStyle()) {
+				Image(systemName: "list.bullet").tag(BrowserViewStyle.list)
+					.accessibilityLabel(Text("List"))
+					.keyboardShortcut("1", modifiers: .command)
+				Image(systemName: "checklist.unchecked").tag(BrowserViewStyle.thumbnailList)
+					.accessibilityLabel(Text("List with previews"))
+					.keyboardShortcut("2", modifiers: .command)
+				Image(systemName: "square.grid.2x2").tag(BrowserViewStyle.grid)
+					.accessibilityLabel(Text("Grid"))
+					.keyboardShortcut("3", modifiers: .command)
+
+				if webViewAvailable {
+					Image(systemName: "doc.text.image")
+						.tag(BrowserViewStyle.web)
+						.accessibilityLabel(Text("Web page"))
+						.keyboardShortcut("4", modifiers: .command)
 				}
 			}
+			.pickerStyle(.segmented)
+			.disabled(isSearching)
 
-			ToolbarItemGroup(placement: .status) {
-				Picker("View as", selection: self.currentViewStyle()) {
-					Image(systemName: "list.bullet").tag(BrowserViewStyle.list)
-						.accessibilityLabel(Text("List"))
-						.keyboardShortcut("1", modifiers: .command)
-					Image(systemName: "checklist.unchecked").tag(BrowserViewStyle.thumbnailList)
-						.accessibilityLabel(Text("List with previews"))
-						.keyboardShortcut("2", modifiers: .command)
-					Image(systemName: "square.grid.2x2").tag(BrowserViewStyle.grid)
-						.accessibilityLabel(Text("Grid"))
-						.keyboardShortcut("3", modifiers: .command)
-
-					if webViewAvailable {
-						Image(systemName: "doc.text.image")
-							.tag(BrowserViewStyle.web)
-							.accessibilityLabel(Text("Web page"))
-							.keyboardShortcut("4", modifiers: .command)
-					}
-				}
-				.pickerStyle(.segmented)
-				.disabled(isSearching)
-
-				self.filterMenu()
-			}
-		#endif
+			self.filterMenu()
+		}
 
 		ToolbarItemGroup(placement: .primaryAction) {
-			#if os(macOS)
-				Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
-					self.showInFinder()
-				}
-				.disabled(localNativeURL == nil || isSearching)
-				.keyboardShortcut("G", modifiers: .command)
-			#endif
+			Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
+				self.showInFinder()
+			}
+			.disabled(localNativeURL == nil || isSearching)
+			.keyboardShortcut("G", modifiers: .command)
 
 			self.folderMenu()
 		}
 	}
 
-	#if os(macOS)
-		@ViewBuilder private func ignoreSheetView() -> some View {
-			IgnoresView(folder: folder)
-				.navigationTitle("Files to ignore")
-				.presentationSizing(.form)
-				.frame(minWidth: 640, minHeight: 480)
-		}
-	#endif
+	@ViewBuilder private func ignoreSheetView() -> some View {
+		IgnoresView(folder: folder)
+			.navigationTitle("Files to ignore")
+			.presentationSizing(.form)
+			.frame(minWidth: 640, minHeight: 480)
+	}
 
 	@ViewBuilder private func filterMenu() -> some View {
 		Menu {
@@ -470,9 +387,7 @@ struct BrowserView: View {
 				Label("By size", systemImage: "scalemass.fill").tag(BrowserViewSortAttribute.size)
 				Label("By date", systemImage: "calendar").tag(BrowserViewSortAttribute.dateModified)
 			}.pickerStyle(.inline)
-				#if os(macOS)
-					.disabled(self.viewStyle != .grid)
-				#endif
+				.disabled(self.viewStyle != .grid)
 
 			Toggle(
 				"Descending", systemImage: "chart.bar.xaxis.descending",
@@ -486,9 +401,7 @@ struct BrowserView: View {
 						userSettings.defaultBrowserSort = AsJSON(self.entriesSort)
 					})
 			)
-			#if os(macOS)
-				.disabled(self.viewStyle != .grid)
-			#endif
+			.disabled(self.viewStyle != .grid)
 
 			Divider()
 
@@ -596,15 +509,6 @@ struct BrowserView: View {
 		}
 	}
 
-	@ViewBuilder private func addMenu() -> some View {
-		Menu {
-			self.addMenuContents()
-		} label: {
-			Label("Add...", systemImage: "plus")
-		}.disabled(
-			!folderExists || !self.folder.isRegularFolder || self.folder.isReceiveOnlyFolder)
-	}
-
 	@ViewBuilder private func addMenuContents() -> some View {
 		Button("Add from photo library...", systemImage: "photo.on.rectangle") {
 			showPhotoPicker = true
@@ -615,28 +519,12 @@ struct BrowserView: View {
 			showAddFilePicker = true
 		}.disabled(
 			!folderExists || !self.folder.isRegularFolder || self.folder.isReceiveOnlyFolder)
-
-		#if os(iOS)
-			Button("Paste files...", systemImage: "document.on.clipboard") {
-				Task {
-					await self.dropItemProviders(UIPasteboard.general.itemProviders)
-				}
-			}.disabled(UIPasteboard.general.itemProviders.isEmpty)
-		#endif
 	}
 
 	@ViewBuilder private func folderOperationsMenu() -> some View {
 		Menu {
-			#if os(iOS)
-				Button("Folder statistics...", systemImage: "chart.pie") {
-					showFolderStatistics = true
-				}
-			#endif
-
 			Button("Re-scan folder", systemImage: "sparkle.magnifyingglass", action: rescanFolder)
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 				.keyboardShortcut("R", modifiers: [.command, .shift])
 
 			Divider()
@@ -644,9 +532,7 @@ struct BrowserView: View {
 			Button("Unlink folder", systemImage: "folder.badge.minus", role: .destructive) {
 				showConfirmable = .unlinkFolder
 			}
-			#if os(macOS)
-				.buttonStyle(.link)
-			#endif
+			.buttonStyle(.link)
 			.foregroundColor(.red)
 
 			// Only allow removing a full folder when we are sure it is in the area managed by us
@@ -654,9 +540,7 @@ struct BrowserView: View {
 				Button("Remove folder", systemImage: "trash", role: .destructive) {
 					showConfirmable = .removeFolder
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 				.foregroundColor(.red)
 			}
 		} label: {
@@ -668,34 +552,7 @@ struct BrowserView: View {
 		let isReceiveEncrypted = folder.isReceiveEncryptedFolder
 		Menu {
 			if folderExists {
-				#if os(iOS)
-					if !isReceiveEncrypted {
-						BrowserViewStylePickerView(
-							webViewAvailable: self.webViewAvailable,
-							viewStyle: self.currentViewStyle()
-						).pickerStyle(.inline)
-
-						self.filterMenu()
-
-						self.addMenu()
-					}
-
-					Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
-						self.showInFinder()
-					}.disabled(localNativeURL == nil)
-				#else
-					self.addMenuContents()
-				#endif
-
-				#if os(iOS)
-					if !isReceiveEncrypted {
-						Toggle(
-							"Search here...",
-							systemImage: "magnifyingglass",
-							isOn: $showSearch
-						).disabled(!folderExists)
-					}
-				#endif
+				self.addMenuContents()
 
 				if folderExists && !self.prefix.isEmpty && !isReceiveEncrypted {
 					if let entry = try? self.folder.getFileInformation(self.prefix.withoutEndingSlash) {
@@ -720,35 +577,26 @@ struct BrowserView: View {
 					.disabled(!folder.versioningArchiveExists)
 				}
 
-				#if os(macOS)
-					if folder.canBrowseVersions() {
-						Button("Deleted Files...", systemImage: "trash.circle") {
-							showDeletedFiles = true
-						}
+				if folder.canBrowseVersions() {
+					Button("Deleted Files...", systemImage: "trash.circle") {
+						showDeletedFiles = true
 					}
-				#endif
+				}
 			}
 
 			Button("Folder settings...", systemImage: "folder.badge.gearshape") {
 				showSettings = true
 			}
 
-			// On iOS this is in the folder settings screen
-			#if os(macOS)
-				if folder.isRegularFolder {
-					Button("Files to ignore...", systemImage: "rectangle.dashed") {
-						showIgnores = true
-					}
+			if folder.isRegularFolder {
+				Button("Files to ignore...", systemImage: "rectangle.dashed") {
+					showIgnores = true
 				}
-			#endif
+			}
 
 			self.folderOperationsMenu()
 		} label: {
-			#if os(macOS)
-				Label("Folder settings", systemImage: "folder.badge.gearshape")
-			#else
-				Label("Actions", systemImage: "ellipsis")
-			#endif
+			Label("Folder settings", systemImage: "folder.badge.gearshape")
 		}.disabled(!folderExists)
 	}
 
@@ -833,44 +681,6 @@ struct BrowserView: View {
 
 		let numFilesAdded = try await self.dropFilesInBackground(urls)
 		self.showToast(Toast(title: "\(numFilesAdded) files added", image: "plus"))
-	}
-
-	private func dropItemProviders(_ items: [NSItemProvider]) async {
-		var urls: [URL] = []
-
-		for item in items {
-			do {
-				let tempURL: URL? = try await withCheckedThrowingContinuation { cont in
-					// TODO: add file coordination
-					let _ = item.loadFileRepresentation(for: UTType.data, openInPlace: true) { tempURL, wasOpenedInPlace, err in
-						if let err = err {
-							cont.resume(throwing: err)
-							return
-						}
-						else {
-							cont.resume(returning: tempURL)
-						}
-					}
-				}
-
-				if let tempURL = tempURL {
-					urls.append(tempURL)
-				}
-			}
-			catch {
-				Log.warn("failed to load file representation for item: \(error)")
-			}
-		}
-
-		// Process the files
-		do {
-			let numFilesAdded = try await self.dropFilesInBackground(urls)
-			self.showToast(Toast(title: "\(numFilesAdded) files added", image: "plus"))
-		}
-		catch {
-			Log.warn("failed to drop files: \(error)")
-			self.showAlert = .error(error.localizedDescription)
-		}
 	}
 
 	private func dropFilesInBackground(_ urls: [URL]) async throws -> Int {
@@ -964,7 +774,6 @@ private struct BrowserItemsView: View {
 	@State private var showSpinner = false
 	@State private var folderExists = false
 	@State private var folderIsPaused = false
-	@State private var showStatistics = false
 
 	@Environment(\.isSearching) private var isSearching
 
@@ -980,17 +789,13 @@ private struct BrowserItemsView: View {
 						self.listView()
 
 					case .web:
-						#if os(macOS)
-							if #available(macOS 26, *) {
-								BrowserWebView(folderID: folder.folderID, path: self.prefix)
-									.backgroundExtensionEffect()
-							}
-							else {
-								BrowserWebView(folderID: folder.folderID, path: self.prefix)
-							}
-						#else
+						if #available(macOS 26, *) {
 							BrowserWebView(folderID: folder.folderID, path: self.prefix)
-						#endif
+								.backgroundExtensionEffect()
+						}
+						else {
+							BrowserWebView(folderID: folder.folderID, path: self.prefix)
+						}
 					}
 				}
 				else {
@@ -1015,15 +820,14 @@ private struct BrowserItemsView: View {
 		.refreshable {
 			await self.rescan()
 		}
-		#if os(macOS)
-			.focusedSceneValue(
-				\.browserRefreshActions,
-				folderExists && !isLoading
-					? BrowserRefreshActions(
-						refresh: { await self.reload() },
-						rescan: { await self.rescan() })
-					: nil)
-		#endif
+		.focusedSceneValue(
+			\.browserRefreshActions,
+			folderExists && !isLoading
+				? BrowserRefreshActions(
+					refresh: { await self.reload() },
+					rescan: { await self.rescan() })
+				: nil
+		)
 		.contextMenu {
 			Button("Refresh") {
 				Task {
@@ -1051,44 +855,25 @@ private struct BrowserItemsView: View {
 			userSettings: appState.userSettings,
 			header: {
 				HStack {
-					#if os(iOS)
-						Button(action: {
-							showStatistics = true
-						}) {
-							FolderStatusView(folder: folder).padding(.horizontal, 10).padding(.vertical, 15)
-						}.sheet(isPresented: $showStatistics) {
-							NavigationStack {
-								FolderStatisticsView(folder: folder)
-									.toolbar {
-										SheetButton(role: .done) {
-											showStatistics = false
-										}
-									}
-							}
-						}
-					#endif
-
 					Spacer()
 
-					#if os(macOS)
-						// You can pinch on macOS using the touch pad, but it is handy to have a slider as well
-						Slider(
-							value: Binding(
-								get: {
-									return Double(appState.userSettings.browserGridColumns)
-								},
-								set: { nv in
-									withAnimation(.spring(response: 0.8)) {
-										appState.userSettings.browserGridColumns = Int(nv)
-									}
+					// You can pinch on macOS using the touch pad, but it is handy to have a slider as well
+					Slider(
+						value: Binding(
+							get: {
+								return Double(appState.userSettings.browserGridColumns)
+							},
+							set: { nv in
+								withAnimation(.spring(response: 0.8)) {
+									appState.userSettings.browserGridColumns = Int(nv)
 								}
-							),
-							in: 1.0...10.0, step: 1.0
-						)
-						.frame(minWidth: 50, maxWidth: 150)
-						.padding(.horizontal, 20)
-						.padding(.vertical, 15)
-					#endif
+							}
+						),
+						in: 1.0...10.0, step: 1.0
+					)
+					.frame(minWidth: 50, maxWidth: 150)
+					.padding(.horizontal, 20)
+					.padding(.vertical, 15)
 				}
 			},
 			content: { columns in
@@ -1100,29 +885,17 @@ private struct BrowserItemsView: View {
 					folder: folder,
 					columns: columns
 				)
-				#if os(macOS)
-					.padding(.leading, 5.0)
-				#endif
+				.padding(.leading, 5.0)
 			})
 	}
 
 	@ViewBuilder private func listView() -> some View {
-		#if os(macOS)
-			BrowserTableView(
-				folder: folder,
-				files: files,
-				subdirectories: subdirectories,
-				viewStyle: viewStyle ?? appState.userSettings.defaultBrowserViewStyle
-			)
-		#else
-			BrowserListView(
-				folder: folder,
-				prefix: prefix,
-				files: files,
-				subdirectories: subdirectories,
-				viewStyle: viewStyle ?? appState.userSettings.defaultBrowserViewStyle
-			)
-		#endif
+		BrowserTableView(
+			folder: folder,
+			files: files,
+			subdirectories: subdirectories,
+			viewStyle: viewStyle ?? appState.userSettings.defaultBrowserViewStyle
+		)
 	}
 
 	@ViewBuilder private func overlayView() -> some View {
@@ -1320,36 +1093,6 @@ extension SushitrainFolder {
 		hasher.combine(self.state())
 		hasher.combine(self.isPaused())
 		return hasher.finalize()
-	}
-}
-
-private struct BrowserViewStylePickerView: View {
-	let webViewAvailable: Bool
-	@Binding var viewStyle: BrowserViewStyle
-
-	var body: some View {
-		Picker("View as", selection: $viewStyle) {
-			HStack {
-				Image(systemName: "list.bullet")
-				Text("List")
-			}.tag(BrowserViewStyle.list)
-			HStack {
-				Image(systemName: "checklist.unchecked")
-				Text("List with previews")
-			}.tag(BrowserViewStyle.thumbnailList)
-			HStack {
-				Image(systemName: "square.grid.2x2")
-				Text("Grid with previews")
-			}.tag(BrowserViewStyle.grid)
-
-			if webViewAvailable {
-				HStack {
-					Image(systemName: "doc.text.image")
-					Text("Web page")
-				}.tag(BrowserViewStyle.web)
-			}
-		}
-		.pickerStyle(.inline)
 	}
 }
 

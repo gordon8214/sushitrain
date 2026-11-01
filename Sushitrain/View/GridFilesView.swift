@@ -42,11 +42,7 @@ struct GridScrollView<HeaderContent: View, Content: View>: View {
 
 					self.content(userSettings.browserGridColumns)
 						.scaleEffect(magnifyBy, anchor: .top)
-						#if os(iOS)
-							.offset(x: 0, y: (scrollViewOffset + UIScreen.main.bounds.midY) * (1 - magnifyBy))
-						#else
-							.offset(x: 0, y: (scrollViewOffset + reader.size.height / 2.0) * (1 - magnifyBy))
-						#endif
+						.offset(x: 0, y: (scrollViewOffset + reader.size.height / 2.0) * (1 - magnifyBy))
 				}
 				.highPriorityGesture(magnification)
 				.accessibilityZoomAction { action in

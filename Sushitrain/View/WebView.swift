@@ -6,16 +6,11 @@
 import Foundation
 import SwiftUI
 import SushitrainCore
-import VisionKit
 import WebKit
 import CoreTransferable
 import UniformTypeIdentifiers
 import SwiftUI
 import Combine
-
-#if os(macOS)
-	typealias UIViewRepresentable = NSViewRepresentable
-#endif
 
 struct HTTPError: LocalizedError {
 	let statusCode: Int
@@ -40,7 +35,7 @@ struct HTTPError: LocalizedError {
 	}
 }
 
-struct WebView: UIViewRepresentable {
+struct WebView: NSViewRepresentable {
 	let url: URL
 	var trustFingerprints: [Data] = []
 	var cookies: [HTTPCookie] = []
@@ -50,7 +45,6 @@ struct WebView: UIViewRepresentable {
 	/// the user's synced files.
 	var isWebApp: Bool = false
 
-	@State var isOpaque: Bool = false
 	@Environment(\.showToast) private var showToast
 
 	@Binding var isLoading: Bool
@@ -59,10 +53,6 @@ struct WebView: UIViewRepresentable {
 	// With thanks to https://www.swiftyplace.com/blog/loading-a-web-view-in-swiftui-with-wkwebview
 	class WebViewCoordinator: NSObject, WKNavigationDelegate, WKDownloadDelegate, WKUIDelegate {
 		var parent: WebView
-
-		#if os(iOS)
-			private var openPanelContinuation: CheckedContinuation<[URL]?, Never>?
-		#endif
 
 		init(_ parent: WebView) {
 			self.parent = parent
@@ -121,11 +111,7 @@ struct WebView: UIViewRepresentable {
 				Log.warn("Not opening a URL from a web app: \(url.scheme ?? "no scheme")")
 				return
 			}
-			#if os(macOS)
-				NSWorkspace.shared.open(url)
-			#else
-				UIApplication.shared.open(url)
-			#endif
+			NSWorkspace.shared.open(url)
 		}
 
 		func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async
@@ -156,183 +142,75 @@ struct WebView: UIViewRepresentable {
 			_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
 			initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor () -> Void
 		) {
-			#if os(iOS)
-				guard let presenter = Self.presenter(for: webView) else {
-					completionHandler()
-					return
-				}
-
-				let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-				alert.addAction(
-					UIAlertAction(title: String(localized: "OK"), style: .default) { _ in
-						completionHandler()
-					})
-				presenter.present(alert, animated: true)
-			#endif
-
-			#if os(macOS)
-				let alert = NSAlert()
-				alert.messageText = message
-				alert.addButton(withTitle: String(localized: "OK"))
-				Self.run(alert: alert, for: webView) { _ in
-					completionHandler()
-				}
-			#endif
+			let alert = NSAlert()
+			alert.messageText = message
+			alert.addButton(withTitle: String(localized: "OK"))
+			Self.run(alert: alert, for: webView) { _ in
+				completionHandler()
+			}
 		}
 
 		func webView(
 			_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
 			initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor (Bool) -> Void
 		) {
-			#if os(iOS)
-				guard let presenter = Self.presenter(for: webView) else {
-					completionHandler(false)
-					return
-				}
-
-				let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-				alert.addAction(
-					UIAlertAction(title: String(localized: "Cancel"), style: .cancel) { _ in
-						completionHandler(false)
-					})
-				alert.addAction(
-					UIAlertAction(title: String(localized: "OK"), style: .default) { _ in
-						completionHandler(true)
-					})
-				presenter.present(alert, animated: true)
-			#endif
-
-			#if os(macOS)
-				let alert = NSAlert()
-				alert.messageText = message
-				alert.addButton(withTitle: String(localized: "OK"))
-				alert.addButton(withTitle: String(localized: "Cancel"))
-				Self.run(alert: alert, for: webView) { response in
-					completionHandler(response == .alertFirstButtonReturn)
-				}
-			#endif
+			let alert = NSAlert()
+			alert.messageText = message
+			alert.addButton(withTitle: String(localized: "OK"))
+			alert.addButton(withTitle: String(localized: "Cancel"))
+			Self.run(alert: alert, for: webView) { response in
+				completionHandler(response == .alertFirstButtonReturn)
+			}
 		}
 
 		func webView(
 			_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
 			initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor (String?) -> Void
 		) {
-			#if os(iOS)
-				guard let presenter = Self.presenter(for: webView) else {
-					completionHandler(nil)
-					return
-				}
+			let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+			textField.stringValue = defaultText ?? ""
 
-				let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
-				alert.addTextField { textField in
-					textField.text = defaultText
-				}
-				alert.addAction(
-					UIAlertAction(title: String(localized: "Cancel"), style: .cancel) { _ in
-						completionHandler(nil)
-					})
-				alert.addAction(
-					UIAlertAction(title: String(localized: "OK"), style: .default) { _ in
-						completionHandler(alert.textFields?.first?.text)
-					})
-				presenter.present(alert, animated: true)
-			#endif
-
-			#if os(macOS)
-				let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-				textField.stringValue = defaultText ?? ""
-
-				let alert = NSAlert()
-				alert.messageText = prompt
-				alert.accessoryView = textField
-				alert.addButton(withTitle: String(localized: "OK"))
-				alert.addButton(withTitle: String(localized: "Cancel"))
-				Self.run(alert: alert, for: webView) { response in
-					completionHandler(response == .alertFirstButtonReturn ? textField.stringValue : nil)
-				}
-			#endif
+			let alert = NSAlert()
+			alert.messageText = prompt
+			alert.accessoryView = textField
+			alert.addButton(withTitle: String(localized: "OK"))
+			alert.addButton(withTitle: String(localized: "Cancel"))
+			Self.run(alert: alert, for: webView) { response in
+				completionHandler(response == .alertFirstButtonReturn ? textField.stringValue : nil)
+			}
 		}
 
-		#if os(iOS)
-			private static func presenter(for webView: WKWebView) -> UIViewController? {
-				let rootViewController =
-					webView.window?.rootViewController
-					?? UIApplication.shared.connectedScenes
-					.compactMap { $0 as? UIWindowScene }
-					.flatMap(\.windows)
-					.last(where: { $0.isKeyWindow })?
-					.rootViewController
-
-				return topViewController(from: rootViewController)
-			}
-
-			private static func topViewController(from viewController: UIViewController?) -> UIViewController? {
-				if let navigationController = viewController as? UINavigationController {
-					return topViewController(from: navigationController.visibleViewController)
-				}
-
-				if let tabBarController = viewController as? UITabBarController {
-					return topViewController(from: tabBarController.selectedViewController)
-				}
-
-				if let presentedViewController = viewController?.presentedViewController {
-					return topViewController(from: presentedViewController)
-				}
-
-				return viewController
-			}
-
-			@available(iOS 18.4, *)
-			func webView(
-				_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo
-			) async -> [URL]? {
-				guard let presenter = Self.presenter(for: webView), openPanelContinuation == nil else {
-					return nil
-				}
-
-				return await withCheckedContinuation { continuation in
-					let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.item], asCopy: true)
-					picker.delegate = self
-					picker.allowsMultipleSelection = parameters.allowsMultipleSelection
-					openPanelContinuation = continuation
-					presenter.present(picker, animated: true)
+		private static func run(
+			alert: NSAlert, for webView: WKWebView,
+			completionHandler: @escaping @MainActor (NSApplication.ModalResponse) -> Void
+		) {
+			if let window = webView.window {
+				alert.beginSheetModal(for: window) { response in
+					completionHandler(response)
 				}
 			}
-		#endif
+			else {
+				completionHandler(alert.runModal())
+			}
+		}
 
-		#if os(macOS)
-			private static func run(
-				alert: NSAlert, for webView: WKWebView,
-				completionHandler: @escaping @MainActor (NSApplication.ModalResponse) -> Void
-			) {
-				if let window = webView.window {
-					alert.beginSheetModal(for: window) { response in
-						completionHandler(response)
-					}
-				}
-				else {
-					completionHandler(alert.runModal())
+		func webView(
+			_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
+			initiatedByFrame frame: WKFrameInfo
+		) async -> [URL]? {
+			let openPanel = NSOpenPanel()
+			openPanel.canChooseFiles = true
+			let result = await openPanel.begin()
+			if result == NSApplication.ModalResponse.OK {
+				if let url = openPanel.url {
+					return [url]
 				}
 			}
-
-			func webView(
-				_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
-				initiatedByFrame frame: WKFrameInfo
-			) async -> [URL]? {
-				let openPanel = NSOpenPanel()
-				openPanel.canChooseFiles = true
-				let result = await openPanel.begin()
-				if result == NSApplication.ModalResponse.OK {
-					if let url = openPanel.url {
-						return [url]
-					}
-				}
-				else if result == NSApplication.ModalResponse.cancel {
-					return nil
-				}
+			else if result == NSApplication.ModalResponse.cancel {
 				return nil
 			}
-		#endif
+			return nil
+		}
 
 		func download(
 			_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
@@ -514,18 +392,6 @@ struct WebView: UIViewRepresentable {
 			let nsError = error as NSError
 			return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
 		}
-
-		#if os(iOS)
-			func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-				openPanelContinuation?.resume(returning: nil)
-				openPanelContinuation = nil
-			}
-
-			func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-				openPanelContinuation?.resume(returning: urls)
-				openPanelContinuation = nil
-			}
-		#endif
 	}
 
 	private static let webAppDataStore = UUID(uuidString: "91EE853C-BEB3-4749-9BEE-70418F70CC4B")!
@@ -548,52 +414,24 @@ struct WebView: UIViewRepresentable {
 		return config
 	}
 
-	#if os(iOS)
-		func makeUIView(context: Context) -> WKWebView {
-			let view = WKWebView(frame: .zero, configuration: self.config)
-			view.navigationDelegate = context.coordinator
-			view.isOpaque = self.isOpaque
-			view.uiDelegate = context.coordinator
-			view.scrollView.contentInsetAdjustmentBehavior = .always
-			let request = URLRequest(url: url)
-			view.load(request)
-			return view
-		}
+	func makeNSView(context: Context) -> WKWebView {
+		let view = WKWebView(frame: CGRectZero, configuration: self.config)
+		view.navigationDelegate = context.coordinator
+		view.uiDelegate = context.coordinator
+		view.setValue(false, forKey: "drawsBackground")
+		view.allowsMagnification = true
+		view.underPageBackgroundColor = NSColor.clear
+		let request = URLRequest(url: url)
+		view.load(request)
+		return view
+	}
 
-		func updateUIView(_ webView: WKWebView, context: Context) {
-			// This sometimes 'resets' the URL to the initial URL when the user has navigated.
-			// A better solution is to use .id(initialURL) on the WebView
-			// if webView.url != url {
-			// let request = URLRequest(url: url)
-			// webView.load(request)
-			// }
-		}
-	#endif
-
-	#if os(macOS)
-		func makeNSView(context: Context) -> WKWebView {
-			let view = WKWebView(frame: CGRectZero, configuration: self.config)
-			view.navigationDelegate = context.coordinator
-			view.uiDelegate = context.coordinator
-			view.setValue(false, forKey: "drawsBackground")
-			view.allowsMagnification = true
-			view.underPageBackgroundColor = NSColor.clear
-			let request = URLRequest(url: url)
-			view.load(request)
-			return view
-		}
-
-		func updateNSView(_ webView: WKWebView, context: Context) {
-			// This sometimes 'resets' the URL to the initial URL when the user has navigated.
-			// A better solution is to use .id(initialURL) on the WebView
-			// if webView.url != url {
-			//	let request = URLRequest(url: url)
-			//	webView.load(request)
-			// }
-		}
-	#endif
+	func updateNSView(_ webView: WKWebView, context: Context) {
+		// This sometimes 'resets' the URL to the initial URL when the user has navigated.
+		// A better solution is to use .id(initialURL) on the WebView
+		// if webView.url != url {
+		//	let request = URLRequest(url: url)
+		//	webView.load(request)
+		// }
+	}
 }
-
-#if os(iOS)
-	extension WebView.WebViewCoordinator: UIDocumentPickerDelegate {}
-#endif

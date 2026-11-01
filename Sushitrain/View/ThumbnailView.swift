@@ -82,9 +82,7 @@ struct ThumbnailView: View {
 							showPreview = true
 						}
 						.padding(10)
-						#if os(macOS)
-							.buttonStyle(.link)
-						#endif
+						.buttonStyle(.link)
 					}
 					else {
 						self.iconAndTextBody

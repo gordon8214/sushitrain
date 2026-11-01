@@ -25,27 +25,17 @@ struct DeviceView: View {
 	@State private var otherFolders: [SushitrainFolder] = []
 	@State private var lastAddress: String = ""
 	@State private var showAddresses: Bool = false
-	#if os(macOS)
-		@State private var showSettings: Bool = false
-		@State private var ignoredFolders: [SushitrainIgnoredFolder] = []
-	#endif
+	@State private var showSettings: Bool = false
+	@State private var ignoredFolders: [SushitrainIgnoredFolder] = []
 	@State private var showConfirmUnlink = false
 	@State private var editSharingWith: SushitrainFolder? = nil
 
 	var body: some View {
 		VStack {
 			if self.device.exists() {
-				#if os(macOS)
-					self.tabSwitcher()
-				#endif
+				self.tabSwitcher()
 
 				Form {
-					#if os(iOS)
-						Section {
-							self.tabSwitcher()
-						}
-					#endif
-
 					switch self.selectedTab {
 					case .general:
 						self.generalTab()
@@ -55,9 +45,7 @@ struct DeviceView: View {
 						self.connectionTab()
 					}
 				}
-				#if os(macOS)
-					.formStyle(.grouped)
-				#endif
+				.formStyle(.grouped)
 			}
 			else {
 				ContentUnavailableView("Unknown device", systemImage: "externaldrive.badge.questionmark")
@@ -184,9 +172,7 @@ struct DeviceView: View {
 				}
 			}
 			.foregroundColor(.red)
-			#if os(macOS)
-				.buttonStyle(.link)
-			#endif
+			.buttonStyle(.link)
 		}
 	}
 
@@ -293,31 +279,27 @@ struct DeviceView: View {
 					}
 			}
 		}
-		#if os(macOS)
-			.buttonStyle(.link)
-		#endif
+		.buttonStyle(.link)
 
-		#if os(macOS)
-			if !device.isSelf() {
-				Button("Connection options...", systemImage: "slider.horizontal.3") {
-					showSettings = true
-				}
-				.sheet(isPresented: $showSettings) {
-					NavigationStack {
-						DeviceSettingsView(device: device)
-					}
-				}
-				.buttonStyle(.link)
-				.task(id: "\(device.deviceID()) \(appState.eventCounter)") {
-					let list = device.ignoredFolders()
-					ignoredFolders = (0..<(list?.count() ?? 0)).compactMap { list?.item(at: $0) }
-				}
-
-				if !ignoredFolders.isEmpty {
-					DeviceIgnoredFoldersSection(device: device, folders: ignoredFolders)
+		if !device.isSelf() {
+			Button("Connection options...", systemImage: "slider.horizontal.3") {
+				showSettings = true
+			}
+			.sheet(isPresented: $showSettings) {
+				NavigationStack {
+					DeviceSettingsView(device: device)
 				}
 			}
-		#endif
+			.buttonStyle(.link)
+			.task(id: "\(device.deviceID()) \(appState.eventCounter)") {
+				let list = device.ignoredFolders()
+				ignoredFolders = (0..<(list?.count() ?? 0)).compactMap { list?.item(at: $0) }
+			}
+
+			if !ignoredFolders.isEmpty {
+				DeviceIgnoredFoldersSection(device: device, folders: ignoredFolders)
+			}
+		}
 	}
 
 	@ViewBuilder private func tabSwitcher() -> some View {
@@ -341,9 +323,7 @@ struct DeviceView: View {
 				trailing: 0
 			)
 		)
-		#if os(macOS)
-			.padding(.top, 24)
-		#endif
+		.padding(.top, 24)
 	}
 }
 
@@ -365,9 +345,6 @@ private struct DeviceAddressesView: View {
 			}, addressType: .device
 		)
 		.disabled(loading != false)
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 		.navigationTitle("Device addresses")
 		.task {
 			await self.update()

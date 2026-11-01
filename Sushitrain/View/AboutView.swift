@@ -50,9 +50,7 @@ struct AboutView: View {
 				Button("Legal notices") {
 					showNotices = true
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 				Link(
 					"Obtain the source code",
 					destination: URL(string: "https://github.com/syncthing/syncthing")!)
@@ -80,18 +78,11 @@ struct AboutView: View {
 				Button("Show introduction screen", systemImage: "hands.and.sparkles.fill") {
 					showOnboarding = true
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			}
 		}
 		.navigationTitle("About this app")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 		.sheet(isPresented: $showOnboarding) {
 			if #available(iOS 18, *) {
 				OnboardingView(allowSkip: true)
@@ -114,9 +105,6 @@ struct AboutView: View {
 						}
 					}
 					.navigationTitle("Legal notices")
-					#if os(iOS)
-						.navigationBarTitleDisplayMode(.inline)
-					#endif
 			}
 		}
 	}

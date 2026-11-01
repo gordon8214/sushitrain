@@ -7,238 +7,195 @@ import Foundation
 import SwiftUI
 import SushitrainCore
 import SynctrainHostKit
+import ServiceManagement
 
-#if os(iOS)
-	private struct ExportButtonView: View {
-		enum ShowAlert {
-			case error(Error)
-			case success
-		}
+struct ConfigurationSettingsView: View {
+	@Environment(AppState.self) private var appState
+	@State private var showHomeDirectorySelector = false
+	@State private var currentPath: URL? = nil
+	@State private var showRestartAlert: Bool = false
+	@State private var containerFolders = ContainerFolders()
+	@State private var showSyncthingTakeover = false
 
-		@Environment(AppState.self) private var appState
-		@State private var showAlert: ShowAlert? = nil
-
-		var body: some View {
-			Button("Export configuration file") {
-				do {
-					try self.appState.client.exportConfigurationFile()
-					showAlert = .success
-				}
-				catch {
-					showAlert = .error(error)
-				}
-			}
-			.disabled(self.appState.client.isUsingCustomConfiguration)
-			.alert(isPresented: Binding.isNotNil($showAlert)) {
-				switch self.showAlert {
-				case .error(let error):
-					Alert(
-						title: Text("An error occurred"),
-						message: Text(error.localizedDescription),
-						dismissButton: .default(Text("OK")))
-				case .success:
-					Alert(
-						title: Text("Custom configuration saved"),
-						message: Text(
-							"The configuration file has been saved in the application folder."),
-						dismissButton: .default(Text("OK")))
-				case .none:
-					Alert(title: Text("An error occurred"))
-				}
-			}
-		}
-	}
-#endif
-
-#if os(macOS)
-	struct ConfigurationSettingsView: View {
-		@Environment(AppState.self) private var appState
-		@State private var showHomeDirectorySelector = false
-		@State private var currentPath: URL? = nil
-		@State private var showRestartAlert: Bool = false
-		@State private var containerFolders = ContainerFolders()
-		@State private var showSyncthingTakeover = false
-
-		var body: some View {
-			Form {
-				Section {
-					HStack {
-						if let p = currentPath {
-							Text(p.path(percentEncoded: false))
-								.frame(maxWidth: .infinity, alignment: .leading)
-								.multilineTextAlignment(.leading)
-							Button(
-								openInFilesAppLabel,
-								systemImage: "arrow.up.forward.app",
-								action: {
-									openURLInSystemFilesApp(url: p)
-								}
-							).labelStyle(.iconOnly)
-						}
-						else {
-							Text("(Default location)")
-								.frame(maxWidth: .infinity, alignment: .leading)
-								.multilineTextAlignment(.leading)
-							Button(
-								openInFilesAppLabel,
-								systemImage: "arrow.up.forward.app",
-								action: {
-									let url = URL(
-										fileURLWithPath: self.appState.client
-											.currentConfigDirectory())
-									openURLInSystemFilesApp(url: url)
-								}
-							).labelStyle(.iconOnly)
-						}
+	var body: some View {
+		Form {
+			Section {
+				HStack {
+					if let p = currentPath {
+						Text(p.path(percentEncoded: false))
+							.frame(maxWidth: .infinity, alignment: .leading)
+							.multilineTextAlignment(.leading)
+						Button(
+							openInFilesAppLabel,
+							systemImage: "arrow.up.forward.app",
+							action: {
+								openURLInSystemFilesApp(url: p)
+							}
+						).labelStyle(.iconOnly)
 					}
+					else {
+						Text("(Default location)")
+							.frame(maxWidth: .infinity, alignment: .leading)
+							.multilineTextAlignment(.leading)
+						Button(
+							openInFilesAppLabel,
+							systemImage: "arrow.up.forward.app",
+							action: {
+								let url = URL(
+									fileURLWithPath: self.appState.client
+										.currentConfigDirectory())
+								openURLInSystemFilesApp(url: url)
+							}
+						).labelStyle(.iconOnly)
+					}
+				}
 
-					Button("Select configuration folder...") {
-						self.showHomeDirectorySelector = true
+				Button("Select configuration folder...") {
+					self.showHomeDirectorySelector = true
+				}
+				.buttonStyle(.link)
+
+				if currentPath != nil {
+					Button("Use default configuration location") {
+						self.choose(nil)
 					}
 					.buttonStyle(.link)
+				}
+			} header: {
+				Text("Configuration folder location")
+			} footer: {
+				Text(
+					"The configuration folder contains the settings for the app, as well as the keys to communicate with other devices and bookkeeping of synchronized folders. By default, the configuration folder is managed by the app."
+				)
+			}
 
-					if currentPath != nil {
-						Button("Use default configuration location") {
-							self.choose(nil)
-						}
-						.buttonStyle(.link)
+			ContainerFoldersSection(model: containerFolders)
+
+			// Not after a takeover: the configuration is Syncthing's already, or a copy with its identity
+			if SyncthingInstallation.hasConfiguration && EngineSetup.choice != .importSyncthing
+				&& appState.configDirectory.standardizedFileURL.path
+					!= SyncthingInstallation.home.standardizedFileURL.path
+			{
+				Section {
+					Button("Take over Syncthing's setup...") {
+						showSyncthingTakeover = true
 					}
+					.buttonStyle(.link)
 				} header: {
-					Text("Configuration folder location")
+					Text("Syncthing")
 				} footer: {
 					Text(
-						"The configuration folder contains the settings for the app, as well as the keys to communicate with other devices and bookkeeping of synchronized folders. By default, the configuration folder is managed by the app."
+						"Synctrain can use the configuration of Syncthing.app on this Mac, keeping its device ID, folders and devices."
 					)
 				}
-
-				ContainerFoldersSection(model: containerFolders)
-
-				// Not after a takeover: the configuration is Syncthing's already, or a copy with its identity
-				if SyncthingInstallation.hasConfiguration && EngineSetup.choice != .importSyncthing
-					&& appState.configDirectory.standardizedFileURL.path
-						!= SyncthingInstallation.home.standardizedFileURL.path
-				{
-					Section {
-						Button("Take over Syncthing's setup...") {
-							showSyncthingTakeover = true
-						}
-						.buttonStyle(.link)
-					} header: {
-						Text("Syncthing")
-					} footer: {
-						Text(
-							"Synctrain can use the configuration of Syncthing.app on this Mac, keeping its device ID, folders and devices."
-						)
-					}
-				}
 			}
-			.sheet(isPresented: $showSyncthingTakeover) {
-				NavigationStack {
-					SyncthingTakeoverView(decision: .offerTakeover, fromSettings: true)
-						.toolbar {
-							ToolbarItem(placement: .confirmationAction) {
-								Button("Done") {
-									showSyncthingTakeover = false
-								}
+		}
+		.sheet(isPresented: $showSyncthingTakeover) {
+			NavigationStack {
+				SyncthingTakeoverView(decision: .offerTakeover, fromSettings: true)
+					.toolbar {
+						ToolbarItem(placement: .confirmationAction) {
+							Button("Done") {
+								showSyncthingTakeover = false
 							}
 						}
-				}
-				.frame(minWidth: 520, minHeight: 560)
+					}
 			}
-			.formStyle(.grouped)
-			.navigationTitle("Configuration settings")
-			.fileImporter(isPresented: $showHomeDirectorySelector, allowedContentTypes: [.directory]) {
-				result in
-				switch result {
-				case .success(let url):
-					self.choose(url)
-				case .failure(let err):
-					Log.info("Failed to select home dir: \(err.localizedDescription)")
-				}
-			}
-			.alert(
-				"Configuration folder changed", isPresented: $showRestartAlert,
-				actions: {
-					if AppRelauncher.canRelaunch {
-						Button("Restart the app") {
-							AppRelauncher.relaunch()
-						}
-					}
-					else {
-						Button("Close the app") {
-							AppRelauncher.quit()
-						}
-					}
-				},
-				message: {
-					if AppRelauncher.canRelaunch {
-						Text("The configuration folder was changed. The app restarts to use it.")
-					}
-					else {
-						Text(
-							"The path to the configuration folder was changed and will be used when the app is restarted. The app will now close."
-						)
-					}
-				}
-			)
-			.task {
-				self.updatePath()
-				await containerFolders.update(appState)
+			.frame(minWidth: 520, minHeight: 560)
+		}
+		.formStyle(.grouped)
+		.navigationTitle("Configuration settings")
+		.fileImporter(isPresented: $showHomeDirectorySelector, allowedContentTypes: [.directory]) {
+			result in
+			switch result {
+			case .success(let url):
+				self.choose(url)
+			case .failure(let err):
+				Log.info("Failed to select home dir: \(err.localizedDescription)")
 			}
 		}
-
-		/// Remembers the chosen folder (nil for the default location): outside the sandbox by its path, in the sandbox
-		/// with a security-scoped bookmark
-		private func choose(_ url: URL?) {
-			if FolderAccess.usesSecurityScope {
-				var bookmark: Data? = nil
-				if let url {
-					_ = url.startAccessingSecurityScopedResource()
-					guard let data = try? url.bookmarkData(options: [.withSecurityScope]) else {
-						return
+		.alert(
+			"Configuration folder changed", isPresented: $showRestartAlert,
+			actions: {
+				if AppRelauncher.canRelaunch {
+					Button("Restart the app") {
+						AppRelauncher.relaunch()
 					}
-					bookmark = data
-					self.keepProxy(in: url)
 				}
-				UserDefaults.standard.setValue(bookmark, forKey: ConfigDirectorySetting.bookmarkKey)
+				else {
+					Button("Close the app") {
+						AppRelauncher.quit()
+					}
+				}
+			},
+			message: {
+				if AppRelauncher.canRelaunch {
+					Text("The configuration folder was changed. The app restarts to use it.")
+				}
+				else {
+					Text(
+						"The path to the configuration folder was changed and will be used when the app is restarted. The app will now close."
+					)
+				}
 			}
-			else {
-				self.keepProxy(in: url ?? EngineLocations.current.configDirectory)
-				ConfigDirectorySetting.choose(url)
-			}
+		)
+		.task {
 			self.updatePath()
-			self.showRestartAlert = true
-		}
-
-		/// The proxy is kept with the configuration, and must not end because the configuration moved
-		private func keepProxy(in folder: URL) {
-			do {
-				try appState.client.copyProxySettings(folder.path(percentEncoded: false))
-			}
-			catch {
-				Log.warn("Could not copy the proxy settings to \(folder): \(error.localizedDescription)")
-			}
-		}
-
-		private func updatePath() {
-			if !FolderAccess.usesSecurityScope {
-				self.currentPath = ConfigDirectorySetting.path.map { URL(fileURLWithPath: $0, isDirectory: true) }
-				return
-			}
-			var isStale: Bool = false
-			if let bd = UserDefaults.standard.data(forKey: ConfigDirectorySetting.bookmarkKey),
-				let url = try? URL(
-					resolvingBookmarkData: bd, options: [.withSecurityScope, .withoutUI],
-					bookmarkDataIsStale: &isStale), !isStale
-			{
-				self.currentPath = url
-			}
-			else {
-				self.currentPath = nil
-			}
+			await containerFolders.update(appState)
 		}
 	}
-#endif
+
+	/// Remembers the chosen folder (nil for the default location): outside the sandbox by its path, in the sandbox
+	/// with a security-scoped bookmark
+	private func choose(_ url: URL?) {
+		if FolderAccess.usesSecurityScope {
+			var bookmark: Data? = nil
+			if let url {
+				_ = url.startAccessingSecurityScopedResource()
+				guard let data = try? url.bookmarkData(options: [.withSecurityScope]) else {
+					return
+				}
+				bookmark = data
+				self.keepProxy(in: url)
+			}
+			UserDefaults.standard.setValue(bookmark, forKey: ConfigDirectorySetting.bookmarkKey)
+		}
+		else {
+			self.keepProxy(in: url ?? EngineLocations.current.configDirectory)
+			ConfigDirectorySetting.choose(url)
+		}
+		self.updatePath()
+		self.showRestartAlert = true
+	}
+
+	/// The proxy is kept with the configuration, and must not end because the configuration moved
+	private func keepProxy(in folder: URL) {
+		do {
+			try appState.client.copyProxySettings(folder.path(percentEncoded: false))
+		}
+		catch {
+			Log.warn("Could not copy the proxy settings to \(folder): \(error.localizedDescription)")
+		}
+	}
+
+	private func updatePath() {
+		if !FolderAccess.usesSecurityScope {
+			self.currentPath = ConfigDirectorySetting.path.map { URL(fileURLWithPath: $0, isDirectory: true) }
+			return
+		}
+		var isStale: Bool = false
+		if let bd = UserDefaults.standard.data(forKey: ConfigDirectorySetting.bookmarkKey),
+			let url = try? URL(
+				resolvingBookmarkData: bd, options: [.withSecurityScope, .withoutUI],
+				bookmarkDataIsStale: &isStale), !isStale
+		{
+			self.currentPath = url
+		}
+		else {
+			self.currentPath = nil
+		}
+	}
+}
 
 struct AdvancedSettingsView: View {
 	@Environment(AppState.self) private var appState
@@ -252,10 +209,8 @@ struct AdvancedSettingsView: View {
 
 	@State private var updateCounter = 0  // Used to force update after binding set... ugly
 
-	#if os(macOS)
-		@State private var showConfigurationSettings = false
-		@State private var showTroubleshooting = false
-	#endif
+	@State private var showConfigurationSettings = false
+	@State private var showTroubleshooting = false
 
 	var body: some View {
 		Form {
@@ -276,9 +231,7 @@ struct AdvancedSettingsView: View {
 					showListeningAddresses = true
 				}
 				.disabled(!appState.client.isListening())
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 				.sheet(isPresented: $showListeningAddresses) {
 					NavigationStack {
 						AsyncAddressesView(addressType: .listening)
@@ -305,9 +258,7 @@ struct AdvancedSettingsView: View {
 				}
 			}
 
-			#if os(macOS)
-				EngineAccessSection()
-			#endif
+			EngineAccessSection()
 
 			Section {
 				Toggle(
@@ -381,9 +332,7 @@ struct AdvancedSettingsView: View {
 					}
 				}
 				.disabled(!appState.client.isGlobalAnnounceEnabled())
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			}
 
 			Section("Network traversal") {
@@ -436,9 +385,7 @@ struct AdvancedSettingsView: View {
 					}
 				}
 				.disabled(!appState.client.isSTUNEnabled())
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			}
 
 			Section {
@@ -481,64 +428,45 @@ struct AdvancedSettingsView: View {
 				self.cacheText
 			}
 
-			#if os(iOS)
-				Section {
-					ExportButtonView().disabled(self.appState.client.isUsingCustomConfiguration)
-				} footer: {
-					if self.appState.client.isUsingCustomConfiguration {
-						Text(
-							"The app is currently using a custom configuration from config.xml in the application directory. Remove it and restart the app to revert back to the default configuration."
-						)
-					}
-					else {
-						Text(
-							"You can export the current configuration to the application directory. When a configuration file exists in the application directory (config.xml) when the app starts, it will be used instead of the internal configuration."
-						)
-					}
+			Section {
+				NavigationLink("Engine options") {
+					EngineOptionsView()
 				}
-			#endif
+			} footer: {
+				Text("Disk space, performance, the audit log, and usage and crash reporting.")
+			}
 
-			#if os(macOS)
-				Section {
-					NavigationLink("Engine options") {
-						EngineOptionsView()
-					}
-				} footer: {
-					Text("Disk space, performance, the audit log, and usage and crash reporting.")
+			Section {
+				NavigationLink("Connection options") {
+					ConnectionOptionsView()
 				}
+			} footer: {
+				Text("Limits, priorities, reconnecting, local discovery and port mapping.")
+			}
 
-				Section {
-					NavigationLink("Connection options") {
-						ConnectionOptionsView()
-					}
-				} footer: {
-					Text("Limits, priorities, reconnecting, local discovery and port mapping.")
+			Section {
+				NavigationLink("Proxy") {
+					ProxySettingsView()
 				}
+			} footer: {
+				Text("A SOCKS5 or HTTP proxy for the engine's outgoing connections.")
+			}
 
-				Section {
-					NavigationLink("Proxy") {
-						ProxySettingsView()
-					}
-				} footer: {
-					Text("A SOCKS5 or HTTP proxy for the engine's outgoing connections.")
+			Section {
+				NavigationLink("Defaults") {
+					DefaultsSettingsView()
 				}
+			} footer: {
+				Text("What new folders and devices start with.")
+			}
 
-				Section {
-					NavigationLink("Defaults") {
-						DefaultsSettingsView()
-					}
-				} footer: {
-					Text("What new folders and devices start with.")
+			Section {
+				NavigationLink("Ignored devices") {
+					IgnoredDevicesView()
 				}
-
-				Section {
-					NavigationLink("Ignored devices") {
-						IgnoredDevicesView()
-					}
-				} footer: {
-					Text("Devices whose requests to connect you turned away.")
-				}
-			#endif
+			} footer: {
+				Text("Devices whose requests to connect you turned away.")
+			}
 
 			Section {
 				NavigationLink("Advanced configuration") {
@@ -548,41 +476,35 @@ struct AdvancedSettingsView: View {
 				Text("Every setting of the engine, for experts.")
 			}
 
-			#if os(macOS)
-				Section {
-					Button("Troubleshooting") {
-						self.showTroubleshooting = true
-					}
-				}.buttonStyle(.link)
-					.sheet(isPresented: $showTroubleshooting) {
-						NavigationStack {
-							TroubleshootingView(userSettings: userSettings)
-								.toolbar {
-									SheetButton(role: .done) {
-										showTroubleshooting = false
-									}
-								}
-						}
-					}
-
-				Section {
-					Button("Configuration settings") {
-						self.showConfigurationSettings = true
-					}
-				}.buttonStyle(.link)
-					.sheet(isPresented: $showConfigurationSettings) {
-						ConfigurationSettingsView()
+			Section {
+				Button("Troubleshooting") {
+					self.showTroubleshooting = true
+				}
+			}.buttonStyle(.link)
+				.sheet(isPresented: $showTroubleshooting) {
+					NavigationStack {
+						TroubleshootingView(userSettings: userSettings)
 							.toolbar {
 								SheetButton(role: .done) {
-									showConfigurationSettings = false
+									showTroubleshooting = false
 								}
 							}
 					}
-			#else
-				NavigationLink(destination: TroubleshootingView(userSettings: userSettings)) {
-					Label("Troubleshooting", systemImage: "book.and.wrench")
 				}
-			#endif
+
+			Section {
+				Button("Configuration settings") {
+					self.showConfigurationSettings = true
+				}
+			}.buttonStyle(.link)
+				.sheet(isPresented: $showConfigurationSettings) {
+					ConfigurationSettingsView()
+						.toolbar {
+							SheetButton(role: .done) {
+								showConfigurationSettings = false
+							}
+						}
+				}
 		}
 		.task {
 			await self.update()
@@ -595,12 +517,7 @@ struct AdvancedSettingsView: View {
 			Log.info("Update counter changed")
 		}
 		.navigationTitle("Advanced settings")
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
+		.formStyle(.grouped)
 	}
 
 	private func update() async {
@@ -640,242 +557,6 @@ struct AdvancedSettingsView: View {
 		return text
 	}
 }
-
-#if os(iOS)
-	struct BackgroundSchedulingControls<Content: View>: View {
-		@ObservedObject var backgroundManager: BackgroundManager
-		@Environment(\.openURL) private var openURL
-		@ViewBuilder var content: () -> Content
-
-		var body: some View {
-			content().disabled(!backgroundManager.canScheduleBackgroundTasks)
-			if !backgroundManager.canScheduleBackgroundTasks {
-				Text(backgroundManager.backgroundUnavailableMessage).font(.footnote).foregroundStyle(.secondary)
-				Button("Open Settings", systemImage: "gear") {
-					if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-				}
-			}
-		}
-	}
-
-	struct BackgroundSettingsView: View {
-		@Environment(AppState.self) private var appState
-		@ObservedObject var backgroundManager: BackgroundManager
-		@ObservedObject var userSettings: AppUserSettings
-
-		private let durationFormatter = DateComponentsFormatter()
-		@State private var alertShown = false
-		@State private var alertMessage = ""
-		@State private var authorizationStatus: UNAuthorizationStatus = .notDetermined
-		@State private var showError: Error? = nil
-
-		init(userSettings: AppUserSettings, backgroundManager: BackgroundManager) {
-			self.userSettings = userSettings
-			self.backgroundManager = backgroundManager
-			durationFormatter.allowedUnits = [.day, .hour, .minute]
-			durationFormatter.unitsStyle = .abbreviated
-		}
-
-		var body: some View {
-			Form {
-				Section {
-					BackgroundSchedulingControls(backgroundManager: backgroundManager) {
-						Toggle("While charging (long)", isOn: userSettings.$longBackgroundSyncEnabled)
-						Toggle("While on battery (short)", isOn: userSettings.$shortBackgroundSyncEnabled)
-					}
-					Toggle("Briefly after leaving app", isOn: userSettings.$lingeringEnabled)
-				} header: {
-					Text("Background synchronization")
-				} footer: {
-					Text(
-						"The operating system will periodically grant the app a few minutes of time in the background, depending on network connectivity and battery status."
-					)
-				}
-
-				if #available(iOS 26, *) {
-					Section {
-						if backgroundManager.runningContinuedTask != nil {
-							Button(
-								"Will continue in the background",
-								systemImage: backgroundManager.stopRunningContinuedTask ? "stop.circle.fill" : "stop.circle"
-							) {
-								backgroundManager.stopContinuedSync()
-							}.disabled(backgroundManager.stopRunningContinuedTask)
-						}
-						else {
-							Menu("Start background synchronization now") {
-								Button("For 10 seconds", systemImage: "play.circle") {
-									self.startBackgroundSyncFor(.time(seconds: 10))
-								}.disabled(backgroundManager.runningContinuedTask != nil)
-
-								Button("For 1 minute", systemImage: "play.circle") {
-									self.startBackgroundSyncFor(.time(seconds: 60))
-								}.disabled(backgroundManager.runningContinuedTask != nil)
-
-								Button("For 10 minutes", systemImage: "play.circle") {
-									self.startBackgroundSyncFor(.time(seconds: 10 * 60))
-								}.disabled(backgroundManager.runningContinuedTask != nil)
-
-								Button("For 1 hour", systemImage: "play.circle") {
-									self.startBackgroundSyncFor(.time(seconds: 60 * 60))
-								}.disabled(backgroundManager.runningContinuedTask != nil)
-							}.disabled(!backgroundManager.canScheduleBackgroundTasks)
-						}
-					} footer: {
-						Text(
-							"At your request, the app can synchronize in the background for a specific amount of time. You can also access these options by long-pressing the status item on the start screen."
-						)
-					}.alert(
-						"An error has occurred", isPresented: Binding.isNotNil($showError),
-						actions: {
-							Button("OK") {
-								showError = nil
-							}
-						},
-						message: {
-							Text(showError?.localizedDescription ?? "")
-						}
-					)
-				}
-
-				Section {
-					if self.authorizationStatus == .notDetermined {
-						Button("Enable notifications") {
-							AppState.requestNotificationPermissionIfNecessary()
-							self.updateNotificationStatus()
-						}
-					}
-					else {
-						Toggle(
-							"When background synchronization completes",
-							isOn: userSettings.$notifyWhenBackgroundSyncCompletes
-						)
-						.disabled(
-							!backgroundManager.canScheduleBackgroundTasks
-								|| (!userSettings.longBackgroundSyncEnabled
-									&& !userSettings.shortBackgroundSyncEnabled)
-								|| (authorizationStatus != .authorized
-									&& authorizationStatus != .provisional)
-						)
-					}
-				} header: {
-					Text("Notifications")
-				}
-
-				Section {
-					if self.authorizationStatus != .notDetermined {
-						Toggle(
-							"When last synchronization happened long ago",
-							isOn: userSettings.$watchdogNotificationEnabled
-						)
-						.disabled(
-							!backgroundManager.canScheduleBackgroundTasks
-								|| (authorizationStatus != .authorized && authorizationStatus != .provisional)
-						)
-						.onChange(of: userSettings.watchdogNotificationEnabled) {
-							self.updateNotificationStatus()
-						}
-
-						if userSettings.watchdogNotificationEnabled {
-							Stepper(
-								"After \(userSettings.watchdogIntervalHours) hours",
-								value: userSettings.$watchdogIntervalHours, in: 1...(24 * 7)
-							).disabled(!backgroundManager.canScheduleBackgroundTasks)
-						}
-					}
-				} footer: {
-					if self.authorizationStatus == .denied {
-						Text("Go to the Settings app to alllow notifications.")
-					}
-				}
-
-				Section("Last background synchronization") {
-					if let lastSyncRun = self.appState.backgroundManager.lastBackgroundSyncRun {
-						Text("Started").badge(lastSyncRun.started.formatted(date: .abbreviated, time: .shortened))
-
-						if let lastSyncEnded = lastSyncRun.ended {
-							Text("Ended").badge(lastSyncEnded.formatted(date: .abbreviated, time: .shortened))
-
-							Text("Duration").badge(
-								durationFormatter.string(from: lastSyncEnded.timeIntervalSince(lastSyncRun.started))
-							)
-
-							if let taskType = lastSyncRun.taskType {
-								Text("Type").badge(taskType.localizedTypeName)
-							}
-						}
-					}
-					else {
-						Text("Started").badge("Never")
-					}
-				}
-
-				let backgroundSyncs = appState.backgroundManager.backgroundSyncRuns
-				if !backgroundSyncs.isEmpty {
-					Section(
-						"During the last 24 hours (\(durationFormatter.string(from: self.totalBackgroundSyncTime24Hours) ?? "0s"))"
-					) {
-						ForEach(backgroundSyncs, id: \.started) { (log: BackgroundSyncRun) in
-							Text(log.asString)
-						}
-					}
-				}
-
-				Section {
-					Text("Uptime").badge(
-						durationFormatter.string(
-							from: Date.now.timeIntervalSince(appState.launchedAt)))
-				}
-			}
-			.task {
-				updateNotificationStatus()
-			}
-			.onDisappear {
-				Task.detached {
-					_ = await self.appState.backgroundManager.scheduleBackgroundSync()
-					await self.appState.backgroundManager.rescheduleWatchdogNotification()
-				}
-			}
-			.navigationTitle("Background synchronization")
-			.navigationBarTitleDisplayMode(.inline)
-			.alert(
-				isPresented: $alertShown,
-				content: {
-					Alert(title: Text("Background synchronization"), message: Text(alertMessage))
-				})
-		}
-
-		@available(iOS 26, *) private func startBackgroundSyncFor(_ type: ContinuedTaskType) {
-			withAnimation {
-				do {
-					try backgroundManager.startContinuedSync(type)
-				}
-				catch {
-					self.showError = error
-				}
-			}
-		}
-
-		private var totalBackgroundSyncTime24Hours: TimeInterval {
-			var totalDuration: TimeInterval = 0.0
-			for run in appState.backgroundManager.backgroundSyncRuns {
-				if let ended = run.ended {
-					totalDuration += ended.timeIntervalSince(run.started)
-				}
-			}
-			return totalDuration
-		}
-
-		private func updateNotificationStatus() {
-			UNUserNotificationCenter.current().getNotificationSettings { settings in
-				let authorizationStatus = settings.authorizationStatus
-				DispatchQueue.main.async {
-					self.authorizationStatus = authorizationStatus
-				}
-			}
-		}
-	}
-#endif
 
 private struct BandwidthSettingsView: View {
 	@Environment(AppState.self) private var appState
@@ -1040,227 +721,122 @@ private struct BandwidthSettingsView: View {
 			}
 		}
 		.navigationTitle("Bandwidth limitations")
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
+		.formStyle(.grouped)
 	}
 }
 
-#if os(macOS)
-	struct TabbedSettingsView: View {
-		@Environment(AppState.self) private var appState
-		@Binding var presence: AppPresence
-		@State private var selection: String = "general"
+struct TabbedSettingsView: View {
+	@Environment(AppState.self) private var appState
+	@Binding var presence: AppPresence
+	@State private var selection: String = "general"
 
-		var body: some View {
-			TabView(selection: $selection) {
-				if appState.startupState == .started {
-					Tab(
-						value: "general",
-						content: {
-							GeneralSettingsView(userSettings: appState.userSettings, presence: $presence)
-						},
-						label: {
-							Label("General", systemImage: "app.badge.checkmark.fill")
-						})
+	var body: some View {
+		TabView(selection: $selection) {
+			if appState.startupState == .started {
+				Tab(
+					value: "general",
+					content: {
+						GeneralSettingsView(userSettings: appState.userSettings, presence: $presence)
+					},
+					label: {
+						Label("General", systemImage: "app.badge.checkmark.fill")
+					})
 
-					Tab(
-						value: "bandwidth",
-						content: {
-							BandwidthSettingsView(userSettings: appState.userSettings)
-						},
-						label: {
-							Label("Bandwidth", systemImage: "tachometer")
-						})
+				Tab(
+					value: "bandwidth",
+					content: {
+						BandwidthSettingsView(userSettings: appState.userSettings)
+					},
+					label: {
+						Label("Bandwidth", systemImage: "tachometer")
+					})
 
-					Tab(
-						value: "gateway",
-						content: {
-							GatewaySettingsView()
-						},
-						label: {
-							Label("Remote file service", systemImage: "externaldrive.connected.to.line.below")
-						})
+				Tab(
+					value: "gateway",
+					content: {
+						GatewaySettingsView()
+					},
+					label: {
+						Label("Remote file service", systemImage: "externaldrive.connected.to.line.below")
+					})
 
-					Tab(
-						value: "photo",
-						content: {
-							PhotoBackupSettingsView(photoBackup: appState.photoBackup)
-						},
-						label: {
-							Label("Photo back-up", systemImage: "photo")
-						})
+				Tab(
+					value: "photo",
+					content: {
+						PhotoBackupSettingsView(photoBackup: appState.photoBackup)
+					},
+					label: {
+						Label("Photo back-up", systemImage: "photo")
+					})
 
-					Tab(
-						value: "advanced",
-						content: {
-							AdvancedSettingsView(userSettings: appState.userSettings)
-						},
-						label: {
-							Label("Advanced", systemImage: "gear")
-						})
-				}
+				Tab(
+					value: "advanced",
+					content: {
+						AdvancedSettingsView(userSettings: appState.userSettings)
+					},
+					label: {
+						Label("Advanced", systemImage: "gear")
+					})
 			}
-			.frame(minWidth: 500, minHeight: 450)
-			.windowResizeBehavior(.automatic)
-			.formStyle(.grouped)
 		}
+		.frame(minWidth: 500, minHeight: 450)
+		.windowResizeBehavior(.automatic)
+		.formStyle(.grouped)
 	}
+}
 
-	struct GeneralSettingsView: View {
-		@Environment(AppState.self) private var appState
-		@ObservedObject var userSettings: AppUserSettings
-		@Binding var presence: AppPresence
+struct GeneralSettingsView: View {
+	@Environment(AppState.self) private var appState
+	@ObservedObject var userSettings: AppUserSettings
+	@Binding var presence: AppPresence
 
-		var body: some View {
-			Form {
-				Section {
-					TextField(
-						"Device name",
-						text: Binding(
-							get: {
-								var err: NSError? = nil
-								return appState.client.getName(&err)
-							},
-							set: { nn in
-								try? appState.client.setName(nn)
-							}))
+	var body: some View {
+		Form {
+			Section {
+				TextField(
+					"Device name",
+					text: Binding(
+						get: {
+							var err: NSError? = nil
+							return appState.client.getName(&err)
+						},
+						set: { nn in
+							try? appState.client.setName(nn)
+						}))
+			}
+
+			Section {
+				AppPresenceToggles(presence: $presence)
+			}
+
+			Section {
+				Picker("Folder access from menu", selection: userSettings.$menuFolderAction) {
+					Text("Do not show folders").tag(MenuFolderAction.hide)
+					Text("Open in Finder").tag(MenuFolderAction.finder)
+					Text("Open in the app").tag(MenuFolderAction.browser)
+				}.disabled(!presence.inMenuBar)
+			}
+
+			Section {
+				AutoStartToggleView()
+			}
+
+			Section("View settings") {
+				ViewSettingsView(userSettings: appState.userSettings)
+			}
+
+			Section {
+				Button("Switch to Files in Finder…") {
+					ModeSwitch.askToSwitchToFilesInFinder()
 				}
-
-				Section {
-					AppPresenceToggles(presence: $presence)
-				}
-
-				Section {
-					Picker("Folder access from menu", selection: userSettings.$menuFolderAction) {
-						Text("Do not show folders").tag(MenuFolderAction.hide)
-						Text("Open in Finder").tag(MenuFolderAction.finder)
-						Text("Open in the app").tag(MenuFolderAction.browser)
-					}.disabled(!presence.inMenuBar)
-				}
-
-				Section {
-					AutoStartToggleView()
-				}
-
-				Section("View settings") {
-					ViewSettingsView(userSettings: appState.userSettings)
-				}
-
-				Section {
-					Button("Switch to Files in Finder…") {
-						ModeSwitch.askToSwitchToFilesInFinder()
-					}
-				} footer: {
-					Text(
-						"This Mac then runs no engine. Finder shows the folders of a gateway on another system, and keeps what you open."
-					)
-				}
+			} footer: {
+				Text(
+					"This Mac then runs no engine. Finder shows the folders of a gateway on another system, and keeps what you open."
+				)
 			}
 		}
 	}
-#endif
-
-#if os(iOS)
-	struct SettingsView: View {
-		@Environment(AppState.self) private var appState
-		@ObservedObject var userSettings: AppUserSettings
-
-		var limitsEnabled: Bool {
-			return self.appState.userSettings.streamingLimitMbitsPerSec > 0
-				|| self.appState.client.getBandwidthLimitUpMbitsPerSec() > 0
-				|| self.appState.client.getBandwidthLimitDownMbitsPerSec() > 0
-				|| self.userSettings.disableDevicesOnMetered
-				|| self.userSettings.disableDevicesOnCellular
-				|| self.userSettings.disableDevicesInLowPowerMode
-		}
-
-		var body: some View {
-			Form {
-				Section("Device name") {
-					TextField(
-						"Host name",
-						text: Binding(
-							get: {
-								var err: NSError? = nil
-								return appState.client.getName(&err)
-							},
-							set: { nn in
-								try? appState.client.setName(nn)
-							})
-					)
-					.autocorrectionDisabled()
-					.textInputAutocapitalization(.never)
-					.keyboardType(.asciiCapable)
-				}
-
-				Section {
-					NavigationLink("View settings") {
-						ViewSettingsView(userSettings: userSettings)
-					}
-
-					NavigationLink(destination: BandwidthSettingsView(userSettings: userSettings)) {
-						Text("Bandwidth limitations").badge(limitsEnabled ? "On" : "Off")
-					}
-
-					#if os(iOS)
-						NavigationLink(
-							destination: BackgroundSettingsView(userSettings: userSettings, backgroundManager: appState.backgroundManager)
-						) {
-							Text("Background synchronization").badge(
-								userSettings.longBackgroundSyncEnabled || userSettings.shortBackgroundSyncEnabled ? "On" : "Off")
-						}
-
-						if FileProviderStorage.container != nil {
-							NavigationLink(destination: FileProviderSettingsView()) {
-								Text("Files app").badge(FileProviderCoordinator.shared.isDomainEnabled == true ? "On" : "Off")
-							}
-
-							NavigationLink(destination: RemoteFoldersSettingsView()) {
-								// As on the Files app page: the folders accessed through a gateway
-								Text("Remote folders").badge(RemoteCoordinator.shared.bindings.count)
-							}
-						}
-					#endif
-
-					NavigationLink(destination: PhotoBackupSettingsView(photoBackup: appState.photoBackup)) {
-						Text("Photo back-up")
-							.badge(appState.photoBackup.isReady && appState.photoBackup.enableBackgroundCopy ? "On" : "Off")
-					}
-
-					NavigationLink("Advanced settings") {
-						AdvancedSettingsView(userSettings: userSettings)
-					}
-				}
-
-				Section {
-					NavigationLink(destination: TotalStatisticsView(appPersistentStatistics: appState.appPersistentStatistics)) {
-						Label("Statistics", systemImage: "chart.pie")
-					}
-				}
-
-				Section {
-					#if os(iOS)
-						NavigationLink(destination: SupportView()) {
-							Label("Questions, support & feedback", systemImage: "lifepreserver")
-						}
-					#endif
-
-					NavigationLink(destination: AboutView()) {
-						Label("About this app", systemImage: "info.circle")
-					}
-				}
-			}
-			.navigationTitle("Settings")
-			#if os(macOS)
-				.formStyle(.grouped)
-			#endif
-		}
-	}
-#endif
+}
 
 struct ViewSettingsView: View {
 	@ObservedObject var userSettings: AppUserSettings
@@ -1290,20 +866,8 @@ struct ViewSettingsView: View {
 					"When enabled, files and directories whose name start with a dot will not be shown when browsing a folder. These files and directories will remain visible in search results."
 				)
 			}
-
-			#if os(iOS)
-				Section {
-					Toggle("Automatically hide hidden folders", isOn: userSettings.$rehideHiddenFoldersOnActivate)
-				} footer: {
-					Text(
-						"When enabled, hidden folders will be hidden in the folder list again each time the app comes to the foreground.")
-				}
-			#endif
 		}
 		.navigationTitle("View settings")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 	}
 }
 
@@ -1339,9 +903,6 @@ private struct AsyncAddressesView: View {
 		.onDisappear {
 			self.write()
 		}
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 	}
 
 	private func update() async {
@@ -1393,33 +954,28 @@ private struct AsyncAddressesView: View {
 	}
 }
 
-#if os(macOS)
-	import ServiceManagement
+struct AutoStartToggleView: View {
+	@State private var autoStart: Bool = false
 
-	struct AutoStartToggleView: View {
-		@State private var autoStart: Bool = false
-
-		var body: some View {
-			Toggle(isOn: $autoStart) {
-				Label("Launch at login", systemImage: "autostartstop")
-			}
-			.onChange(of: autoStart) { _, nv in
-				if nv {
-					try? SMAppService.mainApp.register()
-				}
-				else {
-					try? SMAppService.mainApp.unregister()
-				}
-				self.update()
-			}
-			.onAppear {
-				self.update()
-			}
+	var body: some View {
+		Toggle(isOn: $autoStart) {
+			Label("Launch at login", systemImage: "autostartstop")
 		}
-
-		private func update() {
-			self.autoStart = SMAppService.mainApp.status == .enabled
+		.onChange(of: autoStart) { _, nv in
+			if nv {
+				try? SMAppService.mainApp.register()
+			}
+			else {
+				try? SMAppService.mainApp.unregister()
+			}
+			self.update()
+		}
+		.onAppear {
+			self.update()
 		}
 	}
 
-#endif
+	private func update() {
+		self.autoStart = SMAppService.mainApp.status == .enabled
+	}
+}

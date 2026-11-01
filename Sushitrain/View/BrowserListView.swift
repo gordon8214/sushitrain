@@ -4,83 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
-import QuickLook
 @preconcurrency import SushitrainCore
-
-struct BrowserListView: View {
-	@Environment(AppState.self) private var appState
-	let folder: SushitrainFolder
-	let prefix: String
-	let files: [SushitrainEntry]
-	let subdirectories: [SushitrainEntry]
-	let viewStyle: BrowserViewStyle
-
-	@State private var showStatistics = false
-
-	var body: some View {
-		List {
-			Section {
-				Button(action: {
-					showStatistics = true
-				}) {
-					FolderStatusView(folder: folder)
-				}.sheet(isPresented: $showStatistics) {
-					NavigationStack {
-						FolderStatisticsView(folder: folder)
-							.toolbar {
-								SheetButton(role: .done) {
-									showStatistics = false
-								}
-							}
-					}
-				}
-			}
-
-			// List subdirectories
-			Section {
-				ForEach(subdirectories, id: \.id) { (subDirEntry: SushitrainEntry) in
-					let fileName = subDirEntry.fileName()
-					NavigationLink(
-						destination: BrowserView(folder: folder, prefix: "\(prefix)\(fileName)/", userSettings: appState.userSettings)
-					) {
-						EntryContextMenuWrapper(
-							appState: appState, entry: subDirEntry, inFolder: self.folder, siblings: files, honorTapToPreview: false
-						) {
-							// Subdirectory name with a nice icon
-							HStack(spacing: 9.0) {
-								Image(systemName: subDirEntry.systemImage).foregroundStyle(subDirEntry.color ?? Color.accentColor)
-								Text(subDirEntry.fileName()).multilineTextAlignment(.leading).foregroundStyle(Color.primary).opacity(
-									subDirEntry.isLocallyPresent() ? 1.0 : EntryView.remoteFileOpacity)
-								Spacer()
-							}.frame(maxWidth: .infinity).padding(0)
-						}
-					}
-				}
-			}
-
-			// List files
-			Section {
-				ForEach(files, id: \.id) { file in
-					EntryView(
-						entry: file,
-						folder: folder,
-						siblings: files,
-						showThumbnail: self.viewStyle == .thumbnailList
-					)
-				}
-			}
-
-			// Show number of items
-			FilesFooterView(subdirectories: self.subdirectories.count, files: self.files.count)
-				#if os(iOS)
-					.listRowBackground(Color(.systemGroupedBackground))
-				#endif
-		}
-		#if os(macOS)
-			.listStyle(.inset(alternatesRowBackgrounds: true))
-		#endif
-	}
-}
 
 struct EntryView: View {
 	@Environment(AppState.self) private var appState
@@ -187,9 +111,7 @@ struct EntryLinkView<Content: View>: View {
 	let honorTapToPreview: Bool
 	@ViewBuilder var content: () -> Content
 
-	#if os(macOS)
-		@Environment(\.openWindow) private var openWindow
-	#endif
+	@Environment(\.openWindow) private var openWindow
 
 	var body: some View {
 		EntryContextMenuWrapper(
@@ -219,47 +141,17 @@ struct EntryContextMenuWrapper<Content: View>: View {
 	let honorTapToPreview: Bool
 	@ViewBuilder var content: () -> Content
 
-	@State private var quickLookURL: URL? = nil
-	@State private var showPreviewSheet: Bool = false
 	@State private var showDownloader = false
 
-	#if os(macOS)
-		@Environment(\.openWindow) private var openWindow
-		@State private var showVersions = false
-	#endif
+	@Environment(\.openWindow) private var openWindow
+	@State private var showVersions = false
 
 	private func previewFile() {
-		#if os(macOS)
-			openWindow(id: "preview", value: Preview(folderID: entry.folder!.folderID, path: entry.path()))
-		#else
-			// Tap to preview local file in QuickLook
-			if entry.isLocallyPresent(), let url = entry.localNativeFileURL {
-				self.quickLookURL = url
-			}
-			else if entry.isStreamable {
-				self.showPreviewSheet = true
-			}
-		#endif
+		openWindow(id: "preview", value: Preview(folderID: entry.folder!.folderID, path: entry.path()))
 	}
 
 	@ViewBuilder private func inner() -> some View {
 		self.content()
-			.quickLookPreview(self.$quickLookURL)
-			#if os(macOS)
-				.sheet(isPresented: $showPreviewSheet) {
-					FileViewerView(file: entry, siblings: siblings, inSheet: true, isShown: $showPreviewSheet)
-					.presentationSizing(.fitted)
-					.frame(minWidth: 640, minHeight: 480)
-					.navigationTitle(entry.fileName())
-					.toolbar {
-						ToolbarItem(placement: .confirmationAction) { Button("Done") { showPreviewSheet = false } }
-					}
-				}
-			#else
-				.fullScreenCover(isPresented: $showPreviewSheet) {
-					FileViewerView(file: entry, siblings: siblings, inSheet: true, isShown: $showPreviewSheet)
-				}
-			#endif
 			.sheet(isPresented: $showDownloader) {
 				self.downloaderSheet()
 			}
@@ -268,9 +160,6 @@ struct EntryContextMenuWrapper<Content: View>: View {
 	@ViewBuilder private func downloaderSheet() -> some View {
 		NavigationStack {
 			EntryDownloaderView(file: entry, action: .share)
-				#if os(iOS)
-					.navigationBarTitleDisplayMode(.inline)
-				#endif
 				.toolbar {
 					SheetButton(role: .cancel) {
 						showDownloader = false
@@ -284,9 +173,7 @@ struct EntryContextMenuWrapper<Content: View>: View {
 			Button(action: { self.previewFile() }) {
 				self.inner()
 			}
-			#if os(macOS)
-				.buttonStyle(.link)
-			#endif
+			.buttonStyle(.link)
 			.foregroundStyle(.primary)
 			.frame(maxWidth: .infinity)
 		}
@@ -299,17 +186,11 @@ struct EntryContextMenuWrapper<Content: View>: View {
 		self.innerTapToViewable()
 			.draggable(entry)
 			.contextMenu {
-				#if os(iOS)
+				if appState.userSettings.tapFileToPreview {
 					NavigationLink(
 						destination: EntryInfoView(entry: entry, showPath: self.inFolder == nil, siblings: siblings)
-					) { Label(entry.fileName(), systemImage: entry.systemImage) }
-				#else
-					if appState.userSettings.tapFileToPreview {
-						NavigationLink(
-							destination: EntryInfoView(entry: entry, showPath: self.inFolder == nil, siblings: siblings)
-						) { Label("Show info", systemImage: entry.systemImage) }
-					}
-				#endif
+					) { Label("Show info", systemImage: entry.systemImage) }
+				}
 
 				if !appState.userSettings.tapFileToPreview {
 					Button("Show preview", systemImage: "doc.text.magnifyingglass") { self.previewFile() }
@@ -323,19 +204,17 @@ struct EntryContextMenuWrapper<Content: View>: View {
 					}.labelStyle(.titleAndIcon)
 				}
 
-				#if os(macOS)
-					if entry.canShowVersions {
-						Button("Previous Versions...", systemImage: "clock.arrow.circlepath") {
-							showVersions = true
-						}.labelStyle(.titleAndIcon)
-					}
+				if entry.canShowVersions {
+					Button("Previous Versions...", systemImage: "clock.arrow.circlepath") {
+						showVersions = true
+					}.labelStyle(.titleAndIcon)
+				}
 
-					Button("Copy", systemImage: "document.on.document") {
-						self.copy()
-					}
-					.disabled(!entry.isLocallyPresent())
-					.labelStyle(.titleAndIcon)
-				#endif
+				Button("Copy", systemImage: "document.on.document") {
+					self.copy()
+				}
+				.disabled(!entry.isLocallyPresent())
+				.labelStyle(.titleAndIcon)
 
 				// Regular sharing
 				EntryShareButton(entry: entry, showDownloader: $showDownloader)
@@ -370,13 +249,11 @@ struct EntryContextMenuWrapper<Content: View>: View {
 					}
 				}
 			}
-			#if os(macOS)
-				.sheet(isPresented: $showVersions) {
-					if let folder = entry.folder {
-						FileVersionsView(folder: folder, path: entry.path())
-					}
+			.sheet(isPresented: $showVersions) {
+				if let folder = entry.folder {
+					FileVersionsView(folder: folder, path: entry.path())
 				}
-			#endif
+			}
 	}
 
 	private func copy() {

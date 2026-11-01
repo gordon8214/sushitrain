@@ -184,9 +184,6 @@ private struct AddressView: View {
 								}
 							}), prompt: Text("0.0.0.0")
 					).multilineTextAlignment(.trailing)
-						#if os(iOS)
-							.keyboardType(.asciiCapable).autocorrectionDisabled().autocapitalization(.none)
-						#endif
 				} label: {
 					Text("IP address or host name")
 				}
@@ -210,9 +207,6 @@ private struct AddressView: View {
 								self.url = url.url
 							}), prompt: Text("22000")
 					).multilineTextAlignment(.trailing)
-						#if os(iOS)
-							.keyboardType(.numberPad).autocorrectionDisabled().autocapitalization(.none)
-						#endif
 				} label: {
 					Text("Port")
 				}
@@ -243,9 +237,6 @@ private struct AddressView: View {
 									self.address = url.string ?? ""
 								}), prompt: Text("")
 						).multilineTextAlignment(.trailing).monospaced()
-							#if os(iOS)
-								.keyboardType(.asciiCapable).autocorrectionDisabled().autocapitalization(.none)
-							#endif
 					} label: {
 						Text("Relay ID")
 					}
@@ -270,9 +261,6 @@ private struct AddressView: View {
 									self.address = url.string ?? ""
 								}), prompt: Text("")
 						).multilineTextAlignment(.trailing).monospaced()
-							#if os(iOS)
-								.keyboardType(.asciiCapable).autocorrectionDisabled().autocapitalization(.none)
-							#endif
 					} label: {
 						Text("Access token")
 					}
@@ -295,9 +283,6 @@ private struct AddressView: View {
 								self.address = $0
 							})
 					).frame(maxWidth: .infinity).monospaced().multilineTextAlignment(.leading)
-						#if os(iOS)
-							.autocorrectionDisabled().autocapitalization(.none)
-						#endif
 				}
 			}
 		}
@@ -305,9 +290,7 @@ private struct AddressView: View {
 			self.onSave(self.address)
 		}
 		.navigationTitle(self.address)
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 	}
 }
 
@@ -483,15 +466,13 @@ struct AddressesView: View {
 								})
 						) {
 							HStack {
-								#if os(macOS)
-									Button("Delete", systemImage: "trash") {
-										var newAddresses = addresses
-										newAddresses.remove(at: idx.offset)
-										self.save(newAddresses)
-									}
-									.labelStyle(.iconOnly)
-									.buttonStyle(.borderless)
-								#endif
+								Button("Delete", systemImage: "trash") {
+									var newAddresses = addresses
+									newAddresses.remove(at: idx.offset)
+									self.save(newAddresses)
+								}
+								.labelStyle(.iconOnly)
+								.buttonStyle(.borderless)
 								Text(idx.element)
 
 							}
@@ -509,25 +490,9 @@ struct AddressesView: View {
 					self.onChange(newAddresses)
 				}
 				.deleteDisabled(true)
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			}
 		}
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
-		.toolbar {
-			#if os(iOS)
-				ToolbarItem(placement: .topBarLeading) {
-					if !addresses.isEmpty {
-						EditButton()
-					}
-				}
-			#endif
-		}
+		.formStyle(.grouped)
 	}
 }

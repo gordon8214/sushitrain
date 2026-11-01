@@ -62,9 +62,7 @@ struct EncryptionView: View {
 						writeTextToPasteboard(self.fileEncryptedPath)
 					}
 					.disabled(self.folderPassword.isEmpty)
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 				}
 
 				Section("File encryption key") {
@@ -75,9 +73,7 @@ struct EncryptionView: View {
 						writeTextToPasteboard(self.fileKey)
 					}
 					.disabled(self.folderPassword.isEmpty || self.fileKey.isEmpty)
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 				}
 			}
 			.task {

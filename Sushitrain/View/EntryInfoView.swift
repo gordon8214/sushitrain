@@ -25,9 +25,7 @@ struct EntryInfoView: View {
 	@State private var fullyAvailableOnDevices: [SushitrainPeer]? = nil
 	@State private var availabilityError: Error? = nil
 	@State private var showEncryptionSheet: Bool = false
-	#if os(macOS)
-		@State private var showVersions: Bool = false
-	#endif
+	@State private var showVersions: Bool = false
 	@State private var conflictingEntries: [SushitrainEntry]? = nil
 	@State private var openWithAppURL: URL? = nil
 	@State private var localPath: String? = nil
@@ -36,10 +34,8 @@ struct EntryInfoView: View {
 
 	@Environment(AppState.self) private var appState
 
-	#if os(macOS)
-		@Environment(\.openURL) private var openURL
-		@Environment(\.openWindow) private var openWindow
-	#endif
+	@Environment(\.openURL) private var openURL
+	@Environment(\.openWindow) private var openWindow
 
 	var localIsOnlyCopy: Bool {
 		return entry.isLocallyPresent()
@@ -111,9 +107,7 @@ struct EntryInfoView: View {
 					}
 				}
 			}
-			#if os(macOS)
-				.formStyle(.grouped)
-			#endif
+			.formStyle(.grouped)
 			.navigationTitle(entry.fileName())
 			.quickLookPreview(self.$localItemURL)
 
@@ -133,26 +127,15 @@ struct EntryInfoView: View {
 			// Sheet viewer
 			.sheet(isPresented: $showSheetViewer) {
 				FileViewerView(file: entry, siblings: siblings, inSheet: true, isShown: $showSheetViewer)
-					#if os(macOS)
-						.presentationSizing(.fitted).frame(minWidth: 640, minHeight: 480)
-					#endif
+					.presentationSizing(.fitted).frame(minWidth: 640, minHeight: 480)
 			}
 
 			// Full screen viewer
-			#if os(iOS)
-				.fullScreenCover(
-					isPresented: $showFullScreenViewer,
-					content: {
-						FileViewerView(file: entry, siblings: siblings, inSheet: true, isShown: $showFullScreenViewer)
-							.ignoresSafeArea()
-					})
-			#elseif os(macOS)
-				.sheet(isPresented: $showFullScreenViewer) {
-					FileViewerView(file: entry, siblings: siblings, inSheet: true, isShown: $showFullScreenViewer)
+			.sheet(isPresented: $showFullScreenViewer) {
+				FileViewerView(file: entry, siblings: siblings, inSheet: true, isShown: $showFullScreenViewer)
 					.presentationSizing(.fitted)
 					.frame(minWidth: 640, idealWidth: 960, minHeight: 480, idealHeight: 580)
-				}
-			#endif
+			}
 
 			.sheet(isPresented: Binding.isNotNil($showArchive)) {
 				if let archive = self.showArchive {
@@ -168,13 +151,11 @@ struct EntryInfoView: View {
 				self.copyStreamingURLSheet()
 			}
 
-			#if os(macOS)
-				.sheet(isPresented: $showVersions) {
-					if let folder = self.entry.folder {
-						FileVersionsView(folder: folder, path: self.entry.path())
-					}
+			.sheet(isPresented: $showVersions) {
+				if let folder = self.entry.folder {
+					FileVersionsView(folder: folder, path: self.entry.path())
 				}
-			#endif
+			}
 			.sheet(isPresented: $showEncryptionSheet) {
 				EncryptionView(entry: self.entry)
 			}
@@ -191,40 +172,34 @@ struct EntryInfoView: View {
 					}
 				}
 
-				#if os(macOS)
-					ToolbarItemGroup(placement: .primaryAction) {
-						self.shareButton()
+				ToolbarItemGroup(placement: .primaryAction) {
+					self.shareButton()
 
-						// Menu for advanced actions
-						Menu {
-							Button("Encryption details...", systemImage: "lock.document.fill") { showEncryptionSheet = true }
-								.disabled(!(self.entry.folder?.hasEncryptedPeers ?? false))
+					// Menu for advanced actions
+					Menu {
+						Button("Encryption details...", systemImage: "lock.document.fill") { showEncryptionSheet = true }
+							.disabled(!(self.entry.folder?.hasEncryptedPeers ?? false))
 
-							Button("Explore archive contents...", systemImage: "doc.zipper") {
-								showArchive = self.entry.archive()
-							}
-							.disabled(!self.entry.isArchive())
-
-							if self.entry.canShowVersions {
-								Button("Previous Versions...", systemImage: "clock.arrow.circlepath") { showVersions = true }
-							}
-						} label: {
-							Label("Advanced", systemImage: "ellipsis")
+						Button("Explore archive contents...", systemImage: "doc.zipper") {
+							showArchive = self.entry.archive()
 						}
+						.disabled(!self.entry.isArchive())
 
-						// Open in Finder button
-						Button(
-							openInFilesAppLabel, systemImage: "arrow.up.forward.app",
-							action: {
-								if let localPathActual = localPath { openURLInSystemFilesApp(url: URL(fileURLWithPath: localPathActual)) }
-							}
-						).labelStyle(.iconOnly).disabled(localPath == nil)
+						if self.entry.canShowVersions {
+							Button("Previous Versions...", systemImage: "clock.arrow.circlepath") { showVersions = true }
+						}
+					} label: {
+						Label("Advanced", systemImage: "ellipsis")
 					}
-				#else
-					ToolbarItem {
-						self.shareButton()
-					}
-				#endif
+
+					// Open in Finder button
+					Button(
+						openInFilesAppLabel, systemImage: "arrow.up.forward.app",
+						action: {
+							if let localPathActual = localPath { openURLInSystemFilesApp(url: URL(fileURLWithPath: localPathActual)) }
+						}
+					).labelStyle(.iconOnly).disabled(localPath == nil)
+				}
 			}
 
 			.onAppear {
@@ -388,9 +363,7 @@ struct EntryInfoView: View {
 		Button("Remove file from all devices", systemImage: "trash", role: .destructive) {
 			showRemoveConfirmation = true
 		}
-		#if os(macOS)
-			.buttonStyle(.link)
-		#endif
+		.buttonStyle(.link)
 		.foregroundColor(.red)
 		.confirmationDialog(
 			self.localIsOnlyCopy
@@ -408,9 +381,7 @@ struct EntryInfoView: View {
 		Button("Explore archive contents", systemImage: "doc.zipper") {
 			showArchive = self.entry.archive()
 		}
-		#if os(macOS)
-			.buttonStyle(.link)
-		#endif
+		.buttonStyle(.link)
 	}
 
 	@ViewBuilder private func archiveSheet(archive: SushitrainArchiveProtocol) -> some View {
@@ -428,9 +399,6 @@ struct EntryInfoView: View {
 	@ViewBuilder private func downloaderSheet(action: EntryDownloaderView.AfterDownloadAction) -> some View {
 		NavigationStack {
 			EntryDownloaderView(file: entry, action: action)
-				#if os(iOS)
-					.navigationBarTitleDisplayMode(.inline)
-				#endif
 				.toolbar {
 					SheetButton(role: .cancel) {
 						showDownloader = nil
@@ -439,17 +407,9 @@ struct EntryInfoView: View {
 		}
 	}
 
-	private func streamingURLView() -> some View {
-		#if os(iOS)
-			return StreamingURLView(entry: self.entry, backgroundManager: appState.backgroundManager)
-		#else
-			return StreamingURLView(entry: self.entry)
-		#endif
-	}
-
 	@ViewBuilder private func copyStreamingURLSheet() -> some View {
 		NavigationStack {
-			self.streamingURLView()
+			StreamingURLView(entry: self.entry)
 				.navigationTitle("Stream in another app")
 				.toolbar {
 					SheetButton(role: .done) {
@@ -460,21 +420,19 @@ struct EntryInfoView: View {
 	}
 
 	@ViewBuilder private func viewButtons() -> some View {
-		#if os(macOS)
-			let openInSafariButton = Button("Open in Safari", systemImage: "safari") {
+		let openInSafariButton = Button("Open in Safari", systemImage: "safari") {
+			if let u = URL(string: self.entry.onDemandURL()) {
+				openURL(u)
+			}
+		}
+		.buttonStyle(.link).disabled(folder.connectedPeerCount() == 0)
+		.contextMenu {
+			Button("Copy to clipboard", systemImage: "doc.on.doc") {
 				if let u = URL(string: self.entry.onDemandURL()) {
-					openURL(u)
+					writeTextToPasteboard(u.absoluteString)
 				}
 			}
-			.buttonStyle(.link).disabled(folder.connectedPeerCount() == 0)
-			.contextMenu {
-				Button("Copy to clipboard", systemImage: "doc.on.doc") {
-					if let u = URL(string: self.entry.onDemandURL()) {
-						writeTextToPasteboard(u.absoluteString)
-					}
-				}
-			}
-		#endif
+		}
 
 		if entry.isSelected() {
 			// A file that is not ignored is used from the working directory
@@ -482,25 +440,13 @@ struct EntryInfoView: View {
 				if let localPathActual = localPath {
 					Section {
 						Button("View file", systemImage: "eye", action: { localItemURL = URL(fileURLWithPath: localPathActual) })
-							#if os(macOS)
-								.buttonStyle(.link)
-							#endif
+							.buttonStyle(.link)
 
-						#if os(macOS)
-							if let appURL = openWithAppURL {
-								Button("Open with '\(appURL.lastPathComponent)'", systemImage: "app.badge") {
-									NSWorkspace.shared.open(URL(fileURLWithPath: localPathActual))
-								}.buttonStyle(.link)
-							}
-						#endif
-
-						#if os(iOS)
-							// On macOS, this button is in the toolbar; on iOS there is not enough horizontal space
-							Button(
-								openInFilesAppLabel, systemImage: "arrow.up.forward.app",
-								action: { openURLInSystemFilesApp(url: URL(fileURLWithPath: localPathActual)) }
-							).disabled(localPath == nil)
-						#endif
+						if let appURL = openWithAppURL {
+							Button("Open with '\(appURL.lastPathComponent)'", systemImage: "app.badge") {
+								NSWorkspace.shared.open(URL(fileURLWithPath: localPathActual))
+							}.buttonStyle(.link)
+						}
 					}
 				}
 			}
@@ -513,9 +459,7 @@ struct EntryInfoView: View {
 			let streamInOtherAppButton = Button("Stream in another app", systemImage: "arrow.down.app.fill") {
 				self.showCopyStreamingURL = true
 			}.disabled(folder.connectedPeerCount() == 0)
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 
 			let streamButton = Button(
 				"Stream", systemImage: entry.isVideo ? "tv" : "music.note",
@@ -528,9 +472,7 @@ struct EntryInfoView: View {
 					}
 				}
 			).disabled(folder.connectedPeerCount() == 0)
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 
 			let quickViewButton = Button(
 				"View file", systemImage: "arrow.down.circle",
@@ -543,38 +485,24 @@ struct EntryInfoView: View {
 					}
 				}
 			).disabled(folder.connectedPeerCount() == 0)
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 
 			if !entry.isArchive() {
 				Section {
 					if entry.isMedia {
 						// Stream button
-						#if os(macOS)
-							HStack {
-								quickViewButton
-								streamButton
-								streamInOtherAppButton
-								openInSafariButton
-							}
-						#else
+						HStack {
 							quickViewButton
 							streamButton
-							if #available(iOS 26, *) {
-								streamInOtherAppButton
-							}
-						#endif
+							streamInOtherAppButton
+							openInSafariButton
+						}
 					}
 					else {
-						#if os(macOS)
-							HStack {
-								quickViewButton
-								openInSafariButton
-							}
-						#else
+						HStack {
 							quickViewButton
-						#endif
+							openInSafariButton
+						}
 					}
 				}
 			}
@@ -595,12 +523,10 @@ struct EntryInfoView: View {
 			// Obtain local paths
 			var error: NSError? = nil
 			self.localPath = entry.isLocallyPresent() ? entry.localNativePath(&error) : nil
-			#if os(macOS)
-				if let localPathActual = self.localPath {
-					self.openWithAppURL =
-						error == nil ? NSWorkspace.shared.urlForApplication(toOpen: URL(fileURLWithPath: localPathActual)) : nil
-				}
-			#endif
+			if let localPathActual = self.localPath {
+				self.openWithAppURL =
+					error == nil ? NSWorkspace.shared.urlForApplication(toOpen: URL(fileURLWithPath: localPathActual)) : nil
+			}
 
 			do {
 				self.availabilityError = nil
@@ -622,36 +548,19 @@ struct EntryInfoView: View {
 	}
 
 	private func onTapThumbnail() {
-		#if os(macOS)
-			// On macOS prefer local QuickLook
-			if let localPath = localPath, self.entry.isLocallyPresent() {
-				localItemURL = URL(fileURLWithPath: localPath)
+		// Prefer local QuickLook
+		if let localPath = localPath, self.entry.isLocallyPresent() {
+			localItemURL = URL(fileURLWithPath: localPath)
+		}
+		else if self.entry.isVideo || self.entry.isImage || self.entry.isWebPreviewable {
+			// Cmd-click to open preview window directory
+			if NSEvent.modifierFlags.contains(.command) {
+				openWindow(id: "preview", value: Preview(folderID: self.entry.folder!.folderID, path: self.entry.path()))
 			}
-			else if self.entry.isVideo || self.entry.isImage || self.entry.isWebPreviewable {
-				#if os(macOS)
-					// Cmd-click to open preview window directory
-					if NSEvent.modifierFlags.contains(.command) {
-						openWindow(id: "preview", value: Preview(folderID: self.entry.folder!.folderID, path: self.entry.path()))
-					}
-					else {
-						showFullScreenViewer = true
-					}
-				#else
-					showFullScreenViewer = true
-				#endif
-			}
-		#elseif os(iOS)
-			// On iOS prefer streaming view over QuickLook
-			if entry.isVideo || entry.isImage {
+			else {
 				showFullScreenViewer = true
 			}
-			else if let localPath = localPath, entry.isLocallyPresent() {
-				localItemURL = URL(fileURLWithPath: localPath)
-			}
-			else if entry.isWebPreviewable {
-				showFullScreenViewer = true
-			}
-		#endif
+		}
 	}
 
 	private func updateConflicts() async {
@@ -782,25 +691,21 @@ struct FileSharingLinksView: View {
 			Group {
 				if let link = linkToUse {
 					ShareLink(item: link) { Label("Share external link", systemImage: "link.circle") }
-						#if os(macOS)
-							.buttonStyle(.link)
-						#endif
+						.buttonStyle(.link)
 				}
 				else {
 					EmptyView()
 				}
 
-				#if os(macOS)
-					// On macOS, the share sheet doesn't have an obvious 'copy URL' option
-					Button("Copy external link", systemImage: "link.circle") {
-						if let se = self.sharingLink {
-							writeURLToPasteboard(url: se)
-						}
-						else if let se = entry.externalSharingURLExpensive() {
-							writeURLToPasteboard(url: se)
-						}
-					}.buttonStyle(.link)
-				#endif
+				// On macOS, the share sheet doesn't have an obvious 'copy URL' option
+				Button("Copy external link", systemImage: "link.circle") {
+					if let se = self.sharingLink {
+						writeURLToPasteboard(url: se)
+					}
+					else if let se = entry.externalSharingURLExpensive() {
+						writeURLToPasteboard(url: se)
+					}
+				}.buttonStyle(.link)
 			}.task { await self.update() }
 				.onChange(of: entry) { Task { await self.update() } }
 		}
@@ -809,10 +714,6 @@ struct FileSharingLinksView: View {
 
 private struct StreamingURLView: View {
 	let entry: SushitrainEntry
-
-	#if os(iOS)
-		@ObservedObject var backgroundManager: BackgroundManager
-	#endif
 
 	@State private var url: String = ""
 	@State private var copied = false
@@ -825,112 +726,45 @@ private struct StreamingURLView: View {
 					.listRowBackground(Color.clear)
 			}
 
-			#if os(iOS)
-				if #available(iOS 26, *) {
-					Section {
-						Button(
-							"Run in the background for an hour",
-							systemImage: backgroundManager.runningContinuedTask != nil ? "stop.circle" : "play.circle"
-						) {
-							withAnimation {
-								if backgroundManager.runningContinuedTask != nil {
-									backgroundManager.stopContinuedSync()
-								}
-								else {
-									try? backgroundManager.startContinuedSync(.time(seconds: 3600))
-								}
-							}
-						}.disabled(backgroundManager.stopRunningContinuedTask)
-					}
-				}
-			#endif
-
-			if canStream {
-				if hasVLC {
-					Section {
-						Button("Stream file in VLC", systemImage: "cone") {
-							self.streamWithVLC()
-						}
-						#if os(macOS)
-							.buttonStyle(.link)
-						#endif
-					}
-				}
-
+			if hasVLC {
 				Section {
-					#if os(macOS)
-						Text(
-							"The URL shown below can be used in other applications that support streaming (such as VLC) until Synctrain is closed."
-						).listRowBackground(Color.clear)
-					#endif
-
-					#if os(iOS)
-						Text(
-							"The URL shown below can be used in other applications that support streaming (such as VLC) while Synctrain is running in the background."
-						)
-					#endif
-
-					Text(self.url).monospaced().textSelection(.enabled)
-
-					Button("Copy to clipboard", systemImage: copied ? "checkmark.circle.dotted" : "doc.on.doc") {
-						writeTextToPasteboard(self.url)
-						withAnimation {
-							self.copied = true
-						}
-					}.disabled(copied)
-						#if os(macOS)
-							.buttonStyle(.link)
-						#endif
+					Button("Stream file in VLC", systemImage: "cone") {
+						self.streamWithVLC()
+					}
+					.buttonStyle(.link)
 				}
 			}
+
+			Section {
+				Text(
+					"The URL shown below can be used in other applications that support streaming (such as VLC) until Synctrain is closed."
+				).listRowBackground(Color.clear)
+
+				Text(self.url).monospaced().textSelection(.enabled)
+
+				Button("Copy to clipboard", systemImage: copied ? "checkmark.circle.dotted" : "doc.on.doc") {
+					writeTextToPasteboard(self.url)
+					withAnimation {
+						self.copied = true
+					}
+				}.disabled(copied)
+					.buttonStyle(.link)
+			}
 		}
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 		.task {
 			self.url = entry.onDemandURL()
 		}
 	}
 
 	private func streamWithVLC() {
-		#if os(iOS)
-			UIApplication.shared.open(vlcURL, options: [:], completionHandler: nil)
-		#else
-			if let vlcAppURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "org.videolan.vlc") {
-				NSWorkspace.shared.open(
-					[URL(string: self.url)!], withApplicationAt: vlcAppURL, configuration: NSWorkspace.OpenConfiguration())
-			}
-		#endif
+		if let vlcAppURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "org.videolan.vlc") {
+			NSWorkspace.shared.open(
+				[URL(string: self.url)!], withApplicationAt: vlcAppURL, configuration: NSWorkspace.OpenConfiguration())
+		}
 	}
 
 	private var hasVLC: Bool {
-		#if os(iOS)
-			UIApplication.shared.canOpenURL(self.vlcURL)
-		#else
-			return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "org.videolan.vlc") != nil
-		#endif
+		return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "org.videolan.vlc") != nil
 	}
-
-	private var canStream: Bool {
-		#if os(iOS)
-			return backgroundManager.runningContinuedTask != nil
-		#else
-			return true
-		#endif
-	}
-
-	private var vlcURL: URL {
-		return vlcStreamingURL(for: self.url)
-	}
-}
-
-func vlcStreamingURL(for url: String) -> URL {
-	// VLC wants to see 'http%3A%2F%2F' at the start of the URL parameter for it to interpret
-	// the whole think as percent-encoded URL. Therefore, we need to percent-encode '://' but *not*
-	// the 'http'-part.
-	// See https://github.com/videolan/vlc-ios/blob/33a8cc42e73e9126432c4b614f62da02a1c70a64/Sources/Helpers/Network/URLHandler.swift#L95
-	return URL(
-		string:
-			"vlc-x-callback://x-callback-url/stream?url=\(url.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics)!)"
-	)!
 }

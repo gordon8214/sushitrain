@@ -105,7 +105,6 @@ private struct FolderMetricView: View {
 private struct FoldersSection: View {
 	let groupName: String
 	let folders: [SushitrainFolder]
-	var editSettings: ((SushitrainFolder) -> Void)? = nil
 	@ObservedObject var userSettings: AppUserSettings
 
 	@State private var isExpanded: Bool = true
@@ -143,14 +142,6 @@ private struct FoldersSection: View {
 							)
 							.labelStyle(.titleAndIcon)
 						}
-
-						#if os(iOS)
-							if let editSettings = editSettings {
-								Button("Folder settings...", systemImage: "folder.badge.gearshape") {
-									editSettings(folder)
-								}
-							}
-						#endif
 					}
 				}
 			}
@@ -170,7 +161,6 @@ struct FoldersList: View {
 
 	@State private var discoveredFolders: [AddFolder] = []
 	@State private var foldersByGroup: [String: [SushitrainFolder]] = [:]
-	@State private var showSettingsFor: SushitrainFolder? = nil
 
 	@SceneStorage("discoveredFoldersExpanded") private var discoveredFoldersExpanded = false
 
@@ -200,63 +190,36 @@ struct FoldersList: View {
 				FoldersSection(
 					groupName: folderGroup.id,
 					folders: self.foldersByGroup[folderGroup.id]!,
-					editSettings: { self.showSettingsFor = $0 },
 					userSettings: self.userSettings
 				)
 			}
 
-			#if os(macOS)
-				if let onAdd = self.onAdd {
-					Section {
-						Button("Add folder...", systemImage: "plus") {
-							onAdd(AddFolder())
-						}
-						.buttonStyle(.link)
+			if let onAdd = self.onAdd {
+				Section {
+					Button("Add folder...", systemImage: "plus") {
+						onAdd(AddFolder())
 					}
+					.buttonStyle(.link)
 				}
-			#endif
+			}
 
 			self.pendingFoldersView()
 		}
 		.task(id: appState.eventCounter) {
 			await self.update()
 		}
-		#if os(iOS)
-			.sheet(item: $showSettingsFor) { folder in
-				NavigationStack {
-					FolderView(folder: folder)
-					.toolbar {
-						SheetButton(role: .save) {
-							showSettingsFor = nil
-						}
-					}
-				}
-			}
-		#endif
 	}
 
 	@ViewBuilder private func pendingFoldersView() -> some View {
 		if let onAdd = self.onAdd, !discoveredFolders.isEmpty {
-			// For some reason, isExpanded is accepted on iOS but doesn't do anything in regular lists, other than
-			// randomly hide contents...
-			#if os(macOS)
-				Section("Discovered folders", isExpanded: $discoveredFoldersExpanded) {
-					ForEach(discoveredFolders, id: \.folderID) { addFolder in
-						Button(addFolder.folderID, systemImage: "plus") {
-							onAdd(addFolder)
-						}
-						.buttonStyle(.link)
+			Section("Discovered folders", isExpanded: $discoveredFoldersExpanded) {
+				ForEach(discoveredFolders, id: \.folderID) { addFolder in
+					Button(addFolder.folderID, systemImage: "plus") {
+						onAdd(addFolder)
 					}
+					.buttonStyle(.link)
 				}
-			#else
-				Section("Discovered folders") {
-					ForEach(discoveredFolders, id: \.folderID) { addFolder in
-						Button(addFolder.folderID, systemImage: "plus") {
-							onAdd(addFolder)
-						}
-					}
-				}
-			#endif
+			}
 		}
 	}
 

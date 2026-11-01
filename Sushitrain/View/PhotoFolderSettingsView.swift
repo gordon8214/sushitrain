@@ -94,33 +94,19 @@ struct PhotoFolderConfigurationView: View {
 						editingDirName = folderName
 						self.showingSheet = .editing
 					}
-					#if os(macOS)
-						.buttonStyle(.link)
-						.padding(3.0)
-						.multilineTextAlignment(.leading)
-					#endif
+					.buttonStyle(.link)
+					.padding(3.0)
+					.multilineTextAlignment(.leading)
 
 					Spacer()
 
-					#if os(macOS)
-						Button("Delete", systemImage: "trash") {
-							self.config.folders.removeValue(forKey: folderName)
-						}
-						.labelStyle(.iconOnly)
-						.buttonStyle(.borderless)
-					#endif
+					Button("Delete", systemImage: "trash") {
+						self.config.folders.removeValue(forKey: folderName)
+					}
+					.labelStyle(.iconOnly)
+					.buttonStyle(.borderless)
 				}
 			}
-			#if os(iOS)
-				.onDelete { idxs in
-					Task {
-						for idx in idxs {
-							let albumName = folderPairs[idx].key
-							self.config.folders.removeValue(forKey: albumName)
-						}
-					}
-				}
-			#endif
 			Button("Add album...", systemImage: "plus") {
 				editingAlbumConfig = PhotoFSAlbumConfiguration()
 				self.showingSheet = .adding
@@ -134,9 +120,6 @@ struct PhotoFolderConfigurationView: View {
 					case .editing:
 						PhotoFolderAlbumSettingsView(config: $editingAlbumConfig, dirName: $editingDirName)
 							.interactiveDismissDisabled()
-							#if os(iOS)
-								.navigationBarTitleDisplayMode(.inline)
-							#endif
 							.toolbar {
 								ToolbarItem(
 									placement: .confirmationAction,
@@ -162,9 +145,6 @@ struct PhotoFolderConfigurationView: View {
 					case .adding:
 						PhotoFolderAlbumSettingsView(config: $editingAlbumConfig, dirName: $editingDirName)
 							.navigationTitle("Add album")
-							#if os(iOS)
-								.navigationBarTitleDisplayMode(.inline)
-							#endif
 							.toolbar {
 								ToolbarItem(
 									placement: .confirmationAction,
@@ -184,10 +164,8 @@ struct PhotoFolderConfigurationView: View {
 					}
 				}
 			}
-			#if os(macOS)
-				.padding(3.0)
-				.buttonStyle(.link)
-			#endif
+			.padding(3.0)
+			.buttonStyle(.link)
 		}
 	}
 
@@ -267,11 +245,6 @@ private struct PhotoFolderAlbumSettingsView: View {
 				}
 				else if authorizationStatus == .denied || authorizationStatus == .restricted {
 					Text("Synctrain cannot access your photo library right now")
-					#if os(iOS)
-						Button("Review permissions in the Settings app") {
-							openAppSettings()
-						}
-					#endif
 				}
 				else {
 					Text("Synctrain cannot access your photo library right now")
@@ -331,9 +304,7 @@ private struct PhotoFolderAlbumSettingsView: View {
 				)
 			}
 		}
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 		.task {
 			authorizationStatus = PHPhotoLibrary.authorizationStatus()
 			await self.update()
@@ -375,16 +346,4 @@ private struct PhotoFolderAlbumSettingsView: View {
 		}
 		return albums
 	}
-
-	#if os(iOS)
-		func openAppSettings() {
-			guard let settingsUrl = URL(string: UIApplication.openSettingsURLString) else {
-				return
-			}
-
-			if UIApplication.shared.canOpenURL(settingsUrl) {
-				UIApplication.shared.open(settingsUrl)
-			}
-		}
-	#endif
 }

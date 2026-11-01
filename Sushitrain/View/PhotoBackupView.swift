@@ -36,17 +36,13 @@ struct PhotoBackupButton: View {
 			Button("Cancel", role: .cancel) {
 				photoBackup.cancel()
 			}
-			#if os(macOS)
-				.buttonStyle(.link)
-			#endif
+			.buttonStyle(.link)
 		}
 		else {
 			Button("Back-up new photos", systemImage: "photo.badge.arrow.down.fill") {
 				photoBackup.backup(appState: self.appState, fullExport: false, isInBackground: false)
 			}
-			#if os(macOS)
-				.buttonStyle(.link)
-			#endif
+			.buttonStyle(.link)
 			.disabled(photoBackup.isBackingUp || !photoBackup.isReady)
 		}
 	}
@@ -152,11 +148,6 @@ struct PhotoBackupSettingsView: View {
 				}
 				else if authorizationStatus == .denied || authorizationStatus == .restricted {
 					Text("Synctrain cannot access your photo library right now")
-					#if os(iOS)
-						Button("Review permissions in the Settings app") {
-							openAppSettings()
-						}
-					#endif
 				}
 				else {
 					Text("Synctrain cannot access your photo library right now")
@@ -185,17 +176,6 @@ struct PhotoBackupSettingsView: View {
 					)
 				}
 			}
-
-			#if os(iOS)
-				Section {
-					BackgroundSchedulingControls(backgroundManager: appState.backgroundManager) {
-						Toggle(
-							"Copy photos periodically in the background",
-							isOn: photoBackup.$enableBackgroundCopy
-						).disabled(photoBackup.isBackingUp || photoBackup.selectedAlbumID.isEmpty)
-					}
-				}
-			#endif
 
 			Section("Save the following media types") {
 				Toggle(
@@ -233,11 +213,6 @@ struct PhotoBackupSettingsView: View {
 				LabeledContent {
 					TextField("", text: photoBackup.$subDirectoryPath, prompt: Text("(Top level)"))
 						.multilineTextAlignment(.trailing)
-						#if os(iOS)
-							.keyboardType(.asciiCapable)
-							.autocorrectionDisabled()
-							.autocapitalization(.none)
-						#endif
 						.onChange(of: photoBackup.subDirectoryPath) { _, _ in photoBackup.resetLastSuccessfulChangeToken() }
 				} label: {
 					Text("Path in folder")
@@ -319,14 +294,6 @@ struct PhotoBackupSettingsView: View {
 						"When this option is enabled, photos will be automatically removed from your photo library and iCloud after they have been backed up."
 					)
 				}
-
-				#if os(iOS)
-					if photoBackup.purgeEnabled && photoBackup.enableBackgroundCopy {
-						Text(
-							"Photos will only be removed when photo back-up is started manually from inside the app."
-						)
-					}
-				#endif
 			}.disabled(photoBackup.isBackingUp || photoBackup.selectedAlbumID.isEmpty)
 
 			// Time limit
@@ -382,9 +349,7 @@ struct PhotoBackupSettingsView: View {
 					photoBackup.backup(appState: self.appState, fullExport: true, isInBackground: false)
 				}
 				.disabled(photoBackup.isBackingUp || !photoBackup.isReady)
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			} footer: {
 				Text(
 					"Saves all photos in the album to the folder, even if the photo was saved to the folder before. This will overwrite any modifications made to the photo file in the folder."
@@ -400,12 +365,7 @@ struct PhotoBackupSettingsView: View {
 			}
 		}
 		.navigationTitle("Photo back-up")
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
+		.formStyle(.grouped)
 		.task {
 			await self.update()
 		}
@@ -460,18 +420,6 @@ struct PhotoBackupSettingsView: View {
 			self.smartAlbums = smartAlbums
 		}
 	}
-
-	#if os(iOS)
-		func openAppSettings() {
-			guard let settingsUrl = URL(string: UIApplication.openSettingsURLString) else {
-				return
-			}
-
-			if UIApplication.shared.canOpenURL(settingsUrl) {
-				UIApplication.shared.open(settingsUrl)
-			}
-		}
-	#endif
 }
 
 struct PhotoFolderStructureView: View {

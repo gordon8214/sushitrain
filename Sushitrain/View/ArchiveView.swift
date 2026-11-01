@@ -24,11 +24,9 @@ struct ArchiveView: View {
 	@State private var files: [ArchiveFileName] = []
 	@State private var showDownloaderFor: ArchiveFileName? = nil
 
-	#if os(macOS)
-		@State private var inspectedFile: String? = nil
-		@State private var selectedFiles = Set<ArchiveFileName.ID>()
-		@SceneStorage("ZipTableViewConfig") private var columnCustomization: TableColumnCustomization<ArchiveFileName>
-	#endif
+	@State private var inspectedFile: String? = nil
+	@State private var selectedFiles = Set<ArchiveFileName.ID>()
+	@SceneStorage("ZipTableViewConfig") private var columnCustomization: TableColumnCustomization<ArchiveFileName>
 
 	var body: some View {
 		ZStack {
@@ -39,21 +37,12 @@ struct ArchiveView: View {
 				ContentUnavailableView(e, systemImage: "exclamationmark.triangle")
 			}
 			else {
-				#if os(macOS)
-					self.tableBody()
-				#else
-					self.listBody()
-				#endif
+				self.tableBody()
 			}
 		}
 		.navigationTitle(self.archive.name() + " " + self.prefix.withoutEndingSlash)
-		#if os(macOS)
-			.presentationSizing(.form.sticky())
-			.frame(minWidth: 640, minHeight: 480)
-		#endif
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
+		.presentationSizing(.form.sticky())
+		.frame(minWidth: 640, minHeight: 480)
 		.task {
 			await Task(priority: .userInitiated) {
 				await self.update()
@@ -61,90 +50,65 @@ struct ArchiveView: View {
 		}
 	}
 
-	#if os(macOS)
-		@ViewBuilder private func tableBody() -> some View {
-			Table(files, selection: $selectedFiles, columnCustomization: $columnCustomization) {
-				TableColumn("File") { file in
-					if archive.isDirectory(file.name) {
-						let fileName = String(file.name.trimmingPrefix(self.prefix).trimmingPrefix("/"))
-						Label(fileName.withoutEndingSlash, systemImage: "folder")
-					}
-					else {
-						let fileName = String(file.name.trimmingPrefix(self.prefix).trimmingPrefix("/"))
-						Label(fileName, systemImage: "doc.fill")
-					}
-				}
-			}
-			.contextMenu(
-				forSelectionType: ArchiveFileName.ID.self,
-				menu: { items in
-					if items.count == 1 {
-						Button("Download...", systemImage: "square.and.arrow.down") {
-							showDownloaderFor = ArchiveFileName(name: items.first!)
-						}
-					}
-					else {
-						Text("\(items.count) selected")
-					}
-				}, primaryAction: self.doubleClick
-			)
-			.navigationDestination(item: $inspectedFile) { filePath in
-				if archive.isDirectory(filePath) {
-					ArchiveView(archive: archive, prefix: filePath)
-				}
-				else {
-					ZipFileView(archive: archive, path: filePath)
-				}
-			}
-			.sheet(item: $showDownloaderFor) { downloadFile in
-				self.downloaderSheet(zipFileName: downloadFile)
-			}
-		}
-
-		private func doubleClick(_ items: Set<ArchiveFileName.ID>) {
-			if let fileName = items.first, items.count == 1 {
-				self.inspectedFile = fileName
-			}
-		}
-
-		@ViewBuilder private func downloaderSheet(zipFileName: ArchiveFileName) -> some View {
-			if let downloadable = try? archive.file(zipFileName.name).asDownloadable() {
-				NavigationStack {
-					EntryDownloaderView(file: downloadable, action: .share)
-						#if os(iOS)
-							.navigationBarTitleDisplayMode(.inline)
-						#endif
-						#if os(macOS)
-							.presentationSizing(.form.sticky())
-							.frame(minWidth: 640, minHeight: 480)
-						#endif
-						.toolbar {
-							SheetButton(role: .cancel) {
-								showDownloaderFor = nil
-							}
-						}
-				}
-			}
-		}
-	#endif
-
-	#if os(iOS)
-		@ViewBuilder private func listBody() -> some View {
-			List(files, id: \.self) { file in
-				let fileName = String(file.name.trimmingPrefix(self.prefix))
+	@ViewBuilder private func tableBody() -> some View {
+		Table(files, selection: $selectedFiles, columnCustomization: $columnCustomization) {
+			TableColumn("File") { file in
 				if archive.isDirectory(file.name) {
-					NavigationLink(destination: ArchiveView(archive: self.archive, prefix: file.name)) {
-						Label(fileName.withoutEndingSlash, systemImage: "folder.fill")
-					}
+					let fileName = String(file.name.trimmingPrefix(self.prefix).trimmingPrefix("/"))
+					Label(fileName.withoutEndingSlash, systemImage: "folder")
 				}
 				else {
-					NavigationLink(destination: ZipFileView(archive: self.archive, path: file.name)) {
-						Label(fileName, systemImage: "doc.fill")
-					}
+					let fileName = String(file.name.trimmingPrefix(self.prefix).trimmingPrefix("/"))
+					Label(fileName, systemImage: "doc.fill")
 				}
 			}
 		}
-	#endif
+		.contextMenu(
+			forSelectionType: ArchiveFileName.ID.self,
+			menu: { items in
+				if items.count == 1 {
+					Button("Download...", systemImage: "square.and.arrow.down") {
+						showDownloaderFor = ArchiveFileName(name: items.first!)
+					}
+				}
+				else {
+					Text("\(items.count) selected")
+				}
+			}, primaryAction: self.doubleClick
+		)
+		.navigationDestination(item: $inspectedFile) { filePath in
+			if archive.isDirectory(filePath) {
+				ArchiveView(archive: archive, prefix: filePath)
+			}
+			else {
+				ZipFileView(archive: archive, path: filePath)
+			}
+		}
+		.sheet(item: $showDownloaderFor) { downloadFile in
+			self.downloaderSheet(zipFileName: downloadFile)
+		}
+	}
+
+	private func doubleClick(_ items: Set<ArchiveFileName.ID>) {
+		if let fileName = items.first, items.count == 1 {
+			self.inspectedFile = fileName
+		}
+	}
+
+	@ViewBuilder private func downloaderSheet(zipFileName: ArchiveFileName) -> some View {
+		if let downloadable = try? archive.file(zipFileName.name).asDownloadable() {
+			NavigationStack {
+				EntryDownloaderView(file: downloadable, action: .share)
+					.presentationSizing(.form.sticky())
+					.frame(minWidth: 640, minHeight: 480)
+					.toolbar {
+						SheetButton(role: .cancel) {
+							showDownloaderFor = nil
+						}
+					}
+			}
+		}
+	}
 
 	@concurrent private func update() async {
 		dispatchPrecondition(condition: .notOnQueue(.main))
@@ -204,9 +168,6 @@ private struct ZipFileView: View {
 			}
 		}
 		.navigationTitle(path)
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 		.task {
 			do {
 				self.file = try archive.file(path).asDownloadable()

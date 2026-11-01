@@ -6,91 +6,6 @@
 import SwiftUI
 @preconcurrency import SushitrainCore
 
-#if os(iOS)
-	private struct WaitView: View {
-		@Environment(AppState.self) private var appState
-		@Binding var isPresented: Bool
-
-		@State private var position: CGPoint = .zero
-		@State private var velocity: CGSize = CGSize(width: 1, height: 1)
-		@State private var timer: Timer? = nil
-
-		let spinnerSize = CGSize(width: 240, height: 70)
-
-		var body: some View {
-			GeometryReader { geometry in
-				ZStack {
-					Color.black
-						.edgesIgnoringSafeArea(.all)
-
-					if !appState.isFinished {
-						VStack(alignment: .leading, spacing: 10) {
-							OverallStatusView().frame(maxWidth: .infinity)
-
-							if appState.photoBackup.isBackingUp {
-								PhotoBackupProgressView(photoBackup: appState.photoBackup)
-							}
-
-							Text(
-								velocity.height > 0
-									? "Tap to close"
-									: "The screen will stay on until finished"
-							)
-							.dynamicTypeSize(.xSmall)
-							.foregroundStyle(.gray)
-							.multilineTextAlignment(.center)
-							.frame(maxWidth: .infinity)
-						}
-						.frame(width: spinnerSize.width, height: spinnerSize.height)
-						.position(position)
-					}
-				}
-				.statusBar(hidden: true)
-				.persistentSystemOverlays(.hidden)
-				.onTapGesture {
-					isPresented = false
-				}
-				.onAppear {
-					UIApplication.shared.isIdleTimerDisabled = true
-					position = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
-					startTimer(in: geometry.size)
-				}
-				.onDisappear {
-					UIApplication.shared.isIdleTimerDisabled = false
-					timer?.invalidate()
-				}
-			}
-		}
-
-		private func startTimer(in size: CGSize) {
-			timer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { _ in
-				DispatchQueue.main.async {
-					if appState.isFinished {
-						self.isPresented = false
-						return
-					}
-
-					// Update position
-					position.x += velocity.width
-					position.y += velocity.height
-
-					// Bounce off walls
-					if position.x - spinnerSize.width / 2 <= 0
-						|| position.x + spinnerSize.width / 2 >= size.width
-					{
-						velocity.width *= -1
-					}
-					if position.y - spinnerSize.height / 2 <= 0
-						|| position.y + spinnerSize.height / 2 >= size.height
-					{
-						velocity.height *= -1
-					}
-				}
-			}
-		}
-	}
-#endif
-
 private struct OverallDownloadProgressView: View {
 	@Environment(AppState.self) private var appState
 	@State private var lastProgress: (Date, SushitrainProgress)? = nil
@@ -334,16 +249,9 @@ struct StartView: View {
 
 	@ObservedObject var userSettings: AppUserSettings
 
-	#if os(iOS)
-		@ObservedObject var backgroundManager: BackgroundManager
-	#endif
-
-	#if os(macOS)
-		@Environment(\.openWindow) private var openWindow
-	#endif
+	@Environment(\.openWindow) private var openWindow
 
 	@State private var qrCodeShown = false
-	@State private var showWaitScreen: Bool = false
 
 	@State private var showAddresses = false
 	@State private var showAddFolderSheet = false
@@ -365,49 +273,15 @@ struct StartView: View {
 	@State private var showMaintenance = false
 	@State private var lastDatabaseMaintenance: Date? = nil
 
-	@State private var showError: Error? = nil
-
 	var body: some View {
 		Form {
 			Section {
 				OverallStatusView()
 					.contextMenu {
-						#if os(iOS)
-							if !self.appState.isFinished {
-								if #available(iOS 26, *) {
-									self.continueInBackgroundMenu(untilFinished: true)
-								}
-								else {
-									Button("Wait for completion", systemImage: "hourglass.circle") {
-										self.showWaitScreen = true
-									}
-								}
-							}
-
-							if #available(iOS 26, *) {
-								self.continueInBackgroundMenu(untilFinished: false)
-							}
-						#endif
-
-						#if os(macOS)
-							Button("Statistics...") {
-								openWindow(id: "stats")
-							}
-						#endif
-					}
-
-				#if os(iOS)
-					if #available(iOS 26, *) {
-						if backgroundManager.runningContinuedTask != nil {
-							Button(
-								"Will continue in the background",
-								systemImage: backgroundManager.stopRunningContinuedTask ? "stop.circle.fill" : "stop.circle"
-							) {
-								backgroundManager.stopContinuedSync()
-							}.disabled(backgroundManager.stopRunningContinuedTask)
+						Button("Statistics...") {
+							openWindow(id: "stats")
 						}
 					}
-				#endif
 
 				NetworkStatusView(userSettings: userSettings)
 			}
@@ -446,38 +320,14 @@ struct StartView: View {
 			self.bookmarksSection()
 
 			if appState.photoBackup.isReady {
-				#if os(iOS)
-					Section {
-						PhotoBackupButton(photoBackup: appState.photoBackup)
-					} footer: {
-						PhotoBackupStatusView(photoBackup: appState.photoBackup)
-					}
-				#else
-					Section {
-						PhotoBackupButton(photoBackup: appState.photoBackup)
-						PhotoBackupStatusView(photoBackup: appState.photoBackup)
-					}
-				#endif
-			}
-		}
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
-		.navigationTitle("Start")
-		#if os(iOS)
-			.toolbar {
-				ToolbarItem {
-					NavigationLink(destination: SettingsView(userSettings: appState.userSettings)) {
-						Image(systemName: "gear").accessibilityLabel("Settings")
-					}
+				Section {
+					PhotoBackupButton(photoBackup: appState.photoBackup)
+					PhotoBackupStatusView(photoBackup: appState.photoBackup)
 				}
 			}
-		#endif
-		#if os(iOS)
-			.fullScreenCover(isPresented: $showWaitScreen) {
-				WaitView(isPresented: $showWaitScreen)
-			}
-		#endif
+		}
+		.formStyle(.grouped)
+		.navigationTitle("Start")
 		.sheet(isPresented: Binding.isNotNil($fixingInaccessibleExternalFolder)) {
 			if let fe = self.fixingInaccessibleExternalFolder {
 				NavigationStack {
@@ -495,17 +345,6 @@ struct StartView: View {
 		.sheet(isPresented: $showMaintenance) {
 			MaintenanceView()
 		}
-		.alert(
-			"An error has occurred", isPresented: Binding.isNotNil($showError),
-			actions: {
-				Button("OK") {
-					showError = nil
-				}
-			},
-			message: {
-				Text(showError?.localizedDescription ?? "")
-			}
-		)
 		.task(id: appState.eventCounter) {
 			await self.update()
 		}
@@ -520,52 +359,6 @@ struct StartView: View {
 			}
 		}
 	}
-
-	#if os(iOS)
-		@ViewBuilder @available(iOS 26, *) private func continueInBackgroundMenu(untilFinished: Bool) -> some View {
-			Section(untilFinished ? "Wait for completion" : "Synchronize in the background") {
-				if !backgroundManager.canScheduleBackgroundTasks,
-					let url = URL(string: UIApplication.openSettingsURLString)
-				{
-					Link("Enable background processing in Settings", destination: url)
-				}
-				Button("For 10 seconds", systemImage: "play.circle") {
-					self.startBackgroundSyncFor(untilFinished ? .timeOrFinished(seconds: 10) : .time(seconds: 10))
-				}.disabled(backgroundManager.runningContinuedTask != nil || !backgroundManager.canScheduleBackgroundTasks)
-
-				Button("For 1 minute", systemImage: "play.circle") {
-					self.startBackgroundSyncFor(untilFinished ? .timeOrFinished(seconds: 60) : .time(seconds: 60))
-				}.disabled(backgroundManager.runningContinuedTask != nil || !backgroundManager.canScheduleBackgroundTasks)
-
-				Button("For 10 minutes", systemImage: "play.circle") {
-					self.startBackgroundSyncFor(untilFinished ? .timeOrFinished(seconds: 10 * 60) : .time(seconds: 10 * 60))
-				}.disabled(backgroundManager.runningContinuedTask != nil || !backgroundManager.canScheduleBackgroundTasks)
-
-				Button("For 1 hour", systemImage: "play.circle") {
-					self.startBackgroundSyncFor(untilFinished ? .timeOrFinished(seconds: 3600) : .time(seconds: 3600))
-				}.disabled(backgroundManager.runningContinuedTask != nil || !backgroundManager.canScheduleBackgroundTasks)
-
-				if untilFinished {
-					Divider()
-
-					Button("Wait inside the app", systemImage: "hourglass.circle") {
-						self.showWaitScreen = true
-					}.disabled(appState.isFinished)
-				}
-			}
-		}
-
-		@available(iOS 26, *) private func startBackgroundSyncFor(_ type: ContinuedTaskType) {
-			withAnimation {
-				do {
-					try backgroundManager.startContinuedSync(type)
-				}
-				catch {
-					self.showError = error
-				}
-			}
-		}
-	#endif
 
 	@ViewBuilder private func bookmarksSection() -> some View {
 		if !self.userSettings.bookmarkedRoutes.isEmpty {
@@ -595,9 +388,7 @@ struct StartView: View {
 							})
 						}
 					}
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 				}
 			}
 		}
@@ -614,10 +405,8 @@ struct StartView: View {
 					addingFolder = AddFolder()
 					showAddFolderSheet = true
 				}
-				#if os(macOS)
-					.padding([.bottom], 5)
-					.buttonStyle(.link)
-				#endif
+				.padding([.bottom], 5)
+				.buttonStyle(.link)
 			}
 			.sheet(
 				isPresented: $showAddFolderSheet,
@@ -646,10 +435,8 @@ struct StartView: View {
 					addingDeviceID = ""
 					addingDevice = true
 				}
-				#if os(macOS)
-					.padding([.bottom], 5)
-					.buttonStyle(.link)
-				#endif
+				.padding([.bottom], 5)
+				.buttonStyle(.link)
 			}
 			.sheet(
 				isPresented: $addingDevice,
@@ -672,9 +459,7 @@ struct StartView: View {
 				Button("Perform database maintenance", systemImage: "bubbles.and.sparkles") {
 					showMaintenance = true
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			} header: {
 				Text("Database maintenance")
 			} footer: {
@@ -696,21 +481,19 @@ struct StartView: View {
 		if showNoPeersEnabledWarning || !longTimeNotSeenDevices.isEmpty || !appState.pendingDevices.isEmpty {
 			Section("Devices that need your attention") {
 				// Devices that asked to connect
-				#if os(macOS)
-					// In a window of its own: this row goes as soon as the last request does, which would close what it opened
-					if !appState.pendingDevices.isEmpty {
-						Button {
-							openWindow(id: "connectionRequests")
-						} label: {
-							Label(
-								"Devices that want to connect: \(appState.pendingDevices.count)",
-								systemImage: "person.crop.circle.badge.plus"
-							)
-							.foregroundStyle(.orange)
-						}
-						.buttonStyle(.link)
+				// In a window of its own: this row goes as soon as the last request does, which would close what it opened
+				if !appState.pendingDevices.isEmpty {
+					Button {
+						openWindow(id: "connectionRequests")
+					} label: {
+						Label(
+							"Devices that want to connect: \(appState.pendingDevices.count)",
+							systemImage: "person.crop.circle.badge.plus"
+						)
+						.foregroundStyle(.orange)
 					}
-				#endif
+					.buttonStyle(.link)
+				}
 
 				// All devices are disabled
 				if showNoPeersEnabledWarning {
@@ -730,9 +513,6 @@ struct StartView: View {
 						Task {
 							Log.info("Attempting to fix 'no devices are connected'")
 							self.appState.userSettings.userPausedDevices.removeAll()
-							#if os(iOS)
-								await self.appState.suspend(false)
-							#endif
 							Log.info("Updating device suspension")
 							await self.appState.updateDeviceSuspension()
 							showNoPeersEnabledWarning = false
@@ -780,9 +560,7 @@ struct StartView: View {
 						)
 						.foregroundStyle(.red)
 					}
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 				}
 
 				// Folders with other configuration issues

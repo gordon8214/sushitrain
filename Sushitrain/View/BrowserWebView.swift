@@ -54,7 +54,6 @@ struct BrowserWebView: View {
 					url: s.url,
 					trustFingerprints: self.serverFingerprintSha256,
 					cookies: cookies,
-					isOpaque: true,
 					isLoading: .constant(false),
 					error: $error
 				)

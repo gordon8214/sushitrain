@@ -90,22 +90,14 @@ private struct ToastModifier: ViewModifier {
 private struct GlassyToastView: View {
 	let toast: Toast
 
-	@Environment(\.colorScheme) var colorScheme
-
 	var body: some View {
 		if #available(iOS 26, macOS 26, *) {
 			ToastView(toast: toast).glassEffect()
 		}
 		else {
-			#if os(iOS)
-				ToastView(toast: toast)
-					.shadow(color: Color(Color.black.opacity(0.08)), radius: 8, x: 0, y: 4)
-					.background(Color(colorScheme == .dark ? UIColor.secondarySystemBackground : UIColor.systemBackground))
-			#else
-				ToastView(toast: toast)
-					.shadow(color: Color(Color.black.opacity(0.08)), radius: 8, x: 0, y: 4)
-					.background(Color(NSColor.windowBackgroundColor))
-			#endif
+			ToastView(toast: toast)
+				.shadow(color: Color(Color.black.opacity(0.08)), radius: 8, x: 0, y: 4)
+				.background(Color(NSColor.windowBackgroundColor))
 		}
 	}
 }

@@ -5,7 +5,6 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
 @preconcurrency import SushitrainCore
-import BackgroundTasks
 import Combine
 import AppIntents
 import SynctrainHostKit

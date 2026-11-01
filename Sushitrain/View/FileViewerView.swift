@@ -16,97 +16,40 @@ struct FileViewerView: View {
 	let inSheet: Bool
 	@Binding var isShown: Bool
 
-	#if os(iOS)
-		@State private var barHidden: Bool = false
-	#endif
+	@State private var selfIndex: Int? = nil
+	@Environment(\.openWindow) private var openWindow
 
-	#if os(macOS)
-		@State private var selfIndex: Int? = nil
-		@Environment(\.openWindow) private var openWindow
-	#endif
-
-	#if os(iOS)
-		private var scrollableFiles: [SushitrainEntry] {
-			if let s = siblings {
-				return s
-			}
-			if let f = self.file {
-				return [f]
-			}
-			return []
-		}
-
-		// iOS version has infinite scrolling
-		var body: some View {
-			GeometryReader { reader in
-				ScrollView(.horizontal, showsIndicators: false) {
-					LazyHStack(spacing: 1.0) {
-						ForEach(self.scrollableFiles) { sibling in
-							NavigationStack {
-								FileViewerContentView(file: sibling, isShown: $isShown, playFile: .constant(sibling == self.file))
-									.toolbar {
-										self.toolbarContent(file: sibling)
-									}
-									.navigationTitle(sibling.fileName())
-									// Allow toolbar to be hidden on iOS
-									.navigationBarTitleDisplayMode(.inline)
-									.navigationBarHidden(barHidden)
-							}
-							.frame(width: reader.size.width)
-							.tag(sibling)
-							.id(sibling)
-						}
+	var body: some View {
+		NavigationStack {
+			if let file = file {
+				FileViewerContentView(file: file, isShown: $isShown, playFile: .constant(true))
+					.navigationTitle(file.fileName())
+					.toolbar {
+						self.toolbarContent(file: file)
 					}
-					.scrollTargetLayout()
-				}
-				.simultaneousGesture(
-					TapGesture().onEnded {
-						withAnimation {
-							barHidden = !barHidden
-						}
-					}
-				)
-				.scrollTargetBehavior(.viewAligned)
-				.scrollPosition(id: $file, anchor: .center)
-			}
-			.onAppear {
-				barHidden = false
 			}
 		}
-	#else
-		// Mac version has back/forward buttons
-		var body: some View {
-			NavigationStack {
-				if let file = file {
-					FileViewerContentView(file: file, isShown: $isShown, playFile: .constant(true))
-						.navigationTitle(file.fileName())
-						.toolbar {
-							self.toolbarContent(file: file)
-						}
+		.onAppear {
+			if let file = self.file {
+				self.selfIndex = self.siblings?.firstIndex {
+					$0.id == file.id
 				}
 			}
-			.onAppear {
-				if let file = self.file {
-					self.selfIndex = self.siblings?.firstIndex {
-						$0.id == file.id
-					}
-				}
-			}
-			.presentationSizing(.fitted)
-			.frame(minWidth: 640, minHeight: 480)
 		}
+		.presentationSizing(.fitted)
+		.frame(minWidth: 640, minHeight: 480)
+	}
 
-		private func next(_ offset: Int) {
-			if let siblings = siblings, let file = self.file, let idx = self.siblings?.firstIndex(where: { $0.id == file.id }) {
-				let newIndex = idx + offset
-				if newIndex >= 0 && newIndex < siblings.count {
-					let newFile = siblings[newIndex]
-					self.file = newFile
-					selfIndex = siblings.firstIndex(of: newFile)
-				}
+	private func next(_ offset: Int) {
+		if let siblings = siblings, let file = self.file, let idx = self.siblings?.firstIndex(where: { $0.id == file.id }) {
+			let newIndex = idx + offset
+			if newIndex >= 0 && newIndex < siblings.count {
+				let newFile = siblings[newIndex]
+				self.file = newFile
+				selfIndex = siblings.firstIndex(of: newFile)
 			}
 		}
-	#endif
+	}
 
 	@ToolbarContentBuilder private func toolbarContent(file: SushitrainEntry) -> some ToolbarContent {
 		if inSheet {
@@ -114,44 +57,40 @@ struct FileViewerView: View {
 				isShown = false
 			}
 
-			#if os(macOS)
-				ToolbarItemGroup(placement: .automatic) {
-					Button(
-						"Open in new window",
-						systemImage: "macwindow.on.rectangle"
-					) {
-						if let folder = file.folder {
-							openWindow(
-								id: "preview",
-								value: Preview(
-									folderID: folder
-										.folderID,
-									path: file.path()
-								))
-							isShown = false
-						}
+			ToolbarItemGroup(placement: .automatic) {
+				Button(
+					"Open in new window",
+					systemImage: "macwindow.on.rectangle"
+				) {
+					if let folder = file.folder {
+						openWindow(
+							id: "preview",
+							value: Preview(
+								folderID: folder
+									.folderID,
+								path: file.path()
+							))
+						isShown = false
 					}
-				}
-			#endif
-		}
-
-		#if os(macOS)
-			if let siblings = siblings, let selfIndex = selfIndex {
-				ToolbarItemGroup(placement: .automatic) {
-					Button("Previous", systemImage: "chevron.up") {
-						next(-1)
-					}
-					.disabled(selfIndex < 1)
-					.keyboardShortcut(KeyEquivalent.upArrow)
-
-					Button("Next", systemImage: "chevron.down") {
-						next(1)
-					}
-					.disabled(selfIndex >= siblings.count - 1)
-					.keyboardShortcut(KeyEquivalent.downArrow)
 				}
 			}
-		#endif
+		}
+
+		if let siblings = siblings, let selfIndex = selfIndex {
+			ToolbarItemGroup(placement: .automatic) {
+				Button("Previous", systemImage: "chevron.up") {
+					next(-1)
+				}
+				.disabled(selfIndex < 1)
+				.keyboardShortcut(KeyEquivalent.upArrow)
+
+				Button("Next", systemImage: "chevron.down") {
+					next(1)
+				}
+				.disabled(selfIndex >= siblings.count - 1)
+				.keyboardShortcut(KeyEquivalent.downArrow)
+			}
+		}
 	}
 }
 
@@ -200,10 +139,6 @@ private struct FileViewerContentView: View {
 							error: self.$error
 						)
 						.id(url)
-						#if os(iOS)
-							.ignoresSafeArea()
-							.opacity(loading ? 0.0 : 1.0)
-						#endif
 						if loading {
 							ThumbnailView(
 								file: file, showFileName: false, showErrorMessages: false, scaleToFill: false, generateOnDemand: false
@@ -239,48 +174,11 @@ private struct FileMediaPlayer: View {
 	@Binding var visible: Bool
 
 	@State private var player: AVPlayer?
-	#if os(iOS)
-		@State private var session = AVAudioSession.sharedInstance()
-	#endif
-
-	private func activateSession() {
-		#if os(iOS)
-			do {
-				try session.setCategory(.playback, mode: .default, options: [])
-			}
-			catch _ {}
-
-			do {
-				try session.setActive(true, options: .notifyOthersOnDeactivation)
-			}
-			catch _ {}
-
-			do {
-				try session.overrideOutputAudioPort(.speaker)
-			}
-			catch _ {}
-		#endif
-	}
-
-	private func deactivateSession() {
-		#if os(iOS)
-			do {
-				try session.setActive(false, options: .notifyOthersOnDeactivation)
-			}
-			catch let error as NSError {
-				Log.warn("Failed to deactivate audio session: \(error.localizedDescription)")
-			}
-		#endif
-	}
 
 	var body: some View {
 		ZStack {
 			if let player = self.player {
-				#if os(macOS)
-					MacMediaPlayerView(player: player, showsFullScreenToggleButton: file.isVideo)
-				#else
-					VideoPlayer(player: player)
-				#endif
+				MacMediaPlayerView(player: player, showsFullScreenToggleButton: file.isVideo)
 			}
 			else {
 				Rectangle()
@@ -311,7 +209,6 @@ private struct FileMediaPlayer: View {
 		if let player = self.player {
 			player.pause()
 			self.player = nil
-			self.deactivateSession()
 		}
 	}
 
@@ -328,7 +225,6 @@ private struct FileMediaPlayer: View {
 				player.allowsExternalPlayback = false
 				player.audiovisualBackgroundPlaybackPolicy = .automatic
 				player.preventsDisplaySleepDuringVideoPlayback = !file.isAudio
-				activateSession()
 				player.playImmediately(atRate: 1.0)
 				self.player = player
 			}
@@ -342,25 +238,23 @@ private struct FileMediaPlayer: View {
 	}
 }
 
-#if os(macOS)
-	private struct MacMediaPlayerView: NSViewRepresentable {
-		let player: AVPlayer
-		let showsFullScreenToggleButton: Bool
+private struct MacMediaPlayerView: NSViewRepresentable {
+	let player: AVPlayer
+	let showsFullScreenToggleButton: Bool
 
-		func makeNSView(context: Context) -> AVPlayerView {
-			let view = AVPlayerView()
-			view.player = player
-			view.controlsStyle = .inline
-			view.showsFullScreenToggleButton = showsFullScreenToggleButton
-			view.videoGravity = .resizeAspect
-			view.wantsLayer = true
-			view.layer?.backgroundColor = NSColor.black.cgColor
-			return view
-		}
-
-		func updateNSView(_ nsView: AVPlayerView, context: Context) {
-			nsView.player = player
-			nsView.showsFullScreenToggleButton = showsFullScreenToggleButton
-		}
+	func makeNSView(context: Context) -> AVPlayerView {
+		let view = AVPlayerView()
+		view.player = player
+		view.controlsStyle = .inline
+		view.showsFullScreenToggleButton = showsFullScreenToggleButton
+		view.videoGravity = .resizeAspect
+		view.wantsLayer = true
+		view.layer?.backgroundColor = NSColor.black.cgColor
+		return view
 	}
-#endif
+
+	func updateNSView(_ nsView: AVPlayerView, context: Context) {
+		nsView.player = player
+		nsView.showsFullScreenToggleButton = showsFullScreenToggleButton
+	}
+}

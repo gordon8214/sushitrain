@@ -152,10 +152,8 @@ struct EntryDownloaderView: View {
 				downloadOperation.error = error.localizedDescription
 			}
 		}
-		#if os(macOS)
-			.presentationSizing(.fitted)
-			.frame(minWidth: 640, minHeight: 240)
-		#endif
+		.presentationSizing(.fitted)
+		.frame(minWidth: 640, minHeight: 240)
 		.onDisappear {
 			self.cancelAndDeleteFiles()
 		}
@@ -184,9 +182,7 @@ struct EntryDownloaderView: View {
 		case .share:
 			Form {
 				ShareLink(item: url)
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 
 				Button("Save a copy...", systemImage: "square.and.arrow.down") {
 					showFileExporter = true
@@ -201,13 +197,9 @@ struct EntryDownloaderView: View {
 						break
 					}
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			}
-			#if os(macOS)
-				.formStyle(.grouped)
-			#endif
+			.formStyle(.grouped)
 		}
 	}
 

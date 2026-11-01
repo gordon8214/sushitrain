@@ -62,17 +62,9 @@ struct AddFolderView: View {
 
 	var body: some View {
 		VStack {
-			#if os(macOS)
-				self.tabSwitcher()
-			#endif
+			self.tabSwitcher()
 
 			Form {
-				#if os(iOS)
-					Section {
-						self.tabSwitcher()
-					}
-				#endif
-
 				switch self.selectedTab {
 				case .general:
 					self.generalTab()
@@ -80,9 +72,7 @@ struct AddFolderView: View {
 					self.shareWithSection()
 				}
 			}
-			#if os(macOS)
-				.formStyle(.grouped)
-			#endif
+			.formStyle(.grouped)
 			.task(id: self.adding.folderID) {
 				await self.update(folderID: self.adding.folderID)
 			}
@@ -102,9 +92,6 @@ struct AddFolderView: View {
 				}
 			}
 			.navigationTitle("Add folder")
-			#if os(iOS)
-				.navigationBarTitleDisplayMode(.inline)
-			#endif
 			.alert(item: self.$showAlert) { sa in
 				switch sa {
 				case .error(let errorText):
@@ -152,9 +139,7 @@ struct AddFolderView: View {
 		.onAppear {
 			idFieldFocus = true
 		}
-		#if os(macOS)
-			.presentationSizing(.fitted.sticky())
-		#endif
+		.presentationSizing(.fitted.sticky())
 	}
 
 	@ViewBuilder private func generalTab() -> some View {
@@ -199,9 +184,7 @@ struct AddFolderView: View {
 				trailing: 0
 			)
 		)
-		#if os(macOS)
-			.padding(.top, 24)
-		#endif
+		.padding(.top, 24)
 	}
 
 	@ViewBuilder private func folderIDSection() -> some View {
@@ -209,11 +192,6 @@ struct AddFolderView: View {
 			TextField("", text: $adding.folderID, prompt: Text("XXXX-XXXX"))
 				.focused($idFieldFocus)
 				.disabled(self.folderIDReadOnly)
-				#if os(iOS)
-					.textInputAutocapitalization(.never)
-					.autocorrectionDisabled()
-					.keyboardType(.asciiCapable)
-				#endif
 		} header: {
 			Text("Folder ID")
 		} footer: {
@@ -230,9 +208,7 @@ struct AddFolderView: View {
 				self.folderPath = nil
 				self.isPhotoFolder = false
 			}
-			#if os(macOS)
-				.buttonStyle(.link)
-			#endif
+			.buttonStyle(.link)
 
 			// Only allow creation of photo folders for non-discovered folders
 			if !folderIDReadOnly {
@@ -240,9 +216,7 @@ struct AddFolderView: View {
 					self.isPhotoFolder = true
 					self.isReceiveEncryptedFolder = false
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			}
 
 			Button(action: {
@@ -260,9 +234,7 @@ struct AddFolderView: View {
 					Label("Existing folder...", systemImage: "circle")
 				}
 			}
-			#if os(macOS)
-				.buttonStyle(.link)
-			#endif
+			.buttonStyle(.link)
 		} header: {
 			Text("Folder type")
 		} footer: {
@@ -372,13 +344,6 @@ struct AddFolderView: View {
 			}
 
 			if let folder = appState.client.folder(withID: self.adding.folderID) {
-				#if os(iOS)
-					if folder.isRegularFolder {
-						// By default, exclude from device back-up (on macOS folders stay in Time Machine backups)
-						folder.isExcludedFromBackup = true
-					}
-				#endif
-
 				// Add peers
 				for devID in self.adding.sharedWithDevices {
 					try folder.share(withDevice: devID, toggle: true, encryptionPassword: "")
@@ -434,9 +399,7 @@ private struct ShareWithDevicesView: View {
 				sharedWith = pendingPeers
 			}
 			.disabled(pendingPeers.isEmpty)
-			#if os(macOS)
-				.buttonStyle(.link)
-			#endif
+			.buttonStyle(.link)
 		}
 		.task {
 			await self.update()

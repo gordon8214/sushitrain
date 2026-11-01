@@ -17,10 +17,8 @@ struct MainView: View {
 		case .notStarted:
 			LoadingMainView(appState: appState)
 
-		#if os(macOS)
-			case .engineSetup(let decision):
-				SyncthingTakeoverView(decision: decision)
-		#endif
+		case .engineSetup(let decision):
+			SyncthingTakeoverView(decision: decision)
 
 		case .onboarding:
 			OnboardingView(allowSkip: false)
@@ -30,9 +28,6 @@ struct MainView: View {
 		case .started:
 			ContentView(topLevelRoute: topLevelRoute, initialColumnVisibility: initialColumnVisibility)
 				.showsToast()  // Back-up
-				#if os(iOS)
-					.handleOpenURLInApp()
-				#endif
 		}
 	}
 }
@@ -56,13 +51,10 @@ private struct ContentView: View {
 	@Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
 	@State private var showCustomConfigWarning = false
-	#if os(macOS)
-		@State private var showContainerFolders = false
-	#endif
+	@State private var showContainerFolders = false
 	@State var topLevelRoute: Route? = .start
 	@State private var columnVisibility = NavigationSplitViewVisibility.doubleColumn
-	@State private var showSearchSheet = false
-	@State private var searchSheetSearchTerm: String = ""
+	@State private var initialSearchTerm: String = ""
 	@State private var error: String? = nil
 
 	@State private var addingFolder = AddFolder()
@@ -79,102 +71,6 @@ private struct ContentView: View {
 		self._columnVisibility = State(initialValue: initialColumnVisibility)
 	}
 
-	#if os(iOS)
-		@ViewBuilder private func foldersTab() -> some View {
-			NavigationStack(path: $foldersTabRouteManager.route) {
-				FoldersView()
-					.toolbar {
-						ToolbarItem(placement: .navigation) {
-							Button(
-								openInFilesAppLabel, systemImage: "arrow.up.forward.app",
-								action: {
-									let documentsUrl = FileManager.default.urls(
-										for: .documentDirectory, in: .userDomainMask
-									).first!
-									openURLInSystemFilesApp(url: documentsUrl)
-								}
-							).labelStyle(.iconOnly)
-						}
-					}
-			}
-		}
-
-		// Legacy one has search as toolbar option at the top
-		// When changing this, also update LoadingMainView.legacyTabbedBody to match
-		@ViewBuilder private func legacyTabbedBody() -> some View {
-			TabView(selection: $topLevelRoute) {
-				// Me
-				NavigationStack {
-					StartOrSearchView(topLevelRoute: $topLevelRoute)
-				}
-				.showsToast()
-				.tabItem {
-					Label("Start", systemImage: self.appState.syncState.systemImage)
-				}.tag(Route.start)
-
-				// Folders
-				self.foldersTab().showsToast().tabItem {
-					Label("Folders", systemImage: "folder.fill")
-				}.tag(Route.folders)
-
-				// Peers
-				NavigationStack {
-					DevicesView()
-				}
-				.showsToast()
-				.tabItem {
-					Label("Devices", systemImage: "externaldrive.fill")
-				}.tag(Route.devices)
-			}
-		}
-
-		// Modern one has the search as a tab
-		// When changing this, also update LoadingMainView.modernTabbedBody to match
-		@available(iOS 26.0, *)
-		@ViewBuilder private func modernTabbedBody() -> some View {
-			TabView(selection: $topLevelRoute) {
-				Tab("Start", systemImage: self.appState.syncState.systemImage, value: Route.start) {
-					// Me
-					NavigationStack {
-						#if os(iOS)
-							StartView(
-								topLevelRoute: $topLevelRoute, userSettings: appState.userSettings,
-								backgroundManager: appState.backgroundManager)
-						#else
-							StartView(topLevelRoute: $topLevelRoute, userSettings: appState.userSettings)
-						#endif
-					}.showsToast()
-				}
-
-				// Folders
-				Tab("Folders", systemImage: "folder.fill", value: Route.folders) {
-					self.foldersTab().showsToast()
-				}
-
-				// Peers
-				Tab("Devices", systemImage: "externaldrive.fill", value: Route.devices) {
-					NavigationStack {
-						DevicesView()
-					}.showsToast()
-				}
-
-				// Search (iOS 26)
-				Tab(value: Route.search(for: ""), role: .search) {
-					self.searchView(inSheet: false).showsToast()
-				}
-			}
-		}
-
-		@ViewBuilder private func tabbedBody() -> some View {
-			if #available(iOS 26, *) {
-				self.modernTabbedBody()
-			}
-			else {
-				self.legacyTabbedBody()
-			}
-		}
-	#endif
-
 	@ViewBuilder private func splitBody() -> some View {
 		NavigationSplitView(
 			columnVisibility: $columnVisibility,
@@ -188,42 +84,9 @@ private struct ContentView: View {
 						showAddingFolder = true
 					}
 				)
-				#if os(macOS)
-					.contextMenu {
-						FolderMetricPickerView(userSettings: appState.userSettings)
-					}
-				#endif
-				#if os(iOS)
-					.toolbar {
-						ToolbarItem(placement: .primaryAction) {
-							Button("Add folder...", systemImage: "plus") {
-								addingFolder = AddFolder()
-								showAddingFolder = true
-							}.labelStyle(.iconOnly)
-						}
-
-						ToolbarItem(placement: .navigation) {
-							Button(
-								openInFilesAppLabel, systemImage: "arrow.up.forward.app",
-								action: {
-									let documentsUrl = FileManager.default.urls(
-										for: .documentDirectory, in: .userDomainMask
-									).first!
-									openURLInSystemFilesApp(url: documentsUrl)
-								}
-							).labelStyle(.iconOnly)
-						}
-
-						ToolbarItem(placement: .primaryAction) {
-							Menu(
-								content: {
-									FolderMetricPickerView(userSettings: appState.userSettings)
-								},
-								label: { Image(systemName: "ellipsis").accessibilityLabel(Text("Menu")) }
-							).labelStyle(.iconOnly)
-						}
-					}
-				#endif
+				.contextMenu {
+					FolderMetricPickerView(userSettings: appState.userSettings)
+				}
 			},
 			detail: {
 				switch self.topLevelRoute {
@@ -234,7 +97,7 @@ private struct ContentView: View {
 
 				case .search:
 					NavigationStack {
-						self.searchView(inSheet: false)
+						self.searchView()
 					}.showsToast()
 
 				case .devices:
@@ -277,33 +140,10 @@ private struct ContentView: View {
 
 	var body: some View {
 		Group {
-			#if os(iOS)
-				if horizontalSizeClass == .compact {
-					self.tabbedBody()
-				}
-				else {
-					self.splitBody()
-				}
-			#else
-				self.splitBody()
-			#endif
+			self.splitBody()
 		}
-		#if os(iOS)
-			.onChange(of: QuickActionService.shared.action, initial: true) { _, newAction in
-				if let newAction = newAction {
-					self.navigate(to: newAction)
-					QuickActionService.shared.action = nil
-				}
-			}
-		#endif
 		.onChange(of: scenePhase) { oldPhase, newPhase in
 			self.appState.onScenePhaseChange(from: oldPhase, to: newPhase)
-
-			#if os(iOS)
-				if newPhase != .active && self.appState.userSettings.rehideHiddenFoldersOnActivate {
-					self.leaveHiddenFolder()
-				}
-			#endif
 		}
 
 		.alert(isPresented: Binding.isNotNil($error)) {
@@ -324,32 +164,24 @@ private struct ContentView: View {
 		.onAppear {
 			AppState.requestNotificationPermissionIfNecessary()
 		}
-		#if os(macOS)
-			// Once, after the app moved out of its sandbox container
-			.task {
-				guard !FolderAccess.usesSecurityScope,
-					!UserDefaults.standard.bool(forKey: ContainerMigrator.folderMoveOfferedKey)
-				else {
-					return
-				}
-				// Before looking, so that another window doesn't offer it too
-				UserDefaults.standard.set(true, forKey: ContainerMigrator.folderMoveOfferedKey)
-				if await appState.folders().contains(where: { ContainerMigrator.isInContainer($0) }) {
-					showContainerFolders = true
-				}
+		// Once, after the app moved out of its sandbox container
+		.task {
+			guard !FolderAccess.usesSecurityScope,
+				!UserDefaults.standard.bool(forKey: ContainerMigrator.folderMoveOfferedKey)
+			else {
+				return
 			}
-			.sheet(isPresented: $showContainerFolders) {
-				NavigationStack {
-					ContainerFoldersSheet(isPresented: $showContainerFolders)
-				}
+			// Before looking, so that another window doesn't offer it too
+			UserDefaults.standard.set(true, forKey: ContainerMigrator.folderMoveOfferedKey)
+			if await appState.folders().contains(where: { ContainerMigrator.isInContainer($0) }) {
+				showContainerFolders = true
 			}
-		#endif
-		#if os(iOS)
-			// Search sheet for quick action
-			.sheet(isPresented: $showSearchSheet) {
-				self.searchView(inSheet: true)
+		}
+		.sheet(isPresented: $showContainerFolders) {
+			NavigationStack {
+				ContainerFoldersSheet(isPresented: $showContainerFolders)
 			}
-		#endif
+		}
 
 		.onContinueUserActivity(SushitrainApp.viewRouteActivityID) { ua in
 			if let userInfo = ua.userInfo {
@@ -404,29 +236,12 @@ private struct ContentView: View {
 			return
 		}
 
-		// The search route opens in a sheet, because on iOS 17 is is not a separate tab, and activating the special
-		// search tab on iOS 26 doesn't seem to work properly as of writing this.
+		// The start page has the search field
 		if case .search(for: let searchFor) = route {
 			self.topLevelRoute = .start
-			self.searchSheetSearchTerm = searchFor
-			showSearchSheet = true
+			self.initialSearchTerm = searchFor
 			return
 		}
-
-		#if os(iOS)
-			if horizontalSizeClass == .compact {
-				switch route {
-				case .folder(folderID: _, prefix: _), .file(folderID: _, path: _):
-					self.topLevelRoute = Route.folders
-					self.foldersTabRouteManager.route = route.splitted
-
-				case .devices, .search, .start, .folders:
-					self.topLevelRoute = route
-					self.foldersTabRouteManager.route = []
-				}
-				return
-			}
-		#endif
 
 		if case .folder(folderID: _, prefix: _) = route {
 			let splitted = route.splitted
@@ -439,49 +254,14 @@ private struct ContentView: View {
 		}
 	}
 
-	@ViewBuilder private func searchView(inSheet: Bool) -> some View {
+	@ViewBuilder private func searchView() -> some View {
 		NavigationStack {
 			SearchView(
 				prefix: "",
-				initialSearchText: self.searchSheetSearchTerm
+				initialSearchText: self.initialSearchTerm
 			)
 			.navigationTitle("Search")
-			#if os(iOS)
-				.navigationBarTitleDisplayMode(.inline)
-			#endif
-			.toolbar {
-				if inSheet {
-					SheetButton(role: .done) {
-						showSearchSheet = false
-					}
-				}
-			}
 		}
-	}
-
-	private func leaveHiddenFolder() {
-		if case .folder(folderID: let folderID, prefix: _) = topLevelRoute {
-			if let folder = self.appState.client.folder(withID: folderID) {
-				if folder.isHidden == true {
-					Log.info("we are currently in a hidden folder, move out of it")
-					self.topLevelRoute = .start
-				}
-			}
-		}
-
-		#if os(iOS)
-			for route in self.foldersTabRouteManager.route {
-				// Is the folder tab inside a folder that is hidden? Then move out of it
-				if case .folder(folderID: let folderID, prefix: _) = route {
-					if let folder = self.appState.client.folder(withID: folderID) {
-						if folder.isHidden == true {
-							Log.info("we are currently in a hidden folder, move out of it")
-							self.foldersTabRouteManager.route = []
-						}
-					}
-				}
-			}
-		#endif
 	}
 }
 
@@ -534,93 +314,20 @@ struct RouteView: View {
 
 private struct LoadingMainView: View {
 	@State var appState: AppState
-	@State var topLevelRoute: Route? = .start
-
-	#if os(iOS)
-		// Mirrors ContentView.modernTabbedBody
-		@available(iOS 26.0, *)
-		@ViewBuilder private func modernTabbedBody() -> some View {
-			TabView(selection: $topLevelRoute) {
-				Tab("Start", systemImage: self.appState.syncState.systemImage, value: Route.start) {
-					// Me
-					NavigationStack {
-						LoadingView(appState: appState)
-					}
-				}.disabled(true)
-
-				// Folders
-				Tab("Folders", systemImage: "folder.fill", value: Route.folders) {
-					NavigationStack {
-						LoadingView(appState: appState)
-					}
-				}.disabled(true)
-
-				// Peers
-				Tab("Devices", systemImage: "externaldrive.fill", value: Route.devices) {
-					NavigationStack {
-						LoadingView(appState: appState)
-					}
-				}.disabled(true)
-
-				// Search (iOS 26)
-				Tab(value: Route.search(for: ""), role: .search) {
-					NavigationStack {
-						LoadingView(appState: appState)
-					}
-				}.disabled(true)
-			}
-		}
-
-		// Mirrors ContentView.legacyTabbedBody
-		@ViewBuilder private func legacyTabbedBody() -> some View {
-			TabView(selection: $topLevelRoute) {
-				// Me
-				NavigationStack {
-					LoadingView(appState: appState)
-				}.tabItem {
-					Label("Start", systemImage: self.appState.syncState.systemImage)
-				}.tag(Route.start)
-
-				// Folders
-				NavigationStack {
-					LoadingView(appState: appState)
-				}.tabItem {
-					Label("Folders", systemImage: "folder.fill")
-				}.tag(Route.folders)
-
-				// Peers
-				NavigationStack {
-					LoadingView(appState: appState)
-				}.tabItem {
-					Label("Devices", systemImage: "externaldrive.fill")
-				}.tag(Route.devices)
-			}
-		}
-	#endif
-
 	var body: some View {
-		#if os(iOS)
-			if #available(iOS 26, *) {
-				self.modernTabbedBody()
-			}
-			else {
-				self.legacyTabbedBody()
-			}
-		#else
-			NavigationSplitView(
-				sidebar: {
-					EmptyView()
-				},
-				detail: {
-					NavigationStack {
-						LoadingView(appState: appState)
-							.navigationTitle("Start")
-							.searchable(text: .constant(""))
-					}
+		NavigationSplitView(
+			sidebar: {
+				EmptyView()
+			},
+			detail: {
+				NavigationStack {
+					LoadingView(appState: appState)
+						.navigationTitle("Start")
+						.searchable(text: .constant(""))
 				}
-			)
-			.navigationSplitViewStyle(.balanced)
-		#endif
+			}
+		)
+		.navigationSplitViewStyle(.balanced)
 	}
 }
 
@@ -640,16 +347,6 @@ private struct LoadingView: View {
 				.frame(maxWidth: 320)
 			}
 		}
-		#if os(iOS)
-			.onAppear {
-				Log.info("Asserting idle timer disable")
-				UIApplication.shared.isIdleTimerDisabled = true
-			}
-			.onDisappear {
-				Log.info("Deasserting idle timer disable")
-				UIApplication.shared.isIdleTimerDisabled = false
-			}
-		#endif
 	}
 }
 
@@ -676,12 +373,7 @@ private struct StartOrSearchView: View {
 				)
 			}
 			else {
-				#if os(iOS)
-					StartView(
-						topLevelRoute: $topLevelRoute, userSettings: appState.userSettings, backgroundManager: appState.backgroundManager)
-				#else
-					StartView(topLevelRoute: $topLevelRoute, userSettings: appState.userSettings)
-				#endif
+				StartView(topLevelRoute: $topLevelRoute, userSettings: appState.userSettings)
 			}
 		}
 	}
@@ -692,9 +384,6 @@ private struct StartOrSearchView: View {
 				text: $searchText, placement: SearchFieldPlacement.toolbar,
 				prompt: "Search all files and folders..."
 			)
-			#if os(iOS)
-				.textInputAutocapitalization(.never)
-			#endif
 			.autocorrectionDisabled()
 	}
 

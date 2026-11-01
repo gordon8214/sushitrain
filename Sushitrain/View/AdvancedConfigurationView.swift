@@ -27,10 +27,8 @@ struct AdvancedConfigurationView: View {
 
 			Section {
 				self.link(SushitrainAdvancedSectionOptions, title: Text("Options"))
-				#if os(macOS)
-					self.link(SushitrainAdvancedSectionGUI, title: Text("Web GUI"))
-					self.link(SushitrainAdvancedSectionLDAP, title: Text(verbatim: "LDAP"))
-				#endif
+				self.link(SushitrainAdvancedSectionGUI, title: Text("Web GUI"))
+				self.link(SushitrainAdvancedSectionLDAP, title: Text(verbatim: "LDAP"))
 			}
 
 			Section("Folders") {
@@ -52,12 +50,7 @@ struct AdvancedConfigurationView: View {
 			}
 		}
 		.navigationTitle("Advanced configuration")
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
+		.formStyle(.grouped)
 		// Folders and devices also come and go through the web GUI and other devices
 		.task(id: appState.eventCounter) {
 			self.folders = await appState.folders().sorted()
@@ -112,9 +105,6 @@ private struct AdvancedSectionView: View {
 
 	var body: some View {
 		self.content
-			#if os(iOS)
-				.navigationBarTitleDisplayMode(.inline)
-			#endif
 			.navigationTitle(title)
 			.toolbar {
 				// Says what it does, where the system would call a button of this role Done
@@ -150,58 +140,52 @@ private struct AdvancedSectionView: View {
 	private var form: some View {
 		Form {
 			AdvancedRestartSection()
-			#if os(macOS)
-				self.guiWarning
-			#endif
+			self.guiWarning
 			ForEach(self.groups, id: \.self) { group in
 				self.fieldSection(group)
 			}
 		}
 		.autocorrectionDisabled()
 		.disabled(isSaving)
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 	}
 
-	#if os(macOS)
-		/// The GUI's settings with what is being edited, for the warnings that go with them
-		private var editedGUISettings: SushitrainGUISettings? {
-			guard section == SushitrainAdvancedSectionGUI, let settings = appState.client.guiSettings() else {
-				return nil
-			}
-			settings.address = values["address"] ?? settings.address
-			settings.authMode = values["authMode"] ?? settings.authMode
-			settings.user = values["user"] ?? settings.user
-			settings.password = values["password"] ?? ""
-			settings.insecureSkipHostCheck = values["insecureSkipHostcheck"] == "true"
-			return settings
+	/// The GUI's settings with what is being edited, for the warnings that go with them
+	private var editedGUISettings: SushitrainGUISettings? {
+		guard section == SushitrainAdvancedSectionGUI, let settings = appState.client.guiSettings() else {
+			return nil
 		}
+		settings.address = values["address"] ?? settings.address
+		settings.authMode = values["authMode"] ?? settings.authMode
+		settings.user = values["user"] ?? settings.user
+		settings.password = values["password"] ?? ""
+		settings.insecureSkipHostCheck = values["insecureSkipHostcheck"] == "true"
+		return settings
+	}
 
-		/// The warnings of the GUI's settings page, which this section can get the GUI past just the same
-		@ViewBuilder private var guiWarning: some View {
-			if let settings = self.editedGUISettings {
-				if settings.isExposed() {
-					Section {
-						Label(
-							"Others can reach the web GUI and REST API without signing in, and control this device's synchronization.",
-							systemImage: "exclamationmark.triangle.fill"
-						)
-						.foregroundStyle(.red)
-					}
+	/// The warnings of the GUI's settings page, which this section can get the GUI past just the same
+	@ViewBuilder private var guiWarning: some View {
+		if let settings = self.editedGUISettings {
+			if settings.isExposed() {
+				Section {
+					Label(
+						"Others can reach the web GUI and REST API without signing in, and control this device's synchronization.",
+						systemImage: "exclamationmark.triangle.fill"
+					)
+					.foregroundStyle(.red)
 				}
-				else if settings.isUnprotected() {
-					Section {
-						Label(
-							"Without signing in, any user or program on this Mac can use the web GUI and REST API, and control this device's synchronization.",
-							systemImage: "exclamationmark.triangle.fill"
-						)
-						.foregroundStyle(.orange)
-					}
+			}
+			else if settings.isUnprotected() {
+				Section {
+					Label(
+						"Without signing in, any user or program on this Mac can use the web GUI and REST API, and control this device's synchronization.",
+						systemImage: "exclamationmark.triangle.fill"
+					)
+					.foregroundStyle(.orange)
 				}
 			}
 		}
-	#endif
+	}
 
 	private func fieldSection(_ group: String) -> some View {
 		Section {
@@ -324,9 +308,6 @@ private struct AdvancedFieldView: View {
 						.frame(minHeight: 88)
 						.accessibilityLabel(Text(verbatim: field.label))
 						.disabled(field.isReadOnly)
-						#if os(iOS)
-							.textInputAutocapitalization(.never)
-						#endif
 				}
 
 			default:
@@ -339,10 +320,6 @@ private struct AdvancedFieldView: View {
 						self.textField
 							.labelsHidden()
 							.multilineTextAlignment(.trailing)
-							#if os(iOS)
-								.textInputAutocapitalization(.never)
-								.keyboardType(self.keyboardType)
-							#endif
 					}
 				} label: {
 					Text(verbatim: field.label)
@@ -363,14 +340,4 @@ private struct AdvancedFieldView: View {
 			}
 		}
 	}
-
-	#if os(iOS)
-		// Numbers can be negative, which the number pads have no key for
-		private var keyboardType: UIKeyboardType {
-			switch field.kind {
-			case SushitrainAdvancedKindInt, SushitrainAdvancedKindFloat: .numbersAndPunctuation
-			default: .default
-			}
-		}
-	#endif
 }

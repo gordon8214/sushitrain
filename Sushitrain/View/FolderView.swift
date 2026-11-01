@@ -34,9 +34,6 @@ struct ShareFolderWithDeviceDetailsView: View {
 					Section {
 						TextField("Password", text: $newPassword)
 							.textContentType(.password)
-							#if os(iOS)
-								.textInputAutocapitalization(.never)
-							#endif
 							.monospaced()
 							.focused($passwordFieldFocus)
 					} header: {
@@ -53,17 +50,12 @@ struct ShareFolderWithDeviceDetailsView: View {
 			.task {
 				await self.update()
 			}
-			#if os(macOS)
-				.formStyle(.grouped)
-			#endif
+			.formStyle(.grouped)
 			.onAppear {
 				self.newPassword = folder.encryptionPassword(for: deviceID)
 				passwordFieldFocus = true
 			}
 			.navigationTitle("Share folder '\(folder.displayName)'")
-			#if os(iOS)
-				.navigationBarTitleDisplayMode(.inline)
-			#endif
 			.toolbar {
 				SheetButton(role: .save) {
 					do {
@@ -248,14 +240,8 @@ struct FolderStatusView: View {
 	@ViewBuilder private func statusLabel() -> some View {
 		// Worked out in update, as it asks the engine for more than a view's body should wait for
 		if let folderStatus = self.folderStatusDescription {
-			#if os(iOS)
-				Label(folderStatus.text, systemImage: folderStatus.systemImage)
-					.foregroundStyle(folderStatus.color)
-					.badge(Text(folderStatus.badge).foregroundStyle(folderStatus.color))
-			#else
-				Label(folderStatus.fullText, systemImage: folderStatus.systemImage)
-					.foregroundStyle(folderStatus.color)
-			#endif
+			Label(folderStatus.fullText, systemImage: folderStatus.systemImage)
+				.foregroundStyle(folderStatus.color)
 		}
 	}
 }
@@ -561,17 +547,9 @@ struct FolderView: View {
 	var body: some View {
 		if folder.exists() {
 			VStack {
-				#if os(macOS)
-					self.tabSwitcher()
-				#endif
+				self.tabSwitcher()
 
 				Form {
-					#if os(iOS)
-						Section {
-							self.tabSwitcher()
-						}
-					#endif
-
 					switch selectedTab {
 					case .general:
 						self.generalSection()
@@ -583,9 +561,7 @@ struct FolderView: View {
 						AdvancedFolderSettingsView(folder: self.folder)
 					}
 				}
-				#if os(macOS)
-					.formStyle(.grouped)
-				#endif
+				.formStyle(.grouped)
 			}
 			.navigationTitle(folder.displayName)
 			.task {
@@ -635,9 +611,7 @@ struct FolderView: View {
 				trailing: 0
 			)
 		)
-		#if os(macOS)
-			.padding(.top, 24)
-		#endif
+		.padding(.top, 24)
 	}
 
 	@ViewBuilder private func sharingSection() -> some View {
@@ -669,9 +643,7 @@ struct FolderView: View {
 	}
 
 	@ViewBuilder private func generalSection() -> some View {
-		#if os(macOS)
-			FolderStatusSection(folder: self.folder)
-		#endif
+		FolderStatusSection(folder: self.folder)
 
 		if self.isPhotoFolder {
 			PhotoFolderSectionView()
@@ -713,15 +685,6 @@ struct FolderView: View {
 			}
 		}
 
-		#if os(iOS)
-			// Syncthing refuses to resume a folder that is accessed through a gateway. The coordinator's state is observed,
-			// so that this follows a switch; Syncthing's own answer covers the time before the coordinator has read it.
-			let isRemoteManaged =
-				RemoteCoordinator.shared.isRemoteManaged(folderID: folder.folderID)
-				|| appState.client.isFolderRemoteManaged(folder.folderID)
-		#else
-			let isRemoteManaged = false
-		#endif
 		Section {
 			Toggle(
 				"Synchronize",
@@ -729,18 +692,8 @@ struct FolderView: View {
 					get: { !folder.isPaused() },
 					set: { active in try? folder.setPaused(!active) })
 			)
-			.disabled(isRemoteManaged)
-		} footer: {
-			if isRemoteManaged {
-				Text(
-					"This folder is accessed through a gateway, so Syncthing does not synchronize it on this device. Switch it back to Syncthing to synchronize it here."
-				)
-			}
 		}
 
-		#if os(iOS)
-			RemoteFolderAccessSection(folder: folder)
-		#endif
 	}
 }
 
@@ -906,9 +859,7 @@ private struct FolderThumbnailSettingsView: View {
 						self.showGenerateThumbnailsConfirm = true
 					}
 					.disabled(settings == .disabled || settings == .global && !appState.userSettings.cacheThumbnailsToDisk)
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 					.confirmationDialog(
 						"Generating thumbnails may take a while and could use a lot of data. It is advisable to connect to a Wi-Fi network before proceeding. Are you sure you want to continue?",
 						isPresented: $showGenerateThumbnailsConfirm, titleVisibility: .visible
@@ -936,9 +887,7 @@ private struct FolderThumbnailSettingsView: View {
 					Button("Clear thumbnail cache", systemImage: "eraser.line.dashed.fill") {
 						self.showClearThumbnailsConfirm = true
 					}
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 					.foregroundStyle(.red)
 					.confirmationDialog(
 						"This will delete all files from inside the configured subdirectory. Are you sure you want to continue?",
@@ -987,21 +936,14 @@ private struct FolderThumbnailSettingsView: View {
 					}
 					.disabled(deletingFromSharedCache)
 					.foregroundStyle(.red)
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 				} footer: {
 					Text("Remove thumbnails that were generated for files in this folder from the app-wide thumbnail cache.")
 				}
 			}
 		}
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 		.navigationTitle("Thumbnails")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 		.onChange(of: settings, initial: false) { _, nv in
 			FolderSettingsManager.shared.mutateSettingsFor(folderID: folder.folderID) { fs in
 				fs.thumbnailGeneration = nv
@@ -1019,9 +961,6 @@ private struct FolderThumbnailSettingsView: View {
 			NavigationStack {
 				FolderGenerateThumbnailsView(isShown: $showGenerateThumbnails, folder: self.folder)
 					.navigationTitle("Generate thumbnails")
-					#if os(iOS)
-						.navigationBarTitleDisplayMode(.inline)
-					#endif
 					.toolbar {
 						SheetButton(role: .cancel) {
 							showGenerateThumbnails = false
@@ -1087,10 +1026,6 @@ private struct FolderGenerateThumbnailsView: View {
 				return
 			}
 
-			#if os(iOS)
-				UIApplication.shared.isIdleTimerDisabled = true
-			#endif
-
 			do {
 				let folder = self.folder
 				let stats = try await Task.detached(priority: .utility) {
@@ -1105,9 +1040,6 @@ private struct FolderGenerateThumbnailsView: View {
 				self.error = error.localizedDescription
 			}
 
-			#if os(iOS)
-				UIApplication.shared.isIdleTimerDisabled = false
-			#endif
 		}
 	}
 
@@ -1182,17 +1114,11 @@ private struct AdvancedFolderSettingsView: View {
 
 	@State private var showError: ErrorMessage? = nil
 
-	#if os(iOS)
-		@State private var showIgnores: Bool = false
-	#endif
-
 	@State private var showThumbnailsSettingsSheet: Bool = false
 	@State private var showVersioningSettingsSheet: Bool = false
 	@State private var showExternalSharingSettingsSheet: Bool = false
-	#if os(macOS)
-		@State private var showSyncSettingsSheet: Bool = false
-		@State private var showMetadataSettingsSheet: Bool = false
-	#endif
+	@State private var showSyncSettingsSheet: Bool = false
+	@State private var showMetadataSettingsSheet: Bool = false
 
 	var body: some View {
 		self.subSettingsSection()
@@ -1207,41 +1133,25 @@ private struct AdvancedFolderSettingsView: View {
 	@ViewBuilder private func subSettingsSection() -> some View {
 		// Sub screens for editing advanced settings
 		Section {
-			// Ignore patterns editor (on macOS, this is accessible directly from the folder menu)
-			#if os(iOS)
-				if !folder.isPhotoFolder && !folder.isReceiveEncryptedFolder {
-					Button("Files to ignore", systemImage: "rectangle.dashed") {
-						showIgnores = true
-					}
-					.sheet(isPresented: $showIgnores) {
-						NavigationStack {
-							IgnoresView(folder: folder)
-						}
-					}
+			Button("Synchronization options...", systemImage: "slider.horizontal.3") {
+				showSyncSettingsSheet = true
+			}
+			.sheet(isPresented: $showSyncSettingsSheet) {
+				NavigationStack {
+					FolderSyncSettingsView(folder: folder)
 				}
-			#endif
+			}
+			.buttonStyle(.link)
 
-			#if os(macOS)
-				Button("Synchronization options...", systemImage: "slider.horizontal.3") {
-					showSyncSettingsSheet = true
+			Button("Metadata...", systemImage: "tag") {
+				showMetadataSettingsSheet = true
+			}
+			.sheet(isPresented: $showMetadataSettingsSheet) {
+				NavigationStack {
+					FolderMetadataSettingsView(folder: folder)
 				}
-				.sheet(isPresented: $showSyncSettingsSheet) {
-					NavigationStack {
-						FolderSyncSettingsView(folder: folder)
-					}
-				}
-				.buttonStyle(.link)
-
-				Button("Metadata...", systemImage: "tag") {
-					showMetadataSettingsSheet = true
-				}
-				.sheet(isPresented: $showMetadataSettingsSheet) {
-					NavigationStack {
-						FolderMetadataSettingsView(folder: folder)
-					}
-				}
-				.buttonStyle(.link)
-			#endif
+			}
+			.buttonStyle(.link)
 
 			// Thumbnail settings button
 			if !folder.isReceiveEncryptedFolder {
@@ -1259,9 +1169,7 @@ private struct AdvancedFolderSettingsView: View {
 					}
 
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 
 				// File versioning settings button
 				Button("File versioning...", systemImage: "clock.arrow.circlepath") {
@@ -1272,9 +1180,7 @@ private struct AdvancedFolderSettingsView: View {
 						FolderVersioningSettingsView(folder: folder)
 					}
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 
 				// External sharing settings button
 				Button("External sharing...", systemImage: "link.circle.fill") {
@@ -1290,9 +1196,7 @@ private struct AdvancedFolderSettingsView: View {
 							}
 					}
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			}
 		}
 	}
@@ -1424,38 +1328,12 @@ private struct AdvancedFolderSettingsView: View {
 						Text("Delay for processing changes (seconds)")
 					}
 				}
-			} footer: {
-				#if os(iOS)
-					Text(
-						"Because of limitations in iOS, watching for changes will only work for about 250 subdirectories in total across all folders. If you are experiencing issues, disable this setting for all folders."
-					)
-				#endif
 			}
 		}
 	}
 
 	@ViewBuilder private func systemSettingsSection() -> some View {
 		if !folder.isPhotoFolder {
-			Section {
-				#if os(iOS)
-					Toggle(
-						"Include in device back-up",
-						isOn: Binding(
-							get: {
-								if let f = folder.isExcludedFromBackup {
-									return !f
-								}
-								return false
-							},
-							set: { nv in
-								folder.isExcludedFromBackup = !nv
-							})
-					).disabled(folder.isExternal != false)
-				#endif
-			} header: {
-				Text("System settings")
-			}
-
 			Section {
 				Toggle(
 					"Hide folder",
@@ -1468,16 +1346,12 @@ private struct AdvancedFolderSettingsView: View {
 							folder.isHidden = nv
 						})
 				).disabled(folder.isExternal != false)
+			} header: {
+				Text("System settings")
 			} footer: {
-				#if os(iOS)
-					Text(
-						"Hidden folders will not be visible by default in the Files app, and will be hidden by default in the folders list in this app."
-					)
-				#else
-					Text(
-						"Hidden folders will not be visible by default in Finder, and will be hidden by default in the folders list in this app."
-					)
-				#endif
+				Text(
+					"Hidden folders will not be visible by default in Finder, and will be hidden by default in the folders list in this app."
+				)
 			}
 		}
 	}

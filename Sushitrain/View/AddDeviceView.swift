@@ -5,7 +5,6 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
 import SushitrainCore
-import VisionKit
 
 struct AddDeviceView: View {
 	@Environment(AppState.self) private var appState
@@ -17,7 +16,6 @@ struct AddDeviceView: View {
 	@State private var showHelpAfterAdding = false
 	@State private var showError = false
 	@State private var errorText = ""
-	@State private var showQRScanner = false
 	@FocusState private var idFieldFocus: Bool
 
 	var body: some View {
@@ -31,55 +29,16 @@ struct AddDeviceView: View {
 							"", text: $deviceID, prompt: Text("XXXX-XXXX"), axis: .vertical
 						)
 						.focused($idFieldFocus)
-						#if os(iOS)
-							.textInputAutocapitalization(.never)
-						#endif
 						.foregroundColor(SushitrainIsValidDeviceID(deviceID) ? .green : .red)
 
 					}
-
-					#if os(iOS)
-						if DataScannerViewController.isSupported
-							&& DataScannerViewController.isAvailable
-						{
-							Button("Scan using camera...", systemImage: "qrcode") {
-								showQRScanner = true
-							}
-						}
-					#endif
 				}
 			}
-			#if os(macOS)
-				.formStyle(.grouped)
-			#endif
+			.formStyle(.grouped)
 			.onAppear {
 				idFieldFocus = true
 				deviceID = suggestedDeviceID
 			}
-			#if os(iOS)
-				.sheet(
-					isPresented: $showQRScanner,
-					content: {
-						if DataScannerViewController.isSupported
-							&& DataScannerViewController.isAvailable
-						{
-							NavigationStack {
-								QRScannerViewRepresentable(
-									scannedText: $deviceID,
-									shouldStartScanning: $showQRScanner,
-									dataToScanFor: [.barcode(symbologies: [.qr])]
-								)
-								.navigationTitle("Scan a device QR code")
-								.navigationBarTitleDisplayMode(.inline)
-								.toolbar {
-									SheetButton(role: .cancel) {
-										showQRScanner = false
-									}
-								}
-							}
-						}
-					})
-			#endif
 			.toolbar {
 				SheetButton(role: .add, isDisabled: deviceID.isEmpty || !SushitrainIsValidDeviceID(deviceID)) {
 					self.add()
@@ -90,9 +49,6 @@ struct AddDeviceView: View {
 				}
 			}
 			.navigationTitle("Add device")
-			#if os(iOS)
-				.navigationBarTitleDisplayMode(.inline)
-			#endif
 			.alert(
 				isPresented: $showError,
 				content: {

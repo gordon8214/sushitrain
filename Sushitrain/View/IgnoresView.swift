@@ -75,18 +75,12 @@ struct IgnoresView: View {
 								}), prompt: Text("Pattern...")
 						)
 						.autocorrectionDisabled()
-						#if os(iOS)
-							.textInputAutocapitalization(.never)
-							.keyboardType(.asciiCapable)
-						#endif
 
-						#if os(macOS)
-							Button("Delete", systemImage: "trash") {
-								ignoreLines.remove(at: idx.offset)
-							}
-							.labelStyle(.iconOnly)
-							.buttonStyle(.borderless)
-						#endif
+						Button("Delete", systemImage: "trash") {
+							ignoreLines.remove(at: idx.offset)
+						}
+						.labelStyle(.iconOnly)
+						.buttonStyle(.borderless)
 					}
 				}
 				.onDelete(perform: { indexSet in
@@ -97,46 +91,33 @@ struct IgnoresView: View {
 				Button("Add line", systemImage: "plus") {
 					self.ignoreLines.append("")
 				}.disabled(self.loading)
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 			} header: {
 				Text("Ignore patterns")
 			} footer: {
 				Text(
 					"Files and subdirectories whose paths match any of the patterns above will not be synchronized with other devices. Existing items matching the patterns will not be updated. [Learn more about the pattern syntax...](https://docs.syncthing.net/users/ignoring.html#patterns)"
 				)
-				#if os(macOS)
-					.lineLimit(3, reservesSpace: true)
-				#endif
+				.lineLimit(3, reservesSpace: true)
 			}
 
 			Section {
 				Button("Set default patterns") {
 					self.ignoreLines = Self.defaultIgnoreLines
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 
 				Button("Remove all patterns", role: .destructive) {
 					self.ignoreLines = []
 				}.disabled(self.ignoreLines.isEmpty)
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 			}.disabled(self.loading)
 		}
-		#if os(macOS)
-			.listStyle(.inset(alternatesRowBackgrounds: true))
-		#endif
+		.listStyle(.inset(alternatesRowBackgrounds: true))
 		.task {
 			self.update()
 		}
 		.navigationTitle("Files to ignore")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 		.toolbar {
 			ToolbarItem(
 				placement: .confirmationAction,

@@ -179,7 +179,6 @@ enum PhotoBackupProgress {
 	@AppStorage("photoSyncSavedAlbumID") var savedAlbumID: String = ""
 
 	@AppStorage("photoSyncLastCompletedDate") var lastCompletedDate: Double = -1.0
-	@AppStorage("photoSyncEnableBackgroundCopy") var enableBackgroundCopy: Bool = false
 	@AppStorage("photoSyncCategories") var categories: Set<PhotoBackupCategory> = Set([.photo, .video, .livePhoto])
 	@AppStorage("photoSyncPurgeEnabled") var purgeEnabled = false
 	@AppStorage("photoSyncPurgeAfterDays") var purgeAfterDays = 7

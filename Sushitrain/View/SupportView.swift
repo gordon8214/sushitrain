@@ -96,26 +96,14 @@ extension AppState {
 				UserDefaults.standard.persistentDomain(forName: mainBundle.bundleIdentifier!) ?? [:]),
 			secondsSinceLaunch: Date.now.timeIntervalSince(self.launchedAt),
 			isUsingCustomConfiguration: self.client.isUsingCustomConfiguration,
-			osName: self.osName,
+			osName: "macOS",
 			osVersion: self.osVersion
 		)
 	}
 
 	private var osVersion: String {
-		#if os(iOS)
-			return UIDevice.current.systemVersion
-		#else
-			let ver = ProcessInfo.processInfo.operatingSystemVersion
-			return "\(ver.majorVersion).\(ver.minorVersion).\(ver.patchVersion)"
-		#endif
-	}
-
-	private var osName: String {
-		#if os(iOS)
-			return UIDevice.current.systemName
-		#else
-			return "macOS"
-		#endif
+		let ver = ProcessInfo.processInfo.operatingSystemVersion
+		return "\(ver.majorVersion).\(ver.minorVersion).\(ver.patchVersion)"
 	}
 }
 
@@ -246,14 +234,6 @@ private struct LogView: View {
 		return self.rows.filter { $0.line.facility == facility }
 	}
 
-	private static var controlsPlacement: ToolbarItemPlacement {
-		#if os(iOS)
-			return .bottomBar
-		#else
-			return .automatic
-		#endif
-	}
-
 	var body: some View {
 		let shownRows = self.shownRows
 		ScrollView {
@@ -274,9 +254,6 @@ private struct LogView: View {
 			}
 		}
 		.navigationTitle("Log")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 		.toolbar {
 			ToolbarItem {
 				Picker("Facility", selection: $facility) {
@@ -288,7 +265,7 @@ private struct LogView: View {
 				.pickerStyle(.menu)
 			}
 
-			ToolbarItemGroup(placement: Self.controlsPlacement) {
+			ToolbarItemGroup {
 				Button(self.isPaused ? "Resume" : "Pause", systemImage: self.isPaused ? "play" : "pause") {
 					self.isPaused.toggle()
 				}
@@ -389,20 +366,13 @@ private struct LogLevelsView: View {
 					self.update()
 				}
 				.disabled(!self.hasChangedLevels)
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			} footer: {
 				Text("Unless you keep them, levels return to their defaults when the app restarts.")
 			}
 		}
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 		.navigationTitle("Log levels")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 		.task {
 			self.update()
 		}
@@ -439,9 +409,7 @@ private struct SupportBundleView: View {
 	@State private var supportBundle: URL? = nil
 	@State private var supportBundleDirectory: URL? = nil
 
-	#if os(macOS)
-		@State private var showSaveSupportBundle: Bool = false
-	#endif
+	@State private var showSaveSupportBundle: Bool = false
 
 	var body: some View {
 		Section {
@@ -456,45 +424,39 @@ private struct SupportBundleView: View {
 				self.supportBundleDirectory = nil
 				self.supportBundle = nil
 			}
-			#if os(macOS)
-				.fileImporter(isPresented: $showSaveSupportBundle, allowedContentTypes: [.directory]) { res in
-					switch res {
-					case .failure(let e):
-						Log.warn("error selecting path: \(e)")
-					case .success(let url):
-						let accessing = FolderAccess.startAccessing(url)
-						if FolderAccess.usesSecurityScope && !accessing {
-							Log.warn("Could not start accessing folder to export support bundle to")
-						}
-						defer {
-							if accessing {
-								url.stopAccessingSecurityScopedResource()
-							}
-						}
-
-						if let sbURL = self.supportBundle {
-							let targetURL = url.appendingPathComponent(sbURL.lastPathComponent, isDirectory: false)
-							Log.info("Copying support bundle  to URL \(targetURL)")
-							try? FileManager.default.copyItem(at: sbURL, to: targetURL)
+			.fileImporter(isPresented: $showSaveSupportBundle, allowedContentTypes: [.directory]) { res in
+				switch res {
+				case .failure(let e):
+					Log.warn("error selecting path: \(e)")
+				case .success(let url):
+					let accessing = FolderAccess.startAccessing(url)
+					if FolderAccess.usesSecurityScope && !accessing {
+						Log.warn("Could not start accessing folder to export support bundle to")
+					}
+					defer {
+						if accessing {
+							url.stopAccessingSecurityScopedResource()
 						}
 					}
+
+					if let sbURL = self.supportBundle {
+						let targetURL = url.appendingPathComponent(sbURL.lastPathComponent, isDirectory: false)
+						Log.info("Copying support bundle  to URL \(targetURL)")
+						try? FileManager.default.copyItem(at: sbURL, to: targetURL)
+					}
 				}
-			#endif
+			}
 
 			if let s = supportBundle {
 				ShareLink(item: s, subject: Text("Support bundle"), message: Text("Support bundle"), preview: self.sharePreview()) {
 					Label("Share information bundle for support", systemImage: "text.page.badge.magnifyingglass")
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 
-				#if os(macOS)
-					Button("Save support bundle", systemImage: "text.page.badge.magnifyingglass") {
-						showSaveSupportBundle = true
-					}
-					.buttonStyle(.link)
-				#endif
+				Button("Save support bundle", systemImage: "text.page.badge.magnifyingglass") {
+					showSaveSupportBundle = true
+				}
+				.buttonStyle(.link)
 			}
 			else {
 				Button("Generate support bundle", systemImage: "text.page.badge.magnifyingglass") {
@@ -502,9 +464,7 @@ private struct SupportBundleView: View {
 						await self.generateSupportBundle()
 					}
 				}.disabled(writingSupportBundle)
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 			}
 		}
 	}
@@ -603,13 +563,8 @@ struct SupportView: View {
 				}
 			}
 		}
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 		.navigationTitle("Questions, support & feedback")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 	}
 }
 
@@ -650,16 +605,6 @@ struct MaintenanceView: View {
 		.task {
 			await self.performDatabaseMaintenance()
 		}
-		#if os(iOS)
-			.onAppear {
-				Log.info("Asserting idle timer disable")
-				UIApplication.shared.isIdleTimerDisabled = true
-			}
-			.onDisappear {
-				Log.info("Deasserting idle timer disable")
-				UIApplication.shared.isIdleTimerDisabled = false
-			}
-		#endif
 	}
 
 	private func performDatabaseMaintenance() async {
@@ -704,38 +649,23 @@ struct TroubleshootingView: View {
 		Form {
 			Section {
 				Toggle("Save log to a file", isOn: userSettings.$loggingToFileEnabled)
-				#if os(macOS)
-					if appState.isLoggingToFile {
-						Button("Show in Finder", systemImage: "folder") {
-							NSWorkspace.shared.open(EngineLocations.current.logs)
-						}
+				if appState.isLoggingToFile {
+					Button("Show in Finder", systemImage: "folder") {
+						NSWorkspace.shared.open(EngineLocations.current.logs)
 					}
-				#endif
+				}
 			} header: {
 				Text("Logging")
 			} footer: {
 				if appState.userSettings.loggingToFileEnabled {
-					#if os(macOS)
-						if appState.isLoggingToFile {
-							Text("The app is logging to a file, which you can share with the developers.")
-						}
-						else {
-							Text(
-								"After restarting the app, the app will write a log file, which you can then share with the developers."
-							)
-						}
-					#else
-						if appState.isLoggingToFile {
-							Text(
-								"The app is logging to a file in the application folder, which you can share with the developers."
-							)
-						}
-						else {
-							Text(
-								"After restarting the app, the app will write a log file in the application folder, which you can then share with the developers."
-							)
-						}
-					#endif
+					if appState.isLoggingToFile {
+						Text("The app is logging to a file, which you can share with the developers.")
+					}
+					else {
+						Text(
+							"After restarting the app, the app will write a log file, which you can then share with the developers."
+						)
+					}
 				}
 				else {
 					if appState.isLoggingToFile {
@@ -761,13 +691,9 @@ struct TroubleshootingView: View {
 								}
 							}
 					}
-					#if os(macOS)
-						.frame(minWidth: 600, minHeight: 450)
-					#endif
+					.frame(minWidth: 600, minHeight: 450)
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 
 				Button("Log levels", systemImage: "slider.horizontal.3") {
 					showLogLevels = true
@@ -780,13 +706,9 @@ struct TroubleshootingView: View {
 								}
 							}
 					}
-					#if os(macOS)
-						.frame(minWidth: 500, minHeight: 450)
-					#endif
+					.frame(minWidth: 500, minHeight: 450)
 				}
-				#if os(macOS)
-					.buttonStyle(.link)
-				#endif
+				.buttonStyle(.link)
 			}
 
 			Section {
@@ -839,15 +761,9 @@ struct TroubleshootingView: View {
 				Section {
 					Button("Restart app to remove v1 database") {
 						UserDefaults.standard.set(true, forKey: "clearV1Index")
-						#if os(macOS)
-							AppRelauncher.relaunch()
-						#else
-							exit(0)
-						#endif
+						AppRelauncher.relaunch()
 					}
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 				} footer: {
 					Text(
 						"A legacy database is still present. If the app is functioning correctly, it is safe to manually delete this database. In order to do this, the app needs to be restarted."
@@ -860,9 +776,7 @@ struct TroubleshootingView: View {
 					Button("Remove v1 database back-up") {
 						self.clearMigratedLegacyDatabase()
 					}
-					#if os(macOS)
-						.buttonStyle(.link)
-					#endif
+					.buttonStyle(.link)
 					.alert("Removed v1 database back-up", isPresented: $showV1BackupRemoved) {
 						Button("OK") {}
 					}
@@ -982,26 +896,21 @@ struct TroubleshootingView: View {
 				}
 			}
 		}
-		#if os(macOS)
-			.formStyle(.grouped)
-			.navigationBarBackButtonHidden(true)
-			.toolbar {
-				ToolbarItem(placement: .navigation) {
-					Button(action: {
-						dismiss()
-					}) {
-						Label("Back", systemImage: "arrow.left.circle")
-					}
+		.formStyle(.grouped)
+		.navigationBarBackButtonHidden(true)
+		.toolbar {
+			ToolbarItem(placement: .navigation) {
+				Button(action: {
+					dismiss()
+				}) {
+					Label("Back", systemImage: "arrow.left.circle")
 				}
 			}
-		#endif
+		}
 		.task {
 			await self.updateDatabaseInfo()
 		}
 		.navigationTitle("Troubleshooting")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 		.sheet(isPresented: $showMaintenance) {
 			MaintenanceView()
 		}

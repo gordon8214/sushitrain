@@ -94,11 +94,6 @@ struct TotalStatisticsView: View {
 			}
 		}
 		.navigationTitle("Statistics")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 	}
 }

@@ -82,12 +82,7 @@ struct ExternalSharingSettingsView: View {
 			}
 		}
 		.navigationTitle("External sharing")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
+		.formStyle(.grouped)
 		.onAppear {
 			self.settings = FolderSettingsManager.shared.settingsFor(folderID: folder.folderID).externalSharing
 		}
@@ -115,10 +110,6 @@ private struct UnencryptedSharingSettingsView: View {
 				)
 				.multilineTextAlignment(.trailing)
 				.autocorrectionDisabled()
-				#if os(iOS)
-					.keyboardType(.URL)
-					.textInputAutocapitalization(.never)
-				#endif
 			} label: {
 				Text("Public URL")
 			}
@@ -135,10 +126,6 @@ private struct UnencryptedSharingSettingsView: View {
 				)
 				.multilineTextAlignment(.trailing)
 				.autocorrectionDisabled()
-				#if os(iOS)
-					.keyboardType(.URL)
-					.textInputAutocapitalization(.never)
-				#endif
 			} label: {
 				Text("Subpath")
 			}
@@ -183,10 +170,6 @@ private struct EncryptedSharingSettingsView: View {
 				TextField("", text: Binding(get: { settings.url }, set: { settings.url = $0 }))
 					.multilineTextAlignment(.trailing)
 					.autocorrectionDisabled()
-					#if os(iOS)
-						.keyboardType(.URL)
-						.textInputAutocapitalization(.never)
-					#endif
 			} label: {
 				Text("Public URL")
 			}
@@ -200,10 +183,6 @@ private struct EncryptedSharingSettingsView: View {
 					)
 					.multilineTextAlignment(.trailing)
 					.autocorrectionDisabled()
-					#if os(iOS)
-						.keyboardType(.URL)
-						.textInputAutocapitalization(.never)
-					#endif
 				} label: {
 					Text("Encrypted files URL")
 				}
@@ -223,10 +202,6 @@ private struct EncryptedSharingSettingsView: View {
 					)
 					.multilineTextAlignment(.trailing)
 					.autocorrectionDisabled()
-					#if os(iOS)
-						.keyboardType(.URL)
-						.textInputAutocapitalization(.never)
-					#endif
 
 					// Menu to select passwords used for encrypted peers of this folder
 					if !self.encryptedPeers.isEmpty {

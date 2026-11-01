@@ -164,16 +164,10 @@ private struct ResolvedAddressesView: View {
 			ForEach(Array(self.appState.resolvedListenAddresses), id: \.self) { addr in
 				Text(addr).contextMenu {
 					Button(action: {
-						#if os(iOS)
-							UIPasteboard.general.string = addr
-						#endif
-
-						#if os(macOS)
-							let pasteboard = NSPasteboard.general
-							pasteboard.clearContents()
-							pasteboard.prepareForNewContents()
-							pasteboard.setString(addr, forType: .string)
-						#endif
+						let pasteboard = NSPasteboard.general
+						pasteboard.clearContents()
+						pasteboard.prepareForNewContents()
+						pasteboard.setString(addr, forType: .string)
 					}) {
 						Text("Copy to clipboard")
 						Image(systemName: "doc.on.doc")
@@ -181,9 +175,7 @@ private struct ResolvedAddressesView: View {
 				}
 			}
 		}
-		#if os(macOS)
-			.frame(minHeight: 320)
-		#endif
+		.frame(minHeight: 320)
 	}
 }
 
@@ -215,16 +207,10 @@ private struct QRView: View {
 					.padding(10.0)
 					.contextMenu {
 						Button(action: {
-							#if os(iOS)
-								UIPasteboard.general.string = self.text
-							#endif
-
-							#if os(macOS)
-								let pasteboard = NSPasteboard.general
-								pasteboard.clearContents()
-								pasteboard.prepareForNewContents()
-								pasteboard.setString(self.text, forType: .string)
-							#endif
+							let pasteboard = NSPasteboard.general
+							pasteboard.clearContents()
+							pasteboard.prepareForNewContents()
+							pasteboard.setString(self.text, forType: .string)
 						}) {
 							Text("Copy to clipboard")
 							Image(systemName: "doc.on.doc")
@@ -234,33 +220,20 @@ private struct QRView: View {
 			.padding(10.0)
 		}
 		.navigationTitle("Device ID")
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
 	}
 }
 
 /// Shows text (such as a device ID or a link) as a QR code that fills the available space
 struct QRCodeImage: View {
 	let text: String
-	#if os(iOS)
-		@State private var image: UIImage? = nil
-	#elseif os(macOS)
-		@State private var image: NSImage? = nil
-	#endif
+	@State private var image: NSImage? = nil
 
 	var body: some View {
 		Group {
 			if let image = image {
-				#if os(iOS)
-					Image(uiImage: image)
-						.resizable()
-						.interpolation(.none)
-				#elseif os(macOS)
-					Image(nsImage: image)
-						.resizable()
-						.interpolation(.none)
-				#endif
+				Image(nsImage: image)
+					.resizable()
+					.interpolation(.none)
 			}
 			else {
 				ProgressView()
@@ -277,11 +250,7 @@ struct QRCodeImage: View {
 		if let ciimage = filter.outputImage {
 			let transform = CGAffineTransform(scaleX: 10, y: 10)
 			let scaledCIImage = ciimage.transformed(by: transform)
-			#if os(iOS)
-				image = UIImage(data: UIImage(ciImage: scaledCIImage).pngData()!)
-			#elseif os(macOS)
-				image = NSImage.fromCIImage(scaledCIImage)
-			#endif
+			image = NSImage.fromCIImage(scaledCIImage)
 		}
 	}
 }

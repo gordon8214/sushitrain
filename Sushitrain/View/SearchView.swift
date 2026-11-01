@@ -103,9 +103,6 @@ struct SearchView: View {
 		)
 		.navigationTitle("Search")
 		.searchable(text: $searchText, placement: .toolbar, prompt: self.prompt)
-		#if os(iOS)
-			.textInputAutocapitalization(.never)
-		#endif
 		.autocorrectionDisabled()
 	}
 
@@ -203,10 +200,8 @@ struct SearchResultsView: View, SearchViewDelegate {
 							Spacer()
 							if isSearching {
 								ProgressView()
-									#if os(macOS)
-										.controlSize(.mini)
-										.frame(maxHeight: 10)
-									#endif
+									.controlSize(.mini)
+									.frame(maxHeight: 10)
 							}
 
 							// Search options
@@ -272,10 +267,8 @@ struct SearchResultsView: View, SearchViewDelegate {
 					Text("Menu"))
 			}
 		)
-		#if os(macOS)
-			.menuStyle(.borderlessButton)
-			.frame(width: 36)
-		#endif
+		.menuStyle(.borderlessButton)
+		.frame(width: 36)
 	}
 
 	func cancelSearch() {

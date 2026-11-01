@@ -19,17 +19,6 @@ enum FolderMetric: String {
 	case localPercentage = "localPercentage"
 }
 
-enum DeviceMetric: String {
-	case none = ""
-	case latency = "latency"
-	case needBytes = "needBytes"
-	case needItems = "needItems"
-	case completionPercentage = "completionPercentage"
-	case shortID = "shortID"
-	case lastSeenAgo = "lastSeenAgo"
-	case lastAddress = "lastAddress"
-}
-
 #if os(macOS)
 	enum MenuFolderAction: String, Hashable, Equatable {
 		// Do not show folder shortcuts in menu
@@ -75,11 +64,6 @@ class SushitrainDelegate: NSObject {
 }
 
 @MainActor class AppUserSettings: ObservableObject {
-	@AppStorage("backgroundSyncEnabled") var longBackgroundSyncEnabled: Bool = true
-	@AppStorage("shortBackgroundSyncEnabled") var shortBackgroundSyncEnabled: Bool = false
-	@AppStorage("notifyWhenBackgroundSyncCompletes") var notifyWhenBackgroundSyncCompletes: Bool = false
-	@AppStorage("watchdogNotificationEnabled") var watchdogNotificationEnabled: Bool = false
-	@AppStorage("watchdogIntervalHours") var watchdogIntervalHours: Int = 2 * 24  // 2 days
 	@AppStorage("streamingLimitMbitsPerSec") var streamingLimitMbitsPerSec: Int = 0
 	@AppStorage("maxBytesForPreview") var maxBytesForPreview: Int = 2 * 1024 * 1024  // 2 MiB
 	@AppStorage("browserViewStyle") var defaultBrowserViewStyle: BrowserViewStyle = .list
@@ -91,9 +75,7 @@ class SushitrainDelegate: NSObject {
 	@AppStorage("keptLogLevels") var keptLogLevels: String = ""
 	@AppStorage("dotFilesHidden") var dotFilesHidden: Bool = true
 	@AppStorage("hideHiddenFolders") var hideHiddenFolders: Bool = false
-	@AppStorage("lingeringEnabled") var lingeringEnabled: Bool = true
 	@AppStorage("foldersViewMetric") var viewMetric: FolderMetric = .none
-	@AppStorage("devicesViewMetric") var devicesViewMetric: DeviceMetric = .none
 	@AppStorage("previewVideos") var previewVideos: Bool = false
 	@AppStorage("tapFileToPreview") var tapFileToPreview: Bool = false
 	@AppStorage("cacheThumbnailsToDisk") var cacheThumbnailsToDisk: Bool = true
@@ -122,11 +104,6 @@ class SushitrainDelegate: NSObject {
 
 	// Default sort preference for (non-table) browsers
 	@AppStorage("browserSort") var defaultBrowserSort: AsJSON<BrowserViewSort> = AsJSON(BrowserViewSort())
-
-	#if os(iOS)
-		// Whether to re-enable hideHiddenFolders when app comes to the foreground
-		@AppStorage("rehideHiddenFoldersOnActivate") var rehideHiddenFoldersOnActivate: Bool = false
-	#endif
 
 	#if os(macOS)
 		// The action to perform when a user clicks a folder in the dock menu
@@ -271,11 +248,6 @@ struct EngineMenuState: Equatable {
 	private var changeCancellable: AnyCancellable? = nil
 	private var settingsCancellable: AnyCancellable? = nil
 
-	#if os(iOS)
-		@ObservationIgnored var backgroundManager: BackgroundManager!
-		@ObservationIgnored private var lingerManager: LingerManager!
-	#endif
-
 	private(set) var isSuspended = false
 
 	static let removeMigratedV1DatabaseAfterSeconds: TimeInterval = 7 * 86400.0  // 7 days
@@ -284,11 +256,6 @@ struct EngineMenuState: Equatable {
 	init(client: SushitrainClient, configDirectory: URL) {
 		self.client = client
 		self.configDirectory = configDirectory
-
-		#if os(iOS)
-			self.backgroundManager = BackgroundManager(appState: self)
-			self.lingerManager = LingerManager(appState: self)
-		#endif
 
 		self.maintenanceManager = MaintenanceManager(appState: self)
 
@@ -775,11 +742,6 @@ struct EngineMenuState: Equatable {
 		Log.info("Apply settings: streaming limit=\(self.userSettings.streamingLimitMbitsPerSec) mbits/s")
 	}
 
-	var isFinished: Bool {
-		guard self.hasLoadedClient else { return false }
-		return !self.client.isDownloading() && !self.client.isUploading() && !self.photoBackup.isBackingUp
-	}
-
 	enum AlertType {
 		case error
 		case informational
@@ -1219,17 +1181,6 @@ struct EngineMenuState: Equatable {
 		#endif
 	}
 
-	private nonisolated func rebindServer() async {
-		let client = self.client
-		Log.info("(Re-)activate streaming server")
-		do {
-			try client.server?.listen()
-		}
-		catch let error {
-			Log.warn("Error activating streaming server: " + error.localizedDescription)
-		}
-	}
-
 	func suspend(_ suspended: Bool) async {
 		self.isSuspended = suspended
 		await self.updateDeviceSuspension()
@@ -1290,26 +1241,8 @@ struct EngineMenuState: Equatable {
 	func awake() async {
 		self.startNetworkMonitor()
 
-		#if os(iOS)
-			if self.userSettings.rehideHiddenFoldersOnActivate {
-				self.userSettings.hideHiddenFolders = true
-			}
-		#endif
-
 		// Re-resolve bookmarks, in some cases apps may have updated and their paths changed
 		self.resolveBookmarks()
-
-		#if os(iOS)
-			self.lingerManager.cancelLingering()
-			Task.detached {
-				dispatchPrecondition(condition: .notOnQueue(.main))
-				try? self.client.setReconnectIntervalS(1)
-				await self.suspend(false)
-				await self.backgroundManager.rescheduleWatchdogNotification()
-				await self.rebindServer()
-			}
-			self.client.ignoreEvents = false
-		#endif
 
 		#if os(macOS)
 			// Unsuspend devices. (The reconnect interval stays as configured: changing it here saved it to the
@@ -1330,32 +1263,6 @@ struct EngineMenuState: Equatable {
 
 	func sleep() async {
 		self.stopNetworkMonitor()
-
-		#if os(iOS)
-			QuickActionService.provideActions(bookmarks: self.bookmarkedRoutesAsRoute)
-
-			if userSettings.lingeringEnabled {
-				Log.info("Background time remaining: \(UIApplication.shared.backgroundTimeRemaining)")
-				await self.lingerManager.lingerThenSuspend()
-				Log.info(
-					"Background time remaining (2): \(UIApplication.shared.backgroundTimeRemaining)"
-				)
-			}
-			else {
-				await self.suspend(true)
-			}
-			// Off the main thread: the change waits until Syncthing has applied it, which can take longer than the system
-			// allows a scene update while it is still connecting
-			let client = self.client
-			try? await goTask { try client.setReconnectIntervalS(60) }
-			self.client.ignoreEvents = true
-
-			Task {
-				try? await goTask {
-					SushitrainClearBlockCache()
-				}
-			}
-		#endif
 
 		#if os(macOS)
 			await self.suspend(true)
@@ -1379,17 +1286,10 @@ struct EngineMenuState: Equatable {
 	}
 
 	func onScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
-		Log.info("Phase change from \(oldPhase) to \(newPhase) lingeringEnabled=\(self.userSettings.lingeringEnabled)")
+		Log.info("Phase change from \(oldPhase) to \(newPhase)")
 
 		switch newPhase {
 		case .background:
-			#if os(iOS)
-				if self.backgroundManager.runningContinuedTask != nil {
-					Log.info("Going to background, but not sleeping or lingering, as we are running a continued task")
-					return
-				}
-			#endif
-
 			Task {
 				await self.sleep()
 			}
@@ -1398,15 +1298,7 @@ struct EngineMenuState: Equatable {
 		case .inactive:
 			Task {
 				await self.updateBadge()
-				#if os(iOS)
-					self.backgroundManager.inactivate()
-					self.reduceMemoryUsage()
-					QuickActionService.provideActions(bookmarks: self.bookmarkedRoutesAsRoute)
-				#endif
 			}
-			#if os(iOS)
-				self.client.ignoreEvents = true
-			#endif
 			break
 
 		case .active:
@@ -1449,106 +1341,6 @@ struct EngineMenuState: Equatable {
 		}
 	}
 }
-
-#if os(iOS)
-	@MainActor
-	private class LingerManager {
-		unowned var appState: AppState
-		private var wantsSuspendAfterLinger = false
-		private var lingerTask: UIBackgroundTaskIdentifier? = nil
-		private var lingerTimer: Timer? = nil
-
-		init(appState: AppState) {
-			self.appState = appState
-		}
-
-		func cancelLingering() {
-			if let lt = self.lingerTask {
-				Log.info("Cancel lingering lingerTask=\(lt)")
-				UIApplication.shared.endBackgroundTask(lt)
-				self.lingerTask = nil
-			}
-
-			if let lt = self.lingerTimer {
-				Log.info("Invalidate lingering timer=\(lt)")
-				lt.invalidate()
-				self.lingerTimer = nil
-			}
-
-			self.wantsSuspendAfterLinger = false
-		}
-
-		// Called when we end our lingering task by ourselves. This should perform the same duties as lingeringExpired
-		// but in a more orderly way.
-		private func afterLingering() async {
-			Log.info("After lingering: suspend=\(self.wantsSuspendAfterLinger)")
-			if self.wantsSuspendAfterLinger {
-				self.wantsSuspendAfterLinger = false
-				await self.appState.suspend(true)
-			}
-			self.cancelLingering()
-		}
-
-		// Called when the system expires our lingering background task. This should perform the same tasks as afterLingering,
-		// but it should prioritize calling endBackgroundTask (synchronously).
-		private func lingeringExpired() {
-			Log.info("Suspend after expiration of linger time")
-			let wantsSuspend = self.wantsSuspendAfterLinger
-			self.cancelLingering()
-
-			if wantsSuspend {
-				self.wantsSuspendAfterLinger = false
-				// This task may or may not be executed in time...
-				Task {
-					await self.appState.suspend(true)
-				}
-			}
-		}
-
-		func lingerThenSuspend() async {
-			Log.info("Linger then suspend")
-
-			if self.appState.isSuspended {
-				// Already suspended?
-				Log.info("Already suspended (suspended peer list is not empty), not lingering")
-				await self.afterLingering()
-				return
-			}
-
-			self.wantsSuspendAfterLinger = true
-			if self.lingerTask == nil {
-				self.lingerTask = UIApplication.shared.beginBackgroundTask(
-					withName: "Short-term connection persistence",
-					expirationHandler: {
-						self.lingeringExpired()
-					})
-				Log.info(
-					"Lingering before suspend: \(UIApplication.shared.backgroundTimeRemaining) remaining"
-				)
-			}
-
-			// Try to stay awake for 3/4th of the estimated background time remaining, at most 29s
-			// (at 30s the system appears to terminate)
-			let lingerTime = min(29.0, UIApplication.shared.backgroundTimeRemaining * 3.0 / 4.0)
-			let minimumLingerTime: TimeInterval = 1.0  // Don't bother if we get less than one second
-			if lingerTime < minimumLingerTime {
-				Log.info("Lingering time allotted by the system is too short, suspending immediately")
-				return await afterLingering()
-			}
-
-			if self.lingerTimer?.isValid != true {
-				Log.info("Start lingering timer for \(lingerTime)")
-				self.lingerTimer = Timer.scheduledTimer(withTimeInterval: lingerTime, repeats: false) {
-					_ in
-					Task { @MainActor in
-						Log.info("Suspend after linger")
-						await self.afterLingering()
-					}
-				}
-			}
-		}
-	}
-#endif
 
 extension SushitrainDelegate: SushitrainClientDelegateProtocol {
 	func onFolderScanFinished(_ folderID: String?) {

@@ -17,30 +17,6 @@ import SynctrainHostKit
 class QuickActionService: ObservableObject {
 	@MainActor static let shared = QuickActionService()
 	@Published var action: Route?
-
-	#if os(iOS)
-		@MainActor
-		static func provideActions(bookmarks: [Route]) {
-			let bookmarkedActions = bookmarks.map { route in
-				UIApplicationShortcutItem(
-					type: route.url.absoluteString,
-					localizedTitle: route.localizedTitle,
-					localizedSubtitle: route.localizedSubtitle,
-					icon: UIApplicationShortcutIcon.init(type: .bookmark)
-				)
-			}
-
-			UIApplication.shared.shortcutItems =
-				[
-					UIApplicationShortcutItem(
-						type: Route.search(for: "").url.absoluteString,
-						localizedTitle: String(localized: "Search"),
-						localizedSubtitle: nil,
-						icon: UIApplicationShortcutIcon.init(type: .search)
-					)
-				] + bookmarkedActions
-		}
-	#endif
 }
 
 #if os(macOS)

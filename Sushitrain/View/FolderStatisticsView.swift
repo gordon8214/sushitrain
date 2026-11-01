@@ -121,11 +121,7 @@ struct FolderProgressChartView: View {
 		}
 		.chartPlotStyle { plotArea in
 			plotArea
-				#if os(macOS)
-					.background(Color.gray.opacity(0.2))
-				#else
-					.background(Color(.systemFill))
-				#endif
+				.background(Color.gray.opacity(0.2))
 				.cornerRadius(12)
 		}
 		.chartXAxis(.hidden)
@@ -261,12 +257,7 @@ struct FolderStatisticsView: View {
 		.task {
 			await self.update()
 		}
-		#if os(macOS)
-			.formStyle(.grouped)
-		#endif
-		#if os(iOS)
-			.navigationBarTitleDisplayMode(.inline)
-		#endif
+		.formStyle(.grouped)
 		.navigationTitle("Folder statistics: '\(self.folder.displayName)'")
 	}
 }
