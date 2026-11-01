@@ -474,13 +474,19 @@
 				title: "File versioning", isSheet: true, load: { folder.versioningSettings() }, isEqual: { $0.equal($1) },
 				save: { [folder] in try folder.setVersioningSettings($0) },
 				confirmation: { settings in
-					guard settings.losesPlatformHistory() else {
-						return nil
+					if settings.losesPlatformHistory() {
+						return String(
+							localized:
+								"This ends the platform history of this folder. Versions that have it stay, but it isn't protected from cleaning up anymore, and restoring one may fail."
+						)
 					}
-					return String(
-						localized:
-							"This ends the platform history of this folder. Versions that have it stay, but it isn't protected from cleaning up anymore, and restoring one may fail."
-					)
+					if settings.startsPlatformHistory() {
+						return String(
+							localized:
+								"This starts the platform history of this folder. Versions it has kept so far don't have it, so they can't be restored while it is on. They aren't lost: turning it off lets you restore them again."
+						)
+					}
+					return nil
 				},
 				content: { draft in
 					AdvancedFolderRestartNotice()

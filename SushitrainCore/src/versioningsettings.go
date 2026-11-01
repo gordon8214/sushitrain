@@ -137,6 +137,13 @@ func (s *VersioningSettings) LosesPlatformHistory() bool {
 		(!s.KeepPlatformHistory || s.Type != VersioningTypeStaggered || s.HasCustomPath())
 }
 
+// StartsPlatformHistory reports whether saving starts a platform history that wasn't being kept. The versioner then refuses
+// to restore a version that has none, which is every version the folder has so far, so the user should know.
+func (s *VersioningSettings) StartsPlatformHistory() bool {
+	return s.saved != nil && !s.saved.KeepPlatformHistory &&
+		s.KeepPlatformHistory && s.Type == VersioningTypeStaggered && !s.HasCustomPath()
+}
+
 // applyTo checks what was edited and puts it in versioning, which is a copy to throw away if this fails. Unlike other
 // settings, a new type takes all its values as shown: they were not read from the configuration, so they would otherwise
 // not count as edited, and the versioner would miss them.

@@ -147,9 +147,10 @@ accepting folders from an untrusted device.
   same name would replace each other. These checks go by what the disk sees: whatever the case of the letters, and
   following symbolic links. A new folder can't go in a versions path either. Ages that don't fit the engine's durations
   are refused, and the fork reads them as no limit, as they used to wrap around and remove every version. Ending platform
-  history asks first. What was kept stays on disk,
-  but nothing protects its files in `.stversions/.stversions/platform` from cleaning up anymore, and a version made while
-  it was on may refuse to be restored.
+  history asks first. What was kept stays on disk, but nothing protects its files in `.stversions/.stversions/platform`
+  from cleaning up anymore, and a version made while it was on may refuse to be restored. Starting it asks first too: the
+  versioner then refuses to restore a version with no saved metadata, which is every version the folder has so far. They
+  stay listed, and turning it off lets them be restored again.
 - **Devices.** The Connection tab links to compression, limits, allowed networks and the rest. Limits are in Mbit/s, like
   the app's own, and a limit that wasn't edited keeps its exact value in KiB/s. The engine skips a network it can't read,
   which could lock a device out, so they are checked.

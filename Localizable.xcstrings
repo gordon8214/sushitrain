@@ -72091,6 +72091,52 @@
         }
       }
     },
+    "This starts the platform history of this folder. Versions it has kept so far don't have it, so they can't be restored while it is on. They aren't lost: turning it off lets you restore them again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Damit beginnt der Plattformverlauf dieses Ordners. Bisher behaltene Versionen haben ihn nicht und können daher nicht wiederhergestellt werden, solange er eingeschaltet ist. Diese gehen nicht verloren: Sobald Sie ihn ausschalten, können Sie sie wiederherstellen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto inicia el historial de la plataforma de esta carpeta. Las versiones conservadas hasta ahora no lo tienen, así que no se pueden restaurar mientras esté activado. No se pierden: al desactivarlo, puedes volver a restaurarlas."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo avvia la cronologia della piattaforma di questa cartella. Le versioni conservate finora non la contengono, quindi non possono essere ripristinate finché è attiva. Non vanno perse: disattivandola puoi ripristinarle di nuovo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このフォルダのプラットフォーム履歴が開始されます。これまでに保持されたバージョンには履歴がないため、オンの間は復元できません。失われることはなく、オフにすると再び復元できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiermee begint de platformgeschiedenis van deze map. Versies die tot nu toe zijn bewaard hebben deze niet en kunnen dus niet worden hersteld zolang deze is ingeschakeld. Ze gaan niet verloren: als je deze uitschakelt, kun je ze weer herstellen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Це розпочинає історію платформи цієї папки. Версії, збережені досі, її не мають, тому їх не можна відновити, поки вона увімкнена. Вони не втрачаються: якщо вимкнути її, їх знову можна буде відновити."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这会开始此文件夹的平台历史。目前已保留的版本没有平台历史，因此在其开启期间无法恢复。它们不会丢失：关闭后，你可以再次恢复它们。"
+          }
+        }
+      }
+    },
     "This subdirectory and all its contents are fully available on" : {
       "localizations" : {
         "de" : {

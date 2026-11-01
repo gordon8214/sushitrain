@@ -263,6 +263,73 @@ func TestVersioningPlatformHistoryCanBeTurnedOn(t *testing.T) {
 	}
 }
 
+func TestVersioningStartsPlatformHistory(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "versions")
+	none := config.VersioningConfiguration{FSType: config.FilesystemTypeBasic}
+	simple := config.VersioningConfiguration{
+		Type: VersioningTypeSimple, FSType: config.FilesystemTypeBasic,
+		Params: map[string]string{"keep": "5", "cleanoutDays": "0"},
+	}
+	staggered := config.VersioningConfiguration{
+		Type: VersioningTypeStaggered, FSType: config.FilesystemTypeBasic, Params: map[string]string{"maxAge": "86400"},
+	}
+	elsewhere := staggered
+	elsewhere.FSPath = outside
+	kept := config.VersioningConfiguration{
+		Type: VersioningTypeStaggered, FSType: config.FilesystemTypeBasic,
+		Params: map[string]string{"maxAge": "86400", "preservePlatformData": "true"},
+	}
+	// The toggle stays on when it goes out of sight, for another type or a custom path
+	keepWith := func(versioningType string) func(*VersioningSettings) {
+		return func(s *VersioningSettings) { s.Type, s.KeepPlatformHistory = versioningType, true }
+	}
+	tests := []struct {
+		name   string
+		before config.VersioningConfiguration
+		edit   func(*VersioningSettings)
+		starts bool
+	}{
+		{"turned on", staggered, keepWith(VersioningTypeStaggered), true},
+		{"from no versioning", none, keepWith(VersioningTypeStaggered), true},
+		{"from another type", simple, keepWith(VersioningTypeStaggered), true},
+		{"unchanged", staggered, func(*VersioningSettings) {}, false},
+		{"another edit", staggered, func(s *VersioningSettings) { s.MaxAgeDays = "2" }, false},
+		{"already kept", kept, keepWith(VersioningTypeStaggered), false},
+		{"already kept, another edit", kept, func(s *VersioningSettings) { s.MaxAgeDays = "2" }, false},
+		{"turned off", kept, func(s *VersioningSettings) { s.KeepPlatformHistory = false }, false},
+		{"on, then another type", staggered, keepWith(VersioningTypeTrashcan), false},
+		{"on, then no versioning", staggered, keepWith(VersioningTypeNone), false},
+		{"on, then a custom path", staggered, func(s *VersioningSettings) {
+			s.KeepPlatformHistory, s.Path = true, outside
+		}, false},
+		{"on with a custom path", elsewhere, keepWith(VersioningTypeStaggered), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			folder := settingsTestFolder(t)
+			setVersioning(t, folder, tt.before)
+			settings := folder.VersioningSettings()
+			tt.edit(settings)
+			if got := settings.StartsPlatformHistory(); got != tt.starts {
+				t.Fatalf("starts: %v", got)
+			}
+			if err := folder.SetVersioningSettings(settings); err != nil {
+				t.Fatal(err)
+			}
+			// What it says has to be what saving does
+			keeps := folder.folderConfiguration().Versioning.Params["preservePlatformData"] == "true"
+			if started := keeps && tt.before.Params["preservePlatformData"] != "true"; started != tt.starts {
+				t.Fatalf("started: %v", started)
+			}
+		})
+	}
+
+	unread := &VersioningSettings{Type: VersioningTypeStaggered, KeepPlatformHistory: true}
+	if unread.StartsPlatformHistory() {
+		t.Fatal("settings that were never read start it")
+	}
+}
+
 func TestVersioningKeepsACustomPath(t *testing.T) {
 	folder := settingsTestFolder(t)
 	outside := filepath.Join(t.TempDir(), "versions")
