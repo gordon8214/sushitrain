@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/syncthing/syncthing/lib/config"
+	"github.com/syncthing/syncthing/lib/svcutil"
 )
 
 // These tests connect the gateway's engine to an ordinary Syncthing peer over loopback. Run them with
@@ -40,6 +41,20 @@ func setDevicePaused(t *testing.T, e *testEngine, peer *testEngine, paused bool)
 		t.Fatal(err)
 	}
 	waiter.Wait()
+}
+
+// An engine starts a connection a second after adding it, and doesn't wait for one it hasn't started when it stops. It
+// used to take ten seconds, which is longer than the app and synctrain-gateway give it.
+func TestEngineStopsRightAfterConnecting(t *testing.T) {
+	gw := newTestEngine(t, "shared", nil)
+	peer := newTestEngine(t, "shared", nil)
+	connect(t, gw, peer)
+	waitFor(t, peerTimeout, "connection", func() bool { return gw.app.Internals.IsConnectedTo(peer.id) })
+	start := time.Now()
+	gw.app.Stop(svcutil.ExitSuccess)
+	if took := time.Since(start); took > 5*time.Second {
+		t.Fatalf("stopping took %v", took)
+	}
 }
 
 func TestPeersPropagateThroughGateway(t *testing.T) {

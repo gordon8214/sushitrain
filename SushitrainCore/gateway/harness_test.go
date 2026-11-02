@@ -166,7 +166,7 @@ func connect(t *testing.T, a, b *testEngine) {
 			addresses = []string{peer.listen}
 		}
 		waiter, err := self.cfg.Modify(func(c *config.Configuration) {
-			// One connection: an extra one that comes up as a test ends holds up stopping the engine for ten seconds
+			// One connection is all a test needs
 			c.SetDevice(config.DeviceConfiguration{DeviceID: peer.id, Name: "peer", Addresses: addresses,
 				RawNumConnections: 1})
 			folder, _, _ := c.Folder(self.folderID)
