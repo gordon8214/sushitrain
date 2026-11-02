@@ -80,10 +80,25 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 		}
 	}
 
-	/// What may be changed follows the folder's permissions on the gateway. Items with a local change the gateway has not
-	/// confirmed are not evicted (their contents are staged, but the system keeps its copy until the change is
-	/// synchronized anyway). This depends on the index only, because the system refreshes capabilities only when the
-	/// item's version changes.
+	#if os(macOS)
+		/// Implementing this at all is what makes items evictable on a Mac: without it, the system refuses to evict any item
+		/// that lacks the deprecated `.allowsEvicting` (macOS 27.2). A local change the gateway has not confirmed stays,
+		/// as `modifyItem` has not succeeded yet and the system won't evict what it counts as not uploaded.
+		var contentPolicy: NSFileProviderContentPolicy { .inherited }
+	#endif
+
+	/// Items with a local change the gateway has not confirmed are not evicted (their contents are staged, but the system
+	/// keeps its copy until the change is synchronized anyway). A Mac has `contentPolicy` instead.
+	private var evicting: NSFileProviderItemCapabilities {
+		#if os(macOS)
+			[]
+		#else
+			item.pending == .none ? .allowsEvicting : []
+		#endif
+	}
+
+	/// What may be changed follows the folder's permissions on the gateway. This depends on the index only, because the
+	/// system refreshes capabilities only when the item's version changes.
 	var capabilities: NSFileProviderItemCapabilities {
 		let isWritable = remote.permissions.write
 		switch item.kind {
@@ -93,18 +108,13 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 				: [.allowsReading, .allowsContentEnumerating]
 		case .directory:
 			var capabilities: NSFileProviderItemCapabilities = [.allowsReading, .allowsContentEnumerating]
-			if item.pending == .none {
-				capabilities.insert(.allowsEvicting)
-			}
+			capabilities.formUnion(evicting)
 			if isWritable {
 				capabilities.formUnion([.allowsAddingSubItems, .allowsRenaming, .allowsReparenting, .allowsDeleting])
 			}
 			return capabilities
 		case .file, .symlink:
-			var capabilities: NSFileProviderItemCapabilities = [.allowsReading]
-			if item.pending == .none {
-				capabilities.insert(.allowsEvicting)
-			}
+			var capabilities: NSFileProviderItemCapabilities = evicting.union(.allowsReading)
 			if isWritable {
 				capabilities.formUnion([.allowsWriting, .allowsRenaming, .allowsReparenting, .allowsDeleting])
 			}
