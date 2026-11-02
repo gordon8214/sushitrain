@@ -22,7 +22,7 @@ extension SushitrainListOfStrings {
 	}
 
 	static func from(_ array: [String]) -> SushitrainListOfStrings {
-		let list = SushitrainNewListOfStrings()!
+		let list = SushitrainEmptyListOfStrings()!
 		for item in array {
 			list.append(item)
 		}

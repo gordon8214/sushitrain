@@ -35,7 +35,8 @@ func (lst *ListOfStrings) Append(str string) {
 	lst.data = append(lst.data, str)
 }
 
-func NewListOfStrings() *ListOfStrings {
+// Not NewListOfStrings: gomobile turns that into a nullable init, which conflicts with NSObject's nonnull one
+func EmptyListOfStrings() *ListOfStrings {
 	return List([]string{})
 }
 
