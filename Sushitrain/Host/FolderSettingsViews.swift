@@ -234,74 +234,100 @@
 
 	/// The rules of an extended attribute filter, which the engine takes as lines of + or - and a pattern
 	private struct XattrFilterEditor: View {
+		private struct Rule: Identifiable {
+			let id = UUID()
+			var line: String
+		}
+
 		private static let permit = "+"
 		private static let deny = "-"
-
 		@Binding var text: String
+		@State private var rules: [Rule]
+		@FocusState private var focusedRule: UUID?
 
-		private var lines: [String] {
-			text.isEmpty ? [] : text.components(separatedBy: "\n")
+		init(text: Binding<String>) {
+			self._text = text
+			self._rules = State(initialValue: Self.read(text.wrappedValue))
 		}
 
 		var body: some View {
-			ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+			ForEach(rules.enumerated(), id: \.element.id) { index, rule in
 				HStack {
-					Picker("Action", selection: self.actionBinding(index, line)) {
+					Picker("Action", selection: self.actionBinding(rule)) {
 						Text("Allow").tag(Self.permit)
 						Text("Deny").tag(Self.deny)
 					}
 					.labelsHidden()
 					.fixedSize()
-					TextField("Attribute name", text: self.patternBinding(index, line), prompt: Text(verbatim: "com.apple.*"))
+					TextField("Attribute name", text: self.patternBinding(rule), prompt: Text(verbatim: "com.apple.*"))
 						.labelsHidden()
 						.font(.body.monospaced())
+						.focused($focusedRule, equals: rule.id)
 					Button("Move up", systemImage: "arrow.up") {
-						self.move(index, by: -1)
+						self.move(rule.id, by: -1)
 					}
 					.disabled(index == 0)
 					Button("Move down", systemImage: "arrow.down") {
-						self.move(index, by: 1)
+						self.move(rule.id, by: 1)
 					}
-					.disabled(index == lines.count - 1)
+					.disabled(index == rules.count - 1)
 					Button("Remove", systemImage: "minus.circle") {
-						var lines = self.lines
-						lines.remove(at: index)
-						text = lines.joined(separator: "\n")
+						rules.removeAll { $0.id == rule.id }
+						self.write()
 					}
 				}
 				.labelStyle(.iconOnly)
 				.buttonStyle(.borderless)
 			}
 			Button("Add a rule", systemImage: "plus.circle") {
-				text = (lines + [Self.permit]).joined(separator: "\n")
+				let rule = Rule(line: Self.permit)
+				rules.append(rule)
+				self.write()
+				focusedRule = rule.id
 			}
 			.buttonStyle(.link)
+			.onChange(of: text) {
+				// A reload from the engine replaces the draft; our own edits keep each row's identity.
+				if text != rules.map(\.line).joined(separator: "\n") {
+					rules = Self.read(text)
+				}
+			}
 		}
 
-		private func actionBinding(_ index: Int, _ line: String) -> Binding<String> {
+		private static func read(_ text: String) -> [Rule] {
+			text.isEmpty ? [] : text.components(separatedBy: "\n").map { Rule(line: $0) }
+		}
+
+		private func actionBinding(_ rule: Rule) -> Binding<String> {
 			Binding(
-				get: { line.hasPrefix(Self.deny) ? Self.deny : Self.permit },
-				set: { self.replace(index, with: $0 + line.dropFirst()) }
+				get: { rule.line.hasPrefix(Self.deny) ? Self.deny : Self.permit },
+				set: { self.replace(rule.id, with: $0 + rule.line.dropFirst()) }
 			)
 		}
 
-		private func patternBinding(_ index: Int, _ line: String) -> Binding<String> {
+		private func patternBinding(_ rule: Rule) -> Binding<String> {
 			Binding(
-				get: { String(line.dropFirst()) },
-				set: { self.replace(index, with: line.prefix(1) + $0) }
+				get: { String(rule.line.dropFirst()) },
+				set: { value in self.replace(rule.id, with: String(rule.line.prefix(1)) + value) }
 			)
 		}
 
-		private func replace(_ index: Int, with line: String) {
-			var lines = self.lines
-			lines[index] = line
-			text = lines.joined(separator: "\n")
+		private func replace(_ id: UUID, with line: String) {
+			// AppKit may commit a text field after its row has been removed.
+			guard let index = rules.firstIndex(where: { $0.id == id }) else { return }
+			rules[index].line = line
+			self.write()
 		}
 
-		private func move(_ index: Int, by offset: Int) {
-			var lines = self.lines
-			lines.swapAt(index, index + offset)
-			text = lines.joined(separator: "\n")
+		private func move(_ id: UUID, by offset: Int) {
+			guard let index = rules.firstIndex(where: { $0.id == id }), rules.indices.contains(index + offset) else { return }
+			rules.swapAt(index, index + offset)
+			self.write()
+			focusedRule = id
+		}
+
+		private func write() {
+			text = rules.map(\.line).joined(separator: "\n")
 		}
 	}
 
