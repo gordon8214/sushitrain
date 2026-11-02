@@ -241,6 +241,7 @@
       "product": "Products/Synctrain.app",
       "product-type": "application",
       "dependencies": [
+        { "target": "SushitrainCore", "platforms": [ "macos" ] },
         { "target": "SynctrainShare", "platforms": [ "macos" ] },
         { "target": "SynctrainFileProvider", "platforms": [ "macos" ] },
         { "target": "SynctrainFileProviderUI", "platforms": [ "macos" ] },
