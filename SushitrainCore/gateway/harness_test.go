@@ -152,14 +152,22 @@ func (e *testEngine) scan() {
 	}
 }
 
-// connect makes two engines share their folder
+// connect makes two engines share their folder. Only a dials, so it is a that has to pause and unpause the other device
+// for the connection to come back at once. Engines that dial each other do so from their listening ports, and when the
+// dials meet they make one TCP connection (a simultaneous open) with a TLS client at both ends and no listener involved.
+// Both then fail at once and, with their timers in one process, can meet again on every retry until a test gives up.
 func connect(t *testing.T, a, b *testEngine) {
 	t.Helper()
-	for _, pair := range [][2]*testEngine{{a, b}, {b, a}} {
+	// b goes first: it turns away a device it doesn't know, and a's next dial would be seconds away
+	for _, pair := range [][2]*testEngine{{b, a}, {a, b}} {
 		self, peer := pair[0], pair[1]
+		var addresses []string
+		if self == a {
+			addresses = []string{peer.listen}
+		}
 		waiter, err := self.cfg.Modify(func(c *config.Configuration) {
 			// One connection: an extra one that comes up as a test ends holds up stopping the engine for ten seconds
-			c.SetDevice(config.DeviceConfiguration{DeviceID: peer.id, Name: "peer", Addresses: []string{peer.listen},
+			c.SetDevice(config.DeviceConfiguration{DeviceID: peer.id, Name: "peer", Addresses: addresses,
 				RawNumConnections: 1})
 			folder, _, _ := c.Folder(self.folderID)
 			folder.Devices = append(folder.Devices, config.FolderDeviceConfiguration{DeviceID: peer.id})
