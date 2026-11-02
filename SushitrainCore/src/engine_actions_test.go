@@ -94,6 +94,9 @@ func TestEngineReportsFailedItems(t *testing.T) {
 	folder := scanTestFolder(t, clt)
 	waitUntil(t, "the file is reported", func() bool { return folder.FailedItems().Count() == 1 })
 	item := folder.FailedItems().ItemAt(0)
+	if !folder.HasUnresolvedItems() {
+		t.Fatal("a failed item must keep the folder out of sync")
+	}
 	if item.Path != "unreadable.txt" || !strings.Contains(item.Error, "permission denied") {
 		t.Fatalf("got %+v", item)
 	}
@@ -103,6 +106,9 @@ func TestEngineReportsFailedItems(t *testing.T) {
 	}
 	folder = scanTestFolder(t, clt)
 	waitUntil(t, "the failure is gone", func() bool { return folder.FailedItems().Count() == 0 })
+	if folder.HasUnresolvedItems() {
+		t.Fatal("the resolved failure must stop keeping the folder out of sync")
+	}
 
 	if err := folder.SetPaused(true); err != nil {
 		t.Fatal(err)
@@ -165,6 +171,71 @@ func TestEngineOverridesASendOnlyFolder(t *testing.T) {
 	}
 	if count := folder.OutOfSyncItems(); count != 0 {
 		t.Fatalf("got %d", count)
+	}
+}
+
+// A send-only folder can be idle, with no failed items, while a connected device has changes it needs to override.
+func TestEngineSendOnlyStatusBeforeAndAfterOverride(t *testing.T) {
+	address := "tcp://" + freeLocalAddress(t)
+	sender, _, _ := startTestEngineWith(t, func(cfg *config.Configuration) {
+		cfg.Folders[0].Type = config.FolderTypeSendOnly
+		cfg.Options.RawListenAddresses = []string{address}
+	})
+	peer, _, peerDir := startTestEngine(t)
+	folder := scanTestFolder(t, sender)
+	peerFolder := scanTestFolder(t, peer)
+
+	// Configure the listener first and let only the peer dial, to avoid simultaneous TCP opens.
+	for _, pair := range [][2]*Client{{sender, peer}, {peer, sender}} {
+		self, other := pair[0], pair[1]
+		if err := self.changeConfiguration(func(cfg *config.Configuration) {
+			var addresses []string
+			if self == peer {
+				addresses = []string{address}
+			}
+			cfg.SetDevice(config.DeviceConfiguration{
+				DeviceID: protocolID(*other.cert), Addresses: addresses, RawNumConnections: 1,
+			})
+			cfg.Folders[0].Devices = append(cfg.Folders[0].Devices,
+				config.FolderDeviceConfiguration{DeviceID: protocolID(*other.cert)})
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	waitUntil(t, "the empty folders are connected and idle", func() bool {
+		return folder.ConnectedPeerCount() == 1 && peerFolder.ConnectedPeerCount() == 1 &&
+			folder.State() == "idle" && peerFolder.State() == "idle"
+	})
+	if folder.HasUnresolvedItems() {
+		t.Fatal("empty connected folders must be synchronized")
+	}
+
+	added := filepath.Join(peerDir, "folder", "peer-only.txt")
+	writeTestFile(t, added, "only on the peer")
+	scanTestFolder(t, peer)
+	waitUntil(t, "the idle send-only folder needs an override", func() bool {
+		return folder.State() == "idle" && folder.OutOfSyncItems() == 1
+	})
+	if folder.FailedItemCount() != 0 || !folder.HasUnresolvedItems() {
+		t.Fatal("send-only differences must keep the folder out of sync even without failures")
+	}
+	if peerFolder.HasUnresolvedItems() {
+		t.Fatal("the send-and-receive peer has no unresolved items")
+	}
+	if _, err := os.Stat(added); err != nil {
+		t.Fatal("checking status must leave the peer's file alone:", err)
+	}
+
+	if err := folder.Override(); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, "override resolved the difference on both devices", func() bool {
+		_, err := os.Stat(added)
+		return os.IsNotExist(err) && folder.OutOfSyncItems() == 0 &&
+			folder.State() == "idle" && peerFolder.State() == "idle"
+	})
+	if folder.HasUnresolvedItems() || peerFolder.HasUnresolvedItems() {
+		t.Fatal("both folders must be synchronized after Override")
 	}
 }
 

@@ -112,7 +112,7 @@ struct FolderStatusDescription {
 				switch folder.state() {
 				case "idle", "sync-waiting", "scan-waiting", "clean-waiting":
 					// A folder that is done with what it could do isn't necessarily done
-					if folder.failedItemCount() > 0 {
+					if folder.hasUnresolvedItems() {
 						(self.text, self.systemImage, self.color) = (
 							String(localized: "Out of sync"), "exclamationmark.triangle.fill", .orange
 						)

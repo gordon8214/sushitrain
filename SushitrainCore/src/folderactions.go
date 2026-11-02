@@ -73,6 +73,12 @@ func (fld *Folder) FailedItemCount() int {
 	return fld.FailedItems().Count()
 }
 
+// HasUnresolvedItems reports whether an idle folder still has failed items or send-only differences needing Override.
+// Like FailedItemCount, this reads the failed items, so it isn't for the main thread.
+func (fld *Folder) HasUnresolvedItems() bool {
+	return fld.FailedItemCount() > 0 || (fld.FolderType() == FolderTypeSendOnly && fld.OutOfSyncItems() > 0)
+}
+
 // LocalChangedItems counts what was added or changed here in a receive-only or receive-encrypted folder
 func (fld *Folder) LocalChangedItems() int {
 	internals := fld.client.internals()
