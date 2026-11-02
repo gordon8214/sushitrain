@@ -809,8 +809,8 @@ extension PHAsset {
 	}
 
 	var originalFilename: String {
-		guard let result = primaryResource else { return "file" }
-		return result.originalFilename.replacingOccurrences(of: "/", with: "_")
+		guard let filename = primaryResource?.filename else { return "file" }
+		return filename.replacingOccurrences(of: "/", with: "_")
 	}
 
 	fileprivate func directoryPathInFolder(
