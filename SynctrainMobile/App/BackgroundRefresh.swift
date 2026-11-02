@@ -13,14 +13,19 @@ enum BackgroundRefresh {
 	/// How long a run lasts: the system ends it earlier when its time is up
 	private static let runDuration: Duration = .seconds(20)
 
-	static func schedule() {
-		let request = BGAppRefreshTaskRequest(identifier: identifier)
-		request.earliestBeginDate = Date(timeIntervalSinceNow: 3600)
-		do {
-			try BGTaskScheduler.shared.submit(request)
-		}
-		catch {
-			Log.warn("Could not schedule a background refresh: \(error.localizedDescription)")
+	/// Runs off the main thread, as the scheduler asks, so it needs background time when the app is leaving the foreground
+	@MainActor static func schedule() {
+		let activity = BackgroundActivity(name: "Scheduling a background refresh")
+		Task.detached {
+			let request = BGAppRefreshTaskRequest(identifier: identifier)
+			request.earliestBeginDate = Date(timeIntervalSinceNow: 3600)
+			do {
+				try await BGTaskScheduler.shared.submitTaskRequest(request)
+			}
+			catch {
+				Log.warn("Could not schedule a background refresh: \(error.localizedDescription)")
+			}
+			await activity.end()
 		}
 	}
 
