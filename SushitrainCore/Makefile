@@ -41,9 +41,12 @@ ENGINE_LDFLAGS = -X $(SYNCTHING_BUILD).Version=$(ENGINE_VERSION) -X $(SYNCTHING_
 # Without noassets, the app's web GUI is the one built into the fork commit in go.mod, as in the gateway
 ENGINE_TAGS = noupgrade
 
+# The app's MACOSX_DEPLOYMENT_TARGET. Without it the objects take the SDK's version, and the linker warns about each one.
+MACOS_VERSION = 27.0
+
 build/SushitrainCore.xcframework: src/*.go gateway/*.go sthome/*.go Makefile go.mod go.sum notices.html
-	go tool gomobile bind -target macos -tags $(ENGINE_TAGS) -trimpath -ldflags "$(ENGINE_LDFLAGS)" \
-		-o ./build/SushitrainCore.xcframework ./src
+	go tool gomobile bind -target macos -macosversion $(MACOS_VERSION) -tags $(ENGINE_TAGS) -trimpath \
+		-ldflags "$(ENGINE_LDFLAGS)" -o ./build/SushitrainCore.xcframework ./src
 
 install: build
 
