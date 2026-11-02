@@ -19,8 +19,8 @@ endif
 	go get -tool golang.org/x/mobile/cmd/gobind
 	go tool gomobile init
 
+# go-licenses is the version in go.mod, so this needs no network and leaves go.mod alone
 notices.html: notices.template.html go.mod go.sum
-	go get -tool github.com/google/go-licenses@latest
 	go tool go-licenses report ./... --template=./notices.template.html > notices.html
 
 SYNCTHING_BUILD = github.com/syncthing/syncthing/lib/build
@@ -31,8 +31,8 @@ SYNCTHING_BUILD = github.com/syncthing/syncthing/lib/build
 BUILDER_LDFLAGS = -X $(SYNCTHING_BUILD).User=synctrain -X $(SYNCTHING_BUILD).Host=gordon8214.github.io \
 	-X $(SYNCTHING_BUILD).Stamp=$(shell git log -1 --format=%ct 2>/dev/null || date +%s)
 
-# The engine's version in the app, which its GUI, other devices and logs all show. Raise N when go.mod moves to another
-# commit of the fork. The engine won't start on a version lib/build can't parse.
+# The engine's version in the app, which its GUI, other devices and logs all show. Scripts/update-fork.sh raises N when
+# it moves go.mod to another commit of the fork. The engine won't start on a version lib/build can't parse.
 ENGINE_VERSION = v2.1.7-synctrain.9
 ENGINE_LDFLAGS = -X $(SYNCTHING_BUILD).Version=$(ENGINE_VERSION) -X $(SYNCTHING_BUILD).Tags=noupgrade,synctrain \
 	$(BUILDER_LDFLAGS)

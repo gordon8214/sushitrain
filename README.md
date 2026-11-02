@@ -67,7 +67,35 @@ and `make mac-release` run `make core` first. In development it may be easier to
 easily see any compiler output (a subsequent make invocation from XCode should be rather quick if nothing changed since
 the manual invocation). The iOS app doesn't use it.
 
-Then, run `go mod tidy`.
+### Moving to another commit of the fork
+
+The engine is [gordon8214/syncthing](https://github.com/gordon8214/syncthing), branch `synctrain/v2.1.7`, which
+`SushitrainCore/go.mod` pins with a `replace`. To move the app to another commit, push that commit to the fork, keep the fork
+checked out next to this repository as `syncthing`, and pass the script a commit or a branch:
+
+```bash
+Scripts/update-fork.sh synctrain/v2.1.7
+```
+
+The script:
+
+1. Fetches the fork and checks that the commit is pushed. A branch means its tip on `origin`, and a local branch with commits
+   of its own is refused.
+2. Points the `replace` at the commit (`go mod edit`) and runs `go mod tidy`.
+3. Checks that the web GUI built into the commit matches its `gui` folder, which fails if the fork changed `gui` without
+   regenerating `lib/api/auto/gui.files.go`. There are no files to copy: the pages are in that generated file.
+4. Regenerates `notices.html` with the `go-licenses` version in `go.mod`.
+5. Raises N in `ENGINE_VERSION` (`v2.1.7-synctrain.N`) in `SushitrainCore/Makefile`, the version the engine reports.
+6. Rebuilds the framework with `make`. It doesn't run `make deps` or `make core`, which can move tools in `go.mod`.
+
+It changes only `go.mod`, `go.sum`, `notices.html` and the `Makefile` in `SushitrainCore`, stops if they already have
+uncommitted changes, and doesn't commit: review the diff, and commit it with whatever code the move needed. A failure
+before the build puts the four files back. If the framework doesn't build, they stay, so that the code can be fixed for the
+new commit; `make -C SushitrainCore` then finishes the job.
+
+The script keeps the `v2.1.7` in `ENGINE_VERSION`, so change that by hand when the fork moves to another Syncthing release.
+It builds only the Mac framework: the `synctrain-gateway` executables have versions of their own, see
+[Docs/gateway.md](./Docs/gateway.md).
 
 ## Architecture
 

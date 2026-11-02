@@ -134,9 +134,10 @@ changes it, and what the web GUI or the REST API changed meanwhile stays too. Mo
 - The engine calls itself `v2.1.7-synctrain.N`, with the tag `synctrain` in the long version, in its GUI's About dialog,
   `/rest/system/version`, reports, logs and to other devices, which tells it from Syncthing's own builds.
   `SushitrainCore/Makefile` stamps the version, tags, builder and commit time through `-ldflags -X`, because `lib/build`
-  works out the long version in its `init`; raise N there when `go.mod` moves to another commit of the fork. `lib/build`
-  stops the process on a version it can't parse, and Syncthing's crash server refuses such a long version, so `make test`
-  and `make test-engine` run with the same stamp. Without it, as in a plain `go test`, the version is `unknown-dev`.
+  works out the long version in its `init`; `Scripts/update-fork.sh` raises N there when it moves `go.mod` to another
+  commit of the fork. `lib/build` stops the process on a version it can't parse, and Syncthing's crash server refuses such
+  a long version, so `make test` and `make test-engine` run with the same stamp. Without it, as in a plain `go test`, the
+  version is `unknown-dev`.
 - **Low priority** (`setLowPriority`) calls `setpriority` for the whole process, app included, at each start of the
   engine, and it is on by default, as in Syncthing. It is measurably in force (the process has a nice value of 9) but
   makes little difference on macOS. In a normally launched app the main thread stayed at priority 46 and the engine's
@@ -381,7 +382,7 @@ the same way:
   `STGUIADDRESS` is set, the address and TLS can't be changed.
 - The web GUI's pages are built into the engine, as in the gateway. They are the fork's own, folder browser and metadata
   settings included: its generated `lib/api/auto/gui.files.go`, from the commit in `go.mod`. Moving to another commit
-  brings its pages along, as long as the fork regenerated that file with any change to `gui/`; nothing checks that yet.
+  brings its pages along, so `Scripts/update-fork.sh` refuses a commit where that file doesn't match the fork's `gui/`.
   A `gui` folder in the configuration directory overrides them, as in Syncthing. They add 2.2 MB to the app (now 60 MB)
   and about 3 MB to its disk image (now 25 MB), measured on unsigned Release archives, which are arm64 only. The fork's
   `gui` folder as resources of the app would add about 7 MB and 2 MB, and a step of its own to copy it, as the module
