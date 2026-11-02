@@ -353,6 +353,37 @@ receive-encrypted folders, which only have encrypted names.
   list shows when a file was last archived, which isn't when it was deleted: a deletion on this device archives nothing, so
   restoring can bring back an older version, as the confirmation says.
 
+## Manual settings verification
+
+The settings pages were exercised with native Mac clicks and typing on November 1, 2026, using a Debug build,
+`SYNCTRAIN_TEST_ROOT` and `HOME` pointing to the same disposable home, four scratch folders and loopback-only peers.
+The normal engine configuration was not used. REST calls prepared fixtures and checked saved values; the interactions
+below used the native app.
+
+| Area | Result |
+| --- | --- |
+| Advanced > Connection options | Refused a reconnection interval below 5 seconds, saved a valid value and discarded an unsaved edit on Back. |
+| Defaults, all five pages | Typed values, checked validation errors, saved and reopened, and discarded unsaved edits on Back. Invalid cases included a relative path, malformed attribute and ignore patterns, an invalid version count and a negative upload limit. |
+| Folder > Advanced | Synchronization options, Metadata and File versioning each saved valid changes, reported refused values and discarded changes on Cancel. |
+| Attribute rules | Reproduced focus moving to the wrong rule after reordering, and a crash when removing a focused row. Stable row IDs and guarded commits fix both. Retested moves in both directions, duplicate patterns and removal down to an empty list. |
+| Device > Connection | Connection options saved, canceled and reported invalid input. An ignored folder disappeared after Stop ignoring. |
+| Ignored devices and requests | Dismiss, Ignore, Stop ignoring and Add worked. Opened Connection requests from Start and the app menu; the added peer connected. These list pages have no text fields or Save/Cancel controls. |
+| Folder > Status | Show opened the failed-item list. Show in Finder selected the failed file; Show in file browser opened its containing folder. Revert, Override and Delete Unexpected Items displayed their warnings and canceled without changing files. After approval, all three ran: Revert removed the local receive-only file, Delete Unexpected Items removed the stray encrypted-folder file, and Override removed the peer-only file on the connected device. The action buttons disappeared and disk/index checks confirmed the results. |
+| Previous Versions | Opened from the list and preview-list context menus and file info. Open exported the archived contents and launched the default editor; Save As exported a separate copy; Restore replaced the current file and archived its former contents. Contents were checked on disk. |
+| Deleted Files | Search filtered the list and clearing it restored both rows. Command-click selected both files. Restore was initially absent from the Mac sheet; moving it to confirmationAction and Close to cancellationAction made it visible. Both selected files then restored successfully. |
+
+A fresh connection request reached `announceNewConnectionRequests`, and its ID was recorded after the system accepted
+the notification. Synctrain already had notification permission on this Mac, so the first-request permission prompt was
+not exercised. Notifications were suppressed during screen sharing, and computer use could not read Notification Center;
+the visible banner and clicking it remain unverified. Do not treat these checks as completing notification acceptance.
+
+These checks also found two separate engine and status problems, both fixed since: an idle send-only folder could say
+Synchronized while offering Override for an out-of-sync item, and decoding folder JSON over copied defaults could overwrite
+the defaults' attribute rules because their entry slices shared storage.
+
+The macOS Debug build, iOS Debug compile check, Swift formatting checks and both Swift package suites passed (67 host
+package tests and 195 File Provider package tests). These package tests do not replace the native interactions above.
+
 ## Web GUI and REST API
 
 On macOS the engine runs Syncthing's web GUI and REST API, as Syncthing.app does, so that tools and scripts reach it
