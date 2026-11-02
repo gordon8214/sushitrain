@@ -11,13 +11,14 @@ GO_VERSION := $(shell go version)
 
 build: build/SushitrainCore.xcframework
 
+# gomobile and gobind are the versions in go.mod, so this leaves go.mod alone; the README says how to move them. gomobile init
+# installs the latest gobind, and bind runs the gobind on the PATH, so the one from go.mod has to go back in its place.
 deps:
 ifndef GO_VERSION
 	echo Go is not installed!
 endif
-	go get -tool golang.org/x/mobile/cmd/gomobile
-	go get -tool golang.org/x/mobile/cmd/gobind
 	go tool gomobile init
+	go install golang.org/x/mobile/cmd/gobind
 
 # go-licenses is the version in go.mod, so this needs no network and leaves go.mod alone
 notices.html: notices.template.html go.mod go.sum

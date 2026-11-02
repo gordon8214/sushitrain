@@ -97,8 +97,7 @@ new_engine_version=${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))
 sed "s/^ENGINE_VERSION = .*/ENGINE_VERSION = $new_engine_version/" Makefile >"$scratch/Makefile"
 cat "$scratch/Makefile" >Makefile
 
-# Not `make core`, whose `make deps` can move tools in go.mod. From here a failure is most likely code that needs to change
-# for the new commit, which needs these changes to stay.
+# From here a failure is most likely code that needs to change for the new commit, which needs these changes to stay.
 restore_on_failure=false
 echo "Building the framework as $new_engine_version"
 make || fail "the framework doesn't build against this commit. The changes are in place: fix the code, then run \`make -C SushitrainCore\`"

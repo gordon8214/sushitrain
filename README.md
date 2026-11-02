@@ -86,7 +86,7 @@ The script:
    regenerating `lib/api/auto/gui.files.go`. There are no files to copy: the pages are in that generated file.
 4. Regenerates `notices.html` with the `go-licenses` version in `go.mod`.
 5. Raises N in `ENGINE_VERSION` (`v2.1.7-synctrain.N`) in `SushitrainCore/Makefile`, the version the engine reports.
-6. Rebuilds the framework with `make`. It doesn't run `make deps` or `make core`, which can move tools in `go.mod`.
+6. Rebuilds the framework with `make`.
 
 It changes only `go.mod`, `go.sum`, `notices.html` and the `Makefile` in `SushitrainCore`, stops if they already have
 uncommitted changes, and doesn't commit: review the diff, and commit it with whatever code the move needed. A failure
@@ -96,6 +96,25 @@ new commit; `make -C SushitrainCore` then finishes the job.
 The script keeps the `v2.1.7` in `ENGINE_VERSION`, so change that by hand when the fork moves to another Syncthing release.
 It builds only the Mac framework: the `synctrain-gateway` executables have versions of their own, see
 [Docs/gateway.md](./Docs/gateway.md).
+
+### Moving a build tool to a newer version
+
+`gomobile`, `gobind` and `go-licenses` are pinned in the `tool` block of `SushitrainCore/go.mod`. `make deps`, `make core` and
+the rest of the build use those versions and leave `go.mod` alone, so a newer version is always a deliberate step:
+
+```bash
+cd SushitrainCore
+go get -tool golang.org/x/mobile/cmd/gomobile@latest
+go get -tool github.com/google/go-licenses@latest
+go mod tidy
+make deps
+make
+```
+
+The first command moves `gobind` too, because both tools are in the `golang.org/x/mobile` module. `make deps` installs the
+`gobind` from `go.mod` in `~/go/bin`, where `gomobile bind` finds it, and `make` regenerates `notices.html` and rebuilds the
+framework. Review the changes to `go.mod`, `go.sum` and `notices.html` before committing them, because `go get` can also
+raise modules the engine uses.
 
 ## Architecture
 
