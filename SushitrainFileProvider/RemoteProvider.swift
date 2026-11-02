@@ -489,18 +489,12 @@ final class RemoteProvider: Sendable {
 				return true
 			}
 		}
-		let byService = Dictionary(grouping: due.filter { $0.serviceID != nil }, by: { $0.serviceID ?? "" })
-		for (serviceID, bindings) in byService {
+		for (serviceID, bindings) in Dictionary(grouping: due, by: \.serviceID) {
 			let folderIDs = bindings.map(\.folderID)
 			background { [self] in
 				await refresh(folderIDs: folderIDs, serviceID: serviceID)
 				state.withLock { $0.refreshing.subtract(folderIDs) }
 			}
-		}
-		// Folders without a gateway cannot be refreshed
-		let orphaned = due.filter { $0.serviceID == nil }.map(\.folderID)
-		if !orphaned.isEmpty {
-			state.withLock { $0.refreshing.subtract(orphaned) }
 		}
 	}
 
