@@ -377,9 +377,10 @@ the notification. Synctrain already had notification permission on this Mac, so 
 not exercised. Notifications were suppressed during screen sharing, and computer use could not read Notification Center;
 the visible banner and clicking it remain unverified. Do not treat these checks as completing notification acceptance.
 
-These checks also found two separate engine and status problems, both fixed since: an idle send-only folder could say
-Synchronized while offering Override for an out-of-sync item, and decoding folder JSON over copied defaults could overwrite
-the defaults' attribute rules because their entry slices shared storage.
+These checks also found two separate engine and status problems. An idle send-only folder could say Synchronized while
+offering Override for an out-of-sync item, which is fixed. Decoding folder JSON over copied defaults can overwrite the
+defaults' attribute rules because their entry slices share storage: the fork fixed that in `ee6b696b`, but the app's
+pinned commit is the one before it, so the app keeps the problem until it moves to that commit.
 
 The macOS Debug build, iOS Debug compile check, Swift formatting checks and both Swift package suites passed (67 host
 package tests and 195 File Provider package tests). These package tests do not replace the native interactions above.
