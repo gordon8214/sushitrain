@@ -23395,48 +23395,48 @@
         }
       }
     },
-    "Example file location in folder: " : {
+    "Example file location in folder: %@" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Beispieldateiort im Ordner:"
+            "value" : "Beispieldateiort im Ordner: %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ubicación del archivo de ejemplo en la carpeta:"
+            "value" : "Ubicación del archivo de ejemplo en la carpeta: %@"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esempio di posizione del file nella cartella:"
+            "value" : "Esempio di posizione del file nella cartella: %@"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "フォルダ内のファイルの場所例"
+            "value" : "フォルダ内のファイルの場所例: %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voorbeeld van bestandslocatie in map: "
+            "value" : "Voorbeeld van bestandslocatie in map: %@"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Приклад розташування файлу в папці:"
+            "value" : "Приклад розташування файлу в папці: %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "文件在文件夹中的示例位置："
+            "value" : "文件在文件夹中的示例位置：%@"
           }
         }
       }

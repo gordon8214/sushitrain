@@ -222,9 +222,8 @@ struct PhotoBackupSettingsView: View {
 					.disabled(photoBackup.isBackingUp)
 					.onChange(of: photoBackup.folderStructure) { _, _ in photoBackup.resetLastSuccessfulChangeToken() }
 
-				Text("Example file location in folder: ")
-					+ Text("\(photoBackup.subDirectoryPath)/\(photoBackup.folderStructure.examplePath)")
-					.monospaced()
+				let examplePath = Text("\(photoBackup.subDirectoryPath)/\(photoBackup.folderStructure.examplePath)")
+				Text("Example file location in folder: \(examplePath.monospaced())")
 
 			} footer: {
 				Text(

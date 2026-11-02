@@ -270,9 +270,9 @@ private struct PhotoFolderAlbumSettingsView: View {
 							self.config.folderStructure = $0
 						}))
 
-				Text("Example file location in folder: ")
-					+ Text("\(dirName)/\((self.config.folderStructure ?? PhotoBackupFolderStructure.singleFolder).examplePath)")
-					.monospaced()
+				let folderStructure = self.config.folderStructure ?? PhotoBackupFolderStructure.singleFolder
+				let examplePath = Text("\(dirName)/\(folderStructure.examplePath)")
+				Text("Example file location in folder: \(examplePath.monospaced())")
 			}
 
 			if self.config.folderStructure?.usesTimeZone ?? false {

@@ -534,27 +534,29 @@ struct AdvancedSettingsView: View {
 
 	private var cacheText: Text {
 		let formatter = ByteCountFormatter()
-		var text = Text(
-			"When the cache is enabled, thumbnails will load quicker and use less data when viewed more than once."
-		)
+		var sentences = [
+			String(
+				localized:
+					"When the cache is enabled, thumbnails will load quicker and use less data when viewed more than once.")
+		]
 
 		if let bytes = self.diskCacheSizeBytes {
-			text =
-				text
-				+ Text(
-					"Currently the thumbnail cache is using \(formatter.string(fromByteCount: Int64(bytes))) of disk space."
-				)
+			sentences.append(
+				String(
+					localized:
+						"Currently the thumbnail cache is using \(formatter.string(fromByteCount: Int64(bytes))) of disk space."
+				))
 		}
 
 		if appState.userSettings.cacheThumbnailsToFolderID == "" {
-			text =
-				text + Text(" ")
-				+ Text(
-					"When disk space is scarce, the system may decide to remove some thumbnails in order to free up space."
-				)
+			sentences.append(
+				String(
+					localized:
+						"When disk space is scarce, the system may decide to remove some thumbnails in order to free up space."
+				))
 		}
 
-		return text
+		return Text(sentences.joined(separator: " "))
 	}
 }
 
