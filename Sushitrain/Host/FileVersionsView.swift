@@ -260,10 +260,10 @@
 				.frame(minWidth: 620, minHeight: 400)
 				.navigationTitle("Deleted Files")
 				.toolbar {
-					SheetButton(role: .done) {
-						dismiss()
+					ToolbarItem(placement: .cancellationAction) {
+						Button("Close", role: .cancel) { dismiss() }
 					}
-					ToolbarItem(placement: .primaryAction) {
+					ToolbarItem(placement: .confirmationAction) {
 						Button("Restore") {
 							confirmRestore = true
 						}
