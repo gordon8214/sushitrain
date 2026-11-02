@@ -34,7 +34,7 @@ BUILDER_LDFLAGS = -X $(SYNCTHING_BUILD).User=synctrain -X $(SYNCTHING_BUILD).Hos
 
 # The engine's version in the app, which its GUI, other devices and logs all show. Scripts/update-fork.sh raises N when
 # it moves go.mod to another commit of the fork. The engine won't start on a version lib/build can't parse.
-ENGINE_VERSION = v2.1.7-synctrain.9
+ENGINE_VERSION = v2.1.7-synctrain.10
 ENGINE_LDFLAGS = -X $(SYNCTHING_BUILD).Version=$(ENGINE_VERSION) -X $(SYNCTHING_BUILD).Tags=noupgrade,synctrain \
 	$(BUILDER_LDFLAGS)
 
