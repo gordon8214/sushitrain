@@ -27,11 +27,11 @@ extension Bundle {
 enum DeviceName {
 	static let storageKey = "deviceName"
 
-	static var systemName: String {
+	@MainActor static var systemName: String {
 		UIDevice.current.name
 	}
 
-	static var current: String {
+	@MainActor static var current: String {
 		let name = UserDefaults.standard.string(forKey: storageKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
 		return name?.isEmpty == false ? name! : systemName
 	}
