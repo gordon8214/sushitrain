@@ -29,6 +29,20 @@
 			#endif
 		}
 
+		/// What `open` needs for the app it opens to be a test run as well, for what opens the app again after a crash
+		static var openArguments: [String] {
+			#if DEBUG
+				guard let root = EngineLocations.testRoot?.path(percentEncoded: false) else {
+					return []
+				}
+				return [
+					"-n", "--env", "HOME=\(root)", "--env", "SYNCTRAIN_TEST_ROOT=\(root)", "--env", "SYNCTRAIN_TEST_CRASH_RELAUNCH=1",
+				]
+			#else
+				return []
+			#endif
+		}
+
 		/// Keeps this run's preferences in the scratch directory, as `Library/Preferences/<bundle identifier>.plist` there.
 		/// To be called before anything reads them. It changes what `UserDefaults.standard` returns, rather than each of
 		/// the many places that use it, so that it also covers `@AppStorage`, AppKit and what comes later. A preference left

@@ -109,6 +109,7 @@ func reportCrashes(ctx context.Context, opts config.OptionsConfiguration, dir st
 			_ = os.Remove(log)
 			continue
 		}
+		slog.Warn("the engine crashed in an earlier run", "log", log, "cause", crashCause(report))
 		if opts.CREnabled {
 			if err := sendCrashReport(ctx, opts.CRURL, report); err != nil {
 				// To try again at the next start
@@ -166,6 +167,15 @@ func readCrashReport(log string) ([]byte, error) {
 		return nil, nil
 	}
 	return fmt.Appendf(nil, "%s\nPanic at %s\n%s", version, info.ModTime().Format(time.RFC3339), trace), nil
+}
+
+// crashCause returns the line of a crash report that says what went wrong, which follows the version and the time
+func crashCause(report []byte) string {
+	lines := bytes.SplitN(report, []byte("\n"), 4)
+	if len(lines) < 3 {
+		return ""
+	}
+	return string(lines[2])
 }
 
 // sendCrashReport sends a report to the crash reporting server at urlBase, as Syncthing does: under the hash of its

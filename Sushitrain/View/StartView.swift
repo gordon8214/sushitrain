@@ -286,6 +286,10 @@ struct StartView: View {
 				NetworkStatusView(userSettings: userSettings)
 			}
 
+			#if os(macOS)
+				CrashNoticeSection()
+			#endif
+
 			Section(header: Text("This device's identifier")) {
 				DeviceIDView(device: self.appState.client.peer(withID: self.appState.localDeviceID)!)
 			}

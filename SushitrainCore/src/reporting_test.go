@@ -6,9 +6,11 @@
 package sushitrain
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -268,6 +270,30 @@ func TestACrashOfTheProcessIsSaved(t *testing.T) {
 	if len(lines) != 3 || !strings.HasPrefix(lines[0], "syncthing ") || !strings.HasPrefix(lines[1], "Panic at ") ||
 		!strings.HasPrefix(lines[2], "panic: the test's crash") {
 		t.Fatalf("report: %s", report)
+	}
+	if cause := crashCause(report); !strings.HasPrefix(cause, "panic: the test's crash") {
+		t.Fatalf("cause: %q", cause)
+	}
+}
+
+func TestACrashIsLoggedAtTheNextStart(t *testing.T) {
+	var output bytes.Buffer
+	defer slog.SetDefault(slog.Default())
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
+	dir := t.TempDir()
+	log := writeCrashLog(t, dir, "synctrain-crash-1.log", "version\n"+crashTrace)
+	empty := writeCrashLog(t, dir, "synctrain-crash-2.log", "version\n")
+
+	reportCrashes(t.Context(), config.OptionsConfiguration{}, dir, "")
+
+	if text := output.String(); !strings.Contains(text, log) || !strings.Contains(text, "panic: test") || strings.Contains(text, empty) {
+		t.Fatalf("logged: %s", text)
+	}
+}
+
+func TestACrashCauseCanBeMissing(t *testing.T) {
+	if cause := crashCause([]byte("version\nPanic at noon")); cause != "" {
+		t.Fatalf("cause: %q", cause)
 	}
 }
 

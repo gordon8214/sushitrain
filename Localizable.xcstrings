@@ -36457,6 +36457,52 @@
         }
       }
     },
+    "macOS keeps Synctrain from opening at login. Allow it in System Settings, under Login Items & Extensions." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS verhindert, dass Synctrain bei der Anmeldung geöffnet wird. Erlauben Sie es in den Systemeinstellungen unter „Anmeldeobjekte & Erweiterungen“."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS impide que Synctrain se abra al iniciar sesión. Permítelo en Ajustes del Sistema, en «Ítems de inicio y extensiones»."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS impedisce a Synctrain di aprirsi al login. Consentilo in Impostazioni di Sistema, in «Elementi login ed estensioni»."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOSにより、ログイン時にSynctrainを開くことができません。システム設定の「ログイン項目と機能拡張」で許可してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS houdt tegen dat Synctrain bij het inloggen opent. Sta het toe in Systeeminstellingen, onder Inlogonderdelen en extensies."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS не дозволяє Synctrain відкриватися під час входу. Дозвольте це в системних параметрах, у розділі «Об'єкти входу та розширення»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 阻止了 Synctrain 在登录时打开。请在“系统设置”的“登录项与扩展”中允许。"
+          }
+        }
+      }
+    },
     "macOS kept files from Finder's Synctrain location that never reached a gateway. They are in %@, where you can move or remove them." : {
       "localizations" : {
         "de" : {
@@ -63385,6 +63431,98 @@
         }
       }
     },
+    "Synctrain stopped unexpectedly %lld times and last started again on %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain wurde %lld-mal unerwartet beendet und zuletzt am %@ wieder gestartet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain se detuvo inesperadamente %lld veces y volvió a iniciarse por última vez el %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain si è arrestato inaspettatamente %lld volte ed è ripartito l'ultima volta il %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainが予期せず%lld回停止し、最後に%@に再び起動しました。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain is %lld keer onverwacht gestopt en voor het laatst op %@ opnieuw gestart."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кількість неочікуваних зупинок Synctrain: %lld. Востаннє він знову запустився %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 已意外停止 %lld 次，最近一次于 %@ 重新启动。"
+          }
+        }
+      }
+    },
+    "Synctrain stopped unexpectedly and started again on %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain wurde unerwartet beendet und am %@ wieder gestartet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain se detuvo inesperadamente y volvió a iniciarse el %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain si è arrestato inaspettatamente ed è ripartito il %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrainが予期せず停止し、%@に再び起動しました。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain is onverwacht gestopt en op %@ opnieuw gestart."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain неочікувано зупинився і знову запустився %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synctrain 意外停止，并于 %@ 重新启动。"
+          }
+        }
+      }
+    },
     "Synctrain waits for Syncthing to be taken over or to quit." : {
       "localizations" : {
         "de" : {
@@ -71980,6 +72118,52 @@
         }
       }
     },
+    "This happened too often, so Synctrain won't open again by itself for up to an hour." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ist zu oft passiert. Synctrain öffnet sich daher bis zu eine Stunde lang nicht von selbst."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ha ocurrido demasiadas veces, así que Synctrain no volverá a abrirse solo durante un máximo de una hora."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "È successo troppe volte, quindi Synctrain non si riaprirà da solo per un massimo di un'ora."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これが頻繁に起きたため、最大1時間はSynctrainが自動的に開くことはありません。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dit is te vaak gebeurd, dus Synctrain opent tot een uur lang niet vanzelf."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Це сталося надто часто, тому Synctrain не відкриватиметься сам до години."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这种情况发生得太频繁，因此 Synctrain 在最多一小时内不会自动重新打开。"
+          }
+        }
+      }
+    },
     "This image has no pairing code in it." : {
       "localizations" : {
         "de" : {
@@ -80086,6 +80270,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当存放此文件夹的磁盘剩余空间低于此值时，不再获取文件。0 表示关闭此检查。百分比是相对于磁盘大小而言。"
+          }
+        }
+      }
+    },
+    "While this is on, Synctrain also opens again by itself after a crash." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn dies aktiviert ist, öffnet sich Synctrain nach einem Absturz auch von selbst wieder."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mientras esté activado, Synctrain también se vuelve a abrir solo tras un fallo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando è attivo, Synctrain si riapre da solo anche dopo un arresto anomalo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オンの間は、クラッシュ後にSynctrainが自動的に再び開きます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zolang dit aan staat, opent Synctrain ook vanzelf opnieuw na een crash."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коли це ввімкнено, Synctrain також сам відкривається знову після збою."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启后，Synctrain 在崩溃后也会自动重新打开。"
           }
         }
       }

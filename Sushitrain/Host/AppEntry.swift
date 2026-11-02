@@ -17,6 +17,7 @@
 			}
 			// Before anything reads them
 			TestRun.redirectPreferences()
+			CrashWatch.shared.start()
 
 			AppMode.current = AppMode.resolve()
 			if AppMode.current == .synchronize {

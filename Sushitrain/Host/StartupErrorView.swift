@@ -97,7 +97,7 @@ struct StartupErrorView: View {
 					return
 				}
 				Log.info("Set the configuration aside as \(asidePath); quitting to start anew")
-				exit(0)
+				exitApp()
 			}
 			Button("Cancel", role: .cancel) {}
 		} message: {
@@ -110,7 +110,7 @@ struct StartupErrorView: View {
 				Button("Turn the proxy off", role: .destructive) {
 					do {
 						try appState.client.setProxySettingsAside()
-						exit(0)
+						exitApp()
 					}
 					catch {
 						errorMessage = ErrorMessage(error)
@@ -138,7 +138,7 @@ struct StartupErrorView: View {
 			Button("Reset device identity", role: .destructive) {
 				do {
 					try appState.client.clearIdentity()
-					exit(0)
+					exitApp()
 				}
 				catch {
 					errorMessage = ErrorMessage(error)

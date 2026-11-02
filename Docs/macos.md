@@ -662,6 +662,45 @@ the next start.
 
 There is no separate Stop and Start: the engine runs for as long as the app does.
 
+## After a crash
+
+A panic in the engine takes the whole app down, as they share a process. With **Launch at login** on, in either mode, the
+app opens again by itself after any end other than quitting, without taking the focus from what the user is doing.
+Syncthing.app does the same for its daemon.
+
+- **When:** 10 seconds later, doubling with each crash in the last hour (20, 40, 80, 160). A sixth crash within the hour
+  leaves the app closed, as what keeps crashing needs a person, and the notice says so. That lifts as those crashes pass
+  the hour, also during a run.
+- **What doesn't open it:** quitting, however it is asked for, and a crash once quitting has started. The buttons that
+  close the app to start with a new configuration or identity don't either: what ends the app at once on purpose goes
+  through `exitApp`.
+- **A Force Quit or a `kill` counts as a crash.** The two look the same from outside the app, as they do to launchd's
+  `SuccessfulExit`. To keep the app closed, quit it normally once it is back.
+
+`CrashWatch` starts a small process first thing at each launch: `/bin/sh` reading a pipe whose other end only the app has.
+The system closes that end when the app goes, however that happens, so nothing polls. When the app ends on purpose it
+writes `stop` to the pipe first. Otherwise the process waits, then runs `open -g`. It is the app's child, in a process group
+of its own, and it outlives the app; a panic ends the app through macOS's normal crash handling, which leaves it alone.
+
+This isn't a launch agent with `KeepAlive` (`SuccessfulExit` false), although that is the obvious way. launchd only looks
+after what it started, so an app opened from Finder, the one running when the setting is turned on, and one opened again
+after a mode switch or an update would have no protection until the next login. `SuccessfulExit` also implies `RunAtLoad`,
+so registering the agent would start a second app. Having every start go through launchd would lose the files and URLs the
+app was opened with.
+
+Each run leaves a mark in the preferences that quitting removes (`CrashTracker`). One found at the next start means the
+last run ended unexpectedly, also with **Launch at login** off, unless it is from before the Mac started: that run went
+down with the Mac. The app then logs a warning, and the Start page (the window in Files in Finder mode) and the menu bar
+menu say so until dismissed. An alert would hold up a start that nobody asked for. An engine panic also logs its first line
+and where its crash log is (`reportCrashes`), and macOS keeps a report of any crash in `~/Library/Logs/DiagnosticReports`.
+
+If Launch at login can't be turned on or off, the app says why. macOS can refuse it when the user turned the app off under
+Login Items & Extensions, which only they can undo, so the setting then says that and links there.
+
+A debug build leaves all this out unless it is a test run, as stopping a run in Xcode ends it the way a crash does, and it
+shares its preferences with the real app. `SYNCTRAIN_TEST_CRASH_RELAUNCH` turns on opening again in a test run, in place of
+the login item.
+
 ## Dock and menu bar
 
 **Show in menu bar** and **Show in Dock** choose where the app shows itself, in Settings › General, or in its window in

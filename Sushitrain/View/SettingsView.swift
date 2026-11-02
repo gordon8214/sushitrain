@@ -834,6 +834,8 @@ struct GeneralSettingsView: View {
 
 			Section {
 				AutoStartToggleView()
+			} footer: {
+				Text("While this is on, Synctrain also opens again by itself after a crash.")
 			}
 
 			Section("View settings") {
@@ -970,27 +972,52 @@ private struct AsyncAddressesView: View {
 }
 
 struct AutoStartToggleView: View {
-	@State private var autoStart: Bool = false
+	@State private var status = SMAppService.Status.notRegistered
+	@State private var errorMessage: ErrorMessage? = nil
 
 	var body: some View {
-		Toggle(isOn: $autoStart) {
+		Toggle(isOn: Binding(get: { status == .enabled }, set: { self.set($0) })) {
 			Label("Launch at login", systemImage: "autostartstop")
-		}
-		.onChange(of: autoStart) { _, nv in
-			if nv {
-				try? SMAppService.mainApp.register()
-			}
-			else {
-				try? SMAppService.mainApp.unregister()
-			}
-			self.update()
 		}
 		.onAppear {
 			self.update()
 		}
+		// System Settings tells the app nothing when the user changes this there
+		.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+			self.update()
+		}
+		.errorAlert($errorMessage)
+
+		if status == .requiresApproval {
+			SettingsWarning(
+				text: "macOS keeps Synctrain from opening at login. Allow it in System Settings, under Login Items & Extensions.")
+			Button("Open System Settings…") {
+				SMAppService.openSystemSettingsLoginItems()
+			}
+		}
+	}
+
+	private func set(_ enabled: Bool) {
+		do {
+			if enabled {
+				try SMAppService.mainApp.register()
+			}
+			else {
+				try SMAppService.mainApp.unregister()
+			}
+		}
+		catch {
+			Log.warn("Could not change Launch at login to \(enabled): \(error)")
+			// Only the user can change this one, and the warning says how
+			if SMAppService.mainApp.status != .requiresApproval {
+				self.errorMessage = ErrorMessage(error)
+			}
+		}
+		self.update()
 	}
 
 	private func update() {
-		self.autoStart = SMAppService.mainApp.status == .enabled
+		self.status = SMAppService.mainApp.status
+		CrashWatch.shared.update()
 	}
 }

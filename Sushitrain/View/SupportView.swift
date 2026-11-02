@@ -883,7 +883,7 @@ struct TroubleshootingView: View {
 					Button("Reset device identity", role: .destructive) {
 						do {
 							try self.appState.client.clearIdentity()
-							exit(0)
+							exitApp()
 						}
 						catch {
 							self.errorMessage = ErrorMessage(error)

@@ -81,6 +81,9 @@ class QuickActionService {
 			}
 			isTerminating = true
 			appState?.isQuitting = true
+			// Not when the app has gone: quitting can't be undone from here on, and a crash while stopping the engine has
+			// no business opening the app again
+			CrashWatch.shared.stop()
 			// The remote file service stops first, then the engine, off the main thread. Both are time-limited; what they
 			// could not finish is recovered at the next start.
 			let client = appState?.client

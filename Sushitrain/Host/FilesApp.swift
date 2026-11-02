@@ -27,6 +27,7 @@
 		init() {
 			AppLocations.prepareCurrent()
 			AppPresence.adoptHideInDock(in: .standard)
+			CrashWatch.shared.logLastRun()
 			let mode = AppMode.resolve()
 			let model = AppModel()
 			_mode = State(initialValue: mode)
@@ -79,6 +80,7 @@
 			.defaultLaunchBehavior(.suppressed)
 
 			MenuBarExtra("Synctrain", systemImage: "folder", isInserted: $presence.inMenuBar) {
+				CrashNoticeMenuItems()
 				Button("Open Synctrain", systemImage: "macwindow") {
 					openWindow(id: Self.window, value: Self.window)
 					NSApp.activate()
@@ -119,6 +121,10 @@
 
 		func applicationDidResignActive(_ notification: Notification) {
 			AppPresence.restoreActivationPolicy()
+		}
+
+		func applicationWillTerminate(_ notification: Notification) {
+			CrashWatch.shared.stop()
 		}
 
 		func application(_ application: NSApplication, open urls: [URL]) {
@@ -169,6 +175,7 @@
 					case .needsGateway, .needsFolders, .ready:
 						NavigationStack {
 							RemoteFoldersSettingsView {
+								CrashNoticeSection()
 								Section {
 									Button("Show in Finder", systemImage: "folder") {
 										showLocation()

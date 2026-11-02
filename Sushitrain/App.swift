@@ -61,6 +61,7 @@ struct SushitrainApp: App {
 		}
 		#if os(macOS)
 			EnginePriority.stored.apply()
+			CrashWatch.shared.logLastRun()
 			for message in containerMigration.messages {
 				Log.info(message)
 			}
@@ -455,6 +456,7 @@ struct SushitrainApp: App {
 
 			MenuBarExtra("Synctrain", systemImage: appState.engineStatus.symbol, isInserted: $presence.inMenuBar) {
 				Text(verbatim: appState.engineStatus.menuLine)
+				CrashNoticeMenuItems()
 
 				Divider()
 
