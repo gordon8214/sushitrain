@@ -13,3 +13,4 @@
 /SynctrainFileProviderKit/.swiftpm
 /SynctrainHostKit/.build
 /SynctrainHostKit/.swiftpm
+.DS_Store
