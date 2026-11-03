@@ -114,6 +114,23 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 		}
 		return files.Removal{Leftovers: dest, Moved: moved}, err
 	})
+	// Every folder out of the mount, for a switch to Synchronize mode (the window stops the daemon afterwards)
+	a.Register("leave", func(ctx context.Context, params json.RawMessage) (any, error) {
+		p, err := decode[struct{ Timeout time.Duration }](params)
+		if err != nil {
+			return nil, err
+		}
+		if p.Timeout <= 0 || p.Timeout > 10*time.Minute {
+			p.Timeout = 2 * time.Minute
+		}
+		ctx, cancel := context.WithTimeout(ctx, p.Timeout)
+		defer cancel()
+		removals, err := s.Leave(ctx)
+		if len(removals) > 0 {
+			foldersChanged()
+		}
+		return removals, err
+	})
 	a.Register("keep", func(ctx context.Context, params json.RawMessage) (any, error) {
 		p, err := decode[struct {
 			Path string

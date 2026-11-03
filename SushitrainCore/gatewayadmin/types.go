@@ -123,3 +123,23 @@ type Folder struct {
 	State   string   `json:"state"`
 	Devices []string `json:"devices"`
 }
+
+// Home describes Syncthing's home on this machine, for setting Synchronize mode up (synctrain-gateway home --json)
+type Home struct {
+	Dir string `json:"dir"`
+	// Whether a Syncthing configuration or identity is there, to be taken over
+	Exists   bool     `json:"exists"`
+	DeviceID string   `json:"deviceID,omitempty"`
+	Folders  []string `json:"folders,omitempty"`
+	Devices  int      `json:"devices"`
+	// Whether synctrain-gateway has run on it, which took it over (or made it) already
+	Taken bool `json:"taken"`
+	// Whether a Syncthing runs on it now
+	Locked bool `json:"locked"`
+	// Why it can't be taken over, when it can't
+	Problem string `json:"problem,omitempty"`
+	// The admin socket of a gateway running on it
+	Socket string `json:"socket"`
+	// Its web GUI, when it has one on this machine
+	GUIURL string `json:"guiURL,omitempty"`
+}

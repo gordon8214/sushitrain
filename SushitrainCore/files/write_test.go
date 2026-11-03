@@ -591,3 +591,43 @@ func TestAccessChangesAreNoticed(t *testing.T) {
 		t.Fatalf("the kernel wasn't told that %d nodes changed", attrs)
 	}
 }
+
+func TestLeavingFilesMode(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	g := writableGateway(t, map[string]string{"read.txt": "fetched"})
+	ts := newTestService(t, g, 0)
+	if got := ts.readPath("docs/read.txt"); got != "fetched" {
+		t.Fatalf("read %q", got)
+	}
+	g.Stop()
+	ts.create("docs", "unsent.txt", "x")
+	ts.create("docs", ".~lock.doc.odt#", "lock")
+	// The gateway can't be reached: nothing is taken out
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := ts.Leave(ctx); !errors.Is(err, ErrUnresolved) {
+		t.Fatalf("left with a change that isn't on the gateway: %v", err)
+	}
+	if folders, err := ts.Folders(); err != nil || len(folders) != 1 {
+		t.Fatalf("folders after a refused switch: %+v %v", folders, err)
+	}
+
+	// Once it can, the change is sent first
+	g.Start()
+	ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	removals, err := ts.Leave(ctx)
+	if err != nil || len(removals) != 1 || removals[0].Moved != 1 {
+		t.Fatalf("%+v %v", removals, err)
+	}
+	ts.gatewayHas("unsent.txt", "x")
+	if folders, err := ts.Folders(); err != nil || len(folders) != 0 {
+		t.Fatalf("folders after leaving: %+v %v", folders, err)
+	}
+	if gateways, err := ts.Gateways(); err != nil || len(gateways) != 1 {
+		t.Fatalf("the pairing didn't stay: %+v %v", gateways, err)
+	}
+	if st, err := ts.Storage(); err != nil || st.Used != 0 {
+		t.Fatalf("the cache isn't empty: %+v %v", st, err)
+	}
+}

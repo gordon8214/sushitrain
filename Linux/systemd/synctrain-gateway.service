@@ -1,0 +1,24 @@
+# Synctrain for Linux, Synchronize mode: Syncthing, with Synctrain's remote file service for phones and other machines
+# off until it is turned on in Synctrain's window (Docs/linux.md). Enabled instead of synctrain-files.service, never
+# with it, and instead of syncthing.service, which setting this mode up masks.
+[Unit]
+Description=Synctrain (Syncthing, and the remote file service)
+Documentation=https://github.com/gordon8214/sushitrain/blob/file-provider/Docs/linux.md
+StartLimitIntervalSec=60
+StartLimitBurst=4
+
+[Service]
+ExecStart=/usr/bin/synctrain-gateway serve --service-default=off
+# Restarts from the web GUI happen in the process
+Restart=on-failure
+RestartSec=5
+# Scanning and hashing stay out of the way of interactive work
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

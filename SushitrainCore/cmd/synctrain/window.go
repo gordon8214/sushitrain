@@ -11,11 +11,17 @@ package main
 import (
 	"context"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
+
+// mountName is where Files mode shows folders, as text that doesn't wrap after the slash (a word joiner follows it)
+const mountName = "~/\u2060Synctrain"
 
 // mainWindow shows the page of the machine's mode, or the choice of one
 type mainWindow struct {
@@ -37,8 +43,66 @@ func newMainWindow(app *adw.Application) *mainWindow {
 		}
 		return false
 	})
+	switchMode := gio.NewSimpleAction("switch-mode", nil)
+	switchMode.ConnectActivate(func(*glib.Variant) {
+		switch readMode() {
+		case modeFiles:
+			w.askSynchronize(true)
+		case modeSynchronize:
+			w.leaveSynchronize()
+		}
+	})
+	w.win.AddAction(switchMode)
+	about := gio.NewSimpleAction("about", nil)
+	about.ConnectActivate(func(*glib.Variant) { w.about() })
+	w.win.AddAction(about)
 	w.show()
 	return w
+}
+
+// menuButton is the header bar's main menu: switching to the other mode, and About
+func (w *mainWindow) menuButton(switchLabel string) *gtk.MenuButton {
+	menu := gio.NewMenu()
+	menu.Append(switchLabel, "win.switch-mode")
+	menu.Append("About Synctrain", "win.about")
+	b := gtk.NewMenuButton()
+	b.SetIconName("open-menu-symbolic")
+	b.SetTooltipText("Main Menu")
+	b.SetMenuModel(menu)
+	return b
+}
+
+func (w *mainWindow) about() {
+	d := adw.NewAboutDialog()
+	d.SetApplicationName("Synctrain")
+	d.SetApplicationIcon(appID)
+	if version != "" {
+		d.SetVersion(version)
+	}
+	d.SetComments("Syncthing on this machine, or the folders of a gateway on another system, fetched as they are " +
+		"opened")
+	d.SetWebsite("https://github.com/gordon8214/sushitrain")
+	d.SetLicenseType(gtk.LicenseMPL20)
+	d.Present(w.win)
+}
+
+// sentence is an error as a sentence of its own
+func sentence(err error) string {
+	msg := err.Error()
+	if msg == "" {
+		return msg
+	}
+	r, size := utf8.DecodeRuneInString(msg)
+	return string(unicode.ToUpper(r)) + msg[size:]
+}
+
+// inform shows something to read and acknowledge, which a toast would cut short
+func (w *mainWindow) inform(heading, body string) {
+	d := adw.NewAlertDialog(heading, body)
+	d.AddResponse("ok", "OK")
+	d.SetDefaultResponse("ok")
+	d.SetCloseResponse("ok")
+	d.Present(w.win)
 }
 
 // show shows the page of the machine's mode
@@ -112,9 +176,9 @@ func (w *mainWindow) chooser() gtk.Widgetter {
 	page.SetDescription("Choose what this machine does. You can switch later.")
 	group := adw.NewPreferencesGroup()
 	synchronize := choiceRow("Synchronize", "Run Syncthing here: every folder syncs all of its files, and this "+
-		"machine can be a gateway for phones and other machines.", w.setUpSynchronize)
+		"machine can be a gateway for phones and other machines.", func() { w.askSynchronize(false) })
 	filesMode := choiceRow("Files", "Run no Syncthing: the folders of a gateway on another system appear in "+
-		"~/Synctrain, and files are fetched as they are opened.", w.setUpFiles)
+		mountName+", and files are fetched as they are opened.", w.setUpFiles)
 	group.Add(synchronize)
 	group.Add(filesMode)
 	clamp := adw.NewClamp()

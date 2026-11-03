@@ -36,6 +36,7 @@ Commands:
   exports     List, add or remove exported folders
   devices     List, add or remove Syncthing devices
   folders     List folders; share a folder with a device
+  home        Describe Syncthing's home; stop the Syncthing running there, or copy it aside
   version     Show the version
 
 Run "synctrain-gateway <command> -h" for a command's options.
@@ -66,6 +67,8 @@ func main() {
 		err = devicesCommand(args)
 	case "folders":
 		err = foldersCommand(args)
+	case "home":
+		err = homeCommand(args)
 	case "version", "--version", "-v":
 		fmt.Println(versionString())
 	case "help", "-h", "--help":

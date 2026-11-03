@@ -54,6 +54,7 @@ func newFilesView(w *mainWindow) (gtk.Widgetter, func()) {
 	switcher.SetStack(stack)
 	switcher.SetPolicy(adw.ViewSwitcherPolicyWide)
 	header.SetTitleWidget(switcher)
+	header.PackEnd(w.menuButton("Switch to Synchronize…"))
 	toolbar.AddTopBar(header)
 	v.banner = adw.NewBanner("Synctrain Files isn't running")
 	v.banner.SetButtonLabel("Start")
@@ -64,8 +65,8 @@ func newFilesView(w *mainWindow) (gtk.Widgetter, func()) {
 	toolbar.AddTopBar(v.banner)
 
 	// Folders
-	v.folders = newListGroup("Folders", "Folders added from gateways, in ~/Synctrain. They stay on their gateway when "+
-		"they are removed here.")
+	v.folders = newListGroup("Folders", "Folders added from gateways, in "+mountName+". They stay on their "+
+		"gateway when they are removed here.")
 	v.folders.group.SetHeaderSuffix(textButton("Add…", v.addFolder))
 	stack.AddTitledWithIcon(page(v.folders.group), "folders", "Folders", "folder-symbolic")
 
@@ -241,7 +242,10 @@ func (v *filesView) show(st filesState) {
 }
 
 func plural(n int, one, many string) string {
-	if n == 1 {
+	switch n {
+	case 0:
+		return "no " + many
+	case 1:
 		return "1 " + one
 	}
 	return fmt.Sprintf("%d %s", n, many)
@@ -456,7 +460,7 @@ func (v *filesView) addFolder() {
 								return
 							}
 							add.SetLabel("Added")
-							v.w.toast("Added “" + folder.DirName + "” to ~/Synctrain")
+							v.w.toast("Added “" + folder.DirName + "” to " + mountName)
 							v.refresh()
 						})
 					})

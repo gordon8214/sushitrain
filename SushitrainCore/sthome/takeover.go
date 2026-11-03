@@ -58,6 +58,7 @@ type Summary struct {
 	// As in the configuration (whatever STGUIADDRESS this process has)
 	GUIAddress      string   `json:"guiAddress"`
 	GUINetwork      string   `json:"guiNetwork"`
+	GUITLS          bool     `json:"guiTLS"`
 	ListenAddresses []string `json:"listenAddresses"`
 	// The newest schema of its databases; 0 when there is none
 	SchemaVersion int `json:"schemaVersion"`
@@ -133,6 +134,7 @@ func Summarize(dir string) (Summary, error) {
 		summary.GUIEnabled = raw.GUI.Enabled
 		summary.GUIAddress = raw.GUI.RawAddress
 		summary.GUINetwork = guiNetwork(raw.GUI.RawAddress)
+		summary.GUITLS = raw.GUI.RawUseTLS
 		summary.ListenAddresses = raw.Options.RawListenAddresses
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return summary, fmt.Errorf("%w: %w", ErrUnreadableConfiguration, err)

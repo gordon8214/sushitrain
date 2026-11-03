@@ -79,7 +79,8 @@ func runVersions(path string) int {
 						version := v
 						r := row(v.ModTime.Local().Format(layout),
 							humanBytes(v.Size)+" · archived "+v.Archived.Local().Format("2 Jan 2006 15:04"))
-						r.AddSuffix(iconButton("document-open-symbolic", "Open", func() { openVersion(w, abs, version) }))
+						open := iconButton("document-open-symbolic", "Open", func() { openVersion(w, abs, version) })
+						r.AddSuffix(open)
 						save := textButton("Save a Copy", func() { copyVersion(w, abs, version, load) })
 						restore := textButton("Restore", func() { restoreVersion(w, abs, version, load) })
 						restore.AddCSSClass("destructive-action")

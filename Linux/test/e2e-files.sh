@@ -51,8 +51,9 @@ for i in $(seq 1 60); do [ -S gw.sock ] && break; sleep 0.5; done
 sleep 3
 "$BIN/synctrain-gateway" exports --socket gw.sock --add docs --write || exit 1
 
-# A scratch thumbnail cache and file credentials: the session's own are left alone
-XDG_CACHE_HOME="$ROOT/xdg-cache" "$BIN/synctrain-files" serve --state files-state --cache files-cache --mount mnt \
+# A scratch home, thumbnail cache, GTK bookmarks and file credentials: the session's own are left alone
+mkdir -p "$ROOT/fakehome"
+HOME="$ROOT/fakehome" XDG_CONFIG_HOME="$ROOT/xdg-config" XDG_CACHE_HOME="$ROOT/xdg-cache" "$BIN/synctrain-files" serve --state files-state --cache files-cache --mount mnt \
 	--socket files.sock --credentials file --allow-local-gateway --log-level debug > files.log 2>&1 &
 FILES_PID=$!
 for i in $(seq 1 40); do [ -S files.sock ] && break; sleep 0.5; done

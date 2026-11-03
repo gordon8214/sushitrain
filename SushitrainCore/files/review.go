@@ -475,3 +475,34 @@ func (s *Service) SentCount() int {
 func (s *Service) ItemPath(item int64) (string, error) {
 	return s.itemPath(item)
 }
+
+// Leave takes every folder out of the mount, for a switch to Synchronize mode. Changes still being sent are waited for
+// until ctx is done; any that isn't on its gateway then stops the switch with every folder in place. Files that are only
+// here are moved out of each folder, and the cache is emptied. The pairings with gateways stay, for a switch back.
+func (s *Service) Leave(ctx context.Context) ([]Removal, error) {
+	folders, err := s.folderRefs()
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range folders {
+		if err := s.Wait(ctx, f.rootItem); err != nil {
+			return nil, fmt.Errorf("%w in %s: %w", ErrUnresolved, f.dirName, err)
+		}
+	}
+	for _, f := range folders {
+		if n, err := s.Unresolved(f.id); err != nil {
+			return nil, err
+		} else if n > 0 {
+			return nil, fmt.Errorf("%w: %d in %s", ErrUnresolved, n, f.dirName)
+		}
+	}
+	var removals []Removal
+	for _, f := range folders {
+		dest, moved, err := s.RemoveFolder(f.id)
+		if err != nil {
+			return removals, fmt.Errorf("removing %s: %w", f.dirName, err)
+		}
+		removals = append(removals, Removal{Leftovers: dest, Moved: moved})
+	}
+	return removals, s.cache.evict()
+}
