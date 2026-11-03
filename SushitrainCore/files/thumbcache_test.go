@@ -78,10 +78,10 @@ func TestThumbnails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := "/home/someone/Synctrain/docs"
+	dir := filepath.Join(t.TempDir(), "Synctrain", "docs")
 	ts.FillThumbnails(dir, children)
 	photo := ts.mustLookup("docs/photo.png")
-	key := thumbnailKey(fileURI(dir + "/photo.png"))
+	key := thumbnailKey(fileURI(filepath.Join(dir, "photo.png")))
 	for _, size := range thumbnailSizes {
 		path := filepath.Join(thumbs, size.dir, key+".png")
 		gatewaytest.WaitFor(t, 30*time.Second, "the "+size.dir+" thumbnail", func() bool {
@@ -97,7 +97,7 @@ func TestThumbnails(t *testing.T) {
 		if b := decoded.Bounds(); max(b.Dx(), b.Dy()) > size.size {
 			t.Fatalf("the %s thumbnail is %v", size.dir, b)
 		}
-		if uri, _ := pngTextValue(path, "Thumb::URI"); uri != fileURI(dir+"/photo.png") {
+		if uri, _ := pngTextValue(path, "Thumb::URI"); uri != fileURI(filepath.Join(dir, "photo.png")) {
 			t.Fatalf("Thumb::URI %q", uri)
 		}
 		if mtime, _ := pngTextValue(path, "Thumb::MTime"); mtime != strconv.FormatInt(photo.ModTime.Unix(), 10) {
@@ -105,7 +105,7 @@ func TestThumbnails(t *testing.T) {
 		}
 	}
 	// A kind the gateway can't render gets a failure, which GNOME doesn't try again
-	fail := filepath.Join(thumbs, "fail", "gnome-thumbnail-factory", thumbnailKey(fileURI(dir+"/odd.webp"))+".png")
+	fail := filepath.Join(thumbs, "fail", "gnome-thumbnail-factory", thumbnailKey(fileURI(filepath.Join(dir, "odd.webp")))+".png")
 	gatewaytest.WaitFor(t, 30*time.Second, "the failure entry", func() bool {
 		_, err := os.Stat(fail)
 		return err == nil

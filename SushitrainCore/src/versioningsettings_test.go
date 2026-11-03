@@ -219,7 +219,7 @@ func TestVersioningPlatformHistoryNeverReachesTheVersionerWrongly(t *testing.T) 
 		{"turned off", func(s *VersioningSettings) { s.KeepPlatformHistory = false }, false, true},
 		{"another type", func(s *VersioningSettings) { s.Type = VersioningTypeTrashcan }, false, true},
 		{"no versioning", func(s *VersioningSettings) { s.Type = VersioningTypeNone }, false, true},
-		{"a custom path", func(s *VersioningSettings) { s.Path = filepath.Join(s.Path, "/outside/versions") }, false, true},
+		{"a custom path", func(s *VersioningSettings) { s.Path = filepath.Join(t.TempDir(), "versions") }, false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

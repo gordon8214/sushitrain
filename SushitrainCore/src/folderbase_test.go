@@ -64,7 +64,7 @@ func writeFolderWithMarker(t *testing.T, folderPath string) {
 
 func TestDefaultFolderPath(t *testing.T) {
 	clt := &Client{filesPath: "/documents"}
-	if got, err := clt.defaultFolderPath("abc", ""); err != nil || got != "/documents/abc" {
+	if got, err := clt.defaultFolderPath("abc", ""); err != nil || got != filepath.Join("/documents", "abc") {
 		t.Fatalf("without managed base: %q, %v", got, err)
 	}
 	base := setTestManagedBase(t)

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -105,6 +104,9 @@ func changeRelocations(change func([]folderRelocation) []folderRelocation) error
 // checkRelocationTarget checks that a folder at from (with the given ID) may move to to: not inside or around its own
 // directory, another folder or the engine's data, also where symbolic links in the target's parents lead
 func (clt *Client) checkRelocationTarget(folderID string, from string, to string) error {
+	if isInVersionsPath(to, clt.cfg().Folders()) {
+		return ErrFolderInVersionsPath
+	}
 	for _, target := range withResolved(to) {
 		for _, source := range withResolved(from) {
 			if pathsOverlap(source, target) {
@@ -163,8 +165,8 @@ func (fld *Folder) relocate(newPath string) error {
 	if info, err := os.Lstat(from); err != nil || !info.IsDir() || !markerExists(from, fc.MarkerName) {
 		return ErrRelocationSourceInvalid
 	}
-	to := path.Clean(newPath)
-	if newPath == "" || !path.IsAbs(to) {
+	to := filepath.Clean(newPath)
+	if newPath == "" || !filepath.IsAbs(to) {
 		return ErrRelocationTargetInvalid
 	}
 	if err := clt.checkRelocationTarget(fld.FolderID, from, to); err != nil {
@@ -178,7 +180,7 @@ func (fld *Folder) relocate(newPath string) error {
 	if !onSameVolume(from, to) {
 		return ErrMoveAcrossVolumes
 	}
-	if err := os.MkdirAll(path.Dir(to), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 		return err
 	}
 	// Its parent exists now, so its links resolve
@@ -262,12 +264,12 @@ func (fld *Folder) RelocateInto(base string) (string, error) {
 	if !ok {
 		return "", errFolderConfigNotFound
 	}
-	if base == "" || !path.IsAbs(base) {
+	if base == "" || !filepath.IsAbs(base) {
 		return "", ErrRelocationTargetInvalid
 	}
-	base = path.Clean(base)
+	base = filepath.Clean(base)
 	from := clt.expandHome(fc.Path)
-	if pathKey(path.Dir(from)) == pathKey(base) {
+	if pathKey(filepath.Dir(from)) == pathKey(base) {
 		return from, nil
 	}
 	name, err := folderName(fc.ID, fc.Label)
@@ -286,24 +288,6 @@ func (fld *Folder) RelocateInto(base string) (string, error) {
 
 func withoutRelocation(relocations []folderRelocation, folderID string) []folderRelocation {
 	return slices.DeleteFunc(relocations, func(r folderRelocation) bool { return r.FolderID == folderID })
-}
-
-// onSameVolume reports whether to (or its nearest existing parent) is on the volume of from, so that a rename can move
-// one to the other
-func onSameVolume(from string, to string) bool {
-	var source syscall.Stat_t
-	if err := syscall.Stat(from, &source); err != nil {
-		return false
-	}
-	for dir := path.Dir(to); ; dir = path.Dir(dir) {
-		var target syscall.Stat_t
-		if err := syscall.Stat(dir, &target); err == nil {
-			return source.Dev == target.Dev
-		}
-		if dir == "/" {
-			return false
-		}
-	}
 }
 
 // finishRelocations finishes the folder moves an earlier run left in the journal, for folders that still point where

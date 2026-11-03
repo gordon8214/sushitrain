@@ -29,6 +29,7 @@ type StreamingServerDelegate interface {
 
 type StreamingServer struct {
 	listener                    net.Listener
+	httpServer                  *http.Server
 	client                      *Client
 	publicKey                   ed25519.PublicKey
 	privateKey                  ed25519.PrivateKey
@@ -105,7 +106,8 @@ func (srv *StreamingServer) Listen() error {
 		return err
 	}
 
-	go http.Serve(listener, srv.mux)
+	srv.httpServer = &http.Server{Handler: srv.mux}
+	go srv.httpServer.Serve(listener)
 	srv.listener = listener
 	slog.Info("HTTP service listening", "port", srv.port())
 	return nil
@@ -350,4 +352,15 @@ func serveEntry(w http.ResponseWriter, r *http.Request, folderID string, entry *
 	mp := newMiniPuller(measurements, model)
 	readSeeker := newEntryReadSeeker(info, mp, entry, r.Context(), callback)
 	http.ServeContent(w, r, entry.info.Name, entry.info.ModTime(), readSeeker)
+}
+
+// Close stops the streaming listener and active requests when its client is discarded.
+func (srv *StreamingServer) Close() error {
+	if srv.httpServer != nil {
+		return srv.httpServer.Close()
+	}
+	if srv.listener != nil {
+		return srv.listener.Close()
+	}
+	return nil
 }

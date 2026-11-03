@@ -28,7 +28,6 @@ import (
 	"github.com/syncthing/syncthing/lib/protocol"
 	"github.com/syncthing/syncthing/lib/scanner"
 	"github.com/syncthing/syncthing/lib/syncthing"
-	"golang.org/x/sys/unix"
 )
 
 // The mutation coordinator publishes operations in a folder's serve loop (RunInFolderLoop), where Syncthing's
@@ -156,7 +155,7 @@ func openDirError(err error, missing error) error {
 	if errors.Is(err, errSymlink) {
 		return newAPIError(http.StatusConflict, codeNameConflict, "the path goes through a symbolic link")
 	}
-	if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ENOTDIR) || errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, errNotDirectory) || errors.Is(err, os.ErrNotExist) {
 		return missing
 	}
 	return err
@@ -257,9 +256,9 @@ func matchesIndex(st entryStat, local protocol.FileInfo, window time.Duration) b
 	}
 	switch local.Type {
 	case protocol.FileInfoTypeDirectory:
-		return st.kind == unix.S_IFDIR
+		return st.kind == fsKindDirectory
 	case protocol.FileInfoTypeFile:
-		return st.kind == unix.S_IFREG && st.size == local.Size && st.modTime.Sub(local.ModTime()).Abs() <= window
+		return st.kind == fsKindRegular && st.size == local.Size && st.modTime.Sub(local.ModTime()).Abs() <= window
 	}
 	return false
 }
@@ -272,6 +271,11 @@ func (s *Service) executeWriteFile(ctx context.Context, op *operationRecord) (Op
 		return Operation{}, err
 	}
 	defer root.close()
+	if op.journal == journalPublishing && op.data.Method == methodSwap {
+		if err := repairExchange(root, op.data.Temp, op.data.Target, op.data.Device, op.data.Inode); err != nil {
+			return Operation{}, err
+		}
+	}
 
 	lock := s.folderLock(op.folder)
 	lock.Lock()
@@ -306,6 +310,11 @@ func (s *Service) executeWriteFile(ctx context.Context, op *operationRecord) (Op
 	}
 	// A run that stopped while putting the file in place may have done so: the target is then the staged file
 	if op.journal == journalPublishing && isEntry(root, op.data.Target, op.data.Device, op.data.Inode) {
+		if op.data.Method == methodSwap {
+			if err := recoverExchange(root, op.data.Temp); err != nil {
+				return Operation{}, err
+			}
+		}
 		op.journal = journalPublished
 	}
 	// Nothing to stage while this device doesn't have the base version yet (checked again in the folder loop)
@@ -660,7 +669,7 @@ func (s *Service) putInPlace(ctx context.Context, op *operationRecord, h syncthi
 	case methodSwap:
 		err = renameExchange(pdir, temp, pdir, name)
 		if errors.Is(err, errExchangeUnsupported) {
-			err = unix.Renameat(pdir.fd, temp, pdir.fd, name)
+			err = renameReplace(pdir, temp, name)
 		}
 	default:
 		err = renameNoReplace(pdir, temp, pdir, name)
@@ -845,7 +854,7 @@ func (s *Service) executeCreateDirectory(ctx context.Context, op *operationRecor
 		defer pdir.close()
 		if op.journal == journalPublishing {
 			// A run that stopped after creating the directory finishes indexing it
-			if st, err := pdir.lstat(op.req.Name); err == nil && st.exists && st.kind == unix.S_IFDIR {
+			if st, err := pdir.lstat(op.req.Name); err == nil && st.exists && st.kind == fsKindDirectory {
 				op.journal = journalPublished
 			}
 		}
@@ -1281,7 +1290,7 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 				switch {
 				case isExists(err):
 					return nameConflict(s.currentItem(destFolder, dest))
-				case errors.Is(err, unix.EXDEV):
+				case errors.Is(err, errCrossDevice):
 					return newAPIError(http.StatusConflict, codeCrossFolder,
 						"the folders are on different filesystems; copy the item and delete the original instead")
 				}

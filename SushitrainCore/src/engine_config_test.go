@@ -166,7 +166,9 @@ func newLoadTestClient(t *testing.T) (*Client, string) {
 	}
 	clt := &Client{filesPath: t.TempDir()}
 	t.Cleanup(func() {
-		clt.Stop()
+		if err := clt.Close(); err != nil {
+			t.Error(err)
+		}
 		if clt.appLock != nil {
 			_ = clt.appLock.Unlock()
 		}
@@ -251,10 +253,7 @@ func TestLoadReportsAnInaccessibleConfigurationDirectoryAsIs(t *testing.T) {
 	if err := os.MkdirAll(inside, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(locked, 0); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	makeUnreadable(t, locked)
 	for _, base := range []locations.BaseDirEnum{locations.DataBaseDir, locations.ConfigBaseDir} {
 		if err := locations.SetBaseDir(base, inside); err != nil {
 			t.Fatal(err)
@@ -403,5 +402,24 @@ func TestLoadServesTheConfiguration(t *testing.T) {
 	}
 	if clt.cfg().Options().MaxSendKbps != 7 {
 		t.Fatal("the change was not applied")
+	}
+}
+
+func TestCloseReleasesDiscardedClientOwnership(t *testing.T) {
+	clt, dir := newLoadTestClient(t)
+	if err := clt.acquireLock(); err != nil {
+		t.Fatal(err)
+	}
+	if err := clt.Close(); err != nil {
+		t.Fatal(err)
+	}
+	other := flock.New(filepath.Join(dir, "syncthing.lock"))
+	locked, err := other.TryLock()
+	if err != nil || !locked {
+		t.Fatalf("discarded client retained its lock: %v %v", locked, err)
+	}
+	defer other.Unlock()
+	if err := clt.Close(); err != nil {
+		t.Fatal("second close", err)
 	}
 }

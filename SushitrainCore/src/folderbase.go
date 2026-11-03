@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -52,7 +52,7 @@ func ManagedFolderBase() string {
 // other directory. Syncthing accepts any non-empty folder ID, including IDs such as "../x" offered by other devices.
 func isSafeFolderDirectoryName(folderID string) bool {
 	return folderID != "" && folderID != "." && folderID != ".." && !strings.ContainsAny(folderID, "/\\\x00") &&
-		folderID == path.Base(folderID)
+		folderID == filepath.Base(folderID) && nativeFolderComponent(folderID)
 }
 
 // The location of the folder in the managed base, or an empty string when there is no managed base or the folder ID
@@ -62,7 +62,7 @@ func managedFolderPath(folderID string) string {
 	if base == "" || !isSafeFolderDirectoryName(folderID) {
 		return ""
 	}
-	return path.Join(base, folderID)
+	return filepath.Join(base, folderID)
 }
 
 // The path at which a new folder with the given ID (and label, outside the container) is created when no path is
@@ -77,20 +77,20 @@ func (clt *Client) defaultFolderPath(folderID string, label string) (string, err
 	if managed := managedFolderPath(folderID); managed != "" {
 		return managed, nil
 	}
-	return path.Join(clt.filesPath, folderID), nil
+	return filepath.Join(clt.filesPath, folderID), nil
 }
 
 // Whether a folder with the given ID at the given path is stored at one of the app-controlled default locations
 func (clt *Client) isInternalFolderPath(folderID string, folderPath string) bool {
-	if folderPath == path.Join(clt.filesPath, folderID) {
+	if pathKey(folderPath) == pathKey(filepath.Join(clt.filesPath, folderID)) {
 		return true
 	}
 	managed := managedFolderPath(folderID)
-	return managed != "" && folderPath == managed
+	return managed != "" && pathKey(folderPath) == pathKey(managed)
 }
 
 func markerExists(folderPath string, markerName string) bool {
-	_, err := os.Stat(path.Join(folderPath, markerName))
+	_, err := os.Stat(filepath.Join(folderPath, markerName))
 	return err == nil
 }
 
@@ -108,14 +108,14 @@ func recoverManagedFolder(fc *config.FolderConfiguration, filesPath string) bool
 // changed.
 func reanchorToManagedBase(fc *config.FolderConfiguration, filesPath string) bool {
 	managed := managedFolderPath(fc.ID)
-	if managed == "" || fc.Path == managed {
+	if managed == "" || pathKey(fc.Path) == pathKey(managed) {
 		return false
 	}
-	if fc.Path != path.Join(filesPath, fc.ID) && !isEarlierManagedPath(fc.Path, managed) {
+	if pathKey(fc.Path) != pathKey(filepath.Join(filesPath, fc.ID)) && !isEarlierManagedPath(fc.Path, managed) {
 		return false
 	}
 
-	if _, err := os.Stat(path.Join(fc.Path, fc.MarkerName)); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(fc.Path, fc.MarkerName)); !errors.Is(err, os.ErrNotExist) {
 		return false
 	}
 
@@ -136,7 +136,7 @@ func isEarlierManagedPath(folderPath string, managed string) bool {
 }
 
 func lastPathComponents(p string, count int) string {
-	p = path.Clean(p)
+	p = filepath.ToSlash(filepath.Clean(p))
 	start := len(p)
 	for range count {
 		start = strings.LastIndexByte(p[:start], '/')
@@ -154,7 +154,7 @@ func (fld *Folder) IsInManagedBase() bool {
 		return false
 	}
 	managed := managedFolderPath(fld.FolderID)
-	return managed != "" && fc.Path == managed
+	return managed != "" && pathKey(fc.Path) == pathKey(managed)
 }
 
 // Moves an internal folder from the files path to the managed folder base, then points its configuration at the new
@@ -177,12 +177,12 @@ func (fld *Folder) MoveToManagedBase() error {
 	if !isNativeFilesystem(fc.FilesystemType) {
 		return ErrUnsupportedFilesystem
 	}
-	if fc.Path == managed {
+	if pathKey(fc.Path) == pathKey(managed) {
 		return nil
 	}
 
-	legacy := path.Join(fld.client.filesPath, fld.FolderID)
-	if fc.Path != legacy {
+	legacy := filepath.Join(fld.client.filesPath, fld.FolderID)
+	if pathKey(fc.Path) != pathKey(legacy) {
 		return ErrFolderIsExternal
 	}
 
@@ -206,7 +206,7 @@ func (fld *Folder) MoveToManagedBase() error {
 		return ErrMoveTargetOccupied
 	}
 
-	if err := os.MkdirAll(path.Dir(managed), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(managed), 0o700); err != nil {
 		return err
 	}
 
@@ -256,7 +256,7 @@ func resumeAfterMovePath(folderID string) string {
 	if managed == "" {
 		return ""
 	}
-	return path.Join(path.Dir(managed), ".synctrain-resume-"+folderID)
+	return filepath.Join(filepath.Dir(managed), ".synctrain-resume-"+folderID)
 }
 
 func removeResumeMarker(resumeMarker string) {

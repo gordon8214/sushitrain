@@ -221,3 +221,21 @@ var errExchangeUnsupported = errors.New("the filesystem cannot swap entries")
 func isExists(err error) bool {
 	return errors.Is(err, unix.EEXIST) || errors.Is(err, os.ErrExist)
 }
+
+const (
+	fsKindDirectory = unix.S_IFDIR
+	fsKindRegular   = unix.S_IFREG
+)
+
+var (
+	errNotDirectory = unix.ENOTDIR
+	errCrossDevice  = unix.EXDEV
+)
+
+func renameReplace(d *dir, from, to string) error { return unix.Renameat(d.fd, from, d.fd, to) }
+func openRegularNoFollow(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+}
+
+func recoverExchange(*dir, string) error                        { return nil }
+func repairExchange(*dir, string, string, uint64, uint64) error { return nil }

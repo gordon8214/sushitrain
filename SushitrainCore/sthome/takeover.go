@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -192,32 +191,6 @@ func LockHeld(dir string) bool {
 	return true
 }
 
-// LockHome takes the lock Syncthing takes on its home directory (a flock on syncthing.lock), so that no Syncthing starts
-// on it while the returned file stays open; closing it releases the lock. ErrHomeLocked when a Syncthing runs on it.
-func LockHome(dir string) (*os.File, error) {
-	lockPath := filepath.Join(dir, "syncthing.lock")
-	file, err := os.OpenFile(lockPath, os.O_RDONLY|os.O_CREATE, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		file.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, ErrHomeLocked
-		}
-		return nil, err
-	}
-	// A Syncthing quitting removes its lock file after unlocking it, and one starting then locks a new file: the lock
-	// held must be the file's
-	held, heldErr := file.Stat()
-	current, currentErr := os.Stat(lockPath)
-	if heldErr != nil || currentErr != nil || !os.SameFile(held, current) {
-		file.Close()
-		return nil, ErrHomeLocked
-	}
-	return file, nil
-}
-
 // AddressInUse reports whether something listens on a TCP address (host:port), as another Syncthing's GUI or sync port,
 // by connecting to it (never listening there, which could get in the way of a Syncthing starting). An address that
 // isn't one (such as a unix socket's path) is not in use.
@@ -280,6 +253,9 @@ func Import(src, dst string) error {
 	}
 	fail := func(err error) error {
 		_ = os.RemoveAll(staging)
+		return err
+	}
+	if err := privateImportedHome(staging); err != nil {
 		return err
 	}
 	if err := copyHome(src, staging); err != nil {
@@ -427,14 +403,6 @@ func copyFileContents(from, to string) error {
 }
 
 // syncDir syncs a directory, so that the entries made or renamed in it last
-func syncDir(dir string) error {
-	directory, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	return directory.Sync()
-}
 
 // isLocalHost reports whether a GUI host is this computer's own: unspecified (all addresses), a loopback address, or
 // localhost. A name other than localhost resolves elsewhere.

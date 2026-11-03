@@ -1,0 +1,43 @@
+name: Build Windows
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x64
+            runner: windows-2025-vs2026
+          - architecture: ARM64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: SushitrainCore/go.mod
+          cache-dependency-path: SushitrainCore/go.sum
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build self-contained MSIX
+        shell: pwsh
+        run: Windows/build.ps1 -Architecture '${{ matrix.architecture }}'
+      - name: Test shared Windows implementation
+        shell: pwsh
+        run: Windows/test.ps1 -Architecture '${{ matrix.architecture }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Synctrain-Windows-${{ matrix.architecture }}
+          path: Windows/build/${{ matrix.architecture }}/Packages/**/*.msix
+          if-no-files-found: error
+          retention-days: 14

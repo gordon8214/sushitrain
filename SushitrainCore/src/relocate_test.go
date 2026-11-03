@@ -267,3 +267,20 @@ func TestLoadingFinishesAnInterruptedFolderMove(t *testing.T) {
 		})
 	}
 }
+
+func TestRelocationRefusesAnotherFoldersVersions(t *testing.T) {
+	clt, home, from := newRelocationClient(t, false)
+	versions := filepath.Join(home, "Version history")
+	if err := clt.changeConfiguration(func(cfg *config.Configuration) {
+		cfg.SetFolder(config.FolderConfiguration{ID: "other", Path: filepath.Join(home, "Other"), FilesystemType: config.FilesystemTypeBasic, Versioning: config.VersioningConfiguration{Type: VersioningTypeTrashcan, FSPath: versions, FSType: config.FilesystemTypeBasic}})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	folder := &Folder{client: clt, FolderID: "photos"}
+	if err := folder.Relocate(filepath.Join(versions, "Photos")); !errors.Is(err, ErrFolderInVersionsPath) {
+		t.Fatalf("accepted a destination subject to version cleanup: %v", err)
+	}
+	if pathKey(folder.Path()) != pathKey(from) {
+		t.Fatal("refused relocation changed the folder")
+	}
+}

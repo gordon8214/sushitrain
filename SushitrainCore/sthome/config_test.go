@@ -81,7 +81,7 @@ func TestLoadConfigLeavesAnUnusableConfigurationAlone(t *testing.T) {
 				t.Skip("permissions don't stop root")
 			}
 			writeConfig(t, path, cert, config.CurrentVersion)
-			must(t, os.Chmod(path, 0))
+			makeUnreadable(t, path)
 		}},
 		{"broken link", ErrUnreadableConfiguration, func(t *testing.T, path string) {
 			must(t, os.Symlink(filepath.Join(filepath.Dir(path), "gone.xml"), path))

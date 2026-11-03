@@ -221,18 +221,12 @@ func TestLogFileIsCreatedWithItsDirectory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "synctrain-2026-10-03-11-05-06.log")); err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o700 {
-		t.Errorf("log directory mode %v", info.Mode().Perm())
-	}
+	assertPrivatePermissions(t, dir, 0o700)
 }
 
 func TestLogFilesAreNamedInOrder(t *testing.T) {
 	started := time.Date(2026, 10, 3, 4, 5, 6, 0, time.FixedZone("PDT", -7*3600))
-	if got := logFilePath("/logs", started); got != "/logs/synctrain-2026-10-03-11-05-06.log" {
+	if got := logFilePath("/logs", started); filepath.ToSlash(got) != "/logs/synctrain-2026-10-03-11-05-06.log" {
 		t.Fatalf("got %s", got)
 	}
 }

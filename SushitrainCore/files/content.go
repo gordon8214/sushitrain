@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"t-shaped.nl/sushitrain/v2/sharedfile"
 	"time"
 
 	"t-shaped.nl/sushitrain/v2/remoteapi"
@@ -269,7 +270,7 @@ func (s *Service) open(e Entry, node uint64) (*Reader, error) {
 	if path, err := s.localContentPath(e.Item); err != nil {
 		return nil, err
 	} else if path != "" {
-		f, err := os.Open(path)
+		f, err := sharedfile.Open(path)
 		if err != nil {
 			return nil, err
 		}
@@ -293,7 +294,7 @@ func (s *Service) open(e Entry, node uint64) (*Reader, error) {
 		return nil, err
 	}
 	if cached {
-		if r.file, err = os.Open(s.cache.contentPath(e.ContentID)); err == nil {
+		if r.file, err = sharedfile.Open(s.cache.contentPath(e.ContentID)); err == nil {
 			s.cache.touch(e.ContentID)
 			return r, nil
 		}
@@ -402,7 +403,7 @@ func (c *cache) transferFor(contentID string, item, size int64, keep bool) (*tra
 	if !ok {
 		path := c.partialPath(contentID)
 		_, statErr := os.Stat(path)
-		file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+		file, err := sharedfile.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 		if err != nil {
 			return nil, err
 		}
@@ -864,7 +865,7 @@ func (t *transfer) publish() error {
 	if err != nil {
 		return err
 	}
-	if dir, err := os.Open(t.c.contentDir); err == nil {
+	if dir, err := sharedfile.Open(t.c.contentDir); err == nil {
 		_ = dir.Sync()
 		dir.Close()
 	}

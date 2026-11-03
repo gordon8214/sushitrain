@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func TestVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if data, _ := os.ReadFile(preview); string(data) != "first" || !strings.HasSuffix(preview, "/doc.txt") {
+	if data, _ := os.ReadFile(preview); string(data) != "first" || filepath.Base(preview) != "doc.txt" {
 		t.Fatalf("the preview %s has %q", preview, data)
 	}
 

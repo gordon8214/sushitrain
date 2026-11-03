@@ -21,11 +21,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"t-shaped.nl/sushitrain/v2/sharedfile"
 	"time"
 
 	"github.com/syncthing/syncthing/lib/osutil"
 	"github.com/syncthing/syncthing/lib/protocol"
-	"golang.org/x/sys/unix"
 )
 
 // A lease binds a client to one content identity of an item. Its content is served from a representation: a spool
@@ -262,7 +262,7 @@ func (rep *representation) open() error {
 	// Try a clone of the local file first: it takes no time or space, and its blocks are then verified in place
 	if rep.localPath != "" && rep.localMatches() {
 		if err := cloneFile(rep.localPath, rep.spoolPath); err == nil {
-			f, err := os.OpenFile(rep.spoolPath, os.O_RDWR, 0)
+			f, err := sharedfile.OpenFile(rep.spoolPath, os.O_RDWR, 0)
 			if err == nil {
 				if stat, err := f.Stat(); err == nil && stat.Size() == rep.file.Size {
 					rep.spool, rep.cloned = f, true
@@ -273,7 +273,7 @@ func (rep *representation) open() error {
 			_ = os.Remove(rep.spoolPath)
 		}
 	}
-	f, err := os.OpenFile(rep.spoolPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := sharedfile.OpenFile(rep.spoolPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
@@ -418,7 +418,7 @@ func (rep *representation) prepareBlock(ctx context.Context, index int) error {
 		rep.localFailed()
 	} else if useLocal {
 		// Not following symbolic links, and not blocking on a FIFO put in the file's place
-		if f, err := os.OpenFile(rep.localPath, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0); err == nil {
+		if f, err := openRegularNoFollow(rep.localPath); err == nil {
 			buf := make([]byte, block.Size)
 			_, err := f.ReadAt(buf, block.Offset)
 			f.Close()

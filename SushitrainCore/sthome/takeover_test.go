@@ -163,11 +163,7 @@ func TestImportCopiesTheHomeIntact(t *testing.T) {
 	if summary.DeviceID != deviceID || summary.SchemaVersion != SupportedSchemaVersion || len(summary.Folders) != 2 {
 		t.Fatalf("copy %+v", summary)
 	}
-	info, err := os.Stat(filepath.Join(dst, "key.pem"))
-	must(t, err)
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("key mode %v", info.Mode().Perm())
-	}
+	assertPrivateKey(t, filepath.Join(dst, "key.pem"))
 
 	// Never over an existing copy
 	if err := Import(src, dst); !errors.Is(err, ErrHomeInUse) {

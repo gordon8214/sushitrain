@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/syncthing/syncthing/lib/build"
@@ -201,7 +200,7 @@ func prepareGUI(conf *config.Configuration, configDir string) (*guiMarker, strin
 		if marker.Moved != "" {
 			notice = fmt.Sprintf("The web GUI and REST API are on %s while %s is in use.", marker.Moved, marker.Preferred)
 		}
-	case errors.Is(err, syscall.EADDRINUSE):
+	case addressInUse(err):
 		host, _, _ := net.SplitHostPort(address)
 		moved, freeErr := freeAddress(host)
 		if freeErr != nil {

@@ -14,3 +14,6 @@
 /SynctrainHostKit/.build
 /SynctrainHostKit/.swiftpm
 .DS_Store
+/Windows/build/
+*.pfx
+/SushitrainCore/synctrain-host.exe

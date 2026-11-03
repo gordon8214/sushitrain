@@ -304,7 +304,7 @@ func normalizedRequest(req OperationRequest) (OperationRequest, []byte, error) {
 
 func validName(name string) error {
 	if name == "." || name == ".." || strings.ContainsAny(name, "/\x00") || !utf8.ValidString(name) ||
-		len(name) > maxNameBytes || strings.TrimSpace(name) == "" {
+		len(name) > maxNameBytes || strings.TrimSpace(name) == "" || !platformNameValid(name) {
 		return newAPIError(http.StatusBadRequest, codeInvalidRequest, "invalid name")
 	}
 	return nil

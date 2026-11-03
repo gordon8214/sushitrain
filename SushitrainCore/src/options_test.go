@@ -13,7 +13,6 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/syncthing/syncthing/lib/config"
@@ -133,10 +132,7 @@ func TestEngineOptionsAreChecked(t *testing.T) {
 	if err := os.WriteFile(regularFile, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	pipe := filepath.Join(t.TempDir(), "pipe")
-	if err := syscall.Mkfifo(pipe, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	pipe := auditPipeFixture(t)
 	withUnit := func(value, unit string) func(*EngineOptions) {
 		return func(o *EngineOptions) { o.MinHomeDiskFree, o.MinHomeDiskFreeUnit = value, unit }
 	}
@@ -423,13 +419,7 @@ func TestAuditLogAddsToAGivenFile(t *testing.T) {
 	if string(data) != "first\nsecond\n" {
 		t.Fatalf("audit log: %q", data)
 	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if mode := info.Mode().Perm(); mode != 0o600 {
-		t.Fatalf("others can read it: %o", mode)
-	}
+	assertPrivatePermissions(t, path, 0o600)
 }
 
 func TestARunWithoutAnAuditLogSaysNothing(t *testing.T) {

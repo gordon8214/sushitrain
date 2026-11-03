@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -54,18 +53,18 @@ func (clt *Client) expandHome(p string) string {
 // expandHomeIn expands a leading ~ to home and cleans the path
 func expandHomeIn(home string, p string) string {
 	if p == "~" {
-		return path.Clean(home)
+		return filepath.Clean(home)
 	}
-	if rest, ok := strings.CutPrefix(p, "~/"); ok {
-		return path.Join(home, rest)
+	if rest, ok := strings.CutPrefix(filepath.FromSlash(p), "~"+string(filepath.Separator)); ok {
+		return filepath.Join(home, rest)
 	}
-	return path.Clean(p)
+	return filepath.Clean(p)
 }
 
 // pathKey is how a path is compared with others: the volumes macOS formats by default ignore case and Unicode
 // normalization, so two paths that differ only in those name the same directory (and are taken to, on other volumes)
 func pathKey(p string) string {
-	return strings.ToLower(norm.NFC.String(path.Clean(p)))
+	return strings.ToLower(norm.NFC.String(filepath.ToSlash(filepath.Clean(p))))
 }
 
 // isInsideDirectory reports whether p is strictly inside dir; both are compared as pathKey does
@@ -74,7 +73,7 @@ func isInsideDirectory(p string, dir string) bool {
 	if dir == "/" {
 		return p != "/" && strings.HasPrefix(p, "/")
 	}
-	return strings.HasPrefix(p, dir+"/")
+	return strings.HasPrefix(p, strings.TrimSuffix(dir, "/")+"/")
 }
 
 // pathsOverlap reports whether two paths are the same directory, or one is inside the other
@@ -86,18 +85,18 @@ func pathsOverlap(a string, b string) bool {
 // (all of it, or its nearest existing parent)
 func withResolved(p string) []string {
 	rest := ""
-	for dir := path.Clean(p); ; dir = path.Dir(dir) {
+	for dir := filepath.Clean(p); ; dir = filepath.Dir(dir) {
 		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
-			resolved = path.Join(resolved, rest)
+			resolved = filepath.Join(resolved, rest)
 			if pathKey(resolved) != pathKey(p) {
 				return []string{p, resolved}
 			}
 			return []string{p}
 		}
-		if dir == "/" || dir == "." {
+		if filepath.Dir(dir) == dir || dir == "." {
 			return []string{p}
 		}
-		rest = path.Join(path.Base(dir), rest)
+		rest = filepath.Join(filepath.Base(dir), rest)
 	}
 }
 
@@ -176,6 +175,7 @@ func folderDirectoryName(name string) string {
 		_, size := utf8.DecodeLastRuneInString(name)
 		name = strings.TrimRightFunc(name[:len(name)-size], unicode.IsSpace)
 	}
+	name = nativeFolderName(name)
 	if !isSafeFolderDirectoryName(name) || strings.HasPrefix(name, ".") {
 		return ""
 	}
@@ -198,7 +198,7 @@ func (clt *Client) folderPaths(folders []config.FolderConfiguration) []string {
 // ~/Sync, then the home directory
 func (clt *Client) homeFolderBases(defaultFolderPath string) []string {
 	base := clt.expandHome(defaultFolderPath)
-	if defaultFolderPath == "" || !path.IsAbs(base) {
+	if defaultFolderPath == "" || !filepath.IsAbs(base) {
 		base = clt.expandHome("~/" + syncDirectoryName)
 	}
 	home := clt.expandHome("~")
@@ -251,11 +251,11 @@ func newFolderPathIn(base string, name string, existing []string) (string, error
 		return "", ErrNoDefaultFolderPath
 	}
 	for number := 1; number <= maxNumberedFolderNames; number++ {
-		candidate := path.Join(base, name)
+		candidate := filepath.Join(base, name)
 		if number > 1 {
 			candidate += " " + strconv.Itoa(number)
 		}
-		if path.Dir(candidate) != base {
+		if filepath.Dir(candidate) != base {
 			return "", fmt.Errorf("%w: %q", errUnsafeFolderID, name)
 		}
 		if overlapsAnyFolder(candidate, existing) || overlapsEngineData(candidate) {
@@ -360,7 +360,7 @@ func (clt *Client) canRemoveFiles(fc config.FolderConfiguration, folders []confi
 		}
 		for _, other := range folders {
 			if other.ID != fc.ID && isNativeFilesystem(other.FilesystemType) && other.Path != "" &&
-				pathsOverlap(p, clt.expandHome(other.Path)) {
+				overlapsAnyFolder(p, []string{clt.expandHome(other.Path)}) {
 				return false
 			}
 		}

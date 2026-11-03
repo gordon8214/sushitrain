@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"t-shaped.nl/sushitrain/v2/sharedfile"
 	"time"
 )
 
@@ -176,12 +178,28 @@ func captureBase(tx *sql.Tx, item int64) error {
 
 // Create creates a file or a directory here; it is sent to the gateway once changes settle
 func (s *Service) Create(parent int64, name string, dir bool) (Entry, error) {
+	return s.CreateOnce(parent, name, dir, "")
+}
+
+// CreateOnce records an immutable result in the same transaction as a native
+// directory creation, making a lost native response safe to replay.
+func (s *Service) CreateOnce(parent int64, name string, dir bool, token string) (Entry, error) {
 	name = normalizedName(name)
 	if !validName(name) || reservedName(name) {
 		return Entry{}, ErrInvalidName
 	}
 	var id int64
+	var saved Entry
 	err := s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		if token != "" {
+			data, err := metaValue(tx, "native-create/"+token)
+			if err == nil {
+				return json.Unmarshal([]byte(data), &saved)
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		}
+
 		d, err := directory(tx, parent)
 		if err != nil {
 			return err
@@ -212,20 +230,31 @@ func (s *Service) Create(parent int64, name string, dir bool) (Entry, error) {
 			return err
 		}
 		id, err = res.LastInsertId()
-		return err
+		if err != nil {
+			return err
+		}
+		saved, err = scanEntry(tx.QueryRow(entrySelect+` WHERE i.id=?`, id))
+		if err != nil {
+			return err
+		}
+		if token != "" {
+			data, err := json.Marshal(saved)
+			if err != nil {
+				return err
+			}
+			return setMeta(tx, "native-create/"+token, string(data))
+		}
+		return nil
 	})
 	if err != nil {
 		return Entry{}, err
 	}
-	e, _, err := s.Item(id)
-	if err == nil {
-		s.settleLater(e.Folder)
-	}
-	return e, err
+	s.settleLater(saved.Folder)
+	return saved, nil
 }
 
 // Remove removes a file, or an empty directory, and returns its entry as it was
-func (s *Service) Remove(parent int64, name string, dir bool) (Entry, error) {
+func (s *Service) Remove(parent int64, name string, dir bool, expected ...Entry) (Entry, error) {
 	name = normalizedName(name)
 	var removed Entry
 	var folder int64
@@ -238,7 +267,14 @@ func (s *Service) Remove(parent int64, name string, dir bool) (Entry, error) {
 			return err
 		}
 		if r == nil {
+			if len(expected) > 0 {
+				removed = expected[0]
+				return nil
+			}
 			return fs.ErrNotExist
+		}
+		if len(expected) > 0 && (r.id != expected[0].Item || uint64(r.node) != expected[0].Node) {
+			return ErrVersionChanged
 		}
 		isDir := r.kind == kindDir
 		switch {
@@ -313,7 +349,7 @@ func (s *Service) creationSent(q queryer, item int64) (bool, error) {
 }
 
 // Rename renames or moves an item within its folder, replacing what has the new name unless noReplace
-func (s *Service) Rename(parent int64, name string, newParent int64, newName string, noReplace bool) (*Entry, error) {
+func (s *Service) Rename(parent int64, name string, newParent int64, newName string, noReplace bool, expected ...Entry) (*Entry, error) {
 	name, newName = normalizedName(name), normalizedName(newName)
 	if !validName(newName) || reservedName(newName) {
 		return nil, ErrInvalidName
@@ -321,11 +357,21 @@ func (s *Service) Rename(parent int64, name string, newParent int64, newName str
 	var replaced *Entry
 	var folder int64
 	err := s.store.tx(context.Background(), func(tx *sql.Tx) error {
-		if _, err := directory(tx, parent); err != nil {
-			return err
-		}
 		to, err := directory(tx, newParent)
 		if err != nil {
+			return err
+		}
+		if len(expected) > 0 {
+			target, err := liveChild(tx, newParent, newName)
+			if err != nil {
+				return err
+			}
+			if target != nil && target.id == expected[0].Item && uint64(target.node) == expected[0].Node {
+				folder = target.folder
+				return nil
+			}
+		}
+		if _, err := directory(tx, parent); err != nil {
 			return err
 		}
 		src, err := liveChild(tx, parent, name)
@@ -334,6 +380,9 @@ func (s *Service) Rename(parent int64, name string, newParent int64, newName str
 		}
 		if src == nil {
 			return fs.ErrNotExist
+		}
+		if len(expected) > 0 && (src.id != expected[0].Item || uint64(src.node) != expected[0].Node) {
+			return ErrVersionChanged
 		}
 		if to.folder != src.folder {
 			return ErrCrossFolder
@@ -593,7 +642,7 @@ func (w *Writer) ensure(ctx context.Context, empty bool) error {
 			return nil
 		}
 		if err != nil {
-			if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600); err != nil {
+			if f, err = sharedfile.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600); err != nil {
 				return err
 			}
 			size = 0
@@ -609,7 +658,7 @@ func (w *Writer) ensure(ctx context.Context, empty bool) error {
 		return nil
 	}
 	if empty {
-		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		f, err := sharedfile.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
 			return err
 		}
@@ -694,7 +743,7 @@ func (s *Service) copyContent(ctx context.Context, e Entry, path string) (*os.Fi
 		return cloneFile(src, path)
 	}
 	if e.Size == 0 {
-		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		f, err := sharedfile.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 		return f, 0, err
 	}
 	// Pinned, so that eviction doesn't remove it between the check and the copy
@@ -713,7 +762,7 @@ func (s *Service) copyContent(ctx context.Context, e Entry, path string) (*os.Fi
 		return nil, 0, err
 	}
 	defer r.Close()
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := sharedfile.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -902,12 +951,12 @@ func (s *Service) withWorkingCopy(e Entry) Entry {
 
 // cloneFile makes dst a copy of src, a reflink where the filesystem has them, and opens it for writing
 func cloneFile(src, dst string) (*os.File, int64, error) {
-	in, err := os.Open(src)
+	in, err := sharedfile.Open(src)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+	out, err := sharedfile.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -923,4 +972,12 @@ func cloneFile(src, dst string) (*os.File, int64, error) {
 		return nil, 0, err
 	}
 	return out, info.Size(), nil
+}
+
+// AcknowledgeCreate releases a native directory receipt after its identity is durably bound.
+func (s *Service) AcknowledgeCreate(token string) error {
+	return s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`DELETE FROM meta WHERE key=?`, "native-create/"+token)
+		return err
+	})
 }

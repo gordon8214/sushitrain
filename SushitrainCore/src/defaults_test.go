@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/syncthing/syncthing/lib/config"
@@ -197,7 +198,7 @@ func TestPlaceDefaultIgnores(t *testing.T) {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(filepath.Join(root, ignoreFileName))
-	if err != nil || string(contents) != "*.tmp\n" {
+	if err != nil || strings.ReplaceAll(string(contents), "\r\n", "\n") != "*.tmp\n" {
 		t.Fatalf("got %q, %v", contents, err)
 	}
 
@@ -205,14 +206,14 @@ func TestPlaceDefaultIgnores(t *testing.T) {
 	if err := placeDefaultIgnores(&folder, []string{"*.other"}); err != nil {
 		t.Fatal(err)
 	}
-	if contents, _ := os.ReadFile(filepath.Join(root, ignoreFileName)); string(contents) != "*.tmp\n" {
+	if contents, _ := os.ReadFile(filepath.Join(root, ignoreFileName)); strings.ReplaceAll(string(contents), "\r\n", "\n") != "*.tmp\n" {
 		t.Fatalf("got %q", contents)
 	}
 	// Writing no lines removes the file, which isn't what having no default patterns means
 	if err := placeDefaultIgnores(&folder, nil); err != nil {
 		t.Fatal(err)
 	}
-	if contents, _ := os.ReadFile(filepath.Join(root, ignoreFileName)); string(contents) != "*.tmp\n" {
+	if contents, _ := os.ReadFile(filepath.Join(root, ignoreFileName)); strings.ReplaceAll(string(contents), "\r\n", "\n") != "*.tmp\n" {
 		t.Fatalf("got %q", contents)
 	}
 }

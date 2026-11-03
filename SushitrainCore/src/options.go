@@ -266,10 +266,21 @@ func openAuditFile(path string) (*os.File, error) {
 	if !filepath.IsAbs(path) {
 		return nil, errAuditFileNotAbsolute
 	}
+	if !auditDiskPath(path) {
+		return nil, errAuditFileNotRegular
+	}
 	if info, err := os.Stat(path); err == nil && !info.Mode().IsRegular() {
 		return nil, errAuditFileNotRegular
 	}
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	if err == nil {
+		err = securePrivateFile(path)
+		if err != nil {
+			file.Close()
+			return nil, err
+		}
+	}
+	return file, err
 }
 
 // startAuditLog has a run write the audit log if the options ask for it. Only Syncthing's command line does that by

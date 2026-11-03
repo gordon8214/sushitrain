@@ -27,12 +27,12 @@ func newHomeFoldersClient(t *testing.T, defaultFolderPath string, folders ...con
 	t.Helper()
 	home := t.TempDir()
 	// Syncthing expands ~ with HOME, which is the files path in the app
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	setEngineDataDirectory(t, filepath.Join(home, "Library", "Application Support", "Synctrain"))
 	cfg := config.New(protocol.EmptyDeviceID)
 	cfg.Defaults.Folder.Path = defaultFolderPath
 	for _, folder := range folders {
-		folder.Path = strings.Replace(folder.Path, "$HOME", home, 1)
+		folder.Path = filepath.Clean(strings.Replace(folder.Path, "$HOME", home, 1))
 		if folder.FilesystemType == "" {
 			folder.FilesystemType = config.FilesystemTypeBasic
 		}
@@ -83,8 +83,8 @@ func TestFolderDirectoryNames(t *testing.T) {
 		"zero\u200bwidth": "zerowidth",
 		"trailing. ":      "trailing.",
 	} {
-		if got := folderDirectoryName(name); got != want {
-			t.Errorf("%q: got %q, want %q", name, got, want)
+		if got := folderDirectoryName(name); got != nativeFolderName(want) {
+			t.Errorf("%q: got %q, want %q", name, got, nativeFolderName(want))
 		}
 	}
 	long := folderDirectoryName(strings.Repeat("é", 200))
@@ -320,7 +320,7 @@ func TestRemoveChecksTheDirectorySyncthingRemoves(t *testing.T) {
 	// With HOME elsewhere (as in a test run that sets only SYNCTRAIN_TEST_ROOT), ~ means two different directories
 	clt, _ := newHomeFoldersClient(t, "", config.FolderConfiguration{ID: "photos", Path: "~/Sync/Photos"})
 	other := t.TempDir()
-	t.Setenv("HOME", other)
+	setTestHome(t, other)
 	photos := filepath.Join(other, "Sync", "Photos")
 	if err := os.MkdirAll(photos, 0o700); err != nil {
 		t.Fatal(err)
@@ -377,5 +377,25 @@ func TestRemoveRefusesFoldersOutsideSync(t *testing.T) {
 	}
 	if !folder.Exists() {
 		t.Fatal("the folder was unlinked")
+	}
+}
+
+func TestFolderRemovalProtectsAnotherFolderThroughAnAlias(t *testing.T) {
+	clt, home := newHomeFoldersClient(t, "~", config.FolderConfiguration{ID: "outer", Path: "~/Sync/Outer"})
+	nested := filepath.Join(home, "Sync", "Outer", "Nested")
+	if err := os.MkdirAll(nested, 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(home, "Alias")
+	if err := os.Symlink(nested, alias); err != nil {
+		t.Fatal(err)
+	}
+	if err := clt.changeConfiguration(func(cfg *config.Configuration) {
+		cfg.SetFolder(config.FolderConfiguration{ID: "alias", Path: alias, FilesystemType: config.FilesystemTypeBasic})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if (&Folder{client: clt, FolderID: "outer"}).CanRemoveFiles() {
+		t.Fatal("removing this folder would remove another folder reached through an alias")
 	}
 }

@@ -11,8 +11,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
+	"path/filepath"
 	"strconv"
+	"t-shaped.nl/sushitrain/v2/sqlitefile"
 	"time"
 )
 
@@ -175,8 +176,12 @@ const (
 var errUnsupportedSchema = errors.New("the service database was created by a newer version")
 
 func openStore(path string) (*store, error) {
-	u := url.URL{Scheme: "file", Path: path, RawQuery: driverOptions}
-	db, err := sql.Open(driverName, u.String())
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	u := sqlitefile.URI(path, driverOptions)
+	db, err := sql.Open(driverName, u)
 	if err != nil {
 		return nil, err
 	}

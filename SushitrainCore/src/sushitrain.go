@@ -18,7 +18,7 @@ import (
 	"math"
 	"net/url"
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"runtime/pprof"
@@ -26,7 +26,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -180,12 +179,15 @@ const (
 
 // logFilePath is where a log started at a time is saved, named after the time (in UTC) so that names sort in order
 func logFilePath(dir string, started time.Time) string {
-	return path.Join(dir, started.UTC().Format("synctrain-2006-01-02-15-04-05")+".log")
+	return filepath.Join(dir, started.UTC().Format("synctrain-2006-01-02-15-04-05")+".log")
 }
 
 // createLogFile creates the file a log started at a time is saved to, and the log directory if needed
 func createLogFile(dir string, started time.Time) (*os.File, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	if err := secureLogDirectory(dir); err != nil {
 		return nil, err
 	}
 	// Unbuffered, so that the file has every line when the app stops; the log handler writes a line at a time
@@ -252,7 +254,7 @@ func useCustomConfiguration(filesPath string, ios bool) bool {
 		return false
 	}
 	isUsingCustomConfiguration := false
-	customConfigFilePath := path.Join(filesPath, ConfigFileName)
+	customConfigFilePath := filepath.Join(filesPath, ConfigFileName)
 	if info, err := os.Stat(customConfigFilePath); err == nil {
 		if !info.IsDir() {
 			slog.Info("config XML exists in files dir, using it at", "path", customConfigFilePath)
@@ -262,8 +264,8 @@ func useCustomConfiguration(filesPath string, ios bool) bool {
 	}
 
 	// Check for custom user-provided identity
-	customCertPath := path.Join(filesPath, CertFileName)
-	customKeyPath := path.Join(filesPath, KeyFileName)
+	customCertPath := filepath.Join(filesPath, CertFileName)
+	customKeyPath := filepath.Join(filesPath, KeyFileName)
 	if keyInfo, err := os.Stat(customKeyPath); err == nil {
 		if !keyInfo.IsDir() {
 			if certInfo, err := os.Stat(customCertPath); err == nil {
@@ -321,7 +323,7 @@ func (clt *Client) acquireLock() error {
 		return nil
 	}
 
-	dir := path.Dir(lockPath)
+	dir := filepath.Dir(lockPath)
 	if info, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) || (err == nil && !info.IsDir()) {
 		return missingConfigurationDirectoryError{dir: dir}
 	} else if err != nil {
@@ -379,7 +381,7 @@ func (clt *Client) ExportConfigurationFile() error {
 	}
 	cfg := clt.cfg().RawCopy()
 	homeDir := locations.GetBaseDir(locations.UserHomeBaseDir)
-	customConfigFilePath := path.Join(homeDir, ExportConfigFileName)
+	customConfigFilePath := filepath.Join(homeDir, ExportConfigFileName)
 	fd, err := osutil.CreateAtomic(customConfigFilePath)
 	if err != nil {
 		return err
@@ -880,7 +882,7 @@ func (clt *Client) SetFSWatchingEnabledForAllFolders(enabled bool) error {
 // them. They move off an address in use and back; the second result says what was done about them.
 func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger, filesPath string,
 	remoteManaged *remoteManagedSet, ios bool) (config.Wrapper, string, error) {
-	configDir := path.Dir(cfgFile)
+	configDir := filepath.Dir(cfgFile)
 	cfg, _, err := sthome.LoadConfig(cfgFile, cert, logger, false, func(conf *config.Configuration) {
 		// The iOS app has its own interface
 		conf.GUI.Enabled = !ios
@@ -994,13 +996,13 @@ func applyIOSFolderSettings(conf *config.Configuration, filesPath string) {
 	// the old location but do have one in the new.
 	for _, folderConfig := range conf.Folders {
 		if isNativeFilesystem(folderConfig.FilesystemType) {
-			standardPath := path.Join(filesPath, folderConfig.ID)
+			standardPath := filepath.Join(filesPath, folderConfig.ID)
 			if folderConfig.Path != standardPath && folderConfig.Path != managedFolderPath(folderConfig.ID) {
 				slog.Warn("configured folder path differs from expected path", "configured", folderConfig.Path, "expected", standardPath)
 
-				oldMarkerPath := path.Join(folderConfig.Path, folderConfig.MarkerName)
+				oldMarkerPath := filepath.Join(folderConfig.Path, folderConfig.MarkerName)
 				if _, err := os.Stat(oldMarkerPath); errors.Is(err, os.ErrNotExist) {
-					newMarkerPath := path.Join(standardPath, folderConfig.MarkerName)
+					newMarkerPath := filepath.Join(standardPath, folderConfig.MarkerName)
 					if _, err := os.Stat(newMarkerPath); errors.Is(err, os.ErrNotExist) {
 						slog.Warn("marker does not exist at either old or new location, not changing anything", "oldMarkerPath", oldMarkerPath, "newMarkerPath", newMarkerPath)
 					} else {
@@ -1960,11 +1962,7 @@ func (c *Client) generateSupportBundle(writer io.Writer, appInfo []byte) error {
 	infoJson["numGoroutines"] = runtime.NumGoroutine()
 	infoJson["numCPUs"] = runtime.NumCPU()
 
-	var rlimit syscall.Rlimit
-	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rlimit); err == nil {
-		infoJson["currentFileDescriptorLimit"] = rlimit.Cur
-		infoJson["maxFileDescriptorLimit"] = rlimit.Max
-	}
+	addDescriptorLimits(infoJson)
 
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)

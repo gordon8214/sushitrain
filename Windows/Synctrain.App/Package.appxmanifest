@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+ xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+ xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+ xmlns:cloudFiles="http://schemas.microsoft.com/appx/manifest/cloudfiles/windows10"
+ xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+ xmlns:virtualization="http://schemas.microsoft.com/appx/manifest/virtualization/windows10"
+ xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+ IgnorableNamespaces="uap desktop cloudFiles com virtualization rescap">
+ <Identity Name="com.gordonbyrnes.Synctrain" Publisher="CN=Gordon Byrnes" Version="1.0.14.0"/>
+ <Properties>
+  <DisplayName>Synctrain</DisplayName><PublisherDisplayName>Gordon Byrnes</PublisherDisplayName><Logo>Assets\StoreLogo.png</Logo>
+  <virtualization:FileSystemWriteVirtualization><virtualization:ExcludedDirectories><virtualization:ExcludedDirectory>$(KnownFolder:LocalAppData)\Synctrain</virtualization:ExcludedDirectory></virtualization:ExcludedDirectories></virtualization:FileSystemWriteVirtualization>
+ </Properties>
+ <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0"/></Dependencies>
+ <Resources><Resource Language="en-us"/></Resources>
+ <Applications>
+  <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
+   <uap:VisualElements DisplayName="Synctrain" Description="Synchronize files or open them on demand through a gateway" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
+    <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"/><uap:SplashScreen Image="Assets\SplashScreen.png"/>
+   </uap:VisualElements>
+   <Extensions>
+    <desktop:Extension Category="windows.startupTask" Executable="Synctrain.App.exe" EntryPoint="Windows.FullTrustApplication"><desktop:StartupTask TaskId="SynctrainStartup" Enabled="true" DisplayName="Synctrain"/></desktop:Extension>
+    <uap:Extension Category="windows.protocol"><uap:Protocol Name="synctrain+pair"><uap:DisplayName>Pair with Synctrain</uap:DisplayName></uap:Protocol></uap:Extension>
+    <uap:Extension Category="windows.protocol"><uap:Protocol Name="synctrain"><uap:DisplayName>Open in Synctrain</uap:DisplayName></uap:Protocol></uap:Extension>
+    <cloudFiles:Extension Category="windows.cloudFiles"><cloudFiles:CloudFiles>
+     <cloudFiles:CustomStateHandler Clsid="36F7C1C1-6702-4E7E-9FF8-0497045529D0"/>
+     <cloudFiles:ThumbnailProviderHandler Clsid="36F7C1C1-6702-4E7E-9FF8-0497045529CE"/>
+     <!-- The SDK requires these containers; an omitted CLSID declares no handler. -->
+     <cloudFiles:ExtendedPropertyHandler/>
+     <cloudFiles:BannersHandler/>
+     <cloudFiles:CloudFilesContextMenus><cloudFiles:Verb Id="PreviousVersions" Clsid="36F7C1C1-6702-4E7E-9FF8-0497045529CF"/></cloudFiles:CloudFilesContextMenus>
+    </cloudFiles:CloudFiles></cloudFiles:Extension>
+    <com:Extension Category="windows.comServer"><com:ComServer>
+     <com:ExeServer DisplayName="Synctrain Explorer integration" Executable="Synctrain.Provider.exe" Arguments="--shell true">
+      <com:Class Id="36F7C1C1-6702-4E7E-9FF8-0497045529CE"/>
+      <com:Class Id="36F7C1C1-6702-4E7E-9FF8-0497045529CF"/>
+      <com:Class Id="36F7C1C1-6702-4E7E-9FF8-0497045529D0"/>
+     </com:ExeServer>
+    </com:ComServer></com:Extension>
+   </Extensions>
+  </Application>
+ </Applications>
+ <Capabilities><rescap:Capability Name="runFullTrust"/><rescap:Capability Name="unvirtualizedResources"/></Capabilities>
+</Package>

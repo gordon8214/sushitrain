@@ -168,9 +168,7 @@ func TestProxyStaysWithAMovedConfiguration(t *testing.T) {
 	if err != nil || string(data) != `{"enabled":true}` {
 		t.Fatalf("copied %q, error %v", data, err)
 	}
-	if info, err := os.Stat(target); err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("mode %v, error %v", info.Mode(), err)
-	}
+	assertPrivatePermissions(t, target, 0o600)
 
 	// A folder with settings of its own keeps them
 	if err := os.WriteFile(source, []byte(`{"enabled":false}`), 0o600); err != nil {
@@ -267,13 +265,8 @@ func TestSavingTheProxyWritesAPrivateFileAndAnnouncesIt(t *testing.T) {
 		t.Fatalf("%d events", delegate.events.Load())
 	}
 	path := filepath.Join(dir, proxyFileName)
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("mode %v", info.Mode())
-	}
+	assertPrivatePermissions(t, path, 0o600)
+
 	if read, err := loadProxyFile(path); err != nil || !read.settings().Equal(settings) {
 		t.Fatalf("read %+v, error %v", read, err)
 	}

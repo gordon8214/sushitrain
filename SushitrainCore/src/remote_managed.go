@@ -112,7 +112,9 @@ func writeFileSynced(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = f.Write(data)
+	if err = securePrivateFile(f.Name()); err == nil {
+		_, err = f.Write(data)
+	}
 	if err == nil {
 		err = f.Sync()
 	}

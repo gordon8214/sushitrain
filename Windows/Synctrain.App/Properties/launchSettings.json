@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Synctrain.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Synctrain.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

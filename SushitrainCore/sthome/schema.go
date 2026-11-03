@@ -10,10 +10,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"t-shaped.nl/sushitrain/v2/sqlitefile"
 )
 
 // SupportedSchemaVersion is the newest database schema the pinned engine knows (internal/db/sqlite
@@ -62,8 +62,8 @@ func schemaVersion(path string, immutable bool) (int, error) {
 	if immutable {
 		query += "&immutable=1"
 	}
-	uri := url.URL{Scheme: "file", Path: abs, RawQuery: query}
-	db, err := sql.Open(sqliteDriver, uri.String())
+	uri := sqlitefile.URI(abs, query)
+	db, err := sql.Open(sqliteDriver, uri)
 	if err != nil {
 		return 0, err
 	}

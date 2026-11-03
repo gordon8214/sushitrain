@@ -432,15 +432,6 @@ func (s *Service) stage(work sql.NullString) (*staged, error) {
 	return st, nil
 }
 
-func syncDir(dir string) error {
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return d.Sync()
-}
-
 // Categories of operations, in the order they go when nothing else decides
 const (
 	orderDirCreate = iota

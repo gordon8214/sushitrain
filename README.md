@@ -29,6 +29,8 @@ On iOS and iPadOS, Synctrain is a [client of gateways](./Docs/file-provider.md):
 
 On Linux (Fedora with GNOME), [Synctrain for Linux](./Docs/linux.md) has the same two modes: **Synchronize** runs Syncthing, with the remote file service for phones, and **Files** shows the folders of a gateway in `~/Synctrain`, fetching files as they are opened. Build its package with `Linux/build/build-rpm.sh`.
 
+On Windows 11, [Synctrain for Windows](./Docs/windows.md) uses native WinUI controls and supports **Synchronize** and **Files in Explorer** modes. The Files mode integrates with Windows Cloud Files for on-demand access, editing, pinning, thumbnails, and version history. Build ARM64 and x64 MSIX packages with `Windows/build.ps1`.
+
 ## Building
 
 The Mac app consists of a framework in Go and front-end code in Swift (the `Synctrain` target). The iOS app is Swift only (the `SynctrainMobile` target, with the two File Provider extensions), and shares the gateway client in `SynctrainFileProviderKit`.

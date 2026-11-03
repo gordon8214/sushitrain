@@ -15,9 +15,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
 	"path/filepath"
 	"strconv"
+	"t-shaped.nl/sushitrain/v2/sqlitefile"
 
 	"github.com/google/uuid"
 )
@@ -229,8 +229,8 @@ func OpenStore(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	u := url.URL{Scheme: "file", Path: path, RawQuery: driverOptions}
-	db, err := sql.Open(driverName, u.String())
+	u := sqlitefile.URI(path, driverOptions)
+	db, err := sql.Open(driverName, u)
 	if err != nil {
 		return nil, err
 	}
