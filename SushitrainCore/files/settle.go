@@ -7,6 +7,7 @@
 package files
 
 import (
+	"container/heap"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -458,7 +459,6 @@ type plannedOp struct {
 	targetPar  sql.NullInt64
 	targetName string
 	after      []*plannedOp
-	emitted    bool
 	// An operation not yet sent that this one merges into
 	merge sql.NullInt64
 }
@@ -628,6 +628,7 @@ func (s *Service) plan(tx *sql.Tx, folder int64, cands []*candidate) ([]*candida
 	deleteAt := map[location]*plannedOp{}
 	moveFrom := map[location]*plannedOp{}
 	createOf := map[int64]*plannedOp{}
+	dirDelete := map[int64]*plannedOp{}
 	for _, op := range ops {
 		if op.kind == remoteapi.OpDelete && op.c.baseParent.Valid {
 			deleteAt[location{op.c.baseParent.Int64, op.c.baseName.String}] = op
@@ -637,6 +638,9 @@ func (s *Service) plan(tx *sql.Tx, folder int64, cands []*candidate) ([]*candida
 		}
 		if op.kind == remoteapi.OpCreate && op.itemKind == remoteapi.KindDirectory {
 			createOf[op.c.id] = op
+		}
+		if op.kind == remoteapi.OpDelete && op.c.kind == kindDir {
+			dirDelete[op.c.id] = op
 		}
 	}
 	for _, op := range ops {
@@ -653,12 +657,11 @@ func (s *Service) plan(tx *sql.Tx, folder int64, cands []*candidate) ([]*candida
 				op.after = append(op.after, m)
 			}
 		}
-		if op.kind == remoteapi.OpDelete && op.c.kind == kindDir {
-			// What moves out of the directory goes before the directory does
-			for _, other := range ops {
-				if other.kind == remoteapi.OpMove && other.c.baseParent.Valid &&
-					wasBelow(byID, other.c, op.c.id) {
-					op.after = append(op.after, other)
+		if op.kind == remoteapi.OpMove {
+			// What moves out of a directory goes before the directory does
+			for _, dir := range basedBelow(byID, op.c) {
+				if d := dirDelete[dir]; d != nil {
+					d.after = append(d.after, op)
 				}
 			}
 		}
@@ -702,56 +705,116 @@ func (s *Service) plan(tx *sql.Tx, folder int64, cands []*candidate) ([]*candida
 	return consumed, nil
 }
 
-// wasBelow reports whether a candidate was below the item dir on the gateway, by its base parents
-func wasBelow(byID map[int64]*candidate, c *candidate, dir int64) bool {
-	for p := c.baseParent; p.Valid; {
-		if p.Int64 == dir {
-			return true
-		}
+// basedBelow returns the directories a candidate was below on the gateway, by its base parents, as far as the
+// candidates know them
+func basedBelow(byID map[int64]*candidate, c *candidate) []int64 {
+	var dirs []int64
+	for p := c.baseParent; p.Valid && len(dirs) <= len(byID); {
+		dirs = append(dirs, p.Int64)
 		parent := byID[p.Int64]
 		if parent == nil {
-			return false
+			break
 		}
 		p = parent.baseParent
 	}
-	return false
+	return dirs
 }
 
-// orderOps orders operations so that each comes after what it needs, otherwise by category and depth
+// orderOps orders operations so that each comes after what it needs, otherwise by category and depth, then as listed:
+// of the operations whose needs are met, the first by those goes next. A tar x or git clone settles tens of thousands
+// at once, inside the transaction, so it is a topological sort over a heap.
 func orderOps(ops []*plannedOp) []*plannedOp {
-	less := func(a, b *plannedOp) bool {
+	less := func(i, j int) bool {
+		a, b := ops[i], ops[j]
 		if a.order != b.order {
 			return a.order < b.order
 		}
-		if a.order == orderDirDelete || a.order == orderFileDelete {
-			return a.c.depth > b.c.depth
+		if a.c.depth != b.c.depth {
+			if a.order == orderDirDelete || a.order == orderFileDelete {
+				return a.c.depth > b.c.depth
+			}
+			return a.c.depth < b.c.depth
 		}
-		return a.c.depth < b.c.depth
+		return i < j
 	}
-	var result []*plannedOp
+	at := make(map[*plannedOp]int, len(ops))
+	for i, op := range ops {
+		at[op] = i
+	}
+	waiting := make([]int, len(ops))
+	dependents := make([][]int, len(ops))
+	for i, op := range ops {
+		for _, a := range op.after {
+			// One that isn't planned is never met: only a cycle's way out emits what waits for it
+			waiting[i]++
+			if j, ok := at[a]; ok {
+				dependents[j] = append(dependents[j], i)
+			}
+		}
+	}
+	ready := &opHeap{less: less}
+	for i := range ops {
+		if waiting[i] == 0 {
+			ready.items = append(ready.items, i)
+		}
+	}
+	heap.Init(ready)
+	// For cycles: every operation in that order, and the first not emitted yet
+	all := make([]int, len(ops))
+	for i := range all {
+		all[i] = i
+	}
+	slices.SortFunc(all, func(i, j int) int {
+		if less(i, j) {
+			return -1
+		}
+		return 1
+	})
+	first := 0
+
+	emitted := make([]bool, len(ops))
+	result := make([]*plannedOp, 0, len(ops))
 	for len(result) < len(ops) {
-		var next *plannedOp
-		for _, op := range ops {
-			if op.emitted {
+		var next int
+		if ready.Len() > 0 {
+			next = heap.Pop(ready).(int)
+			if emitted[next] {
 				continue
 			}
-			ready := !slices.ContainsFunc(op.after, func(a *plannedOp) bool { return !a.emitted })
-			if ready && (next == nil || less(op, next)) {
-				next = op
-			}
-		}
-		if next == nil {
+		} else {
 			// A cycle: what is left goes in category order, and the gateway sorts out what it can
-			for _, op := range ops {
-				if !op.emitted && (next == nil || less(op, next)) {
-					next = op
-				}
+			for emitted[all[first]] {
+				first++
+			}
+			next = all[first]
+		}
+		emitted[next] = true
+		result = append(result, ops[next])
+		for _, d := range dependents[next] {
+			if waiting[d]--; waiting[d] == 0 && !emitted[d] {
+				heap.Push(ready, d)
 			}
 		}
-		next.emitted = true
-		result = append(result, next)
 	}
 	return result
+}
+
+// opHeap holds the indices of operations whose needs are met, the first by less on top
+type opHeap struct {
+	items []int
+	less  func(i, j int) bool
+}
+
+func (h *opHeap) Len() int           { return len(h.items) }
+func (h *opHeap) Less(i, j int) bool { return h.less(h.items[i], h.items[j]) }
+func (h *opHeap) Swap(i, j int)      { h.items[i], h.items[j] = h.items[j], h.items[i] }
+func (h *opHeap) Push(x any)         { h.items = append(h.items, x.(int)) }
+
+func (h *opHeap) Pop() any {
+	n := len(h.items) - 1
+	x := h.items[n]
+	h.items = h.items[:n]
+	return x
 }
 
 // errNoAdoption means a new file can't take over the gateway item of the one it replaced
