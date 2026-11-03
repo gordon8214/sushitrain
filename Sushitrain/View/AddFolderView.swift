@@ -43,9 +43,7 @@ struct AddFolderView: View {
 	@State private var selectedTab = AddFolderViewTab.general
 	@State private var folderPath: URL? = nil
 	@State private var showPathSelector: Bool = false
-	@State private var isPhotoFolder = false
 	@State private var isReceiveEncryptedFolder = false
-	@State private var photoFolderConfig = PhotoFSConfiguration()
 	@State private var showAlert: ShowAlert? = nil
 
 	// Whether any device offers this folder as receive encrypted
@@ -128,7 +126,6 @@ struct AddFolderView: View {
 						}
 						else {
 							self.folderPath = url
-							self.isPhotoFolder = false
 						}
 					case .failure(let e):
 						Log.warn("Failed to select folder: \(e.localizedDescription)")
@@ -147,7 +144,7 @@ struct AddFolderView: View {
 
 		self.folderTypeSection()
 
-		if !isPhotoFolder && isOfferedReceiveEncrypted {
+		if isOfferedReceiveEncrypted {
 			Section {
 				Toggle("Receive encrypted", isOn: $isReceiveEncryptedFolder)
 			} footer: {
@@ -157,10 +154,6 @@ struct AddFolderView: View {
 					)
 				}
 			}
-		}
-
-		if isPhotoFolder {
-			PhotoFolderConfigurationView(config: $photoFolderConfig)
 		}
 	}
 
@@ -203,26 +196,15 @@ struct AddFolderView: View {
 
 	@ViewBuilder private func folderTypeSection() -> some View {
 		Section {
-			Button("Regular folder", systemImage: self.folderPath == nil && !isPhotoFolder ? "checkmark.circle.fill" : "circle")
-			{
+			Button("Regular folder", systemImage: self.folderPath == nil ? "checkmark.circle.fill" : "circle") {
 				self.folderPath = nil
-				self.isPhotoFolder = false
 			}
 			.buttonStyle(.link)
-
-			// Only allow creation of photo folders for non-discovered folders
-			if !folderIDReadOnly {
-				Button("Photo folder", systemImage: self.isPhotoFolder ? "checkmark.circle.fill" : "circle") {
-					self.isPhotoFolder = true
-					self.isReceiveEncryptedFolder = false
-				}
-				.buttonStyle(.link)
-			}
 
 			Button(action: {
 				self.showPathSelector = true
 			}) {
-				if let u = self.folderPath, !isPhotoFolder {
+				if let u = self.folderPath {
 					Label(
 						"Existing folder: '\(u.lastPathComponent)'",
 						systemImage: "checkmark.circle.fill"
@@ -238,12 +220,7 @@ struct AddFolderView: View {
 		} header: {
 			Text("Folder type")
 		} footer: {
-			if self.isPhotoFolder {
-				Text(
-					"A photo folder contains photos from selected albums from your photo library. Because photos are read directly from the photo album, the photo folder itself does not take up storage space on this device. Photo folders are read-only and send-only, which means that you cannot add files to the folder, nor modify or delete photos in the folder."
-				)
-			}
-			else if let folderPath = self.folderPath, appState.client.usesHomeFolders() {
+			if let folderPath = self.folderPath, appState.client.usesHomeFolders() {
 				if let overlapping = self.folderOverlapping(folderPath) {
 					Text(
 						"This location overlaps the folder '\(overlapping)'. Folders inside one another are not supported."
@@ -311,36 +288,29 @@ struct AddFolderView: View {
 	private func add() {
 		do {
 			// Add the folder
-			if self.isPhotoFolder {
-				let path = String(data: try JSONEncoder().encode(self.photoFolderConfig), encoding: .utf8)!
-				try appState.client.addSpecialFolder(
-					self.adding.folderID, fsType: photoFSType, folderPath: path, folderType: "sendonly")
+			if let fp = self.folderPath {
+				// Check data protection class of target directory
+				if fp.hasUnsupportedProtection() {
+					self.showAlert = .error(
+						text: String(
+							localized: "The selected folder is protected, and therefore cannot be accessed while the device is locked."))
+					return
+				}
+
+				try BookmarkManager.shared.saveBookmark(folderID: self.adding.folderID, url: fp)
+
+				try appState.client.addFolder(
+					self.adding.folderID,
+					folderPath: fp.path(percentEncoded: false),
+					createAsReceiveEncrypted: isReceiveEncryptedFolder
+				)
 			}
 			else {
-				if let fp = self.folderPath {
-					// Check data protection class of target directory
-					if fp.hasUnsupportedProtection() {
-						self.showAlert = .error(
-							text: String(
-								localized: "The selected folder is protected, and therefore cannot be accessed while the device is locked."))
-						return
-					}
-
-					try BookmarkManager.shared.saveBookmark(folderID: self.adding.folderID, url: fp)
-
-					try appState.client.addFolder(
-						self.adding.folderID,
-						folderPath: fp.path(percentEncoded: false),
-						createAsReceiveEncrypted: isReceiveEncryptedFolder
-					)
-				}
-				else {
-					try appState.client.addFolder(
-						self.adding.folderID,
-						folderPath: "",
-						createAsReceiveEncrypted: isReceiveEncryptedFolder
-					)
-				}
+				try appState.client.addFolder(
+					self.adding.folderID,
+					folderPath: "",
+					createAsReceiveEncrypted: isReceiveEncryptedFolder
+				)
 			}
 
 			if let folder = appState.client.folder(withID: self.adding.folderID) {

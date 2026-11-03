@@ -62,7 +62,7 @@ the user force-quits the app.
   synchronized, so the gateway retains their full contents. A replace or delete stays pending (`202`) until the
   gateway's local copy is the operation's base revision. Folders exported without write permission for any client may
   be selective or receive-only, and stream content from connected peers when the gateway lacks a current local copy.
-- Preserve the existing iOS deployment target. External folders, photo folders, symbolic links, and receive-encrypted
+- Preserve the existing iOS deployment target. External folders, symbolic links, and receive-encrypted
   folders remain excluded from Files. Preserve read-only access where the effective folder permissions require it.
 - Keep the existing integration for folders without a gateway. Its current remote-access limitation remains visible;
   do not silently downgrade a configured gateway folder to that path during an outage.

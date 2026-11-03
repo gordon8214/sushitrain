@@ -482,14 +482,12 @@ func TestDefaultsOfNewDevicesCanBePaused(t *testing.T) {
 }
 
 func TestFilesystemTypesAreThoseThatExist(t *testing.T) {
-	RegisterCustomFilesystemType("advanced-test", nil)
 	conf := advancedTestConfiguration(t)
 	section, err := newAdvancedSection(&conf, AdvancedSectionFolderPrefix+advancedTestFolder, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if options := advancedField(t, section, "filesystemType").options; !slices.Contains(options, "basic") ||
-		!slices.Contains(options, filesystemTypeTrash) || !slices.Contains(options, "advanced-test") || slices.Contains(options, "fake") {
+	if options := advancedField(t, section, "filesystemType").options; !slices.Equal(options, []string{"basic", filesystemTypeTrash}) {
 		t.Fatalf("options: %v", options)
 	}
 

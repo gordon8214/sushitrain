@@ -107,9 +107,7 @@ prevent removal. Intentional native cleanup is recorded before touching the tree
 so a crash cannot upload those removals as user deletions. A failed backend switch
 restores the prior Files index and its selected folders.
 
-Dedicated Apple Photos backup and photo collections are outside the Windows port.
-Ordinary synchronized media remain ordinary files, with native image/media preview
-controls in the app.
+Synchronized media remain ordinary files, with native image/media preview controls in the app.
 
 ## Verification
 

@@ -22,7 +22,6 @@ On macOS, Sushitrain does one of two things, chosen per Mac:
 In Synchronize mode it has some extra tricks up its sleeve:
 
 - [**Remote thumbnails**](./Docs/thumbnails.md): the app can generate thumbnails for files on other devices (images or videos). You can even synchronize thumbnails between devices, so previews can be generated on a device that has all the files for use on other devices.
-- **Photo back-up** (automatically export photos from the system album to a folder) as well as [**photo folders**](./Docs/photo-fs.md) (directly synchronize a system photo album as a send-only folder, without exporting).
 - **Tight macOS integration**: Shortcuts, Continuity, and a [gateway](./Docs/gateway.md) for your phone.
 
 On iOS and iPadOS, Synctrain is a [client of gateways](./Docs/file-provider.md): it runs no Syncthing itself. Choose folders from a Mac running Synctrain or a server running `synctrain-gateway`, then browse, search and play them in the app, and open, edit and add files from the Files app.

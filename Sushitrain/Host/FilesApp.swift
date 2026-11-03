@@ -26,6 +26,7 @@
 
 		init() {
 			AppLocations.prepareCurrent()
+			LegacyPhotoBackupPreferences.remove(from: .standard)
 			AppPresence.adoptHideInDock(in: .standard)
 			CrashWatch.shared.logLastRun()
 			let mode = AppMode.resolve()

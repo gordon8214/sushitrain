@@ -47,8 +47,7 @@ to copy-and-remove; its source removal also passes through Trash, potentially
 retaining an additional copy or reporting a Trash error after the copy succeeds.
 
 Renames, in-place writes, and replacements are unchanged. The setting is not a
-guarantee that every overwritten version is recoverable. Virtual photo folders
-are excluded. Folder bookmarks and the availability of Trash on external volumes
+guarantee that every overwritten version is recoverable. Folder bookmarks and the availability of Trash on external volumes
 and file-provider locations remain platform-dependent; unsupported operations
 fail rather than permanently deleting content.
 

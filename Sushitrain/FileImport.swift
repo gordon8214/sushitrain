@@ -17,7 +17,7 @@ enum FileImport {
 
 	nonisolated static func copy(_ urls: [URL], folder: SushitrainFolder, prefix: String) throws -> Int {
 		let canReceive = atEnginePriority {
-			folder.exists() && !folder.isPaused() && !folder.isPhotoFolder && !folder.isReceiveEncryptedFolder
+			folder.exists() && !folder.isPaused() && !folder.isReceiveEncryptedFolder
 		}
 		guard canReceive else {
 			throw CocoaError(.fileWriteNoPermission)
@@ -255,7 +255,7 @@ private struct IncomingFilesView: View {
 		#endif
 		.task {
 			folders = await appState.folders().filter {
-				$0.exists() && !$0.isPaused() && !$0.isPhotoFolder && !$0.isReceiveEncryptedFolder && $0.localNativeURL != nil
+				$0.exists() && !$0.isPaused() && !$0.isReceiveEncryptedFolder && $0.localNativeURL != nil
 			}.sorted()
 			loading = false
 		}

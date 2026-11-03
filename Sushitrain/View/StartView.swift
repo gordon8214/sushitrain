@@ -322,13 +322,6 @@ struct StartView: View {
 			}
 
 			self.bookmarksSection()
-
-			if appState.photoBackup.isReady {
-				Section {
-					PhotoBackupButton(photoBackup: appState.photoBackup)
-					PhotoBackupStatusView(photoBackup: appState.photoBackup)
-				}
-			}
 		}
 		.formStyle(.grouped)
 		.navigationTitle("Start")
@@ -626,7 +619,7 @@ struct StartView: View {
 				return false
 			}
 
-			return folder.isExternal == true && !folder.isPhotoFolder
+			return folder.isExternal == true
 				&& !BookmarkManager.shared.hasBookmarkFor(folderID: folder.folderID)
 		}
 

@@ -306,12 +306,6 @@ struct FolderDirectionPicker: View {
 	}
 }
 
-private struct PhotoFolderSectionView: View {
-	var body: some View {
-		Label("Photo folder", systemImage: "camera.fill").foregroundStyle(.cyan)
-	}
-}
-
 private struct ExternalFolderSectionView: View {
 	@Environment(AppState.self) private var appState
 	var folder: SushitrainFolder
@@ -514,7 +508,6 @@ struct FolderView: View {
 	private enum FolderViewTab: String, CaseIterable, Identifiable {
 		case general = "general"
 		case sharing = "sharing"
-		case photo = "photo"
 		case advanced = "advanced"
 		var id: Self { self }
 	}
@@ -525,7 +518,6 @@ struct FolderView: View {
 	@State private var unsupportedDataProtection = false
 	@State private var selectedTab: FolderViewTab = .general
 	@State private var isExternal: Bool? = nil
-	@State private var isPhotoFolder = false
 	@State private var editSharingWith: SushitrainPeer? = nil
 
 	@concurrent func update() async {
@@ -536,7 +528,6 @@ struct FolderView: View {
 
 		Task { @MainActor in
 			self.isExternal = folder.isExternal
-			self.isPhotoFolder = folder.isPhotoFolder
 			self.sharedPeers = sharedPeers
 			self.otherPeers = otherPeers
 			self.unsupportedDataProtection =
@@ -555,8 +546,6 @@ struct FolderView: View {
 						self.generalSection()
 					case .sharing:
 						self.sharingSection()
-					case .photo:
-						PhotoFolderSettingsView(folder: self.folder)
 					case .advanced:
 						AdvancedFolderSettingsView(folder: self.folder)
 					}
@@ -573,15 +562,15 @@ struct FolderView: View {
 					Task {
 						await self.update()
 					}
-				}
-			) { withDevice in
-				NavigationStack {
-					ShareFolderWithDeviceDetailsView(
-						folder: self.folder,
-						deviceID: withDevice.deviceID()
-					)
-				}
-			}
+				},
+				content: { withDevice in
+					NavigationStack {
+						ShareFolderWithDeviceDetailsView(
+							folder: self.folder,
+							deviceID: withDevice.deviceID()
+						)
+					}
+				})
 		}
 	}
 
@@ -589,10 +578,7 @@ struct FolderView: View {
 		Picker("Page", selection: $selectedTab) {
 			Text("General").tag(FolderViewTab.general)
 			Text("Sharing").tag(FolderViewTab.sharing)
-			if isPhotoFolder {
-				Label("Albums", systemImage: "photo.on.rectangle.angled").tag(FolderViewTab.photo)
-			}
-			if folder.isRegularFolder || folder.isPhotoFolder || folder.isReceiveEncryptedFolder {
+			if folder.isRegularFolder || folder.isReceiveEncryptedFolder {
 				Label("Advanced", systemImage: "gear").tag(FolderViewTab.advanced)
 			}
 		}
@@ -645,10 +631,7 @@ struct FolderView: View {
 	@ViewBuilder private func generalSection() -> some View {
 		FolderStatusSection(folder: self.folder)
 
-		if self.isPhotoFolder {
-			PhotoFolderSectionView()
-		}
-		else if self.isExternal == true {
+		if self.isExternal == true {
 			ExternalFolderSectionView(folder: folder)
 		}
 
@@ -675,14 +658,10 @@ struct FolderView: View {
 				Text("Display name")
 			}
 
-			FolderDirectionPicker(folder: folder).disabled(isPhotoFolder || folder.isReceiveEncryptedFolder).id(
+			FolderDirectionPicker(folder: folder).disabled(folder.isReceiveEncryptedFolder).id(
 				appState.eventCounter)
 		} header: {
 			Text("Folder settings")
-		} footer: {
-			if isPhotoFolder {
-				Text("Photo folders can only be send-only.")
-			}
 		}
 
 		Section {
@@ -1253,7 +1232,7 @@ private struct AdvancedFolderSettingsView: View {
 	}
 
 	@ViewBuilder private func conflictsSection() -> some View {
-		if !folder.isReceiveEncryptedFolder && !folder.isPhotoFolder && !folder.isSendOnlyFolder {
+		if !folder.isReceiveEncryptedFolder && !folder.isSendOnlyFolder {
 			Section {
 				Toggle(
 					"Keep conflicting versions",
@@ -1301,7 +1280,7 @@ private struct AdvancedFolderSettingsView: View {
 			}
 		}
 
-		if !folder.isPhotoFolder && !folder.isReceiveOnlyFolder && !folder.isReceiveEncryptedFolder {
+		if !folder.isReceiveOnlyFolder && !folder.isReceiveEncryptedFolder {
 			Section {
 				Toggle(
 					"Watch for changes",
@@ -1333,26 +1312,24 @@ private struct AdvancedFolderSettingsView: View {
 	}
 
 	@ViewBuilder private func systemSettingsSection() -> some View {
-		if !folder.isPhotoFolder {
-			Section {
-				Toggle(
-					"Hide folder",
-					isOn: Binding(
-						get: {
-							if let f = folder.isHidden { return f }
-							return false
-						},
-						set: { nv in
-							folder.isHidden = nv
-						})
-				).disabled(folder.isExternal != false)
-			} header: {
-				Text("System settings")
-			} footer: {
-				Text(
-					"Hidden folders will not be visible by default in Finder, and will be hidden by default in the folders list in this app."
-				)
-			}
+		Section {
+			Toggle(
+				"Hide folder",
+				isOn: Binding(
+					get: {
+						if let f = folder.isHidden { return f }
+						return false
+					},
+					set: { nv in
+						folder.isHidden = nv
+					})
+			).disabled(folder.isExternal != false)
+		} header: {
+			Text("System settings")
+		} footer: {
+			Text(
+				"Hidden folders will not be visible by default in Finder, and will be hidden by default in the folders list in this app."
+			)
 		}
 	}
 }

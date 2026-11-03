@@ -335,7 +335,7 @@ func marshalAdvancedText(value reflect.Value) string {
 // otherwise holds these are not listed anywhere: a type that doesn't exist leaves a folder in error, and Syncthing's
 // fake one, for its tests, has no files, which the engine takes for all of them having been deleted.
 func advancedFilesystemTypes(current string) []string {
-	types := slices.Concat([]string{string(config.FilesystemTypeBasic), filesystemTypeTrash}, registeredCustomFilesystemTypes())
+	types := []string{string(config.FilesystemTypeBasic), filesystemTypeTrash}
 	if !slices.Contains(types, current) {
 		types = append(types, current)
 	}

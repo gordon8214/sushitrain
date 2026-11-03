@@ -61,22 +61,6 @@ extension AppState {
 	}
 }
 
-struct SynchronizePhotosIntent: AppIntent {
-	static let title: LocalizedStringResource = "Back-up new photos"
-
-	@Dependency private var appState: AppState
-
-	func perform() async throws -> some IntentResult {
-		try AppMode.requireEngine()
-		try await appState.waitForAppStarted()
-		await appState.awake()
-		let backupTask = await appState.photoBackup.backup(appState: appState, fullExport: false, isInBackground: true)
-		try await backupTask?.value
-		await appState.sleep()
-		return .result()
-	}
-}
-
 struct GenerateThumbnailsIntent: AppIntent {
 	static let title: LocalizedStringResource = "Generate thumbnails"
 
@@ -924,12 +908,6 @@ struct DownloadFilesIntent: AppIntent {
 struct AppShortcuts: AppShortcutsProvider {
 	static var appShortcuts: [AppShortcut] {
 		return [
-			AppShortcut(
-				intent: SynchronizePhotosIntent(),
-				phrases: ["Back-up new photos using ${applicationName}"],
-				shortTitle: "Back-up new photos",
-				systemImageName: "photo.badge.arrow.down.fill"
-			),
 			AppShortcut(
 				intent: SynchronizeIntent(),
 				phrases: ["Synchronize ${applicationName} files"],

@@ -3,7 +3,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
-.PHONY: lint format test core mac mac-release ios clean build
+.PHONY: lint format test test-photo-preferences core mac mac-release ios clean build
 # Both platforms archive into the same derived data, which Xcode can't do concurrently
 .NOTPARALLEL:
 
@@ -15,10 +15,16 @@ format: Sushitrain/*.swift
 lint: Sushitrain/*.swift
 	swift format lint -r .
 
-# Tests of the Swift packages; the Go core has its own (make -C SushitrainCore test)
-test:
+# Shared preference cleanup and Swift packages; the Go core has its own (make -C SushitrainCore test)
+test: test-photo-preferences
 	swift test --package-path SynctrainHostKit
 	swift test --package-path SynctrainFileProviderKit
+
+test-photo-preferences:
+	mkdir -p "$(BUILD_DIR)/tests"
+	swiftc SynctrainClient/LegacyPhotoBackupPreferences.swift Scripts/test-legacy-photo-backup-preferences.swift \
+		-o "$(BUILD_DIR)/tests/test-legacy-photo-backup-preferences"
+	"$(BUILD_DIR)/tests/test-legacy-photo-backup-preferences"
 
 BUILD_DIR=$(shell pwd)/Build
 

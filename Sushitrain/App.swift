@@ -42,12 +42,12 @@ struct SushitrainApp: App {
 
 		// Find out all the relevant locations we need to access
 		AppLocations.prepareCurrent()
+		LegacyPhotoBackupPreferences.remove(from: .standard)
 		let engineLocations = EngineLocations.current
 		let configDirectory = Self.configDirectoryURL()
 		let filesPath = engineLocations.files.path(percentEncoded: false)
 		let configPath = configDirectory.path(percentEncoded: false)
 		let enableLoggingToFile = UserDefaults.standard.bool(forKey: "loggingEnabled")
-		registerPhotoFilesystem()
 		SushitrainRegisterTrashHandler(SystemTrash())
 		#if os(iOS)
 			FileProviderStorage.configureManagedFolderBase()

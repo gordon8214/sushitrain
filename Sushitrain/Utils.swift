@@ -139,20 +139,11 @@ extension SushitrainFolder {
 
 	var isHidden: Bool? {
 		get {
-			if self.isPhotoFolder {
-				return false
-			}
-
 			guard let lu = self.localNativeURL else { return nil }
 			let values = try? lu.resourceValues(forKeys: [.isHiddenKey])
 			return values?.isHidden
 		}
 		set {
-			if self.isPhotoFolder {
-				Log.info("Cannot change hide setting for photo folders; reaching this is a bug")
-				return
-			}
-
 			guard var lu = self.localNativeURL else { return }
 			if var values = try? lu.resourceValues(forKeys: [.isHiddenKey]) {
 				values.isHidden = newValue
@@ -183,8 +174,7 @@ extension SushitrainFolder {
 		return ft == SushitrainFolderTypeReceiveOnly || ft == SushitrainFolderTypeReceiveEncrypted
 	}
 
-	/** A folder is 'regular' if it is backed by a file system where paths in the index correspond to paths in that file
-	system.*/
+	/// A folder is regular if its index paths correspond to paths in its file system.
 	var isRegularFolder: Bool {
 		// Receive-encrypted folders are not regular
 		let folderType = self.folderType()
@@ -193,10 +183,6 @@ extension SushitrainFolder {
 		}
 
 		return self.isNativeFilesystem()
-	}
-
-	var isPhotoFolder: Bool {
-		return self.filesystemType() == photoFSType
 	}
 
 	var hasEncryptedPeers: Bool {
@@ -265,9 +251,6 @@ extension SushitrainFolder {
 		if self.isReceiveOnlyFolder {
 			return "arrow.forward.folder.fill.rtl"
 		}
-		else if self.isPhotoFolder {
-			return "photo.stack"
-		}
 		else if self.isSendOnlyFolder {
 			return "arrow.forward.folder.fill"
 		}
@@ -319,9 +302,6 @@ extension SushitrainEntry {
 			return "trash"
 		}
 		else if self.isSelected() {
-			if let f = self.folder, f.isPhotoFolder {
-				return base
-			}
 			if self.isDirectory() {
 				return "questionmark.folder"
 			}
@@ -392,11 +372,6 @@ extension SushitrainEntry {
 	}
 
 	var localNativeFileURL: URL? {
-		// For photo folders, there is never a local native URL
-		if let f = self.folder, f.isPhotoFolder {
-			return nil
-		}
-
 		var error: NSError? = nil
 		if self.isLocallyPresent() {
 			let path = self.localNativePath(&error)

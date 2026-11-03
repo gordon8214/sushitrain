@@ -207,7 +207,6 @@ struct EngineMenuState: Equatable {
 	private static let currentOnboardingVersion = 1
 
 	@ObservationIgnored nonisolated let client: SushitrainClient
-	@ObservationIgnored var photoBackup = PhotoBackup()
 	@ObservationIgnored var changePublisher = PassthroughSubject<Void, Never>()
 	@ObservationIgnored var pathMonitor: NWPathMonitor? = nil
 	@ObservationIgnored var pingTimer: Timer? = nil
@@ -437,6 +436,7 @@ struct EngineMenuState: Equatable {
 			if self.containerMigrationError != nil {
 				// Copying the engine data may take a while
 				let outcome = await Task.detached(priority: .userInitiated) { ContainerMigrator.run() }.value
+				LegacyPhotoBackupPreferences.remove(from: .standard)
 				for message in outcome.messages {
 					Log.info(message)
 				}

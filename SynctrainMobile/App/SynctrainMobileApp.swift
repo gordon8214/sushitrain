@@ -11,6 +11,7 @@ import SwiftUI
 	@State private var model: AppModel
 
 	init() {
+		LegacyPhotoBackupPreferences.remove(from: .standard)
 		let model = AppModel()
 		_model = State(initialValue: model)
 		// Not from a view: a launch for background events has no scene

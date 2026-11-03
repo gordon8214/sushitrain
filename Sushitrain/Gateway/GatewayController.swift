@@ -408,7 +408,7 @@
 
 		@concurrent nonisolated private static func exportableFolders(_ client: SushitrainClient) async -> [GatewayFolder] {
 			let folders = (client.folders()?.asArray() ?? []).compactMap { client.folder(withID: $0) }
-			return folders.filter { $0.exists() && !$0.isPhotoFolder && !$0.isReceiveEncryptedFolder }
+			return folders.filter { $0.exists() && !$0.isReceiveEncryptedFolder }
 				.sorted()
 				.map { folder in
 					var restriction: String? = nil

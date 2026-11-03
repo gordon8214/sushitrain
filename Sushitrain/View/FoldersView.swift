@@ -121,12 +121,10 @@ private struct FoldersSection: View {
 						else {
 							HStack {
 								Label(folder.displayName, systemImage: folder.systemImage)
-								if !folder.isPhotoFolder {
-									Spacer()
-									FolderMetricView(
-										metric: self.userSettings.viewMetric, folder: folder
-									)
-								}
+								Spacer()
+								FolderMetricView(
+									metric: self.userSettings.viewMetric, folder: folder
+								)
 							}
 						}
 					}

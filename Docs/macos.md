@@ -210,7 +210,7 @@ thread's calls into Go for 70 to 130 ms from a utility task and for up to 465 ms
 1 ms from the default priority, with one run at 6.6 ms. So:
 
 - A task that does nothing but call into Go runs at the default priority (`FolderView`, `FileImport`).
-- Where the rest of a task should stay low, as in exporting photos and copying files, only its calls into Go are raised,
+- Where the rest of a task should stay low, as in copying files, only its calls into Go are raised,
   through `atEnginePriority` (`Utils.swift`). Over twelve runs of those calls, the worst call from the main thread took
   2.9 ms, and none took over 16 ms. The same calls without it took up to 356 ms in those rounds, and 39 went over 16 ms.
 
@@ -674,7 +674,7 @@ older database's own. After *Use Syncthing's configuration*, Syncthing's folder 
 StartAtLogin setting and login item back on as the receipt records, and open it. Starting Syncthing.app on the backup,
 or on Syncthing's own folder after an import, needs its database reset first (`syncthing debug reset-database`), which
 exchanges every index anew. Going back is one-way when Synctrain's engine migrated the database to a newer schema than
-Syncthing.app's, or when a folder uses a filesystem type only Synctrain has (the Trash, photo folders);
+Syncthing.app's, or when a folder uses a filesystem type only Synctrain has (the Trash);
 `return-to-syncthing-app` checks for both. Usage and crash reporting stay as Synctrain left them, which is off unless they
 were turned on here.
 

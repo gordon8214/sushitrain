@@ -763,15 +763,6 @@ struct TabbedSettingsView: View {
 					})
 
 				Tab(
-					value: "photo",
-					content: {
-						PhotoBackupSettingsView(photoBackup: appState.photoBackup)
-					},
-					label: {
-						Label("Photo back-up", systemImage: "photo")
-					})
-
-				Tab(
 					value: "advanced",
 					content: {
 						AdvancedSettingsView(userSettings: appState.userSettings)
