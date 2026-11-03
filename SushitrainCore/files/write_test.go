@@ -776,37 +776,95 @@ func TestRemovingADirectoryWithWhatMovedIntoIt(t *testing.T) {
 }
 
 // A directory removed on the gateway while a new file in it was on its way is made again, before the file, though
-// its creation was queued after the file's
+// its creation was queued after the file's: whether the client learned of the removal before the file was sent, or
+// from the gateway's refusal of it
 func TestDirectoryMadeAgainGoesFirst(t *testing.T) {
-	g := writableGateway(t, map[string]string{"sub/old.txt": "old"})
+	for _, point := range []string{"outbox.uploaded", "outbox.submit"} {
+		t.Run(point, func(t *testing.T) {
+			g := writableGateway(t, map[string]string{"sub/old.txt": "old"})
+			var ts *testService
+			var once sync.Once
+			ts = newTestServiceWith(t, g, func(c *Config) {
+				c.SettleDelay = testSettleDelay
+				c.Hook = func(at string) error {
+					if at != point {
+						return nil
+					}
+					once.Do(func() {
+						g.Engine.Remove("sub")
+						if point == "outbox.submit" {
+							g.Sync()
+							return
+						}
+						ts.refresh()
+						gatewaytest.WaitFor(t, 30*time.Second, "the directory's creation to be queued", func() bool {
+							var n int
+							_ = ts.store.db.QueryRow(`SELECT COUNT(*) FROM outbox WHERE kind = 'create'
+								AND item_kind = 'directory' AND state IN ` + activeStates).Scan(&n)
+							return n == 1
+						})
+					})
+					return nil
+				}
+			})
+			ts.create("docs/sub", "new.txt", "new")
+			time.Sleep(5 * testSettleDelay)
+			ts.settled()
+			ts.gatewayHas("sub/new.txt", "new")
+			ts.gatewayLacks("sub/old.txt")
+			if edits, err := ts.Edits(); err != nil || len(edits) != 0 {
+				t.Fatalf("edits left: %+v %v", edits, err)
+			}
+		})
+	}
+}
+
+// An upload the gateway no longer has when its operation is submitted (it expired while the daemon didn't run, say)
+// is made again, and the save still replaces the file
+func TestALostUploadIsMadeAgain(t *testing.T) {
+	g := writableGateway(t, map[string]string{"doc.txt": "v1"})
 	var ts *testService
 	var once sync.Once
 	ts = newTestServiceWith(t, g, func(c *Config) {
 		c.SettleDelay = testSettleDelay
 		c.Hook = func(point string) error {
-			if point != "outbox.uploaded" {
+			if point != "outbox.submit" {
 				return nil
 			}
 			once.Do(func() {
-				g.Engine.Remove("sub")
-				ts.refresh()
-				gatewaytest.WaitFor(t, 30*time.Second, "the directory's creation to be queued", func() bool {
-					var n int
-					_ = ts.store.db.QueryRow(`SELECT COUNT(*) FROM outbox WHERE kind = 'create'
-						AND item_kind = 'directory' AND state IN ` + activeStates).Scan(&n)
-					return n == 1
-				})
+				var upload string
+				if err := ts.store.db.QueryRow(`SELECT upload_id FROM outbox WHERE state = 'submitted'`).
+					Scan(&upload); err != nil {
+					t.Error(err)
+					return
+				}
+				f, err := ts.folderGateway(ts.store.db, ts.folder.ID)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				client, err := ts.client(f.serviceID)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if err := client.TerminateUpload(context.Background(), upload, ""); err != nil {
+					t.Error(err)
+				}
 			})
 			return nil
 		}
 	})
-	ts.create("docs/sub", "new.txt", "new")
+	before := ts.gatewayID("docs/doc.txt")
+	ts.write(ts.mustLookup("docs/doc.txt"), "v2", true)
 	time.Sleep(5 * testSettleDelay)
 	ts.settled()
-	ts.gatewayHas("sub/new.txt", "new")
-	ts.gatewayLacks("sub/old.txt")
-	if edits, err := ts.Edits(); err != nil || len(edits) != 0 {
-		t.Fatalf("edits left: %+v %v", edits, err)
+	ts.gatewayHas("doc.txt", "v2")
+	if after := ts.gatewayID("docs/doc.txt"); after != before {
+		t.Fatalf("the save became another item: %s, not %s", after, before)
+	}
+	if copies, _ := filepath.Glob(g.Engine.Path("doc.sync-conflict-*")); len(copies) != 0 {
+		t.Fatalf("conflict copies: %v", copies)
 	}
 }
 

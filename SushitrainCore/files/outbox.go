@@ -266,6 +266,9 @@ func (s *Service) step(ctx context.Context, o *outboxRow) error {
 			err = s.hook("outbox.sent")
 		}
 		if err != nil {
+			if lost, err := s.uploadLost(ctx, client, o, err); lost || err != nil {
+				return err
+			}
 			return s.refused(o, err)
 		}
 		return s.recordResult(o, f, result)
@@ -441,8 +444,9 @@ var errStepAgain = errors.New("the operation changed")
 // errFeedBehind means an operation waits for the change feed to show what the gateway reported
 var errFeedBehind = errors.New("waiting for the change feed to catch up with the gateway")
 
-// How many times a directory's removal the gateway found out of date is checked and sent again
-const maxRemovalResends = 5
+// How many times an operation the gateway refused is sent again as a new intent: a directory's removal it found out of
+// date, a creation or move whose directory went, one whose upload is gone or doesn't match
+const maxResends = 5
 
 // removalStillSeen checks a directory's removal the gateway found out of date, once the change feed has reached the
 // subtree generation it reported: it may go again, with the feed's generation, only if the directory is where it was
@@ -760,7 +764,7 @@ func (s *Service) refused(o *outboxRow, err error) error {
 		case e.Kind == remoteclient.KindRevisionMismatch && o.kind == remoteapi.OpReplace:
 			return s.conflictCopy(tx, p, o)
 		case e.Kind == remoteclient.KindRevisionMismatch && o.kind == remoteapi.OpDelete && e.Item != nil &&
-			e.Item.Kind == remoteapi.KindDirectory && o.resends < maxRemovalResends:
+			e.Item.Kind == remoteapi.KindDirectory && o.resends < maxResends:
 			// Something changed below the directory since it was removed here, which may be only what this client
 			// sent meanwhile (a save in it that was on its way): once the change feed has reached what the gateway
 			// reported, it is checked and sent again, as a new intent (prepare)
@@ -805,14 +809,14 @@ func (s *Service) refused(o *outboxRow, err error) error {
 					SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id WHERE i.deleted = 0)
 				UPDATE items SET local = local | ?2 WHERE id IN (SELECT id FROM sub)`, o.item, localOnly|localCreated)
 			return err
-		case e.Code == remoteapi.CodeUploadMismatch || (e.Kind == remoteclient.KindNotFound && o.needsUpload()):
-			// The upload is gone or used: upload again, and send the operation anew, after a while (an upload that
-			// keeps mismatching its content mustn't be sent again and again)
-			delay := min(time.Duration(1<<min(o.attempts+1, 8))*time.Second, 5*time.Minute)
-			_, err := tx.Exec(`UPDATE outbox SET upload_id = '', payload = NULL, op_id = ?, state = 'queued',
-				attempts = attempts + 1, not_before = ?, updated_at = ? WHERE id = ?`, uuid.NewString(),
-				nowMillis()+delay.Milliseconds(), nowUnix(), o.id)
-			return err
+		case e.Kind == remoteclient.KindNotFound && (o.kind == remoteapi.OpCreate || o.kind == remoteapi.OpMove) &&
+			o.resends < maxResends:
+			// Its directory, or the move's destination, went from the gateway: sent again once the change feed has
+			// shown that, when a directory made again here for it goes first (neededFirst)
+			return resend(tx, o, e)
+		case e.Code == remoteapi.CodeUploadMismatch && o.resends < maxResends:
+			// The upload is used, incomplete, or not what was staged: upload again
+			return resend(tx, o, e)
 		}
 		_, err := tx.Exec(`UPDATE outbox SET state = 'failed', error = ?, updated_at = ? WHERE id = ?`, e.Error(),
 			nowUnix(), o.id)
@@ -822,6 +826,45 @@ func (s *Service) refused(o *outboxRow, err error) error {
 		}
 		return err
 	})
+}
+
+// resend sends an operation again as a new intent (the gateway keeps its answer to this one), after a while longer each
+// time, from a new upload if it sends content (the gateway removes an upload once an operation used it)
+func resend(tx *sql.Tx, o *outboxRow, reason error) error {
+	state := stateUploaded
+	if o.needsUpload() {
+		state = stateQueued
+	}
+	delay := time.Duration(1<<(o.resends+1)) * time.Second
+	_, err := tx.Exec(`UPDATE outbox SET upload_id = '', payload = NULL, op_id = ?, state = ?, resends = resends + 1,
+		not_before = ?, error = ?, updated_at = ? WHERE id = ?`, uuid.NewString(), state,
+		nowMillis()+delay.Milliseconds(), reason.Error(), nowUnix(), o.id)
+	return err
+}
+
+// uploadLost handles a submission of an operation with an upload that the gateway answered with 404 without storing
+// it (no operation in the answer): if the upload is gone (it expired while the daemon didn't run, say), and not the
+// item, the operation goes again from a new upload of its staged copy, as the Swift client does. Reports whether it
+// handled the answer; an error means whether the upload is gone can't be told now, and the submission is tried
+// again later (the gateway stored nothing of it).
+func (s *Service) uploadLost(ctx context.Context, client *remoteclient.Client, o *outboxRow, err error) (bool,
+	error) {
+	var e *remoteclient.Error
+	if !errors.As(err, &e) || e.Kind != remoteclient.KindNotFound || e.Operation != nil || !o.needsUpload() ||
+		o.uploadID == "" {
+		return false, nil
+	}
+	if _, err := client.UploadOffset(ctx, o.uploadID, ""); remoteclient.KindOf(err) != remoteclient.KindNotFound {
+		// Still there, so something else isn't; or it can't be told now
+		return err != nil, err
+	}
+	if o.resends >= maxResends {
+		return true, s.setState(o.id, stateFailed, "the gateway lost its upload again and again")
+	}
+	s.log.Info("The gateway no longer has a change's upload: uploading it again", "operation", o.opID)
+	return true, s.guarded(ctx, `UPDATE outbox SET upload_id = '', payload = NULL, op_id = ?, state = 'queued',
+		resends = resends + 1, updated_at = ? WHERE id = ? AND state = 'submitted' AND op_id = ?`, uuid.NewString(),
+		nowUnix(), o.id, o.opID)
 }
 
 // renameToConflict gives an item whose name was taken on the gateway a conflict copy's name, and sends its creation

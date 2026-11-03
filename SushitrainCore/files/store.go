@@ -121,8 +121,9 @@ var schema = []string{
 	// Operations to send, in order per folder. payload is the request exactly as sent, stored before it is sent the
 	// first time (one operation ID per intent, replayed unchanged). staged is the immutable copy of the content to
 	// upload, in the state directory. A row whose base_revision is empty takes it from the result of the operation
-	// before it on the same item. awaited_generation is the subtree generation a directory's removal the gateway found
-	// out of date waits for the change feed to reach, before it is checked and sent again (resends times so far).
+	// before it on the same item. resends counts the times it was sent again as a new intent after the gateway
+	// refused it; awaited_generation is the subtree generation a directory's removal the gateway found out of date
+	// waits for the change feed to reach, before it is checked and sent again.
 	`CREATE TABLE outbox (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		op_id TEXT NOT NULL UNIQUE,
