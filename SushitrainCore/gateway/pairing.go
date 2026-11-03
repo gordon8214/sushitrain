@@ -96,14 +96,6 @@ func remoteHost(r *http.Request) string {
 	return host
 }
 
-// PairingSession is a started pairing, for showing to the person approving it
-type PairingSession struct {
-	SessionID string    `json:"sessionID"`
-	Secret    string    `json:"secret"`
-	URL       string    `json:"url"`
-	Expires   time.Time `json:"expires"`
-}
-
 // StartPairing creates a pairing session. host and port are where clients reach the service; spki is the pinned
 // public key hash for self-signed certificates ("" when the certificate is trusted normally).
 func (s *Service) StartPairing(host string, port int, spki string) (PairingSession, error) {
@@ -133,18 +125,6 @@ func (s *Service) StartPairing(host string, port int, spki string) (PairingSessi
 		RawQuery: query.Encode()}
 	session.URL = u.String()
 	return session, nil
-}
-
-// PendingPairing is a client waiting for approval
-type PendingPairing struct {
-	RequestID  string    `json:"requestID"`
-	SessionID  string    `json:"sessionID"`
-	ClientID   string    `json:"clientID"`
-	ClientName string    `json:"clientName"`
-	Platform   string    `json:"platform"`
-	Requested  time.Time `json:"requested"`
-	// The name of the paired client this request would replace (pairing again with the same identity), if any
-	Replaces string `json:"replaces,omitempty"`
 }
 
 func (s *Service) PendingPairings() ([]PendingPairing, error) {

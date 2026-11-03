@@ -144,11 +144,6 @@ func (a folderAccess) requireWrite() error {
 
 // Exports
 
-type Export struct {
-	FolderID   string `json:"folderID"`
-	AllowWrite bool   `json:"allowWrite"`
-}
-
 func (s *Service) Exports() ([]Export, error) {
 	rows, err := s.store.db.Query(`SELECT folder_id, allow_write FROM exports ORDER BY folder_id`)
 	if err != nil {
@@ -224,16 +219,6 @@ func (s *Service) exportedFolderIDs() []string {
 }
 
 // Clients
-
-type Client struct {
-	ClientID    string            `json:"clientID"`
-	Name        string            `json:"name"`
-	Platform    string            `json:"platform"`
-	Created     time.Time         `json:"created"`
-	LastSeen    time.Time         `json:"lastSeen"`
-	Revoked     bool              `json:"revoked"`
-	Permissions map[string]string `json:"permissions"`
-}
 
 func (s *Service) Clients() ([]Client, error) {
 	rows, err := s.store.db.Query(`SELECT client_id, name, platform, created_at, last_seen, revoked_at IS NOT NULL

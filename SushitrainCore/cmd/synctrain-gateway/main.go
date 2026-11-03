@@ -30,6 +30,7 @@ func usage() {
 Commands:
   serve       Run Syncthing and the remote file service
   status      Show the service's state
+  service     Turn the remote file service on or off, or change its address
   pair        Pair a client: show a pairing code and approve the client
   clients     List clients; revoke one; set a client's folder access
   exports     List, add or remove exported folders
@@ -53,6 +54,8 @@ func main() {
 		err = serve(args)
 	case "status":
 		err = statusCommand(args)
+	case "service":
+		err = serviceCommand(args)
 	case "pair":
 		err = pairCommand(args)
 	case "clients":

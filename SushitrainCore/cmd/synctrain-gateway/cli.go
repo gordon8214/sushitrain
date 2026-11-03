@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"t-shaped.nl/sushitrain/v2/gateway"
+	"t-shaped.nl/sushitrain/v2/gatewayadmin"
 )
 
 func printJSON(v any) error {
@@ -174,9 +176,6 @@ func pairCommand(args []string) error {
 	return nil
 }
 
-// The pairing.wait method's answer when no request came while it waited
-const noPairingRequestYet = "no pairing request yet"
-
 var errWaitedTooLong = errors.New("no pairing request before the deadline")
 
 // waitForPairing waits until deadline for a client to submit the code of a pairing session
@@ -205,7 +204,7 @@ func waitForPairing(socket, sessionID string, deadline time.Time) (gateway.Pendi
 			if r.err == nil {
 				return r.request, nil
 			}
-			if !strings.Contains(r.err.Error(), noPairingRequestYet) {
+			if !strings.Contains(r.err.Error(), gatewayadmin.NoPairingRequestYet) {
 				return gateway.PendingPairing{}, r.err
 			}
 		case <-timer.C:
@@ -381,5 +380,78 @@ func foldersCommand(args []string) error {
 				f["type"], f["state"], printable(fmt.Sprint(f["path"])))
 		}
 	})
+	return nil
+}
+
+func serviceCommand(args []string) error {
+	fs, cf := newFlagSet("service")
+	on := fs.Bool("on", false, "turn the remote file service on")
+	off := fs.Bool("off", false, "turn the remote file service off; Syncthing keeps running")
+	listen := fs.String("listen", "", "address for the service to listen on, such as :20920")
+	publicHost := fs.String("public-host", "", "host name clients connect to, for pairing codes (\"-\" for this machine's name)")
+	publicPort := fs.Int("public-port", -1, "port clients connect to, when it differs from the listening port (0 for the listening port)")
+	asJSON := fs.Bool("json", false, "print JSON")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if *on && *off {
+		return errors.New("give --on or --off, not both")
+	}
+	socket := cf.path()
+	var st gatewayadmin.ServiceStatus
+	if err := gateway.AdminCall(socket, "service.status", nil, &st); err != nil {
+		return err
+	}
+	change := false
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "on", "off", "listen", "public-host", "public-port":
+			change = true
+		}
+	})
+	if change {
+		settings := st.ServiceSettings
+		switch {
+		case *on:
+			settings.Enabled = true
+		case *off:
+			settings.Enabled = false
+		}
+		if *listen != "" {
+			settings.Listen = *listen
+		}
+		switch *publicHost {
+		case "":
+		case "-":
+			settings.PublicHost = ""
+		default:
+			settings.PublicHost = *publicHost
+		}
+		if *publicPort >= 0 {
+			settings.PublicPort = *publicPort
+		}
+		if err := gateway.AdminCall(socket, "service.set", settings, &st); err != nil {
+			return err
+		}
+	}
+	if *asJSON {
+		return printJSON(st)
+	}
+	state := "off"
+	if st.Running {
+		state = "on, listening on " + st.Listen
+	} else if st.Enabled {
+		state = "on, but not running: " + st.Error
+	}
+	fmt.Println("Remote file service:", state)
+	if st.PublicHost != "" || st.PublicPort != 0 {
+		fmt.Printf("Clients connect to %s, port %d\n", printable(st.PublicHost), st.PublicPort)
+	}
+	if st.SPKI != "" {
+		fmt.Printf("Certificate public key (SPKI SHA-256): %s\n", st.SPKI)
+	}
+	if len(st.Fixed) > 0 {
+		fmt.Printf("Set by flags of serve: %s\n", strings.Join(st.Fixed, ", "))
+	}
 	return nil
 }

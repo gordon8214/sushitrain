@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"t-shaped.nl/sushitrain/v2/adminsock"
+	"t-shaped.nl/sushitrain/v2/gatewayadmin"
 )
 
 // The admin socket is how the command-line interface (and other local tools) manage a running service: one engine
@@ -26,6 +27,17 @@ type (
 	AdminServer   = adminsock.Server
 )
 
+// What the admin methods answer, in gatewayadmin for clients that don't link the engine
+type (
+	Status           = gatewayadmin.Status
+	ExportStatus     = gatewayadmin.ExportStatus
+	Export           = gatewayadmin.Export
+	Client           = gatewayadmin.Client
+	PendingOperation = gatewayadmin.PendingOperation
+	PairingSession   = gatewayadmin.PairingSession
+	PendingPairing   = gatewayadmin.PendingPairing
+)
+
 func NewAdminServer() *AdminServer {
 	return adminsock.NewServer()
 }
@@ -33,29 +45,6 @@ func NewAdminServer() *AdminServer {
 // AdminCall sends one request to an admin socket and decodes the result into result (if not nil)
 func AdminCall(path, method string, params any, result any) error {
 	return adminsock.Call(path, method, params, result)
-}
-
-// Status summarizes the service for the host's status displays
-type Status struct {
-	ServiceID           string         `json:"serviceID"`
-	ServiceName         string         `json:"serviceName"`
-	DeviceID            string         `json:"deviceID"`
-	Address             string         `json:"address"`
-	SPKI                string         `json:"spki,omitempty"`
-	AuthorityGeneration int64          `json:"authorityGeneration"`
-	Exports             []ExportStatus `json:"exports"`
-	Clients             int            `json:"clients"`
-	PendingOperations   int            `json:"pendingOperations"`
-	PendingPairings     int            `json:"pendingPairings"`
-	ContentCacheBytes   int64          `json:"contentCacheBytes"`
-	ContentCacheQuota   int64          `json:"contentCacheQuota"`
-}
-
-type ExportStatus struct {
-	Export
-	Label string `json:"label"`
-	State string `json:"state"`
-	Items int64  `json:"items"`
 }
 
 func (s *Service) Status() (Status, error) {
@@ -91,16 +80,6 @@ func (s *Service) Status() (Status, error) {
 	st.ContentCacheBytes = s.content.reserved
 	s.content.mutex.Unlock()
 	return st, nil
-}
-
-// PendingOperation describes an operation that has not finished, for the host's display. File names are left out.
-type PendingOperation struct {
-	Operation string    `json:"operation"`
-	ClientID  string    `json:"clientID"`
-	Kind      string    `json:"kind"`
-	FolderID  string    `json:"folderID"`
-	Journal   string    `json:"journal"`
-	Created   time.Time `json:"created"`
 }
 
 func (s *Service) PendingOperations() ([]PendingOperation, error) {
@@ -198,7 +177,7 @@ func (s *Service) RegisterAdmin(a *AdminServer, pairHost string, pairPort int) {
 			select {
 			case <-changed:
 			case <-time.After(time.Until(deadline)):
-				return nil, errors.New("no pairing request yet")
+				return nil, errors.New(gatewayadmin.NoPairingRequestYet)
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}

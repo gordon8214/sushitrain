@@ -7,7 +7,7 @@ PATH := $(shell pwd):/opt/homebrew/bin:$(HOME)/go/bin:$(PATH)
 SHELL := env PATH="$(PATH)" /bin/bash
 GO_VERSION := $(shell go version)
 
-.PHONY: clean install deps test test-engine gateway-linux gateway-test-linux linux linux-test
+.PHONY: clean install deps test test-engine gateway-linux gateway-test-linux linux linux-window linux-test
 
 build: build/SushitrainCore.xcframework
 
@@ -44,7 +44,7 @@ ENGINE_TAGS = noupgrade
 # The app's MACOSX_DEPLOYMENT_TARGET. Without it the objects take the SDK's version, and the linker warns about each one.
 MACOS_VERSION = 27.0
 
-build/SushitrainCore.xcframework: src/*.go gateway/*.go sthome/*.go remoteapi/*.go adminsock/*.go Makefile go.mod go.sum notices.html
+build/SushitrainCore.xcframework: src/*.go gateway/*.go sthome/*.go remoteapi/*.go adminsock/*.go gatewayadmin/*.go Makefile go.mod go.sum notices.html
 	# gomobile replaces CGO_CFLAGS, dropping Go's default -O2. CPPFLAGS reaches every C/C++ compile unchanged,
 	# so restore optimization here, particularly for SQLite's amalgamation.
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS) -O2" go tool gomobile bind -target macos -macosversion $(MACOS_VERSION) -tags $(ENGINE_TAGS) -trimpath \
@@ -77,6 +77,12 @@ LINUX_VERSION ?= $(shell git describe --always --dirty 2>/dev/null)
 linux: gateway-linux
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(LINUX_VERSION)" \
 		-o build/linux-amd64/synctrain-files ./cmd/synctrain-files
+
+# The window links GTK 4 and libadwaita (cgo): on a Linux host with their development packages, or in a container
+# with ../Linux/build/build-window.sh
+linux-window:
+	CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X main.version=$(LINUX_VERSION)" \
+		-o build/linux-amd64/synctrain ./cmd/synctrain
 
 # Test executables of Synctrain for Linux, to run on a Linux host (go test -c). Fixtures are read from ../Docs, so run
 # them from a checkout's SushitrainCore/<package> directory. The FUSE tests need /dev/fuse and fusermount3.

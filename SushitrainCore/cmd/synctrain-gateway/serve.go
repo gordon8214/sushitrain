@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net"
@@ -32,6 +33,7 @@ import (
 	"github.com/syncthing/syncthing/lib/syncthing"
 
 	"t-shaped.nl/sushitrain/v2/gateway"
+	"t-shaped.nl/sushitrain/v2/gatewayadmin"
 	"t-shaped.nl/sushitrain/v2/sthome"
 )
 
@@ -52,10 +54,9 @@ const (
 // serveOptions are the settings each start of Syncthing and the service uses
 type serveOptions struct {
 	service         gateway.Config
+	defaults        serviceDefaults
 	socket          string
 	adminGroup      bool
-	pairHost        string
-	pairPort        int
 	dbMaintenance   time.Duration
 	deleteRetention time.Duration
 }
@@ -83,7 +84,14 @@ func serve(args []string) error {
 	maintenance := fs.Duration("db-maintenance-interval", dbMaintenance, "how often Syncthing maintains its database; 0 disables it ($STDBMAINTENANCEINTERVAL)")
 	retention := fs.Duration("db-delete-retention-interval", deleteRetention, "how long Syncthing's database remembers deleted items ($STDBDELETERETENTIONINTERVAL)")
 	adminGroup := fs.Bool("admin-group", os.Getenv("SYNCTRAIN_GATEWAY_ADMIN_GROUP") == "1", "let members of the admin socket's group use it, not only its owner ($SYNCTRAIN_GATEWAY_ADMIN_GROUP=1)")
+	service := fs.String("service", os.Getenv("SYNCTRAIN_GATEWAY_SERVICE"), "on or off: whether the remote file service runs, which \"synctrain-gateway service\" can't change then; by default it runs as that last set it ($SYNCTRAIN_GATEWAY_SERVICE)")
+	serviceDefault := fs.String("service-default", envOr("SYNCTRAIN_GATEWAY_SERVICE_DEFAULT", "on"), "on or off: whether the remote file service runs until \"synctrain-gateway service\" first turns it on or off ($SYNCTRAIN_GATEWAY_SERVICE_DEFAULT)")
 	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	defaults, err := serviceFlags(fs, *service, *serviceDefault, serviceSettings{Listen: *listen,
+		PublicHost: *publicHost, PublicPort: *publicPort})
+	if err != nil {
 		return err
 	}
 	if err := configureLogging(); err != nil {
@@ -94,7 +102,7 @@ func serve(args []string) error {
 	ctx, stop := stopOnSignal()
 	defer stop()
 
-	pairHost, pairPort, err := pairingAddress(*publicHost, *publicPort, *listen)
+	_, pairPort, err := pairingAddress(*publicHost, *publicPort, *listen)
 	if err != nil {
 		return err
 	}
@@ -147,10 +155,9 @@ func serve(args []string) error {
 			AuditRetention: time.Duration(*auditDays) * 24 * time.Hour,
 			Logger:         slog.Default(),
 		},
+		defaults:        defaults,
 		socket:          adminSocket(cf.socket, dataDir),
 		adminGroup:      *adminGroup,
-		pairHost:        pairHost,
-		pairPort:        pairPort,
 		dbMaintenance:   *maintenance,
 		deleteRetention: *retention,
 	}
@@ -233,7 +240,7 @@ func run(ctx context.Context, opts serveOptions) (restart bool, err error) {
 	}
 	slog.Info("Syncthing started", "device", id.String())
 
-	svc, admin, err := startService(ctx, opts, app, cfg, evLogger, id)
+	admin, svc, err := startAdmin(ctx, opts, app, cfg, evLogger, id)
 	if err != nil {
 		shutdown(nil, nil, app)
 		return false, err
@@ -260,36 +267,69 @@ func run(ctx context.Context, opts serveOptions) (restart bool, err error) {
 	}
 }
 
-// startService starts the remote file service and its admin socket for a running Syncthing
-func startService(ctx context.Context, opts serveOptions, app *syncthing.App, cfg config.Wrapper,
-	evLogger events.Logger, id protocol.DeviceID) (*gateway.Service, *gateway.AdminServer, error) {
+// startAdmin starts the admin socket for a running Syncthing, and the remote file service when it is on
+func startAdmin(ctx context.Context, opts serveOptions, app *syncthing.App, cfg config.Wrapper,
+	evLogger events.Logger, id protocol.DeviceID) (*gateway.AdminServer, *serviceSwitch, error) {
 	backend := &gateway.EngineBackend{App: app, Config: cfg, Events: evLogger, ID: id, IsSelective: gateway.SelectiveFolders(app, cfg)}
-	svc, err := gateway.New(opts.service, backend)
+	admin := gateway.NewAdminServer()
+	registerHostAdmin(admin, cfg, app, id)
+	svc, err := newServiceSwitch(opts, opts.defaults, backend, admin)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := svc.Start(); err != nil {
-		_ = svc.Close()
+	if err := svc.start(); err != nil {
 		return nil, nil, err
 	}
-	admin := gateway.NewAdminServer()
-	svc.RegisterAdmin(admin, opts.pairHost, opts.pairPort)
-	registerHostAdmin(admin, cfg, app, id)
 	if err := os.MkdirAll(filepath.Dir(opts.socket), 0o700); err != nil {
-		_ = svc.Close()
+		_ = svc.stop()
 		return nil, nil, err
 	}
 	if err := admin.Listen(ctx, opts.socket, opts.adminGroup); err != nil {
-		_ = svc.Close()
+		_ = svc.stop()
 		return nil, nil, fmt.Errorf("listening on the admin socket: %w", err)
 	}
 	slog.Info("Admin socket ready", "path", opts.socket)
-	return svc, admin, nil
+	return admin, svc, nil
+}
+
+// serviceFlags are the remote file service's settings as serve's flags give them: what flags or the environment set
+// can't be changed with "synctrain-gateway service"
+func serviceFlags(fs *flag.FlagSet, service, serviceDefault string, settings serviceSettings) (serviceDefaults, error) {
+	d := serviceDefaults{settings: settings}
+	switch serviceDefault {
+	case "on":
+		d.enabled = true
+	case "off":
+	default:
+		return d, fmt.Errorf("--service-default %q: give on or off", serviceDefault)
+	}
+	switch service {
+	case "on":
+		d.settings.Enabled = true
+		d.fixed = append(d.fixed, "enabled")
+	case "off":
+		d.fixed = append(d.fixed, "enabled")
+	case "":
+	default:
+		return d, fmt.Errorf("--service %q: give on or off", service)
+	}
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	for _, f := range []struct{ flag, env, setting string }{
+		{"listen", "SYNCTRAIN_GATEWAY_LISTEN", "listen"},
+		{"public-host", "SYNCTRAIN_GATEWAY_HOST", "publicHost"},
+		{"public-port", "SYNCTRAIN_GATEWAY_PORT", "publicPort"},
+	} {
+		if given[f.flag] || strings.TrimSpace(os.Getenv(f.env)) != "" {
+			d.fixed = append(d.fixed, f.setting)
+		}
+	}
+	return d, nil
 }
 
 // shutdown closes the admin socket, stops the service and then Syncthing, waiting at most shutdownTimeout in all. It
 // reports whether everything stopped in time.
-func shutdown(admin *gateway.AdminServer, svc *gateway.Service, app *syncthing.App) bool {
+func shutdown(admin *gateway.AdminServer, svc *serviceSwitch, app *syncthing.App) bool {
 	start := time.Now()
 	stopped := true
 	if admin != nil {
@@ -297,7 +337,7 @@ func shutdown(admin *gateway.AdminServer, svc *gateway.Service, app *syncthing.A
 	}
 	if svc != nil {
 		closed := within(serviceShutdownTimeout, func() {
-			if err := svc.Close(); err != nil {
+			if err := svc.stop(); err != nil {
 				slog.Warn("Stopping the remote file service", "error", err)
 			}
 		})
@@ -402,22 +442,10 @@ func pairingAddress(host string, port int, listen string) (string, int, error) {
 
 // registerHostAdmin adds Syncthing device and folder management to the admin socket
 func registerHostAdmin(admin *gateway.AdminServer, cfg config.Wrapper, app *syncthing.App, self protocol.DeviceID) {
-	type device struct {
-		ID        string   `json:"id"`
-		Name      string   `json:"name"`
-		Addresses []string `json:"addresses,omitempty"`
-		Connected bool     `json:"connected"`
-		Paused    bool     `json:"paused"`
-	}
-	type folder struct {
-		ID      string   `json:"id"`
-		Label   string   `json:"label"`
-		Path    string   `json:"path"`
-		Type    string   `json:"type"`
-		Paused  bool     `json:"paused"`
-		State   string   `json:"state"`
-		Devices []string `json:"devices"`
-	}
+	type (
+		device = gatewayadmin.Device
+		folder = gatewayadmin.Folder
+	)
 	modify := func(fn func(*config.Configuration) error) error {
 		var inner error
 		waiter, err := cfg.Modify(func(c *config.Configuration) { inner = fn(c) })
