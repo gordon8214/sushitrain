@@ -107,6 +107,7 @@ func (s *Service) Children(parent int64) ([]Entry, error) {
 		return nil, err
 	}
 	for i := range result {
+		result[i] = s.withWorkingCopy(result[i])
 		result[i].Keep = result[i].Keep || keep
 	}
 	return result, nil
@@ -125,6 +126,7 @@ func (s *Service) Item(id int64) (Entry, bool, error) {
 }
 
 func (s *Service) withKeep(e Entry) (Entry, bool, error) {
+	e = s.withWorkingCopy(e)
 	if !e.Keep {
 		keep, err := s.effectiveKeep(e.Item)
 		if err != nil {
@@ -167,4 +169,15 @@ func (s *Service) Resolve(path string) (Entry, error) {
 		return Entry{}, fmt.Errorf("%s is the mount itself, not an item in it", path)
 	}
 	return e, nil
+}
+
+// WithWorkingCopy shows what a node's working copy has of an entry's length and time, for a node that no longer
+// shows its item
+func (s *Service) WithWorkingCopy(e Entry) Entry {
+	return s.withWorkingCopy(e)
+}
+
+// StateDir is where edits wait to be sent, which is where the space for writing is
+func (s *Service) StateDir() string {
+	return s.cfg.StateDir
 }

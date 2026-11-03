@@ -1,6 +1,6 @@
 #!/bin/bash
 # End-to-end check of synctrain-files against a scratch synctrain-gateway, on one Linux machine with FUSE: pairing,
-# adding a folder, reading on demand, keeping, refused writes, a change on the gateway, and a clean stop. Build first
+# adding a folder, reading on demand, keeping, writes, a change on the gateway, and a clean stop. Build first
 # with "make -C SushitrainCore linux". Everything lives in /tmp/st-e2e: the machine's own Syncthing and ~/Synctrain are
 # not touched. It prints what it sees; read it rather than trusting an exit status.
 set -u
@@ -82,9 +82,14 @@ echo "== keep"
 setfattr -n user.synctrain.keep -v 1 mnt/Documents/photos
 for i in $(seq 1 40); do [ "$(getfattr --only-values -n user.synctrain.state mnt/Documents/photos/img3.jpg 2>/dev/null)" = kept ] && break; sleep 0.5; done
 "$BIN/synctrain-files" state --socket files.sock "$ROOT"/mnt/Documents/photos/*.jpg
-echo "== writes refused"
-echo x > mnt/Documents/new.txt 2>&1 || true
-test -w mnt/Documents/readme.txt && echo "readme reported writable" || echo "readme not writable"
+echo "== writes"
+echo "made here" > mnt/Documents/new.txt
+sed -i 's/hello/edited/' mnt/Documents/readme.txt
+mkdir -p mnt/Documents/made/here && echo deep > mnt/Documents/made/here/file.txt
+"$BIN/synctrain-files" pending --socket files.sock
+"$BIN/synctrain-files" wait --socket files.sock "$ROOT/mnt/Documents" && echo "all changes on the gateway"
+cat docs/new.txt docs/readme.txt docs/made/here/file.txt
+ls -a docs | tr '\n' ' '; echo
 echo "== a change on the gateway"
 echo "changed" > docs/readme.txt
 "$BIN/synctrain-gateway" folders --socket gw.sock >/dev/null

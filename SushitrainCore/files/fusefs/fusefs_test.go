@@ -14,12 +14,10 @@ import (
 	"crypto/rand"
 	"errors"
 	"io/fs"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"syscall"
 	"testing"
 	"time"
 
@@ -46,10 +44,9 @@ func mountGateway(t *testing.T, g *gatewaytest.Gateway) *mounted {
 		t.Skip("no fusermount3")
 	}
 	dir := t.TempDir()
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
-	s, err := files.Open(files.Config{StateDir: filepath.Join(dir, "state"), CacheDir: filepath.Join(dir, "cache"),
-		Credentials: &files.FileCredentials{Path: filepath.Join(dir, "credentials.json")}, ClientName: "test",
-		AllowLocalGateway: true, Logger: logger})
+	cfg := testConfig(dir)
+	logger := cfg.Logger
+	s, err := files.Open(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +136,7 @@ func TestMount(t *testing.T) {
 		t.Fatalf("readme: %q, %v", data, err)
 	}
 	info, err := os.Stat(m.path("docs/big.bin"))
-	if err != nil || info.Size() != int64(len(big)) || info.Mode().Perm() != 0o444 {
+	if err != nil || info.Size() != int64(len(big)) || info.Mode().Perm() != 0o644 {
 		t.Fatalf("big.bin: %v, %v", info, err)
 	}
 	if got := xattr(t, m.path("docs/big.bin"), xattrState); got != "remote" {
@@ -161,14 +158,6 @@ func TestMount(t *testing.T) {
 		t.Fatalf("the whole file: %v", err)
 	}
 
-	// Nothing can be written yet
-	if err := os.WriteFile(m.path("docs/new.txt"), []byte("x"), 0o644); !errors.Is(err, fs.ErrPermission) &&
-		!errors.Is(err, syscall.EROFS) {
-		t.Fatalf("writing a new file: %v", err)
-	}
-	if _, err := os.OpenFile(m.path("docs/readme.txt"), os.O_WRONLY, 0); err == nil {
-		t.Fatal("opened a file for writing")
-	}
 
 	// Changes on the gateway show without remounting, past what the kernel cached
 	if _, err := os.Stat(m.path("docs/sub/b.txt")); !errors.Is(err, fs.ErrNotExist) {
@@ -206,7 +195,7 @@ func TestMount(t *testing.T) {
 	}
 
 	// A folder removed from the mount goes from it
-	if err := m.service.RemoveFolder(m.folder.ID); err != nil {
+	if _, _, err := m.service.RemoveFolder(m.folder.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(m.path("docs")); !errors.Is(err, fs.ErrNotExist) {

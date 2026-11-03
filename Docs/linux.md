@@ -7,8 +7,7 @@ Synctrain for Linux targets Fedora Workstation with GNOME. As on the Mac, a mach
 - **Files**: it runs no Syncthing. The folders of a gateway on another system, which has all their files, appear in
   `~/Synctrain`, and files are fetched from the gateway as they are read.
 
-This page is about Files mode, which is `synctrain-files`. **So far it reads only**: files can be opened, kept on this
-machine and let go of, but not changed. Saving into `~/Synctrain` fails with "Read-only file system".
+This page is about Files mode, which is `synctrain-files`.
 
 ## Building
 
@@ -37,7 +36,7 @@ systemctl --user enable --now synctrain-files
 
 | What | Where | Option |
 | --- | --- | --- |
-| The index of the folders, and the credentials of gateways | `~/.local/state/synctrain/files` | `--state` |
+| The index of the folders, changes not on the gateway yet, and the credentials of gateways | `~/.local/state/synctrain/files` | `--state` |
 | Files fetched from gateways, and downloads in progress | `~/.cache/synctrain` | `--cache` |
 | The folders | `~/Synctrain` | `--mount` |
 | The admin socket the commands below use | `$XDG_RUNTIME_DIR/synctrain/files.sock` | `--socket` |
@@ -84,6 +83,39 @@ synctrain-files state ~/Synctrain/Documents/*.pdf
 The same through extended attributes: `setfattr -n user.synctrain.keep -v 1 <path>` (or `-v 0`), and
 `getfattr -n user.synctrain.state <path>`, which is `remote`, `partial`, `local` or `kept`.
 
+## Changing files
+
+Files and directories in `~/Synctrain` are changed as on a local disk, in folders the gateway lets this machine write
+(in others, a write fails with "Read-only file system"):
+
+- **A change is kept here before the program that made it is told it succeeded**, so a crash or a power loss loses
+  nothing it was told was saved. It goes to the gateway once the folder has been quiet for two seconds, in the order it
+  was made, and waits here while the gateway is out of reach. `synctrain-files wait <path>` waits until changes are on
+  the gateway; `user.synctrain.state` is `pending` until then.
+- **Saves keep the file's identity.** Editors and tools save through temporary files and renames (GNOME's apps,
+  LibreOffice, vim, `sed -i`, `rsync`): such a save reaches the gateway as one new version of the file, which keeps its
+  history there, and the temporary names never do. A save that leaves the content as it was sends nothing.
+- **Conflicts:** a file changed on the gateway while it was being edited here is kept as both: the edit becomes a copy
+  named as Syncthing names conflict copies (`report.sync-conflict-20261102-101500-ABCDEFG.odt`), next to the gateway's
+  version. A name taken on the gateway meanwhile does the same for a new file. Removing or moving a file that changed on
+  the gateway is undone, which leaves the gateway's version.
+- **Stays here:** LibreOffice's `.~lock.…#`, vim's swap files and Emacs's `#…#` files, which last as long as an editing
+  session, and files the gateway's ignore patterns exclude. `user.synctrain.state` is `local-only`.
+- **Can't be done here:** symbolic links, hard links and device nodes ("Operation not permitted"); moving an item to
+  another folder (`mv` copies it and removes the original); exchanging two items in one rename. Modes and owners are the
+  mount's, and setting them does nothing.
+- A program that still has a file open after it was removed or replaced (as LibreOffice keeps a document it saved
+  through a temporary file) can go on writing to it; that is dropped when it closes, as on a local disk.
+
+`synctrain-files pending` lists changes that aren't on the gateway yet. One the gateway refuses (the folder became
+read-only, say), one whose outcome can't be known (the gateway's database was restored from a backup after it was
+sent), and one to a file that was being written when the daemon stopped (its content may be incomplete) are kept for
+you to decide: `pending --export <ID> <file>` saves a copy of what it would write, and `pending --discard <ID>` gives
+it up, so that the file shows the gateway's version again. Nothing is sent twice.
+
+A folder whose changes aren't on the gateway can't be removed. Files that stay here are moved out when it is, to a new
+directory named after the folder in `~/Sync` (or in your home folder if `~/Sync` is itself synchronized).
+
 ## GNOME
 
 GNOME treats `~/Synctrain` as a local disk, and some of its programs read every file they see:
@@ -96,7 +128,6 @@ GNOME treats `~/Synctrain` as a local disk, and some of its programs read every 
 
 ## Limitations so far
 
-- Nothing can be changed in `~/Synctrain`.
 - Credentials are kept in a file only the owner can read (`credentials.json` in the state directory), not in GNOME's
   keyring.
 - Symbolic links on the gateway are not shown. Previous versions can't be browsed here yet.

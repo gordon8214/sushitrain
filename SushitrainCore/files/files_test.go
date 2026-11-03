@@ -27,6 +27,7 @@ type testService struct {
 	*Service
 	t       *testing.T
 	g       *gatewaytest.Gateway
+	cfg     Config
 	folder  Folder
 	mutex   sync.Mutex
 	changes []Changes
@@ -34,25 +35,23 @@ type testService struct {
 
 // newTestService pairs a new service with a gateway of one exported folder, and adds the folder
 func newTestService(t *testing.T, g *gatewaytest.Gateway, budget int64) *testService {
+	return newTestServiceWith(t, g, func(c *Config) { c.CacheBudget = budget })
+}
+
+func newTestServiceWith(t *testing.T, g *gatewaytest.Gateway, modify func(*Config)) *testService {
 	t.Helper()
 	dir := t.TempDir()
-	s, err := Open(Config{StateDir: filepath.Join(dir, "state"), CacheDir: filepath.Join(dir, "cache"),
-		Credentials: &FileCredentials{Path: filepath.Join(dir, "credentials.json")}, CacheBudget: budget,
-		ClientName: "test", AllowLocalGateway: true,
-		Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))})
-	if err != nil {
-		t.Fatal(err)
+	cfg := Config{StateDir: filepath.Join(dir, "state"), CacheDir: filepath.Join(dir, "cache"),
+		Credentials: &FileCredentials{Path: filepath.Join(dir, "credentials.json")}, ClientName: "test",
+		AllowLocalGateway: true, SettleDelay: testSettleDelay,
+		Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))}
+	if modify != nil {
+		modify(&cfg)
 	}
-	ts := &testService{Service: s, t: t, g: g}
-	s.SetInvalidator(func(c Changes) {
-		ts.mutex.Lock()
-		defer ts.mutex.Unlock()
-		ts.changes = append(ts.changes, c)
-	})
-	t.Cleanup(func() { s.Close() })
-	if err := s.Start(); err != nil {
-		t.Fatal(err)
-	}
+	ts := &testService{t: t, g: g, cfg: cfg}
+	ts.open()
+	t.Cleanup(func() { ts.Close() })
+	s := ts.Service
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	done := make(chan error, 1)
@@ -66,11 +65,39 @@ func newTestService(t *testing.T, g *gatewaytest.Gateway, budget int64) *testSer
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
+	var err error
 	if ts.folder, err = s.AddFolder(ctx, gw.ServiceID, g.Engine.FolderID); err != nil {
 		t.Fatal(err)
 	}
 	ts.refresh()
 	return ts
+}
+
+// open opens the service (again) from the test's directories, and starts it
+func (ts *testService) open() {
+	ts.t.Helper()
+	s, err := Open(ts.cfg)
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	ts.Service = s
+	s.SetInvalidator(func(c Changes) {
+		ts.mutex.Lock()
+		defer ts.mutex.Unlock()
+		ts.changes = append(ts.changes, c)
+	})
+	if err := s.Start(); err != nil {
+		ts.t.Fatal(err)
+	}
+}
+
+// restart stops the service as a crash would leave it (nothing more is recorded) and opens it again
+func (ts *testService) restart() {
+	ts.t.Helper()
+	if err := ts.Service.Close(); err != nil {
+		ts.t.Fatal(err)
+	}
+	ts.open()
 }
 
 // refresh brings the folder up to date with the gateway, after the gateway caught up with its disk
@@ -225,7 +252,7 @@ func TestBrowseAndFollow(t *testing.T) {
 	}
 
 	// Removing the folder takes it out of the mount
-	if err := ts.RemoveFolder(ts.folder.ID); err != nil {
+	if _, _, err := ts.RemoveFolder(ts.folder.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := ts.lookup("docs"); ok {

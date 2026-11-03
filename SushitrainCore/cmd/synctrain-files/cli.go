@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"text/tabwriter"
+	"time"
 
 	"t-shaped.nl/sushitrain/v2/adminsock"
 	"t-shaped.nl/sushitrain/v2/files"
@@ -146,7 +147,14 @@ func foldersCommand(args []string) error {
 		if err != nil {
 			return errors.New("--remove takes a folder's ID, as listed")
 		}
-		return adminsock.Call(cf.path(), "folders.remove", map[string]int64{"id": id}, nil)
+		var removal Removal
+		if err := adminsock.Call(cf.path(), "folders.remove", map[string]int64{"id": id}, &removal); err != nil {
+			return err
+		}
+		if removal.Moved > 0 {
+			fmt.Printf("%d files that were only on this machine are in %s\n", removal.Moved, removal.Leftovers)
+		}
+		return nil
 	case *add != "":
 		if *gateway == "" {
 			return errors.New("--add needs --gateway")
@@ -243,5 +251,68 @@ func stateCommand(args []string) error {
 			fmt.Fprintf(w, "%s\t%s\n", st.State, p)
 		}
 	})
+	return nil
+}
+
+func pendingCommand(args []string) error {
+	fs, cf := newFlagSet("pending")
+	export := fs.String("export", "", "export the edit with this ID (as listed) to the file given after it")
+	discard := fs.String("discard", "", "discard the edit with this ID: the file shows what the gateway has again")
+	asJSON := fs.Bool("json", false, "print JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	switch {
+	case *export != "":
+		id, err := strconv.ParseInt(*export, 10, 64)
+		if err != nil || fs.NArg() != 1 {
+			return errors.New("usage: synctrain-files pending --export <ID> <file>")
+		}
+		dest, err := filepath.Abs(fs.Arg(0))
+		if err != nil {
+			return err
+		}
+		return adminsock.Call(cf.path(), "pending.export", map[string]any{"id": id, "dest": dest}, nil)
+	case *discard != "":
+		id, err := strconv.ParseInt(*discard, 10, 64)
+		if err != nil {
+			return errors.New("--discard takes an edit's ID, as listed")
+		}
+		return adminsock.Call(cf.path(), "pending.discard", map[string]int64{"id": id}, nil)
+	}
+	var edits []files.Edit
+	if err := adminsock.Call(cf.path(), "pending.list", nil, &edits); err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(edits)
+	}
+	if len(edits) == 0 {
+		fmt.Println("Every change is on its gateway.")
+		return nil
+	}
+	table("ID\tSTATE\tCHANGE\tPATH\tREASON", func(w *tabwriter.Writer) {
+		for _, e := range edits {
+			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", e.ID, e.State, e.Kind, e.Path, e.Error)
+		}
+	})
+	return nil
+}
+
+func waitCommand(args []string) error {
+	fs, cf := newFlagSet("wait")
+	timeout := fs.Duration("timeout", 10*time.Minute, "how long to wait at most")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	paths, err := absolutePaths(fs.Args())
+	if err != nil || len(paths) == 0 {
+		return errors.New("usage: synctrain-files wait [--timeout 10m] <path>…")
+	}
+	for _, p := range paths {
+		if err := adminsock.Call(cf.path(), "wait", map[string]any{"path": p, "timeout": *timeout}, nil); err != nil {
+			return fmt.Errorf("%s: %w", p, err)
+		}
+	}
 	return nil
 }

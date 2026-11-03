@@ -30,7 +30,9 @@ Commands:
   gateways    List paired gateways; forget one
   folders     List folders here; list a gateway's folders; add or remove one
   keep        Keep files on this device (or stop keeping them)
-  state       Show whether files are on this device
+  state       Show whether files are on this device, or changed here
+  pending     List changes not on the gateway yet; export or discard one
+  wait        Wait until changes to files are on the gateway
   version     Show the version
 
 Run "synctrain-files <command> -h" for a command's options.
@@ -59,6 +61,10 @@ func main() {
 		err = keepCommand(args)
 	case "state":
 		err = stateCommand(args)
+	case "pending":
+		err = pendingCommand(args)
+	case "wait":
+		err = waitCommand(args)
 	case "version", "--version", "-v":
 		fmt.Println(versionString())
 	case "help", "-h", "--help":

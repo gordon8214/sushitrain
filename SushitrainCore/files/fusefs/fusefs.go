@@ -7,7 +7,8 @@
 //go:build linux
 
 // Package fusefs shows the folders of a files.Service as a FUSE filesystem: a directory per folder at the root,
-// files that are fetched as they are read, and the kernel's caches dropped as the gateways' changes arrive.
+// files that are fetched as they are read, changes recorded before they are answered, and the kernel's caches
+// dropped as the gateways' changes arrive.
 package fusefs
 
 import (
@@ -15,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -25,14 +27,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hanwen/go-fuse/v2/fs"
+	gofs "github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"golang.org/x/sys/unix"
 	"t-shaped.nl/sushitrain/v2/files"
 )
 
 const (
-	// Extended attributes: the state of an item's content, and whether it is kept on this device ("1" or "0")
+	// Extended attributes: the state of an item, and whether it is kept on this device ("1" or "0")
 	xattrState = "user.synctrain.state"
 	xattrKeep  = "user.synctrain.keep"
 
@@ -67,12 +69,11 @@ type Mount struct {
 	service *files.Service
 	log     *slog.Logger
 	dir     string
-
 	// When it was mounted: the time of the mount's root, which is the daemon's own
 	mounted time.Time
 
 	mutex sync.Mutex
-	nodes map[uint64]*fs.Inode
+	nodes map[uint64]*gofs.Inode
 }
 
 // MountService mounts the service at dir, which is created if needed. A mount left by a daemon that stopped without
@@ -90,10 +91,10 @@ func MountService(dir string, service *files.Service, opts Options) (*Mount, err
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	m := &Mount{service: service, log: opts.Logger, dir: dir, mounted: time.Now(), nodes: map[uint64]*fs.Inode{}}
+	m := &Mount{service: service, log: opts.Logger, dir: dir, mounted: time.Now(), nodes: map[uint64]*gofs.Inode{}}
 	root := &rootDir{m: m}
 	entryTimeout, attrTimeout, negative := cacheTimeout, cacheTimeout, negativeTimeout
-	server, err := fs.Mount(dir, root, &fs.Options{
+	server, err := gofs.Mount(dir, root, &gofs.Options{
 		// Without default_permissions: the mount is its owner's alone (no allow_other), and the daemon decides what
 		// can be written, so that the keep attribute can be set on a file that can't be written
 		MountOptions: fuse.MountOptions{
@@ -106,7 +107,7 @@ func MountService(dir string, service *files.Service, opts Options) (*Mount, err
 		NegativeTimeout: &negative,
 		UID:             uint32(os.Getuid()),
 		GID:             uint32(os.Getgid()),
-		RootStableAttr:  &fs.StableAttr{Ino: 1, Mode: fuse.S_IFDIR},
+		RootStableAttr:  &gofs.StableAttr{Ino: 1, Mode: fuse.S_IFDIR},
 	})
 	if err != nil {
 		return nil, err
@@ -128,13 +129,13 @@ func (m *Mount) Unmount() error {
 	return m.server.Unmount()
 }
 
-func (m *Mount) remember(node uint64, inode *fs.Inode) {
+func (m *Mount) remember(node uint64, inode *gofs.Inode) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.nodes[node] = inode
 }
 
-func (m *Mount) forget(node uint64, inode *fs.Inode) {
+func (m *Mount) forget(node uint64, inode *gofs.Inode) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if m.nodes[node] == inode {
@@ -142,7 +143,7 @@ func (m *Mount) forget(node uint64, inode *fs.Inode) {
 	}
 }
 
-func (m *Mount) inode(node uint64) *fs.Inode {
+func (m *Mount) inode(node uint64) *gofs.Inode {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	return m.nodes[node]
@@ -180,8 +181,22 @@ func errno(err error) syscall.Errno {
 		return e
 	case errors.Is(err, context.Canceled):
 		return syscall.EINTR
-	case errors.Is(err, os.ErrNotExist):
+	case errors.Is(err, fs.ErrNotExist):
 		return syscall.ENOENT
+	case errors.Is(err, fs.ErrExist):
+		return syscall.EEXIST
+	case errors.Is(err, fs.ErrInvalid), errors.Is(err, files.ErrInvalidName):
+		return syscall.EINVAL
+	case errors.Is(err, files.ErrReadOnly):
+		return syscall.EROFS
+	case errors.Is(err, files.ErrNotEmpty):
+		return syscall.ENOTEMPTY
+	case errors.Is(err, files.ErrCrossFolder):
+		return syscall.EXDEV
+	case errors.Is(err, files.ErrIsDir):
+		return syscall.EISDIR
+	case errors.Is(err, files.ErrNotDir):
+		return syscall.ENOTDIR
 	case errors.Is(err, files.ErrVersionChanged):
 		return syscall.ESTALE
 	default:
@@ -189,38 +204,57 @@ func errno(err error) syscall.Errno {
 	}
 }
 
-// attributes fills out with what the mount shows of an entry. The mount can't be written yet, so nothing is writable.
+// owner owns everything in the mount: the user it is mounted for
+var owner = fuse.Owner{Uid: uint32(os.Getuid()), Gid: uint32(os.Getgid())}
+
+// attributes fills out with what the mount shows of an entry. The owner is always set: an answer without one (to a
+// chmod, say) would make the kernel think root owns the file, and refuse its owner what only an owner may do.
 func attributes(e files.Entry, out *fuse.Attr) {
+	out.Owner = owner
 	out.Ino = e.Node
 	mtime := e.ModTime
 	out.SetTimes(&mtime, &mtime, &mtime)
 	if e.IsDir() {
 		out.Mode = fuse.S_IFDIR | 0o555
+		if e.Writable {
+			out.Mode |= 0o200
+		}
 		out.Nlink = 2
 		return
 	}
 	out.Mode = fuse.S_IFREG | 0o444
+	if e.Writable {
+		out.Mode |= 0o200
+	}
 	out.Nlink = 1
 	out.Size = uint64(e.Size)
 	out.Blocks = (out.Size + 511) / 512
 	out.Blksize = 128 << 10
 }
 
-func (m *Mount) child(ctx context.Context, parent *fs.Inode, e files.Entry, out *fuse.EntryOut) *fs.Inode {
+// access answers access(2), which the kernel asks the mount about without default_permissions
+func access(writable bool, mask uint32) syscall.Errno {
+	if mask&unix.W_OK != 0 && !writable {
+		return syscall.EACCES
+	}
+	return 0
+}
+
+func (m *Mount) child(ctx context.Context, parent *gofs.Inode, e files.Entry, out *fuse.EntryOut) *gofs.Inode {
 	attributes(e, &out.Attr)
-	var node fs.InodeEmbedder
+	var node gofs.InodeEmbedder
 	mode := uint32(fuse.S_IFREG)
 	if e.IsDir() {
 		node, mode = &dir{m: m, item: e.Item, node: e.Node}, fuse.S_IFDIR
 	} else {
 		node = &file{m: m, entry: e}
 	}
-	inode := parent.NewInode(ctx, node, fs.StableAttr{Mode: mode, Ino: e.Node})
+	inode := parent.NewInode(ctx, node, gofs.StableAttr{Mode: mode, Ino: e.Node})
 	m.remember(e.Node, inode)
 	return inode
 }
 
-func (m *Mount) readdir(entries []files.Entry, extra ...fuse.DirEntry) fs.DirStream {
+func (m *Mount) readdir(entries []files.Entry, extra ...fuse.DirEntry) gofs.DirStream {
 	list := slices.Clone(extra)
 	for _, e := range entries {
 		mode := uint32(fuse.S_IFREG)
@@ -229,36 +263,45 @@ func (m *Mount) readdir(entries []files.Entry, extra ...fuse.DirEntry) fs.DirStr
 		}
 		list = append(list, fuse.DirEntry{Name: e.Name, Mode: mode, Ino: e.Node})
 	}
-	return fs.NewListDirStream(list)
+	return gofs.NewListDirStream(list)
+}
+
+// statfs reports the space where edits wait to be sent: what can be written here
+func (m *Mount) statfs(out *fuse.StatfsOut) syscall.Errno {
+	var st unix.Statfs_t
+	if err := unix.Statfs(m.service.StateDir(), &st); err != nil {
+		return errno(err)
+	}
+	out.Blocks, out.Bfree, out.Bavail = st.Blocks, st.Bfree, st.Bavail
+	out.Files, out.Ffree = st.Files, st.Ffree
+	out.Bsize, out.Frsize, out.NameLen = uint32(st.Bsize), uint32(st.Frsize), 255
+	return 0
 }
 
 // rootDir is the mount's root: a directory per folder, and .trackerignore
 type rootDir struct {
-	fs.Inode
+	gofs.Inode
 	m *Mount
 }
 
 var (
-	_ fs.NodeLookuper  = (*rootDir)(nil)
-	_ fs.NodeReaddirer = (*rootDir)(nil)
-	_ fs.NodeGetattrer = (*rootDir)(nil)
-	_ fs.NodeAccesser  = (*rootDir)(nil)
+	_ gofs.NodeLookuper  = (*rootDir)(nil)
+	_ gofs.NodeReaddirer = (*rootDir)(nil)
+	_ gofs.NodeGetattrer = (*rootDir)(nil)
+	_ gofs.NodeAccesser  = (*rootDir)(nil)
+	_ gofs.NodeStatfser  = (*rootDir)(nil)
 )
 
-// access answers access(2), which the kernel asks the mount about without default_permissions: nothing in it can be
-// written yet
-func access(mask uint32) syscall.Errno {
-	if mask&unix.W_OK != 0 {
-		return syscall.EACCES
-	}
-	return 0
-}
-
 func (r *rootDir) Access(ctx context.Context, mask uint32) syscall.Errno {
-	return access(mask)
+	return access(false, mask)
 }
 
-func (r *rootDir) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+func (r *rootDir) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
+	return r.m.statfs(out)
+}
+
+func (r *rootDir) Getattr(ctx context.Context, f gofs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+	out.Owner = owner
 	out.Mode = fuse.S_IFDIR | 0o555
 	out.Ino = 1
 	out.Nlink = 2
@@ -266,13 +309,13 @@ func (r *rootDir) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOu
 	return 0
 }
 
-func (r *rootDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+func (r *rootDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*gofs.Inode, syscall.Errno) {
 	if name == ".trackerignore" {
 		attr := fuse.Attr{Mode: fuse.S_IFREG | 0o444, Nlink: 1, Size: uint64(len(trackerIgnore))}
 		attr.SetTimes(&r.m.mounted, &r.m.mounted, &r.m.mounted)
 		out.Attr = attr
-		return r.NewInode(ctx, &fs.MemRegularFile{Data: []byte(trackerIgnore), Attr: attr},
-			fs.StableAttr{Ino: 2 << 62}), 0
+		return r.NewInode(ctx, &gofs.MemRegularFile{Data: []byte(trackerIgnore), Attr: attr},
+			gofs.StableAttr{Ino: 2 << 62}), 0
 	}
 	e, ok, err := r.m.service.Lookup(0, name)
 	if err != nil {
@@ -284,7 +327,7 @@ func (r *rootDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (
 	return r.m.child(ctx, r.EmbeddedInode(), e, out), 0
 }
 
-func (r *rootDir) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
+func (r *rootDir) Readdir(ctx context.Context) (gofs.DirStream, syscall.Errno) {
 	folders, err := r.m.service.Children(0)
 	if err != nil {
 		return nil, errno(err)
@@ -292,47 +335,89 @@ func (r *rootDir) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	return r.m.readdir(folders, fuse.DirEntry{Name: ".trackerignore", Mode: fuse.S_IFREG, Ino: 2 << 62}), 0
 }
 
+// itemOf is the item of a directory node (0: the mount's root)
+func itemOf(node gofs.InodeEmbedder) (int64, bool) {
+	switch n := node.(type) {
+	case *dir:
+		return n.item, true
+	case *rootDir:
+		return 0, true
+	}
+	return 0, false
+}
+
 // dir is a folder's root or a directory in it
 type dir struct {
-	fs.Inode
+	gofs.Inode
 	m    *Mount
 	item int64
 	node uint64
 }
 
 var (
-	_ fs.NodeLookuper      = (*dir)(nil)
-	_ fs.NodeReaddirer     = (*dir)(nil)
-	_ fs.NodeGetattrer     = (*dir)(nil)
-	_ fs.NodeGetxattrer    = (*dir)(nil)
-	_ fs.NodeSetxattrer    = (*dir)(nil)
-	_ fs.NodeListxattrer   = (*dir)(nil)
-	_ fs.NodeOnForgetter   = (*dir)(nil)
-	_ fs.NodeRemovexattrer = (*dir)(nil)
-	_ fs.NodeAccesser      = (*dir)(nil)
+	_ gofs.NodeLookuper      = (*dir)(nil)
+	_ gofs.NodeReaddirer     = (*dir)(nil)
+	_ gofs.NodeGetattrer     = (*dir)(nil)
+	_ gofs.NodeSetattrer     = (*dir)(nil)
+	_ gofs.NodeGetxattrer    = (*dir)(nil)
+	_ gofs.NodeSetxattrer    = (*dir)(nil)
+	_ gofs.NodeListxattrer   = (*dir)(nil)
+	_ gofs.NodeRemovexattrer = (*dir)(nil)
+	_ gofs.NodeOnForgetter   = (*dir)(nil)
+	_ gofs.NodeAccesser      = (*dir)(nil)
+	_ gofs.NodeStatfser      = (*dir)(nil)
+	_ gofs.NodeCreater       = (*dir)(nil)
+	_ gofs.NodeMkdirer       = (*dir)(nil)
+	_ gofs.NodeUnlinker      = (*dir)(nil)
+	_ gofs.NodeRmdirer       = (*dir)(nil)
+	_ gofs.NodeRenamer       = (*dir)(nil)
+	_ gofs.NodeSymlinker     = (*dir)(nil)
+	_ gofs.NodeLinker        = (*dir)(nil)
+	_ gofs.NodeMknoder       = (*dir)(nil)
 )
-
-func (d *dir) Access(ctx context.Context, mask uint32) syscall.Errno {
-	return access(mask)
-}
 
 func (d *dir) OnForget() {
 	d.m.forget(d.node, d.EmbeddedInode())
 }
 
-func (d *dir) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+func (d *dir) entry() (files.Entry, syscall.Errno) {
 	e, ok, err := d.m.service.Item(d.item)
 	if err != nil {
-		return errno(err)
+		return files.Entry{}, errno(err)
 	}
 	if !ok {
-		return syscall.ENOENT
+		return files.Entry{}, syscall.ENOENT
+	}
+	return e, 0
+}
+
+func (d *dir) Access(ctx context.Context, mask uint32) syscall.Errno {
+	e, status := d.entry()
+	if status != 0 {
+		return status
+	}
+	return access(e.Writable, mask)
+}
+
+func (d *dir) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
+	return d.m.statfs(out)
+}
+
+func (d *dir) Getattr(ctx context.Context, f gofs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+	e, status := d.entry()
+	if status != 0 {
+		return status
 	}
 	attributes(e, &out.Attr)
 	return 0
 }
 
-func (d *dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+// Setattr of a directory: its times and modes are the gateway's, so changing them does nothing
+func (d *dir) Setattr(ctx context.Context, f gofs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+	return d.Getattr(ctx, f, out)
+}
+
+func (d *dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*gofs.Inode, syscall.Errno) {
 	e, ok, err := d.m.service.Lookup(d.item, name)
 	if err != nil {
 		return nil, errno(err)
@@ -343,12 +428,73 @@ func (d *dir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.
 	return d.m.child(ctx, d.EmbeddedInode(), e, out), 0
 }
 
-func (d *dir) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
+func (d *dir) Readdir(ctx context.Context) (gofs.DirStream, syscall.Errno) {
 	children, err := d.m.service.Children(d.item)
 	if err != nil {
 		return nil, errno(err)
 	}
 	return d.m.readdir(children), 0
+}
+
+func (d *dir) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (
+	*gofs.Inode, gofs.FileHandle, uint32, syscall.Errno) {
+	e, err := d.m.service.Create(d.item, name, false)
+	if err != nil {
+		return nil, nil, 0, errno(err)
+	}
+	inode := d.m.child(ctx, d.EmbeddedInode(), e, out)
+	h, status := d.m.openHandle(e, flags|syscall.O_TRUNC)
+	if status != 0 {
+		return nil, nil, 0, status
+	}
+	return inode, h, 0, 0
+}
+
+func (d *dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*gofs.Inode, syscall.Errno) {
+	e, err := d.m.service.Create(d.item, name, true)
+	if err != nil {
+		return nil, errno(err)
+	}
+	return d.m.child(ctx, d.EmbeddedInode(), e, out), 0
+}
+
+func (d *dir) Unlink(ctx context.Context, name string) syscall.Errno {
+	_, err := d.m.service.Remove(d.item, name, false)
+	return errno(err)
+}
+
+func (d *dir) Rmdir(ctx context.Context, name string) syscall.Errno {
+	_, err := d.m.service.Remove(d.item, name, true)
+	return errno(err)
+}
+
+func (d *dir) Rename(ctx context.Context, name string, newParent gofs.InodeEmbedder, newName string,
+	flags uint32) syscall.Errno {
+	if flags&^unix.RENAME_NOREPLACE != 0 {
+		// Exchanging two items can't be one operation on a gateway
+		return syscall.EINVAL
+	}
+	to, ok := itemOf(newParent)
+	if !ok {
+		return syscall.EXDEV
+	}
+	_, err := d.m.service.Rename(d.item, name, to, newName, flags&unix.RENAME_NOREPLACE != 0)
+	return errno(err)
+}
+
+// Symbolic links, hard links and device nodes can't be in a folder of a gateway
+func (d *dir) Symlink(ctx context.Context, target, name string, out *fuse.EntryOut) (*gofs.Inode, syscall.Errno) {
+	return nil, syscall.EPERM
+}
+
+func (d *dir) Link(ctx context.Context, target gofs.InodeEmbedder, name string, out *fuse.EntryOut) (*gofs.Inode,
+	syscall.Errno) {
+	return nil, syscall.EPERM
+}
+
+func (d *dir) Mknod(ctx context.Context, name string, mode uint32, dev uint32, out *fuse.EntryOut) (*gofs.Inode,
+	syscall.Errno) {
+	return nil, syscall.EPERM
 }
 
 func (d *dir) Getxattr(ctx context.Context, attr string, dest []byte) (uint32, syscall.Errno) {
@@ -370,69 +516,129 @@ func (d *dir) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.Errno
 // file is a file as it was when looked up: a change of its content on the gateway gives the path a new node, and
 // this one keeps reading what it had
 type file struct {
-	fs.Inode
+	gofs.Inode
 	m     *Mount
 	entry files.Entry
 }
 
 var (
-	_ fs.NodeOpener        = (*file)(nil)
-	_ fs.NodeReader        = (*file)(nil)
-	_ fs.NodeReleaser      = (*file)(nil)
-	_ fs.NodeGetattrer     = (*file)(nil)
-	_ fs.NodeGetxattrer    = (*file)(nil)
-	_ fs.NodeSetxattrer    = (*file)(nil)
-	_ fs.NodeListxattrer   = (*file)(nil)
-	_ fs.NodeRemovexattrer = (*file)(nil)
-	_ fs.NodeOnForgetter   = (*file)(nil)
-	_ fs.NodeAccesser      = (*file)(nil)
+	_ gofs.NodeOpener        = (*file)(nil)
+	_ gofs.NodeReader        = (*file)(nil)
+	_ gofs.NodeWriter        = (*file)(nil)
+	_ gofs.NodeFsyncer       = (*file)(nil)
+	_ gofs.NodeFlusher       = (*file)(nil)
+	_ gofs.NodeReleaser      = (*file)(nil)
+	_ gofs.NodeGetattrer     = (*file)(nil)
+	_ gofs.NodeSetattrer     = (*file)(nil)
+	_ gofs.NodeGetxattrer    = (*file)(nil)
+	_ gofs.NodeSetxattrer    = (*file)(nil)
+	_ gofs.NodeListxattrer   = (*file)(nil)
+	_ gofs.NodeRemovexattrer = (*file)(nil)
+	_ gofs.NodeOnForgetter   = (*file)(nil)
+	_ gofs.NodeAccesser      = (*file)(nil)
 )
-
-func (f *file) Access(ctx context.Context, mask uint32) syscall.Errno {
-	return access(mask)
-}
 
 func (f *file) OnForget() {
 	f.m.forget(f.entry.Node, f.EmbeddedInode())
 }
 
+// current is the entry as it is now, while the node shows the item, and as it was otherwise
 func (f *file) current() files.Entry {
 	if e, ok, err := f.m.service.Item(f.entry.Item); err == nil && ok && e.Node == f.entry.Node {
 		return e
 	}
-	return f.entry
+	return f.m.service.WithWorkingCopy(f.entry)
 }
 
-func (f *file) Getattr(ctx context.Context, h fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+func (f *file) Access(ctx context.Context, mask uint32) syscall.Errno {
+	return access(f.current().Writable, mask)
+}
+
+func (f *file) Getattr(ctx context.Context, h gofs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	attributes(f.current(), &out.Attr)
 	return 0
 }
 
-func (f *file) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
-	if flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
-		return nil, 0, syscall.EROFS
-	}
-	if state, err := f.m.service.State(f.entry); err == nil && state != "local" && state != "kept" {
-		if name, ok := f.m.bulkReader(ctx); ok {
-			f.m.log.Debug("Refused to fetch a file for a program that reads everything", "program", name,
-				"item", f.entry.Item)
-			return nil, 0, syscall.EPERM
+func (f *file) Setattr(ctx context.Context, h gofs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+	e := f.current()
+	if size, ok := in.GetSize(); ok {
+		fh, _ := h.(*handle)
+		if fh != nil && fh.w != nil {
+			if err := fh.w.Truncate(ctx, int64(size)); err != nil {
+				return errno(err)
+			}
+		} else {
+			// truncate(2) on a path, or an open that truncates before it is sent
+			w, err := f.m.service.OpenWriter(e, false)
+			if err != nil {
+				return errno(err)
+			}
+			err = w.Truncate(ctx, int64(size))
+			if cerr := w.Close(); err == nil {
+				err = cerr
+			}
+			if err != nil {
+				return errno(err)
+			}
 		}
 	}
-	r, err := f.m.service.OpenFile(f.entry.Item)
-	if err != nil {
-		return nil, 0, errno(err)
+	if mtime, ok := in.GetMTime(); ok {
+		if err := f.m.service.SetModTime(f.entry.Node, mtime); err != nil {
+			return errno(err)
+		}
 	}
-	if r.ContentID() != f.entry.ContentID {
-		// The file changed since it was looked up: its new node has the new content
-		r.Close()
-		return nil, 0, syscall.ESTALE
-	}
-	// The pages stay valid as long as the node does: the node changes with the content
-	return &handle{r: r}, fuse.FOPEN_KEEP_CACHE, 0
+	// Modes and owners are the mount's: changing them does nothing
+	attributes(f.current(), &out.Attr)
+	return 0
 }
 
-func (f *file) Read(ctx context.Context, h fs.FileHandle, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
+// openHandle opens a handle on what a file node shows, for writing too when flags say so
+func (m *Mount) openHandle(e files.Entry, flags uint32) (*handle, syscall.Errno) {
+	h := &handle{}
+	if flags&syscall.O_ACCMODE != syscall.O_RDONLY || flags&syscall.O_TRUNC != 0 {
+		w, err := m.service.OpenWriter(e, flags&syscall.O_TRUNC != 0)
+		if err != nil {
+			return nil, errno(err)
+		}
+		h.w = w
+	}
+	// Writable handles read too: the kernel reads pages that writes only partly cover
+	r, err := m.service.OpenNode(e)
+	if err != nil {
+		if h.w != nil {
+			h.w.Close()
+		}
+		return nil, errno(err)
+	}
+	h.r = r
+	return h, 0
+}
+
+func (f *file) Open(ctx context.Context, flags uint32) (gofs.FileHandle, uint32, syscall.Errno) {
+	e := f.current()
+	writing := flags&syscall.O_ACCMODE != syscall.O_RDONLY || flags&syscall.O_TRUNC != 0
+	if !writing {
+		if state, err := f.m.service.State(e); err == nil && (state == "remote" || state == "partial") {
+			if name, ok := f.m.bulkReader(ctx); ok {
+				f.m.log.Debug("Refused to fetch a file for a program that reads everything", "program", name,
+					"item", e.Item)
+				return nil, 0, syscall.EPERM
+			}
+		}
+	}
+	h, status := f.m.openHandle(e, flags)
+	if status != 0 {
+		return nil, 0, status
+	}
+	if writing || !h.r.FromGateway() {
+		// Pages of content written here aren't kept between opens
+		return h, 0, 0
+	}
+	// Content from the gateway is the same as long as the node is: the node changes with the content
+	return h, fuse.FOPEN_KEEP_CACHE, 0
+}
+
+func (f *file) Read(ctx context.Context, h gofs.FileHandle, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
 	fh, ok := h.(*handle)
 	if !ok {
 		return nil, syscall.EBADF
@@ -444,9 +650,35 @@ func (f *file) Read(ctx context.Context, h fs.FileHandle, dest []byte, off int64
 	return fuse.ReadResultData(dest[:n]), 0
 }
 
-func (f *file) Release(ctx context.Context, h fs.FileHandle) syscall.Errno {
+func (f *file) Write(ctx context.Context, h gofs.FileHandle, data []byte, off int64) (uint32, syscall.Errno) {
+	fh, ok := h.(*handle)
+	if !ok || fh.w == nil {
+		return 0, syscall.EBADF
+	}
+	n, err := fh.w.WriteAt(ctx, data, off)
+	if err != nil && n == 0 {
+		return 0, errno(err)
+	}
+	return uint32(n), 0
+}
+
+func (f *file) Fsync(ctx context.Context, h gofs.FileHandle, flags uint32) syscall.Errno {
+	if fh, ok := h.(*handle); ok && fh.w != nil {
+		return errno(fh.w.Sync())
+	}
+	return 0
+}
+
+func (f *file) Flush(ctx context.Context, h gofs.FileHandle) syscall.Errno {
+	return 0
+}
+
+func (f *file) Release(ctx context.Context, h gofs.FileHandle) syscall.Errno {
 	if fh, ok := h.(*handle); ok {
 		fh.r.Close()
+		if fh.w != nil {
+			return errno(fh.w.Close())
+		}
 	}
 	return 0
 }
@@ -469,6 +701,7 @@ func (f *file) Listxattr(ctx context.Context, dest []byte) (uint32, syscall.Errn
 
 type handle struct {
 	r *files.Reader
+	w *files.Writer
 }
 
 func (m *Mount) getxattr(item int64, attr string, dest []byte) (uint32, syscall.Errno) {
@@ -505,7 +738,13 @@ func (m *Mount) getxattr(item int64, attr string, dest []byte) (uint32, syscall.
 }
 
 func (m *Mount) setxattr(item int64, attr string, data []byte) syscall.Errno {
-	if attr != xattrKeep {
+	switch attr {
+	case xattrKeep:
+	case xattrState:
+		// What the mount reports, not something to set: programs that copy a file's attributes (vim, cp -a) copy
+		// it along, which does nothing
+		return 0
+	default:
 		return syscall.ENOTSUP
 	}
 	var keep bool

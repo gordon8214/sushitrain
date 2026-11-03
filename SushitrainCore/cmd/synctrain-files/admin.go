@@ -36,6 +36,12 @@ type RemoteFolder struct {
 	Selected bool   `json:"selective,omitempty"`
 }
 
+// Removal is where files that were only here went when their folder was removed
+type Removal struct {
+	Leftovers string `json:"leftovers,omitempty"`
+	Moved     int    `json:"moved"`
+}
+
 // ItemState is the state of an item in the mount
 type ItemState struct {
 	Path  string `json:"path"`
@@ -126,7 +132,8 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string) {
 		if err != nil {
 			return nil, err
 		}
-		return nil, s.RemoveFolder(p.ID)
+		dest, moved, err := s.RemoveFolder(p.ID)
+		return Removal{Leftovers: dest, Moved: moved}, err
 	})
 	a.Register("keep", func(ctx context.Context, params json.RawMessage) (any, error) {
 		p, err := decode[struct {
@@ -145,6 +152,49 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string) {
 			return nil, err
 		}
 		return nil, s.SetKeep(e.Item, p.Keep)
+	})
+	a.Register("pending.list", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return s.Edits()
+	})
+	a.Register("pending.export", func(ctx context.Context, params json.RawMessage) (any, error) {
+		p, err := decode[struct {
+			ID   int64
+			Dest string
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+		return nil, s.ExportEdit(p.ID, p.Dest)
+	})
+	a.Register("pending.discard", func(ctx context.Context, params json.RawMessage) (any, error) {
+		p, err := decode[struct{ ID int64 }](params)
+		if err != nil {
+			return nil, err
+		}
+		return nil, s.DiscardEdit(p.ID)
+	})
+	a.Register("wait", func(ctx context.Context, params json.RawMessage) (any, error) {
+		p, err := decode[struct {
+			Path    string
+			Timeout time.Duration
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+		rel, err := mountPath(mount, p.Path)
+		if err != nil {
+			return nil, err
+		}
+		e, err := s.Resolve(rel)
+		if err != nil {
+			return nil, err
+		}
+		if p.Timeout <= 0 || p.Timeout > 10*time.Minute {
+			p.Timeout = 10 * time.Minute
+		}
+		ctx, cancel := context.WithTimeout(ctx, p.Timeout)
+		defer cancel()
+		return nil, s.Wait(ctx, e.Item)
 	})
 	a.Register("state", func(ctx context.Context, params json.RawMessage) (any, error) {
 		p, err := decode[struct{ Path string }](params)

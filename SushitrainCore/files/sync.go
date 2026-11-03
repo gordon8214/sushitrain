@@ -291,6 +291,7 @@ func (s *Service) resetCursor(folder int64) error {
 // apply runs fn with a projector in one transaction, then tells the mount what changed
 func (s *Service) apply(ctx context.Context, fn func(*projector) error) error {
 	var changes Changes
+	var resettle map[int64]bool
 	err := s.store.tx(ctx, func(tx *sql.Tx) error {
 		p := newProjector(tx)
 		if err := fn(p); err != nil {
@@ -300,12 +301,16 @@ func (s *Service) apply(ctx context.Context, fn func(*projector) error) error {
 			return err
 		}
 		changes = p.changes
+		resettle = p.resettle
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 	s.changed(changes)
+	for folder := range resettle {
+		s.settleLater(folder)
+	}
 	return nil
 }
 
@@ -338,6 +343,12 @@ func (s *Service) checkCapabilities(ctx context.Context, g gatewayRef, client *r
 			}
 			if _, err := tx.Exec(`DELETE FROM snapshots WHERE folder IN (SELECT id FROM folders WHERE service_id = ?)`,
 				g.serviceID); err != nil {
+				return err
+			}
+			// Whether what was sent took effect can't be known: it is never sent again, and waits for review
+			if _, err := tx.Exec(`UPDATE outbox SET state = 'unknown', error = 'the gateway''s database was reset or
+				restored since it was sent', updated_at = ? WHERE state IN ('submitted', 'pending')
+				AND folder IN (SELECT id FROM folders WHERE service_id = ?)`, nowUnix(), g.serviceID); err != nil {
 				return err
 			}
 		}

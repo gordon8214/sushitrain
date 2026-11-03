@@ -171,17 +171,21 @@ func (c *cache) touch(contentID string) {
 	})
 }
 
-// Reader reads a file's content as it was when opened, fetching blocks from the gateway as they are read
+// Reader reads a file's content as it was when opened, fetching blocks from the gateway as they are read. A reader
+// of a node reads its working copy while it has one, as every handle of a file on a local filesystem reads what is
+// written through the others.
 type Reader struct {
 	c         *cache
+	node      uint64
 	contentID string
 	size      int64
 	file      *os.File
 	t         *transfer
+	pinned    bool
 	closeOnce sync.Once
 }
 
-// OpenFile opens an item's content for reading. Content that isn't here is fetched in the background, and reads
+// OpenFile opens an item's content as it is now. Content that isn't here is fetched in the background, and reads
 // wait only for the blocks they cover.
 func (s *Service) OpenFile(item int64) (*Reader, error) {
 	e, ok, err := s.Item(item)
@@ -191,13 +195,51 @@ func (s *Service) OpenFile(item int64) (*Reader, error) {
 	if !ok {
 		return nil, fs.ErrNotExist
 	}
-	if e.Kind != kindFile {
-		return nil, errors.New("not a file")
+	return s.open(e, 0)
+}
+
+// OpenNode opens what a node shows. A node that no longer shows its item (it was given a new one when its content
+// changed on the gateway) can't be opened again, unless it is being written.
+func (s *Service) OpenNode(e Entry) (*Reader, error) {
+	current, ok, err := s.Item(e.Item)
+	if err != nil {
+		return nil, err
 	}
-	r := &Reader{c: s.cache, contentID: e.ContentID, size: e.Size}
-	if e.Size == 0 {
+	if !ok || current.Node != e.Node {
+		if s.workingCopy(e.Node) == nil {
+			return nil, ErrVersionChanged
+		}
+		current = e
+	}
+	return s.open(current, e.Node)
+}
+
+func (s *Service) open(e Entry, node uint64) (*Reader, error) {
+	if e.Kind != kindFile {
+		return nil, ErrIsDir
+	}
+	r := &Reader{c: s.cache, node: node, contentID: e.ContentID, size: e.Size}
+	// Content the gateway hasn't committed yet is read from here
+	if path, err := s.localContentPath(e.Item); err != nil {
+		return nil, err
+	} else if path != "" {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		info, err := f.Stat()
+		if err != nil {
+			f.Close()
+			return nil, err
+		}
+		r.file, r.size, r.contentID = f, info.Size(), ""
 		return r, nil
 	}
+	if e.Size == 0 || e.ContentID == "" {
+		r.size = 0
+		return r, nil
+	}
+	r.pinned = true
 	s.cache.pin(e.ContentID)
 	cached, err := s.cache.cached(e.ContentID)
 	if err != nil {
@@ -210,7 +252,7 @@ func (s *Service) OpenFile(item int64) (*Reader, error) {
 			return r, nil
 		}
 	}
-	if r.t, err = s.cache.transferFor(e.ContentID, item, e.Size, false); err != nil {
+	if r.t, err = s.cache.transferFor(e.ContentID, e.Item, e.Size, false); err != nil {
 		s.cache.unpin(e.ContentID)
 		return nil, err
 	}
@@ -234,6 +276,11 @@ func (r *Reader) Local() bool {
 
 // ReadAt reads len(p) bytes at off, or fewer at the end of the content, waiting for blocks that aren't here
 func (r *Reader) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
+	if r.node != 0 {
+		if n, ok, err := r.c.s.readWorkingCopy(r.node, p, off); ok {
+			return n, err
+		}
+	}
 	if off >= r.size {
 		return 0, io.EOF
 	}
@@ -256,7 +303,7 @@ func (r *Reader) Close() error {
 		if r.t != nil {
 			r.c.release(r.t)
 		}
-		if r.size > 0 {
+		if r.pinned {
 			r.c.unpin(r.contentID)
 		}
 	})
@@ -775,30 +822,55 @@ func (t *transfer) wait(ctx context.Context, off int64, n int) error {
 	}
 }
 
-// State is how much of an item's content is here: "remote" (none), "partial", "local", or "kept" (local, and kept on
-// this device on purpose)
+// State is how an item is here: "remote" (its content isn't here), "partial", "local", "kept" (local, and kept on
+// this device on purpose), "pending" (changed here, not committed by the gateway yet), "failed" or "blocked" (a
+// change that can't be sent, waiting to be exported or discarded) or "local-only" (never sent)
 func (s *Service) State(e Entry) (string, error) {
+	var local int
+	var review, pending bool
+	err := s.store.db.QueryRow(`SELECT local,
+		EXISTS (SELECT 1 FROM outbox WHERE item = items.id AND state IN ('failed', 'unknown')),
+		EXISTS (SELECT 1 FROM outbox WHERE item = items.id AND state IN ('queued', 'uploaded', 'submitted', 'pending')
+			) OR EXISTS (SELECT 1 FROM work WHERE item = items.id AND detached = 0)
+		FROM items WHERE id = ?`, e.Item).Scan(&local, &review, &pending)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+	var blocked bool
+	if err := s.store.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM outbox WHERE item = ? AND state = 'blocked')`,
+		e.Item).Scan(&blocked); err != nil {
+		return "", err
+	}
+	switch {
+	case local&localOnly != 0:
+		return "local-only", nil
+	case blocked:
+		return "blocked", nil
+	case review:
+		return "failed", nil
+	case pending || local != 0:
+		return "pending", nil
+	}
 	if e.IsDir() {
 		if e.Keep {
 			return "kept", nil
 		}
 		return "", nil
 	}
-	local := e.Size == 0
-	if !local {
-		var err error
-		if local, err = s.cache.cached(e.ContentID); err != nil {
+	here := e.Size == 0
+	if !here {
+		if here, err = s.cache.cached(e.ContentID); err != nil {
 			return "", err
 		}
 	}
 	switch {
-	case local && e.Keep:
+	case here && e.Keep:
 		return "kept", nil
-	case local:
+	case here:
 		return "local", nil
 	}
 	var partial bool
-	err := s.store.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM transfers WHERE content_id = ?)`, e.ContentID).Scan(&partial)
+	err = s.store.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM transfers WHERE content_id = ?)`, e.ContentID).Scan(&partial)
 	if partial {
 		return "partial", err
 	}
@@ -999,4 +1071,10 @@ func (c *cache) remove(contentID string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// FromGateway reports whether the reader reads content as the gateway committed it (rather than content written
+// here), which stays the same as long as its node does
+func (r *Reader) FromGateway() bool {
+	return r.contentID != ""
 }

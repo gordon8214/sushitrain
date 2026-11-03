@@ -69,11 +69,13 @@ type projector struct {
 	touched      map[int64]bool
 	sessionMarks map[int64]int64
 	readsFolder  map[string]bool
+	// Folders whose local changes need settling again (a directory they need was removed on the gateway)
+	resettle map[int64]bool
 }
 
 func newProjector(tx *sql.Tx) *projector {
 	return &projector{tx: tx, touched: map[int64]bool{}, sessionMarks: map[int64]int64{},
-		readsFolder: map[string]bool{}}
+		readsFolder: map[string]bool{}, resettle: map[int64]bool{}}
 }
 
 type remoteRow struct {
@@ -143,14 +145,67 @@ func (p *projector) nodeOf(item sql.NullInt64) (uint64, error) {
 	return uint64(node), err
 }
 
-// hasOverlay reports whether the item has a local change the gateway hasn't confirmed, which its row shows instead
-// of the gateway's metadata. There are none until the mount can be written.
-func (p *projector) hasOverlay(int64) (bool, error) {
-	return false, nil
+// overlaid is the condition on an item (as i) that it has changes here the gateway hasn't committed, which its row
+// shows instead of the gateway's metadata: changes not settled yet, operations not resolved, or a working copy
+const overlaid = `(i.local != 0 OR EXISTS (SELECT 1 FROM outbox AS o WHERE o.item = i.id AND o.state IN ` +
+	unresolvedStates + `) OR EXISTS (SELECT 1 FROM work AS w WHERE w.item = i.id AND w.detached = 0))`
+
+func (p *projector) hasOverlay(item int64) (bool, error) {
+	var result bool
+	err := p.tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM items AS i WHERE i.id = ? AND `+overlaid+`)`, item).Scan(&result)
+	return result, err
 }
 
-func (p *projector) subtreeHasOverlay(int64) (bool, error) {
-	return false, nil
+// subtreeHasOverlay reports whether something below an item has changes here
+func (p *projector) subtreeHasOverlay(item int64) (bool, error) {
+	var result bool
+	err := p.tx.QueryRow(`WITH RECURSIVE sub(id) AS (SELECT id FROM items WHERE parent = ?1
+			UNION ALL SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id)
+		SELECT EXISTS (SELECT 1 FROM items AS i JOIN sub ON sub.id = i.id WHERE `+overlaid+`)`, item).Scan(&result)
+	return result, err
+}
+
+// mapItem records that a gateway item is what an item created here became (the result of its creation). It shows
+// the gateway's metadata once nothing of it is pending.
+func (p *projector) mapItem(item remoteapi.Item, folder, local int64) error {
+	var existing sql.NullInt64
+	err := p.tx.QueryRow(`SELECT item FROM remote_items WHERE gateway_id = ?`, item.ID).Scan(&existing)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if existing.Valid && existing.Int64 != local {
+		// The change feed came first and showed it as a new item: that row goes
+		row, err := p.itemRow(existing.Int64)
+		if err != nil {
+			return err
+		}
+		if row != nil && !row.deleted {
+			if err := p.removeRow(row, false); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := p.tx.Exec(`UPDATE remote_items SET item = NULL WHERE item = ? AND gateway_id != ?`, local,
+		item.ID); err != nil {
+		return err
+	}
+	var parent, contentID sql.NullString
+	if item.ParentID != nil {
+		parent = sql.NullString{String: *item.ParentID, Valid: true}
+	}
+	if item.ContentID != "" {
+		contentID = sql.NullString{String: item.ContentID, Valid: true}
+	}
+	mark, err := p.sessionMark(folder)
+	if err != nil {
+		return err
+	}
+	_, err = p.tx.Exec(`INSERT INTO remote_items (gateway_id, folder, item, parent_gateway_id, name, kind, revision,
+		content_id, size, modified_ns, subtree_generation, deleted, seen_mark, placed)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1)
+		ON CONFLICT (gateway_id) DO UPDATE SET item = excluded.item, placed = 1`, item.ID, folder, local, parent,
+		item.Name, item.Kind, item.Revision, contentID, item.Size, item.ModifiedNs, item.SubtreeGeneration, mark)
+	return err
 }
 
 // sessionMark is the mark of the folder's snapshot in progress (0 without one): items stored outside the snapshot
@@ -508,23 +563,54 @@ func (p *projector) place(gatewayID string, mayDisplace bool) (bool, error) {
 	return true, p.setPlaced(gatewayID, sql.NullInt64{Int64: id, Valid: true})
 }
 
-// removeRow removes a row and the rows below it. With unplace, their gateway items wait to be placed again (they
-// were displaced, not deleted).
+// removeRow removes a row and the rows below it, except those with changes here, which keep the directories above
+// them. With unplace, their gateway items wait to be placed again (they were displaced, not deleted).
 func (p *projector) removeRow(row *itemRow, unplace bool) error {
 	now := nowUnix()
+	if kept, err := p.hasOverlay(row.id); err != nil || kept {
+		return err
+	}
 	if row.kind == kindDir || row.kind == kindRoot {
-		sub := `WITH RECURSIVE sub(id) AS (
-			SELECT id FROM items WHERE parent = ?1 AND deleted = 0
-			UNION ALL SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id WHERE i.deleted = 0)`
+		// What has changes here stays, with the directories it is in
+		keep := `WITH RECURSIVE sub(id, parent) AS (
+				SELECT id, parent FROM items WHERE parent = ?1
+				UNION ALL SELECT i.id, i.parent FROM items AS i JOIN sub ON i.parent = sub.id),
+			changed(id) AS (SELECT sub.id FROM sub JOIN items AS i ON i.id = sub.id WHERE ` + overlaid + `),
+			kept(id) AS (SELECT id FROM changed
+				UNION SELECT sub.parent FROM sub JOIN kept ON kept.id = sub.id WHERE sub.parent != ?1)`
+		var keeps bool
+		if err := p.tx.QueryRow(keep+` SELECT EXISTS (SELECT 1 FROM kept)`, row.id).Scan(&keeps); err != nil {
+			return err
+		}
+		sub := keep + `, gone(id) AS (SELECT id FROM sub WHERE id NOT IN (SELECT id FROM kept))`
 		if unplace {
-			if _, err := p.tx.Exec(sub+` UPDATE remote_items SET placed = 0 WHERE item IN (SELECT id FROM sub)`,
+			if _, err := p.tx.Exec(sub+` UPDATE remote_items SET placed = 0 WHERE item IN (SELECT id FROM gone)`,
 				row.id); err != nil {
 				return err
 			}
 		}
-		if _, err := p.tx.Exec(sub+` UPDATE items SET deleted = 1, deleted_at = ?2 WHERE id IN (SELECT id FROM sub)`,
-			row.id, now); err != nil {
+		if _, err := p.tx.Exec(sub+` UPDATE items SET deleted = 1, deleted_at = ?2 WHERE id IN (SELECT id FROM gone)
+			AND deleted = 0`, row.id, now); err != nil {
 			return err
+		}
+		if keeps {
+			if unplace {
+				// Displaced, with changes below it: it stays where it is, and its gateway item waits
+				_, err := p.tx.Exec(`UPDATE remote_items SET placed = 0 WHERE item = ?`, row.id)
+				return err
+			}
+			// Removed on the gateway with changes here below it: the directories they need are made again there
+			if _, err := p.tx.Exec(keep+` UPDATE items SET local = local | ?2 WHERE (id = ?1 OR id IN
+				(SELECT id FROM kept)) AND kind = ?3 AND id NOT IN (SELECT id FROM changed)`, row.id, localCreated,
+				kindDir); err != nil {
+				return err
+			}
+			if _, err := p.tx.Exec(keep+` UPDATE remote_items SET item = NULL WHERE item = ?1 OR (item IN
+				(SELECT id FROM kept) AND item NOT IN (SELECT id FROM changed))`, row.id); err != nil {
+				return err
+			}
+			p.resettle[row.folder] = true
+			return nil
 		}
 	}
 	if unplace {

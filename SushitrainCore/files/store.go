@@ -80,6 +80,11 @@ var schema = []string{
 	`CREATE INDEX remote_items_seen ON remote_items(folder, seen_mark)`,
 	// What the mount shows. An item keeps its ID through renames and moves; node is its FUSE inode number, which
 	// changes when its content does, so that a handle on the old content keeps its own pages.
+	//
+	// Changes made here are in local (local… flags) until they are settled into operations, and an item shows them
+	// until the gateway has committed those. base_… is what the gateway had of the item when it was first changed
+	// here: what the changes are based on. local_content is the file in the state directory with the item's content
+	// while the gateway hasn't committed it.
 	`CREATE TABLE items (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		folder INTEGER NOT NULL,
@@ -93,8 +98,61 @@ var schema = []string{
 		keep INTEGER NOT NULL DEFAULT 0,
 		last_used INTEGER NOT NULL DEFAULT 0,
 		deleted INTEGER NOT NULL DEFAULT 0,
-		deleted_at INTEGER
+		deleted_at INTEGER,
+		local INTEGER NOT NULL DEFAULT 0,
+		base_revision TEXT,
+		base_content_id TEXT,
+		base_subtree INTEGER,
+		changed_at INTEGER NOT NULL DEFAULT 0,
+		local_content TEXT
 	)`,
+	`CREATE INDEX items_local ON items(folder) WHERE local != 0`,
+	// Working copies of files being written, one per node: a reflink of the content it started from, which writes
+	// change. writing means writable handles were open (after a crash, its content may be torn); detached means its
+	// node no longer shows an item (it was removed or replaced), so what is written to it is dropped, as on a local
+	// filesystem.
+	`CREATE TABLE work (
+		node INTEGER PRIMARY KEY,
+		item INTEGER NOT NULL,
+		file TEXT NOT NULL,
+		writing INTEGER NOT NULL DEFAULT 0,
+		detached INTEGER NOT NULL DEFAULT 0
+	)`,
+	// Operations to send, in order per folder. payload is the request exactly as sent, stored before it is sent the
+	// first time (one operation ID per intent, replayed unchanged). staged is the immutable copy of the content to
+	// upload, in the state directory. A row whose base_revision is empty takes it from the result of the operation
+	// before it on the same item.
+	`CREATE TABLE outbox (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		op_id TEXT NOT NULL UNIQUE,
+		folder INTEGER NOT NULL,
+		item INTEGER NOT NULL,
+		kind TEXT NOT NULL,
+		item_kind TEXT NOT NULL DEFAULT '',
+		state TEXT NOT NULL,
+		base_revision TEXT NOT NULL DEFAULT '',
+		base_content_id TEXT NOT NULL DEFAULT '',
+		subtree_generation INTEGER,
+		target_parent INTEGER,
+		target_name TEXT NOT NULL DEFAULT '',
+		staged TEXT,
+		digest TEXT NOT NULL DEFAULT '',
+		size INTEGER NOT NULL DEFAULT 0,
+		mod_ns INTEGER,
+		upload_id TEXT NOT NULL DEFAULT '',
+		payload BLOB,
+		server_op TEXT NOT NULL DEFAULT '',
+		authority_generation INTEGER,
+		result_revision TEXT NOT NULL DEFAULT '',
+		result_content_id TEXT NOT NULL DEFAULT '',
+		attempts INTEGER NOT NULL DEFAULT 0,
+		not_before INTEGER NOT NULL DEFAULT 0,
+		error TEXT NOT NULL DEFAULT '',
+		created_at INTEGER NOT NULL,
+		updated_at INTEGER NOT NULL
+	)`,
+	`CREATE INDEX outbox_folder ON outbox(folder, state)`,
+	`CREATE INDEX outbox_item ON outbox(item)`,
 	`CREATE UNIQUE INDEX items_child ON items(parent, name) WHERE deleted = 0`,
 	`CREATE UNIQUE INDEX items_node ON items(node)`,
 	`CREATE INDEX items_folder ON items(folder, deleted)`,

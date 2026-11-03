@@ -42,6 +42,19 @@ type Config struct {
 	// Allow pairing with a gateway on this machine (for tests: a gateway is what this machine has instead of files)
 	AllowLocalGateway bool
 	Logger            *slog.Logger
+	// Told about what someone should know of: a change that can't be sent, a gateway out of reach
+	Notify func(Notice)
+	// Called at points where a crash would leave work half done, for tests that stop there (an error stops)
+	Hook func(point string) error
+	// How long a folder must be quiet before its changes are sent (DefaultSettleDelay when 0)
+	SettleDelay time.Duration
+}
+
+// Notice is something to tell the person using the machine
+type Notice struct {
+	// "review" (changes can't be sent: export or discard them), "unreachable" (a gateway is out of reach)
+	Kind    string
+	Message string
 }
 
 // DefaultCacheBudget is how much content the cache keeps by default, as on the other platforms
@@ -54,13 +67,20 @@ type Service struct {
 	log   *slog.Logger
 	cache *cache
 
-	mutex       sync.Mutex
-	clients     map[string]*remoteclient.Client
-	loops       map[int64]context.CancelFunc
-	invalidator func(Changes)
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
+	mutex        sync.Mutex
+	clients      map[string]*remoteclient.Client
+	loops        map[int64]context.CancelFunc
+	invalidator  func(Changes)
+	work         map[uint64]*workingCopy
+	settleTimers map[int64]*time.Timer
+	busySince    map[int64]time.Time
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+
+	// Settling and collecting staged content take turns
+	settleMutex sync.Mutex
+	outboxWake  chan struct{}
 }
 
 // Open opens the service's index and cache; Start starts following the gateways
@@ -73,6 +93,9 @@ func Open(cfg Config) (*Service, error) {
 	}
 	if cfg.Platform == "" {
 		cfg.Platform = "Linux"
+	}
+	if cfg.SettleDelay <= 0 {
+		cfg.SettleDelay = DefaultSettleDelay
 	}
 	if cfg.ClientName == "" {
 		cfg.ClientName, _ = os.Hostname()
@@ -87,13 +110,37 @@ func Open(cfg Config) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{cfg: cfg, store: store, log: cfg.Logger, clients: map[string]*remoteclient.Client{},
-		loops: map[int64]context.CancelFunc{}}
+		loops: map[int64]context.CancelFunc{}, work: map[uint64]*workingCopy{}, settleTimers: map[int64]*time.Timer{},
+		busySince: map[int64]time.Time{}, outboxWake: make(chan struct{}, 1)}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	if s.cache, err = openCache(s); err != nil {
 		store.Close()
 		return nil, err
 	}
+	if err := s.recover(); err != nil {
+		store.Close()
+		return nil, fmt.Errorf("recovering changes: %w", err)
+	}
 	return s, nil
+}
+
+func (s *Service) hook(point string) error {
+	if s.cfg.Hook != nil {
+		return s.cfg.Hook(point)
+	}
+	return nil
+}
+
+func (s *Service) notify(n Notice) {
+	if s.cfg.Notify != nil {
+		s.cfg.Notify(n)
+	}
+}
+
+// reviewNeeded tells that changes can't be sent
+func (s *Service) reviewNeeded() {
+	s.notify(Notice{Kind: "review", Message: "Some changes can't be sent to their gateway. Export or discard them " +
+		"with synctrain-files pending, or in Synctrain's window."})
 }
 
 // SetInvalidator sets what is told about changes to the tree once they are stored (the mount, which drops what the
@@ -125,22 +172,55 @@ func (s *Service) Start() error {
 	for _, f := range folders {
 		s.startLoop(f)
 	}
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go func() {
 		defer s.wg.Done()
 		s.cache.run(s.ctx)
 	}()
-	return nil
+	go func() {
+		defer s.wg.Done()
+		s.runOutbox(s.ctx)
+	}()
+	// Changes from before a restart that weren't settled
+	rows, err := s.store.db.Query(`SELECT DISTINCT folder FROM items WHERE local & ? != 0 AND local & ? = 0`,
+		localCreated|localContent|localMoved|localDeleted, localOnly|localFolded)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var folder int64
+		if err := rows.Scan(&folder); err != nil {
+			return err
+		}
+		s.settleLater(folder)
+	}
+	return rows.Err()
 }
 
 // Close stops everything and closes the index
 func (s *Service) Close() error {
 	s.cancel()
+	s.mutex.Lock()
+	for _, t := range s.settleTimers {
+		t.Stop()
+	}
+	s.mutex.Unlock()
+	// A settle in progress finishes
+	s.settleMutex.Lock()
+	s.settleMutex.Unlock()
 	s.wg.Wait()
 	s.cache.close()
 	s.mutex.Lock()
 	for _, c := range s.clients {
 		c.Close()
+	}
+	for _, wc := range s.work {
+		wc.mutex.Lock()
+		if wc.file != nil {
+			wc.file.Close()
+		}
+		wc.mutex.Unlock()
 	}
 	s.mutex.Unlock()
 	return s.store.Close()
@@ -516,9 +596,38 @@ func uniqueDirName(tx *sql.Tx, label, id string) (string, error) {
 	}
 }
 
+// ErrUnresolved refuses to remove a folder whose changes the gateway hasn't committed
+var ErrUnresolved = errors.New("changes made here aren't on the gateway yet")
+
 // RemoveFolder takes a folder out of the mount. It stays on the gateway; its cached content goes as the cache needs
-// room.
-func (s *Service) RemoveFolder(id int64) error {
+// room. It is refused while changes made here aren't committed; files that are only here are moved out first.
+// Returns where they went, and how many.
+func (s *Service) RemoveFolder(id int64) (string, int, error) {
+	n, err := s.Unresolved(id)
+	if err != nil {
+		return "", 0, err
+	}
+	if n > 0 {
+		return "", 0, fmt.Errorf("%w: %d (wait for them, or export or discard them)", ErrUnresolved, n)
+	}
+	var label string
+	if err := s.store.db.QueryRow(`SELECT label FROM folders WHERE id = ?`, id).Scan(&label); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", 0, errors.New("no such folder")
+		}
+		return "", 0, err
+	}
+	dest, moved, err := s.leftovers(id, label)
+	if err != nil {
+		return "", 0, fmt.Errorf("moving files that are only here out of the folder: %w", err)
+	}
+	if err := s.removeFolder(id); err != nil {
+		return "", 0, err
+	}
+	return dest, moved, nil
+}
+
+func (s *Service) removeFolder(id int64) error {
 	s.stopLoop(id)
 	var changes Changes
 	err := s.store.tx(context.Background(), func(tx *sql.Tx) error {
@@ -534,6 +643,8 @@ func (s *Service) RemoveFolder(id int64) error {
 		for _, statement := range []string{
 			`DELETE FROM remote_items WHERE folder = ?`,
 			`DELETE FROM transfers WHERE item IN (SELECT id FROM items WHERE folder = ?)`,
+			`DELETE FROM work WHERE item IN (SELECT id FROM items WHERE folder = ?)`,
+			`DELETE FROM outbox WHERE folder = ?`,
 			`DELETE FROM items WHERE folder = ?`,
 			`DELETE FROM cursors WHERE folder = ?`,
 			`DELETE FROM snapshots WHERE folder = ?`,
