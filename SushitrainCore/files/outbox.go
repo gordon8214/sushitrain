@@ -140,6 +140,9 @@ func (s *Service) outboxPass(ctx context.Context) (time.Duration, error) {
 			worked = true
 			continue
 		}
+		if o, err = s.neededFirst(o); err != nil {
+			return 0, err
+		}
 		var notBefore int64
 		if err := s.store.db.QueryRow(`SELECT not_before FROM outbox WHERE id = ?`, o.id).Scan(&notBefore); err != nil {
 			return 0, err
@@ -161,6 +164,37 @@ func (s *Service) outboxPass(ctx context.Context) (time.Duration, error) {
 		return 0, nil
 	}
 	return wait, nil
+}
+
+// neededFirst returns the operation to step instead of o: the creation of the directory o creates or moves something
+// into, when that directory isn't on the gateway and its creation was queued after o (removed on the gateway while
+// something in it changed here, it is made again), and so on up. Otherwise o. Only a creation nothing before it
+// waits for goes out of turn: the order of everything else is what keeps names and moves straight.
+func (s *Service) neededFirst(o *outboxRow) (*outboxRow, error) {
+	f, err := s.folderGateway(s.store.db, o.folder)
+	if err != nil {
+		return nil, err
+	}
+	for range 256 {
+		if (o.kind != remoteapi.OpCreate && o.kind != remoteapi.OpMove) || !o.targetPar.Valid ||
+			(o.state != stateQueued && o.state != stateUploaded) {
+			return o, nil
+		}
+		if parentID, err := gatewayIDOf(s.store.db, o.targetPar.Int64, f); err != nil || parentID != "" {
+			return o, err
+		}
+		creation, err := scanOutbox(s.store.db.QueryRow(`SELECT `+outboxColumns+` FROM outbox WHERE item = ?
+			AND folder = ? AND kind = 'create' AND state IN `+activeStates+` ORDER BY id LIMIT 1`, o.targetPar.Int64,
+			o.folder))
+		if errors.Is(err, sql.ErrNoRows) {
+			return o, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		o = creation
+	}
+	return o, nil
 }
 
 // retryLater records a failure that left the operation as it was, and returns how long to wait before trying again:

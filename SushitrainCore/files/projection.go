@@ -455,7 +455,9 @@ func (p *projector) place(gatewayID string, mayDisplace bool) (bool, error) {
 				}
 			}
 		}
-		return true, p.setPlaced(gatewayID, r.item)
+		// Linked as removeRow left it: a directory kept for the changes in it is made again, as another item
+		_, err := p.tx.Exec(`UPDATE remote_items SET placed = 1 WHERE gateway_id = ?`, gatewayID)
+		return true, err
 	}
 	parent, err := p.parentRow(r)
 	if err != nil {

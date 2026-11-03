@@ -774,3 +774,38 @@ func TestRemovingADirectoryWithWhatMovedIntoIt(t *testing.T) {
 	ts.gatewayLacks("other/x.txt")
 	ts.gatewayLacks("dir/x.txt")
 }
+
+// A directory removed on the gateway while a new file in it was on its way is made again, before the file, though
+// its creation was queued after the file's
+func TestDirectoryMadeAgainGoesFirst(t *testing.T) {
+	g := writableGateway(t, map[string]string{"sub/old.txt": "old"})
+	var ts *testService
+	var once sync.Once
+	ts = newTestServiceWith(t, g, func(c *Config) {
+		c.SettleDelay = testSettleDelay
+		c.Hook = func(point string) error {
+			if point != "outbox.uploaded" {
+				return nil
+			}
+			once.Do(func() {
+				g.Engine.Remove("sub")
+				ts.refresh()
+				gatewaytest.WaitFor(t, 30*time.Second, "the directory's creation to be queued", func() bool {
+					var n int
+					_ = ts.store.db.QueryRow(`SELECT COUNT(*) FROM outbox WHERE kind = 'create'
+						AND item_kind = 'directory' AND state IN ` + activeStates).Scan(&n)
+					return n == 1
+				})
+			})
+			return nil
+		}
+	})
+	ts.create("docs/sub", "new.txt", "new")
+	time.Sleep(5 * testSettleDelay)
+	ts.settled()
+	ts.gatewayHas("sub/new.txt", "new")
+	ts.gatewayLacks("sub/old.txt")
+	if edits, err := ts.Edits(); err != nil || len(edits) != 0 {
+		t.Fatalf("edits left: %+v %v", edits, err)
+	}
+}
