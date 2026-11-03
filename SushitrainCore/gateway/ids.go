@@ -13,7 +13,6 @@ import (
 	"cmp"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"slices"
@@ -21,25 +20,26 @@ import (
 	"strings"
 
 	"github.com/syncthing/syncthing/lib/protocol"
+	"t-shaped.nl/sushitrain/v2/remoteapi"
 )
 
-var b64 = base64.RawURLEncoding
+var b64 = remoteapi.B64
 
-// Prefixes of identifiers and tokens (see Docs/remote-api/invariants.md)
+// Prefixes of identifiers and tokens (remoteapi, Docs/remote-api/invariants.md)
 const (
-	prefixService   = "svc_"
-	prefixItem      = "itm_"
-	prefixLease     = "lse_"
-	prefixUpload    = "upl_"
-	prefixSnapshot  = "snp_"
-	prefixPage      = "pg_"
-	prefixPairing   = "prq_"
-	prefixOperation = "op_"
+	prefixService   = remoteapi.PrefixService
+	prefixItem      = remoteapi.PrefixItem
+	prefixLease     = remoteapi.PrefixLease
+	prefixUpload    = remoteapi.PrefixUpload
+	prefixSnapshot  = remoteapi.PrefixSnapshot
+	prefixPage      = remoteapi.PrefixPage
+	prefixPairing   = remoteapi.PrefixPairing
+	prefixOperation = remoteapi.PrefixOperation
 
-	prefixCredential = "stc_"
-	prefixLeaseToken = "stl_"
-	prefixUploadTok  = "stu_"
-	prefixPollToken  = "stp_"
+	prefixCredential = remoteapi.PrefixCredential
+	prefixLeaseToken = remoteapi.PrefixLeaseToken
+	prefixUploadTok  = remoteapi.PrefixUploadToken
+	prefixPollToken  = remoteapi.PrefixPollToken
 )
 
 func randomBytes(n int) []byte {
@@ -73,12 +73,7 @@ func secretHash(secret string) []byte {
 }
 
 func hasIDFormat(id, prefix string) bool {
-	rest, ok := strings.CutPrefix(id, prefix)
-	if !ok || len(rest) != 22 {
-		return false
-	}
-	_, err := b64.DecodeString(rest)
-	return err == nil
+	return remoteapi.HasIDFormat(id, prefix)
 }
 
 // blocksHashOf returns the hash naming a file's block list, computing it where the index leaves it out
@@ -101,27 +96,11 @@ func contentIDOf(fi protocol.FileInfo) string {
 }
 
 func formatContentID(blocksHash []byte, size int64) string {
-	return "c1." + b64.EncodeToString(blocksHash) + "." + strconv.FormatInt(size, 10)
+	return remoteapi.FormatContentID(blocksHash, size)
 }
 
 func parseContentID(id string) (blocksHash []byte, size int64, ok bool) {
-	rest, found := strings.CutPrefix(id, "c1.")
-	if !found {
-		return nil, 0, false
-	}
-	hash, length, found := strings.Cut(rest, ".")
-	if !found {
-		return nil, 0, false
-	}
-	blocksHash, err := b64.DecodeString(hash)
-	if err != nil {
-		return nil, 0, false
-	}
-	size, err = strconv.ParseInt(length, 10, 64)
-	if err != nil || size < 0 {
-		return nil, 0, false
-	}
-	return blocksHash, size, true
+	return remoteapi.ParseContentID(id)
 }
 
 // revisionOf derives an item's opaque revision from what a client can observe of it: the version vector, content

@@ -22,14 +22,15 @@ import (
 	"github.com/syncthing/syncthing/lib/model"
 	"github.com/syncthing/syncthing/lib/protocol"
 	"github.com/syncthing/syncthing/lib/syncthing"
+	"t-shaped.nl/sushitrain/v2/remoteapi"
 )
 
 const (
-	prefixVersion = "ver_"
+	prefixVersion = remoteapi.PrefixVersion
 	// ItemVersionList.Versioning of folders without versioning, and of folders whose versions are kept in a custom path,
 	// which the service doesn't serve
-	versioningNone       = "none"
-	versioningCustomPath = "customPath"
+	versioningNone       = remoteapi.VersioningNone
+	versioningCustomPath = remoteapi.VersioningCustomPath
 )
 
 var errVersionNotFound = newAPIError(http.StatusNotFound, codeVersionNotFound, "the version does not exist")

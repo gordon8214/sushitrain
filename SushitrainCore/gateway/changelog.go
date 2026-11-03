@@ -661,6 +661,21 @@ func (s *Service) runReconciler(ctx context.Context) {
 	}
 }
 
+// ReconcileNow brings a folder's change log up to date with Syncthing's index at once, instead of after the
+// reconciler's debounce, and retries the folder's pending operations. It waits for an operation that holds the folder.
+// For tests of clients (gatewaytest), which change a folder and expect its change log to show it.
+func (s *Service) ReconcileNow(ctx context.Context, folder string) error {
+	lock := s.folderLock(folder)
+	lock.Lock()
+	err := s.reconcileLocked(ctx, folder)
+	lock.Unlock()
+	if err != nil {
+		return err
+	}
+	s.retryPendingOperations(folder)
+	return nil
+}
+
 // reconcileFolder reconciles a folder unless an operation holds it, and reports whether it did. An operation may hold
 // the folder while it waits for Syncthing's folder loop (behind a long pull), which must not hold up other folders.
 func (s *Service) reconcileFolder(ctx context.Context, folder string) bool {

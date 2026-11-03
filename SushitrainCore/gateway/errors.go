@@ -10,34 +10,36 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"t-shaped.nl/sushitrain/v2/remoteapi"
 )
 
-// Error codes (Docs/remote-api/openapi.yaml, ErrorDetail.code)
+// Error codes (remoteapi, Docs/remote-api/openapi.yaml)
 const (
-	codeInvalidRequest      = "invalid_request"
-	codeUnauthenticated     = "unauthenticated"
-	codeForbidden           = "forbidden"
-	codeFolderReadOnly      = "folder_read_only"
-	codeReservedName        = "reserved_name"
-	codeNotFound            = "not_found"
-	codeNameConflict        = "name_conflict"
-	codeIgnoredPath         = "ignored_path"
-	codeNotEmpty            = "not_empty"
-	codeCrossFolder         = "cross_folder"
-	codeRevisionMismatch    = "revision_mismatch"
-	codeUploadMismatch      = "upload_mismatch"
-	codeCursorExpired       = "cursor_expired"
-	codeSnapshotExpired     = "snapshot_expired"
-	codeLeaseExpired        = "lease_expired"
-	codeOperationMismatch   = "operation_mismatch"
-	codeOverloaded          = "overloaded"
-	codeTooManyAttempts     = "too_many_attempts"
-	codeContentUnavailable  = "content_unavailable"
-	codeVersionNotFound     = "version_not_found"
-	codeInsufficientStorage = "insufficient_storage"
-	codePairingDenied       = "pairing_denied"
-	codePairingExpired      = "pairing_expired"
-	codeInternal            = "internal"
+	codeInvalidRequest      = remoteapi.CodeInvalidRequest
+	codeUnauthenticated     = remoteapi.CodeUnauthenticated
+	codeForbidden           = remoteapi.CodeForbidden
+	codeFolderReadOnly      = remoteapi.CodeFolderReadOnly
+	codeReservedName        = remoteapi.CodeReservedName
+	codeNotFound            = remoteapi.CodeNotFound
+	codeNameConflict        = remoteapi.CodeNameConflict
+	codeIgnoredPath         = remoteapi.CodeIgnoredPath
+	codeNotEmpty            = remoteapi.CodeNotEmpty
+	codeCrossFolder         = remoteapi.CodeCrossFolder
+	codeRevisionMismatch    = remoteapi.CodeRevisionMismatch
+	codeUploadMismatch      = remoteapi.CodeUploadMismatch
+	codeCursorExpired       = remoteapi.CodeCursorExpired
+	codeSnapshotExpired     = remoteapi.CodeSnapshotExpired
+	codeLeaseExpired        = remoteapi.CodeLeaseExpired
+	codeOperationMismatch   = remoteapi.CodeOperationMismatch
+	codeOverloaded          = remoteapi.CodeOverloaded
+	codeTooManyAttempts     = remoteapi.CodeTooManyAttempts
+	codeContentUnavailable  = remoteapi.CodeContentUnavailable
+	codeVersionNotFound     = remoteapi.CodeVersionNotFound
+	codeInsufficientStorage = remoteapi.CodeInsufficientStorage
+	codePairingDenied       = remoteapi.CodePairingDenied
+	codePairingExpired      = remoteapi.CodePairingExpired
+	codeInternal            = remoteapi.CodeInternal
 )
 
 // An error with an HTTP status and machine-readable code, as returned to clients
