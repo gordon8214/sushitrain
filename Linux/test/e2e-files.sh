@@ -14,6 +14,8 @@ cleanup() {
 }
 trap cleanup EXIT
 fusermount3 -uz "$ROOT/mnt" 2>/dev/null
+# Removing through a mount left by an earlier run would remove files through the daemon
+mountpoint -q "$ROOT/mnt" 2>/dev/null && { echo "$ROOT/mnt is still mounted"; exit 1; }
 rm -rf "$ROOT" && mkdir -p "$ROOT/home" "$ROOT/docs/.stfolder" "$ROOT/docs/photos" && cd "$ROOT" || exit 1
 
 cat > home/config.xml <<'XML'
@@ -51,9 +53,11 @@ for i in $(seq 1 60); do [ -S gw.sock ] && break; sleep 0.5; done
 sleep 3
 "$BIN/synctrain-gateway" exports --socket gw.sock --add docs --write || exit 1
 
-# A scratch home, thumbnail cache, GTK bookmarks and file credentials: the session's own are left alone
+# A scratch home, thumbnail cache, GTK bookmarks, settings (Déjà Dup's) and file credentials, and no session bus
+# (notifications): the session's own are left alone
 mkdir -p "$ROOT/fakehome"
-HOME="$ROOT/fakehome" XDG_CONFIG_HOME="$ROOT/xdg-config" XDG_CACHE_HOME="$ROOT/xdg-cache" "$BIN/synctrain-files" serve --state files-state --cache files-cache --mount mnt \
+HOME="$ROOT/fakehome" XDG_CONFIG_HOME="$ROOT/xdg-config" XDG_CACHE_HOME="$ROOT/xdg-cache" GSETTINGS_BACKEND=memory \
+	DBUS_SESSION_BUS_ADDRESS=disabled: "$BIN/synctrain-files" serve --state files-state --cache files-cache --mount mnt \
 	--socket files.sock --credentials file --allow-local-gateway --log-level debug > files.log 2>&1 &
 FILES_PID=$!
 for i in $(seq 1 40); do [ -S files.sock ] && break; sleep 0.5; done
@@ -66,7 +70,7 @@ for i in $(seq 1 40); do grep -q 'synctrain+pair://' pair.log && break; sleep 0.
 LINK=$(grep -o 'synctrain+pair://[^ ]*' pair.log | head -1)
 [ -n "$LINK" ] || { echo "no pairing link"; cat pair.log; exit 1; }
 echo "== pair"
-timeout 60 "$BIN/synctrain-files" pair --socket files.sock "$LINK" || { cat pair.log; exit 1; }
+echo "$LINK" | timeout 60 "$BIN/synctrain-files" pair --socket files.sock - || { cat pair.log; exit 1; }
 wait $PAIR_PID
 SERVICE=$("$BIN/synctrain-files" gateways --socket files.sock --json | grep -o '"serviceID": "[^"]*"' | head -1 | cut -d'"' -f4)
 echo "== gateway's folders"
@@ -79,11 +83,11 @@ echo "== mount"
 grep synctrain /proc/mounts
 ls -la mnt mnt/Documents mnt/Documents/photos
 echo "== read"
-cat mnt/Documents/readme.txt
+timeout 120 cat mnt/Documents/readme.txt
 "$BIN/synctrain-files" state --socket files.sock "$ROOT/mnt/Documents/big.bin"
-dd if=mnt/Documents/big.bin bs=4096 skip=4000 count=1 status=none | cmp - <(dd if=docs/big.bin bs=4096 skip=4000 count=1 status=none) && echo "partial read matches"
+timeout 120 dd if=mnt/Documents/big.bin bs=4096 skip=4000 count=1 status=none | cmp - <(dd if=docs/big.bin bs=4096 skip=4000 count=1 status=none) && echo "partial read matches"
 getfattr -n user.synctrain.state mnt/Documents/big.bin
-cmp mnt/Documents/big.bin docs/big.bin && echo "whole file matches"
+timeout 120 cmp mnt/Documents/big.bin docs/big.bin && echo "whole file matches"
 sleep 1
 getfattr -n user.synctrain.state mnt/Documents/big.bin
 echo "== thumbnails"
@@ -109,7 +113,7 @@ echo "made here" > mnt/Documents/new.txt
 sed -i 's/hello/edited/' mnt/Documents/readme.txt
 mkdir -p mnt/Documents/made/here && echo deep > mnt/Documents/made/here/file.txt
 "$BIN/synctrain-files" pending --socket files.sock
-"$BIN/synctrain-files" wait --socket files.sock "$ROOT/mnt/Documents" && echo "all changes on the gateway"
+"$BIN/synctrain-files" wait --socket files.sock --timeout 2m "$ROOT/mnt/Documents" && echo "all changes on the gateway"
 cat docs/new.txt docs/readme.txt docs/made/here/file.txt
 ls -a docs | tr '\n' ' '; echo
 echo "== a change on the gateway"
@@ -121,7 +125,10 @@ echo "readme now: $(cat mnt/Documents/readme.txt)"
 echo "== GIO"
 gio info -a filesystem::remote,filesystem::type,standard::content-type mnt/Documents/readme.txt 2>&1 | tail -4
 echo "== stop"
-kill -TERM "$FILES_PID"; wait "$FILES_PID"; echo "daemon exit $?"; FILES_PID=
+kill -TERM "$FILES_PID"
+for i in $(seq 1 30); do kill -0 "$FILES_PID" 2>/dev/null || break; sleep 0.5; done
+kill -0 "$FILES_PID" 2>/dev/null && { echo "the daemon didn't stop"; kill -KILL "$FILES_PID"; }
+wait "$FILES_PID"; echo "daemon exit $?"; FILES_PID=
 grep -c synctrain /proc/mounts
 echo "== daemon log (warnings)"
 grep -E 'level=(WARN|ERROR)' files.log | head -20

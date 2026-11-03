@@ -12,9 +12,12 @@ import (
 	"database/sql"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,6 +49,9 @@ func (s *Service) settleLater(folder int64) {
 		s.mutex.Lock()
 		delete(s.settleTimers, folder)
 		s.mutex.Unlock()
+		if s.ctx.Err() != nil {
+			return
+		}
 		if err := s.settleFolder(folder); err != nil && s.ctx.Err() == nil {
 			if !errors.Is(err, errUnsettled) {
 				s.log.Warn("Could not settle changes", "folder", folder, "error", err)
@@ -108,16 +114,43 @@ func (s *Service) settleFolder(folder int64) error {
 		newest = max(newest, c.changedAt)
 		if wc := s.workingCopy(uint64(c.node)); wc != nil {
 			wc.mutex.Lock()
-			c.busy = wc.writers > 0
+			// A handle left on a file that was replaced writes to nothing that is sent: it holds nothing back
+			c.busy = wc.writers > 0 && !wc.detached
 			c.version = wc.version
 			wc.mutex.Unlock()
 		}
 		busy = busy || c.busy
 	}
 	if now-newest < s.cfg.SettleDelay.Milliseconds() {
-		s.settleLater(folder)
-		return nil
+		// A file changed again and again (a log, a database) holds back the folder's other changes only for a while;
+		// then those that are quiet are settled without it
+		s.mutex.Lock()
+		since, ok := s.heldSince[folder]
+		if !ok {
+			s.heldSince[folder] = time.Now()
+			since = time.Now()
+		}
+		s.mutex.Unlock()
+		if time.Since(since) < settleMaxWait {
+			s.settleLater(folder)
+			return nil
+		}
+		var quiet []*candidate
+		for _, c := range cands {
+			if now-c.changedAt >= s.cfg.SettleDelay.Milliseconds() {
+				quiet = append(quiet, c)
+			}
+		}
+		if len(quiet) == 0 {
+			s.settleLater(folder)
+			return nil
+		}
+		cands = quiet
+		defer s.settleLater(folder)
 	}
+	s.mutex.Lock()
+	delete(s.heldSince, folder)
+	s.mutex.Unlock()
 	if busy {
 		s.mutex.Lock()
 		since, ok := s.busySince[folder]
@@ -147,19 +180,55 @@ func (s *Service) settleFolder(folder int64) error {
 			os.Remove(p)
 		}
 	}()
+	staging := cands[:0:0]
 	for _, c := range cands {
 		if !c.live() || c.kind != kindFile || c.local&(localCreated|localContent) == 0 {
+			staging = append(staging, c)
 			continue
 		}
 		st, err := s.stage(c.work)
 		if err != nil {
-			return err
+			// That file's change waits (or, with its working copy gone, is given up); the others go on
+			s.unstageable(c, err)
+			continue
 		}
 		stagedFiles = append(stagedFiles, filepath.Join(s.cfg.StateDir, st.rel))
 		c.staged = st
+		staging = append(staging, c)
 	}
+	cands = staging
 	if err := s.hook("settle.staged"); err != nil {
 		return err
+	}
+
+	// The candidates' working copies are held from the check that nothing writes them to their retirement, so that
+	// a handle opened meanwhile gets a working copy of its own rather than one about to be removed. Working copies
+	// are locked before the database, as everywhere.
+	var held []*workingCopy
+	s.mutex.Lock()
+	for _, c := range cands {
+		if wc := s.work[uint64(c.node)]; wc != nil {
+			held = append(held, wc)
+		}
+	}
+	s.mutex.Unlock()
+	sort.Slice(held, func(i, j int) bool { return held[i].node < held[j].node })
+	for _, wc := range held {
+		wc.mutex.Lock()
+	}
+	unlocked := false
+	unlock := func() {
+		if !unlocked {
+			unlocked = true
+			for _, wc := range held {
+				wc.mutex.Unlock()
+			}
+		}
+	}
+	defer unlock()
+	versions := map[uint64]*workingCopy{}
+	for _, wc := range held {
+		versions[wc.node] = wc
 	}
 
 	var consumed []*candidate
@@ -170,13 +239,17 @@ func (s *Service) settleFolder(folder int64) error {
 			if err != nil || changedAt != c.changedAt {
 				return errUnsettled
 			}
-			if wc := s.workingCopy(uint64(c.node)); wc != nil {
-				wc.mutex.Lock()
-				changed := wc.version != c.version || wc.writers > 0
-				wc.mutex.Unlock()
-				if changed {
-					return errUnsettled
-				}
+			if wc := versions[uint64(c.node)]; wc != nil && !wc.detached && (wc.version != c.version || wc.writers > 0) {
+				return errUnsettled
+			}
+			// Nor may the gateway have mapped it meanwhile (its creation committed while it was staged)
+			var gateway sql.NullString
+			if err := tx.QueryRow(`SELECT gateway_id FROM remote_items WHERE item = ?`, c.id).Scan(&gateway); err != nil &&
+				!errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			if gateway != c.gateway {
+				return errUnsettled
 			}
 		}
 		var err error
@@ -186,27 +259,53 @@ func (s *Service) settleFolder(folder int64) error {
 	if err != nil {
 		return err
 	}
+	// For tests: a handle opened from here on waits for the working copies to be retired, and takes new ones
+	_ = s.hook("settle.committed")
 	// The staged files are referred to now; the working copies they were made from are not
 	stagedFiles = nil
+	var retired []*workingCopy
 	for _, c := range consumed {
 		if c.work.Valid {
 			os.Remove(filepath.Join(s.cfg.StateDir, c.work.String))
 		}
-		s.mutex.Lock()
-		if wc := s.work[uint64(c.node)]; wc != nil {
-			wc.mutex.Lock()
-			if wc.writers == 0 {
-				if wc.file != nil {
-					wc.file.Close()
-				}
-				delete(s.work, uint64(c.node))
+		if wc := versions[uint64(c.node)]; wc != nil {
+			if wc.file != nil {
+				wc.file.Close()
+				wc.file = nil
 			}
-			wc.mutex.Unlock()
+			wc.retired = true
+			retired = append(retired, wc)
 		}
-		s.mutex.Unlock()
 	}
+	unlock()
+	s.mutex.Lock()
+	for _, wc := range retired {
+		if s.work[wc.node] == wc {
+			delete(s.work, wc.node)
+		}
+	}
+	s.mutex.Unlock()
 	s.wakeOutbox()
 	return nil
+}
+
+// unstageable deals with a change whose content can't be staged: it waits, unless its working copy is gone (as
+// after a power loss right after it was made), when the change is given up and the item shows its content before it
+func (s *Service) unstageable(c *candidate, err error) {
+	if !errors.Is(err, fs.ErrNotExist) || !c.work.Valid {
+		s.log.Warn("Could not stage a change; it waits", "item", c.id, "error", err)
+		return
+	}
+	s.log.Warn("A change was lost: the file it was written to is gone", "item", c.id, "file", c.work.String)
+	_ = s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`DELETE FROM work WHERE node = ? AND file = ?`, c.node,
+			strings.TrimPrefix(c.work.String, "Work/")); err != nil {
+			return err
+		}
+		_, err := tx.Exec(`UPDATE items SET local = local & ~?, local_content = NULL, changed_at = ? WHERE id = ?
+			AND local_content = ?`, localContent, nowMillis(), c.id, c.work.String)
+		return err
+	})
 }
 
 // settleable leaves out what depends on files still being written: a removed or new file where one is being
@@ -399,7 +498,11 @@ func (s *Service) plan(tx *sql.Tx, folder int64, cands []*candidate) ([]*candida
 		if n == nil || n.gone {
 			continue
 		}
-		if err := s.adopt(tx, t, n); err != nil {
+		err := s.adopt(tx, t, n)
+		if errors.Is(err, errNoAdoption) {
+			continue
+		}
+		if err != nil {
 			return nil, err
 		}
 		delete(newAt, location{t.baseParent.Int64, t.baseName.String})
@@ -416,17 +519,41 @@ func (s *Service) plan(tx *sql.Tx, folder int64, cands []*candidate) ([]*candida
 				continue
 			}
 		}
-		res, err := tx.Exec(`WITH RECURSIVE sub(id) AS (SELECT id FROM items WHERE parent = ?1
-				UNION ALL SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id)
-			UPDATE items SET local = ?2 WHERE id IN (SELECT id FROM sub) AND deleted = 1`, c.id, localFolded)
+		// Only what was below it on the gateway: something moved into it here and removed with it was elsewhere
+		// there, and needs a removal of its own
+		rows, err := tx.Query(`WITH RECURSIVE below(id) AS (SELECT gateway_id FROM remote_items WHERE item = ?1
+				UNION ALL SELECT r.gateway_id FROM remote_items AS r JOIN below ON r.parent_gateway_id = below.id)
+			SELECT i.id FROM items AS i JOIN remote_items AS r ON r.item = i.id
+			WHERE r.gateway_id IN (SELECT id FROM below) AND i.id != ?1 AND i.deleted = 1`, c.id)
 		if err != nil {
 			return nil, err
 		}
-		if n, _ := res.RowsAffected(); n > 0 {
-			for _, d := range cands {
-				if !d.live() && d.id != c.id && isBelow(byID, d, c.id) {
-					d.gone = true
-				}
+		folded := map[int64]bool{}
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			folded[id] = true
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		for id := range folded {
+			if _, err := tx.Exec(`UPDATE items SET local = ? WHERE id = ?`, localFolded, id); err != nil {
+				return nil, err
+			}
+			// What was still to be sent of it goes with it, rather than change what the directory's removal finds
+			if _, err := tx.Exec(`UPDATE outbox SET state = 'canceled', updated_at = ? WHERE item = ?
+				AND state IN ('queued', 'uploaded')`, nowUnix(), id); err != nil {
+				return nil, err
+			}
+		}
+		for _, d := range cands {
+			if !d.live() && folded[d.id] {
+				d.gone = true
 			}
 		}
 	}
@@ -499,10 +626,14 @@ func (s *Service) plan(tx *sql.Tx, folder int64, cands []*candidate) ([]*candida
 
 	// What each operation needs first
 	deleteAt := map[location]*plannedOp{}
+	moveFrom := map[location]*plannedOp{}
 	createOf := map[int64]*plannedOp{}
 	for _, op := range ops {
 		if op.kind == remoteapi.OpDelete && op.c.baseParent.Valid {
 			deleteAt[location{op.c.baseParent.Int64, op.c.baseName.String}] = op
+		}
+		if op.kind == remoteapi.OpMove && op.c.baseParent.Valid {
+			moveFrom[location{op.c.baseParent.Int64, op.c.baseName.String}] = op
 		}
 		if op.kind == remoteapi.OpCreate && op.itemKind == remoteapi.KindDirectory {
 			createOf[op.c.id] = op
@@ -516,6 +647,10 @@ func (s *Service) plan(tx *sql.Tx, folder int64, cands []*candidate) ([]*candida
 			if d := deleteAt[location{op.targetPar.Int64, op.targetName}]; d != nil && d.c != op.c {
 				// The name is freed first
 				op.after = append(op.after, d)
+			}
+			if m := moveFrom[location{op.targetPar.Int64, op.targetName}]; m != nil && m.c != op.c {
+				// So is a name another item moves away from (log rotation: mv log.1 log.2; mv log log.1)
+				op.after = append(op.after, m)
 			}
 		}
 		if op.kind == remoteapi.OpDelete && op.c.kind == kindDir {
@@ -565,21 +700,6 @@ func (s *Service) plan(tx *sql.Tx, folder int64, cands []*candidate) ([]*candida
 		consumed = append(consumed, c)
 	}
 	return consumed, nil
-}
-
-// isBelow reports whether a candidate is below the item dir, by its current parents
-func isBelow(byID map[int64]*candidate, c *candidate, dir int64) bool {
-	for p := c.parent; p.Valid; {
-		if p.Int64 == dir {
-			return true
-		}
-		parent := byID[p.Int64]
-		if parent == nil {
-			return false
-		}
-		p = parent.parent
-	}
-	return false
 }
 
 // wasBelow reports whether a candidate was below the item dir on the gateway, by its base parents
@@ -634,8 +754,25 @@ func orderOps(ops []*plannedOp) []*plannedOp {
 	return result
 }
 
+// errNoAdoption means a new file can't take over the gateway item of the one it replaced
+var errNoAdoption = errors.New("the removed file's gateway item is being moved")
+
 // adopt makes the new file n take over the gateway item of the removed file t, whose place it took
 func (s *Service) adopt(tx *sql.Tx, t, n *candidate) error {
+	// A move of the removed file that is on its way, or waits for review, takes the gateway item elsewhere: the new
+	// file can't take its place. One not sent yet is given up, as it would move the new file.
+	var moving bool
+	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM outbox WHERE item = ? AND kind = 'move'
+		AND state IN ('submitted', 'pending', 'failed', 'unknown', 'blocked'))`, t.id).Scan(&moving); err != nil {
+		return err
+	}
+	if moving {
+		return errNoAdoption
+	}
+	if _, err := tx.Exec(`UPDATE outbox SET state = 'canceled', updated_at = ? WHERE item = ? AND kind = 'move'
+		AND state IN ('queued', 'uploaded')`, nowUnix(), t.id); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(`UPDATE remote_items SET item = ? WHERE gateway_id = ?`, n.id, t.gateway.String); err != nil {
 		return err
 	}

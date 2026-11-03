@@ -32,6 +32,8 @@ type filesView struct {
 	used     *adw.ActionRow
 	kept     *adw.ActionRow
 	budget   *adw.SpinRow
+	// Each change of the budget trims the cache: only the last of a quick series is sent
+	budgetChange debouncer
 	// Set while the budget is shown, so that showing it doesn't set it
 	showing bool
 	mount   string
@@ -86,18 +88,20 @@ func newFilesView(w *mainWindow) (gtk.Widgetter, func()) {
 	storage.SetTitle("Storage")
 	storage.SetDescription("Files fetched from gateways are kept until the cache needs room, least recently opened " +
 		"first. Files kept on this device don't count.")
-	// The daemon's minimum is 100 MB
-	v.budget = adw.NewSpinRowWithRange(0.1, 1000, 1)
+	// The daemon's minimum is 100 MiB, a little over 0.1 GB
+	v.budget = adw.NewSpinRowWithRange(0.2, 1000, 1)
 	v.budget.SetDigits(1)
 	v.budget.SetTitle("Cache size (GB)")
 	v.budget.NotifyProperty("value", func() {
 		if v.showing {
 			return
 		}
-		bytes := int64(v.budget.Value() * 1e9)
-		background(func() (struct{}, error) {
-			return struct{}{}, callFiles("storage.budget", map[string]int64{"bytes": bytes}, nil)
-		}, func(_ struct{}, err error) { w.failed(err) })
+		v.budgetChange.call(func() {
+			bytes := int64(v.budget.Value() * 1e9)
+			background(func() (struct{}, error) {
+				return struct{}{}, callFiles("storage.budget", map[string]int64{"bytes": bytes}, nil)
+			}, func(_ struct{}, err error) { w.failed(err) })
+		})
 	})
 	storage.Add(v.budget)
 	v.used = row("Fetched files", "")
@@ -138,13 +142,14 @@ func (v *filesView) refresh() {
 	v.busy = true
 	background(func() (filesState, error) {
 		var st filesState
-		if err := callFiles("status", nil, &st.status); err != nil {
+		socket := filesSocket()
+		if err := callBounded(socket, "status", nil, &st.status); err != nil {
 			return st, err
 		}
-		if err := callFiles("pending.list", nil, &st.edits); err != nil {
+		if err := callBounded(socket, "pending.list", nil, &st.edits); err != nil {
 			return st, err
 		}
-		return st, callFiles("storage", nil, &st.storage)
+		return st, callBounded(socket, "storage", nil, &st.storage)
 	}, func(st filesState, err error) {
 		v.busy = false
 		v.banner.SetRevealed(err != nil)
@@ -234,9 +239,11 @@ func (v *filesView) show(st filesState) {
 		}
 		return rows
 	})
-	v.showing = true
-	v.budget.SetValue(float64(st.storage.Budget) / 1e9)
-	v.showing = false
+	if budget := float64(st.storage.Budget) / 1e9; !editing(v.budget) && budget != v.budget.Value() {
+		v.showing = true
+		v.budget.SetValue(budget)
+		v.showing = false
+	}
 	v.used.SetSubtitle(humanBytes(st.storage.Used) + " of " + humanBytes(st.storage.Budget))
 	v.kept.SetSubtitle(humanBytes(st.storage.Kept))
 }
@@ -332,6 +339,8 @@ func (v *filesView) export(e files.Edit) {
 // pair pairs with a gateway from the link its pairing shows
 func (v *filesView) pair() {
 	d := adw.NewDialog()
+	closed := false
+	d.ConnectClosed(func() { closed = true })
 	d.SetTitle("Pair with a Gateway")
 	d.SetContentWidth(520)
 	toolbar := adw.NewToolbarView()
@@ -370,14 +379,19 @@ func (v *filesView) pair() {
 			err := callFiles("pair", map[string]string{"link": text}, &g)
 			return g, err
 		}, func(g files.Gateway, err error) {
+			if err == nil {
+				v.w.toast("Paired with " + g.Name + ". Add its folders with Add….")
+				v.refresh()
+			}
+			if closed {
+				return
+			}
 			button.SetSensitive(true)
 			if err != nil {
 				status.SetText(err.Error())
 				return
 			}
 			d.Close()
-			v.w.toast("Paired with " + g.Name + ". Add its folders with Add….")
-			v.refresh()
 		})
 	})
 	toolbar.SetContent(box)
@@ -396,6 +410,8 @@ func (v *filesView) addFolder() {
 	prefs := adw.NewPreferencesPage()
 	toolbar.SetContent(prefs)
 	d.SetChild(toolbar)
+	closed := false
+	d.ConnectClosed(func() { closed = true })
 	d.Present(v.w.win)
 
 	type gatewayFolders struct {
@@ -416,6 +432,9 @@ func (v *filesView) addFolder() {
 		}
 		return result, nil
 	}, func(list []gatewayFolders, err error) {
+		if closed {
+			return
+		}
 		if err != nil {
 			v.w.failed(err)
 			d.Close()

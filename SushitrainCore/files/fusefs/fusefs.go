@@ -102,6 +102,8 @@ func MountService(dir string, service *files.Service, opts Options) (*Mount, err
 			FsName: "synctrain",
 			Name:   "synctrain",
 			Debug:  opts.Debug,
+			// Nothing in the mount has security labels; without this the kernel asks before every write
+			IgnoreSecurityLabels: true,
 		},
 		EntryTimeout:    &entryTimeout,
 		AttrTimeout:     &attrTimeout,
@@ -158,8 +160,9 @@ func (m *Mount) invalidate(c files.Changes) {
 		if parent == nil {
 			continue
 		}
-		if child := m.inode(e.Node); e.Node != 0 && child != nil {
-			// Also tells inotify watchers that it is gone
+		if child := m.inode(e.Node); e.Gone && child != nil {
+			// Also tells inotify watchers that it is gone. Only for what is: the kernel takes the node as removed (a
+			// directory that was only moved would be dead for a shell in it).
 			parent.NotifyDelete(e.Name, child)
 		} else {
 			parent.NotifyEntry(e.Name)
@@ -200,6 +203,8 @@ func errno(err error) syscall.Errno {
 		return syscall.ENOTDIR
 	case errors.Is(err, files.ErrVersionChanged):
 		return syscall.ESTALE
+	case errors.Is(err, files.ErrKeptAbove):
+		return syscall.EPERM
 	default:
 		return syscall.EIO
 	}
@@ -233,9 +238,13 @@ func attributes(e files.Entry, out *fuse.Attr) {
 	out.Blksize = 128 << 10
 }
 
-// access answers access(2), which the kernel asks the mount about without default_permissions
-func access(writable bool, mask uint32) syscall.Errno {
+// access answers access(2), which the kernel asks the mount about without default_permissions: nothing in the
+// mount can be executed, as its modes say, and only what may be written can be
+func access(writable, dir bool, mask uint32) syscall.Errno {
 	if mask&unix.W_OK != 0 && !writable {
+		return syscall.EACCES
+	}
+	if mask&unix.X_OK != 0 && !dir {
 		return syscall.EACCES
 	}
 	return 0
@@ -279,6 +288,50 @@ func (m *Mount) statfs(out *fuse.StatfsOut) syscall.Errno {
 	return 0
 }
 
+// readOnlyFile is a file the mount makes up, which can be read only (.trackerignore)
+type readOnlyFile struct {
+	gofs.Inode
+	data  []byte
+	mtime time.Time
+}
+
+func (f *readOnlyFile) attributes(out *fuse.Attr) {
+	out.Owner = owner
+	out.Mode = fuse.S_IFREG | 0o444
+	out.Nlink = 1
+	out.Size = uint64(len(f.data))
+	out.SetTimes(&f.mtime, &f.mtime, &f.mtime)
+}
+
+func (f *readOnlyFile) Getattr(ctx context.Context, fh gofs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+	f.attributes(&out.Attr)
+	return 0
+}
+
+func (f *readOnlyFile) Setattr(ctx context.Context, fh gofs.FileHandle, in *fuse.SetAttrIn,
+	out *fuse.AttrOut) syscall.Errno {
+	return syscall.EROFS
+}
+
+func (f *readOnlyFile) Access(ctx context.Context, mask uint32) syscall.Errno {
+	return access(false, false, mask)
+}
+
+func (f *readOnlyFile) Open(ctx context.Context, flags uint32) (gofs.FileHandle, uint32, syscall.Errno) {
+	if flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC) != 0 {
+		return nil, 0, syscall.EROFS
+	}
+	return nil, fuse.FOPEN_KEEP_CACHE, 0
+}
+
+func (f *readOnlyFile) Read(ctx context.Context, fh gofs.FileHandle, dest []byte, off int64) (fuse.ReadResult,
+	syscall.Errno) {
+	if off >= int64(len(f.data)) {
+		return fuse.ReadResultData(nil), 0
+	}
+	return fuse.ReadResultData(f.data[off:min(int64(len(f.data)), off+int64(len(dest)))]), 0
+}
+
 // rootDir is the mount's root: a directory per folder, and .trackerignore
 type rootDir struct {
 	gofs.Inode
@@ -291,11 +344,48 @@ var (
 	_ gofs.NodeGetattrer = (*rootDir)(nil)
 	_ gofs.NodeAccesser  = (*rootDir)(nil)
 	_ gofs.NodeStatfser  = (*rootDir)(nil)
+	_ gofs.NodeUnlinker  = (*rootDir)(nil)
+	_ gofs.NodeRmdirer   = (*rootDir)(nil)
+	_ gofs.NodeMkdirer   = (*rootDir)(nil)
+	_ gofs.NodeRenamer   = (*rootDir)(nil)
+	_ gofs.NodeFsyncer   = (*rootDir)(nil)
+	_ gofs.NodeFsyncer   = (*dir)(nil)
+	_ gofs.NodeAccesser  = (*readOnlyFile)(nil)
+	_ gofs.NodeOpener    = (*readOnlyFile)(nil)
+	_ gofs.NodeGetattrer = (*readOnlyFile)(nil)
+	_ gofs.NodeSetattrer = (*readOnlyFile)(nil)
 )
 
 func (r *rootDir) Access(ctx context.Context, mask uint32) syscall.Errno {
-	return access(false, mask)
+	return access(false, true, mask)
 }
+
+// The root holds the folders, which are added and removed through Synctrain only
+func (r *rootDir) Unlink(ctx context.Context, name string) syscall.Errno { return syscall.EROFS }
+func (r *rootDir) Rmdir(ctx context.Context, name string) syscall.Errno  { return syscall.EROFS }
+func (r *rootDir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*gofs.Inode,
+	syscall.Errno) {
+	return nil, syscall.EROFS
+}
+func (r *rootDir) Rename(ctx context.Context, name string, newParent gofs.InodeEmbedder, newName string,
+	flags uint32) syscall.Errno {
+	return syscall.EROFS
+}
+func (r *rootDir) Symlink(ctx context.Context, target, name string, out *fuse.EntryOut) (*gofs.Inode,
+	syscall.Errno) {
+	return nil, syscall.EROFS
+}
+func (r *rootDir) Mknod(ctx context.Context, name string, mode, dev uint32, out *fuse.EntryOut) (*gofs.Inode,
+	syscall.Errno) {
+	return nil, syscall.EROFS
+}
+func (r *rootDir) Link(ctx context.Context, target gofs.InodeEmbedder, name string, out *fuse.EntryOut) (
+	*gofs.Inode, syscall.Errno) {
+	return nil, syscall.EROFS
+}
+
+// Fsync of a directory has nothing to do: what changed in it was recorded before it was answered
+func (r *rootDir) Fsync(ctx context.Context, f gofs.FileHandle, flags uint32) syscall.Errno { return 0 }
 
 func (r *rootDir) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 	return r.m.statfs(out)
@@ -312,11 +402,9 @@ func (r *rootDir) Getattr(ctx context.Context, f gofs.FileHandle, out *fuse.Attr
 
 func (r *rootDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*gofs.Inode, syscall.Errno) {
 	if name == ".trackerignore" {
-		attr := fuse.Attr{Mode: fuse.S_IFREG | 0o444, Nlink: 1, Size: uint64(len(trackerIgnore))}
-		attr.SetTimes(&r.m.mounted, &r.m.mounted, &r.m.mounted)
-		out.Attr = attr
-		return r.NewInode(ctx, &gofs.MemRegularFile{Data: []byte(trackerIgnore), Attr: attr},
-			gofs.StableAttr{Ino: 2 << 62}), 0
+		f := &readOnlyFile{data: []byte(trackerIgnore), mtime: r.m.mounted}
+		f.attributes(&out.Attr)
+		return r.NewInode(ctx, f, gofs.StableAttr{Ino: 2 << 62}), 0
 	}
 	e, ok, err := r.m.service.Lookup(0, name)
 	if err != nil {
@@ -397,8 +485,10 @@ func (d *dir) Access(ctx context.Context, mask uint32) syscall.Errno {
 	if status != 0 {
 		return status
 	}
-	return access(e.Writable, mask)
+	return access(e.Writable, true, mask)
 }
+
+func (d *dir) Fsync(ctx context.Context, f gofs.FileHandle, flags uint32) syscall.Errno { return 0 }
 
 func (d *dir) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 	return d.m.statfs(out)
@@ -447,12 +537,15 @@ func (d *dir) Create(ctx context.Context, name string, flags uint32, mode uint32
 	if err != nil {
 		return nil, nil, 0, errno(err)
 	}
-	inode := d.m.child(ctx, d.EmbeddedInode(), e, out)
 	h, status := d.m.openHandle(e, flags|syscall.O_TRUNC)
 	if status != 0 {
+		// The caller gets no file: neither does the folder
+		if _, err := d.m.service.Remove(d.item, name, false); err != nil {
+			d.m.log.Warn("Could not take back a file that couldn't be opened", "name", name, "error", err)
+		}
 		return nil, nil, 0, status
 	}
-	return inode, h, 0, 0
+	return d.m.child(ctx, d.EmbeddedInode(), e, out), h, 0, 0
 }
 
 func (d *dir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*gofs.Inode, syscall.Errno) {
@@ -556,7 +649,7 @@ func (f *file) current() files.Entry {
 }
 
 func (f *file) Access(ctx context.Context, mask uint32) syscall.Errno {
-	return access(f.current().Writable, mask)
+	return access(f.current().Writable, false, mask)
 }
 
 func (f *file) Getattr(ctx context.Context, h gofs.FileHandle, out *fuse.AttrOut) syscall.Errno {
@@ -710,6 +803,10 @@ type handle struct {
 }
 
 func (m *Mount) getxattr(item int64, attr string, dest []byte) (uint32, syscall.Errno) {
+	// Others (security.capability, which the kernel asks about before writes) answer at once
+	if attr != xattrState && attr != xattrKeep {
+		return 0, syscall.ENODATA
+	}
 	e, ok, err := m.service.Item(item)
 	if err != nil {
 		return 0, errno(err)

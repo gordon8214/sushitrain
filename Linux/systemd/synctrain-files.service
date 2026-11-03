@@ -3,6 +3,7 @@
 [Unit]
 Description=Synctrain Files (folders of a gateway, fetched on demand)
 Documentation=https://github.com/gordon8214/sushitrain/blob/file-provider/Docs/linux.md
+Conflicts=synctrain-gateway.service
 
 [Service]
 Type=notify

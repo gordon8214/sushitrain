@@ -58,6 +58,8 @@ type versionTarget struct {
 	revision  string
 	parentID  sql.NullString
 	name      string
+	// Its name here, which is checked to be one; the gateway's (name) isn't
+	localName string
 	modNs     int64
 	size      int64
 	writable  bool
@@ -67,11 +69,11 @@ type versionTarget struct {
 func (s *Service) versionTarget(item int64) (versionTarget, *remoteclient.Client, error) {
 	var t versionTarget
 	var folder int64
-	err := s.store.db.QueryRow(`SELECT r.gateway_id, r.revision, r.parent_gateway_id, r.name, r.modified_ns, r.size,
-		i.folder, f.can_write, i.local != 0 OR EXISTS (SELECT 1 FROM outbox WHERE item = i.id AND state IN `+
+	err := s.store.db.QueryRow(`SELECT r.gateway_id, r.revision, r.parent_gateway_id, r.name, i.name, r.modified_ns,
+		r.size, i.folder, f.can_write, i.local != 0 OR EXISTS (SELECT 1 FROM outbox WHERE item = i.id AND state IN `+
 		unresolvedStates+`) FROM items AS i JOIN remote_items AS r ON r.item = i.id JOIN folders AS f ON f.id = i.folder
 		WHERE i.id = ? AND i.deleted = 0 AND i.kind = ?`, item, kindFile).Scan(&t.gatewayID, &t.revision, &t.parentID,
-		&t.name, &t.modNs, &t.size, &folder, &t.writable, &t.pending)
+		&t.name, &t.localName, &t.modNs, &t.size, &folder, &t.writable, &t.pending)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, nil, errors.New("not a file on a gateway")
 	}
@@ -119,6 +121,19 @@ func (s *Service) Versions(ctx context.Context, item int64) (Versions, error) {
 	return result, nil
 }
 
+// removeOldPreviews removes previews made more than a day ago, which nothing shows any more
+func removeOldPreviews(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil && time.Since(info.ModTime()) > 24*time.Hour {
+			_ = os.RemoveAll(filepath.Join(dir, entry.Name()))
+		}
+	}
+}
+
 // validVersionID reports whether an ID has the documented form: it names directories of previews
 func validVersionID(id string) bool {
 	number, ok := strings.CutPrefix(id, remoteapi.PrefixVersion)
@@ -136,9 +151,27 @@ func (s *Service) VersionToFile(ctx context.Context, item int64, versionID, dir 
 	if err != nil {
 		return "", err
 	}
-	dest := filepath.Join(dir, fmt.Sprintf("%d-%s", item, versionID), t.name)
+	// Named as the file is here: one name, which the gateway's needn't be
+	if !validName(t.localName) {
+		return "", ErrInvalidName
+	}
+	removeOldPreviews(dir)
+	dest := filepath.Join(dir, fmt.Sprintf("%d-%s", item, versionID), t.localName)
 	if _, err := os.Stat(dest); err == nil {
 		return dest, nil
+	}
+	versions, err := s.Versions(ctx, item)
+	if err != nil {
+		return "", err
+	}
+	size := int64(-1)
+	for _, v := range versions.Versions {
+		if v.ID == versionID {
+			size = v.Size
+		}
+	}
+	if size < 0 {
+		return "", errors.New("no such version")
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 		return "", err
@@ -153,8 +186,12 @@ func (s *Service) VersionToFile(ctx context.Context, item int64, versionID, dir 
 		return "", err
 	}
 	defer os.Remove(tmp.Name())
-	if _, err := io.Copy(tmp, body); err != nil {
+	// No more than the version is: previews may be in memory (the runtime directory)
+	if n, err := io.Copy(tmp, io.LimitReader(body, size+1)); err != nil || n != size {
 		tmp.Close()
+		if err == nil {
+			err = fmt.Errorf("the gateway sent %d bytes of a %d-byte version", n, size)
+		}
 		return "", err
 	}
 	if err := tmp.Chmod(0o400); err != nil {

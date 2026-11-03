@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -84,6 +85,9 @@ func (s *Service) wakeOutbox() {
 
 // runOutbox sends the operations, one at a time per folder in their order
 func (s *Service) runOutbox(ctx context.Context) {
+	// Whether a gateway's database was reset or restored while the daemon didn't run must be known before anything
+	// left submitted is sent again: it would be sent twice
+	s.checkGateways(ctx)
 	for ctx.Err() == nil {
 		wait, err := s.outboxPass(ctx)
 		if err != nil && ctx.Err() == nil {
@@ -122,7 +126,20 @@ func (s *Service) outboxPass(ctx context.Context) (time.Duration, error) {
 	}
 	wait := 10 * time.Minute
 	worked := false
-	for _, o := range heads {
+	for _, head := range heads {
+		// Read again right before its step: settling may have merged a newer change into it, or a discard canceled
+		// it, while the heads before it were stepped (an upload can take minutes)
+		o, err := loadOutbox(s.store.db, head.id)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		if !slices.Contains([]string{stateQueued, stateUploaded, stateSubmitted, statePending}, o.state) {
+			worked = true
+			continue
+		}
 		var notBefore int64
 		if err := s.store.db.QueryRow(`SELECT not_before FROM outbox WHERE id = ?`, o.id).Scan(&notBefore); err != nil {
 			return 0, err
@@ -131,14 +148,12 @@ func (s *Service) outboxPass(ctx context.Context) (time.Duration, error) {
 			wait = min(wait, time.Duration(notBefore-now)*time.Millisecond)
 			continue
 		}
-		if err := s.step(ctx, o); err != nil {
+		if err := s.step(ctx, o); err != nil && !errors.Is(err, errStepAgain) {
 			if ctx.Err() != nil {
 				return 0, nil
 			}
-			if delay := s.retryLater(o, err); delay > 0 {
-				wait = min(wait, delay)
-				continue
-			}
+			wait = min(wait, s.retryLater(o, err))
+			continue
 		}
 		worked = true
 	}
@@ -148,22 +163,17 @@ func (s *Service) outboxPass(ctx context.Context) (time.Duration, error) {
 	return wait, nil
 }
 
-// retryLater records a failure worth trying again after, and returns how long that is (0: not worth it)
+// retryLater records a failure that left the operation as it was, and returns how long to wait before trying again:
+// longer each time, so that one that keeps failing doesn't keep the outbox busy
 func (s *Service) retryLater(o *outboxRow, err error) time.Duration {
-	var delay time.Duration
+	delay := min(time.Duration(1<<min(o.attempts, 8))*time.Second, 5*time.Minute)
 	var e *remoteclient.Error
 	switch {
 	case remoteclient.KindOf(err) == remoteclient.KindUnauthenticated,
 		remoteclient.KindOf(err) == remoteclient.KindUntrusted:
 		delay = 5 * time.Minute
-	case remoteclient.IsTransient(err) || remoteclient.KindOf(err) == remoteclient.KindProtocol ||
-		!errors.As(err, &e):
-		delay = min(time.Duration(1<<min(o.attempts, 8))*time.Second, 5*time.Minute)
-		if errors.As(err, &e) && e.RetryAfter > delay {
-			delay = e.RetryAfter
-		}
-	default:
-		return 0
+	case errors.As(err, &e) && e.RetryAfter > delay:
+		delay = e.RetryAfter
 	}
 	s.log.Debug("Will send a change again", "operation", o.opID, "kind", o.kind, "error", err, "retry", delay)
 	_ = s.store.tx(context.Background(), func(tx *sql.Tx) error {
@@ -228,12 +238,56 @@ func (s *Service) step(ctx context.Context, o *outboxRow) error {
 		if remoteclient.KindOf(err) == remoteclient.KindNotFound {
 			return s.setState(o.id, stateUnknown, "the gateway doesn't know the operation any more")
 		}
+		var e *remoteclient.Error
+		if errors.As(err, &e) && !e.Transient() && e.Kind != remoteclient.KindUnauthenticated &&
+			e.Kind != remoteclient.KindUntrusted && e.Kind != remoteclient.KindProtocol {
+			// Refused for good (access was taken away, say): how it ended can't be known any more
+			return s.setState(o.id, stateUnknown, "the gateway can't be asked how it ended: "+e.Error())
+		}
 		if err != nil {
 			return err
 		}
 		return s.recordResult(o, f, result)
 	}
 	return nil
+}
+
+// checkGateways checks the capabilities of every gateway that operations wait for. One out of reach is checked by its
+// folders' loops before their next refresh; until then nothing is sent to it either.
+func (s *Service) checkGateways(ctx context.Context) {
+	rows, err := s.store.db.Query(`SELECT DISTINCT f.service_id FROM outbox AS o JOIN folders AS f ON f.id = o.folder
+		WHERE o.state IN ('submitted', 'pending')`)
+	if err != nil {
+		return
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	for _, id := range ids {
+		g, err := s.gatewayRef(id)
+		if err != nil {
+			continue
+		}
+		client, err := s.client(id)
+		if err != nil {
+			continue
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		if err := s.checkCapabilities(checkCtx, g, client); err != nil {
+			s.log.Debug("Could not check a gateway before sending", "gateway", id, "error", err)
+		}
+		cancel()
+	}
+}
+
+// loadOutbox reads an operation as it is now
+func loadOutbox(q queryer, id int64) (*outboxRow, error) {
+	return scanOutbox(q.QueryRow(`SELECT `+outboxColumns+` FROM outbox WHERE id = ?`, id))
 }
 
 func (s *Service) setState(id int64, state, message string) error {
@@ -276,21 +330,22 @@ func (s *Service) upload(ctx context.Context, o *outboxRow, f folderGateway, cli
 				return s.refused(o, err)
 			}
 			upload.Upload = created.Upload
-			if err := s.store.tx(ctx, func(tx *sql.Tx) error {
-				_, err := tx.Exec(`UPDATE outbox SET upload_id = ?, updated_at = ? WHERE id = ?`, upload.Upload,
-					nowUnix(), o.id)
-				return err
-			}); err != nil {
+			// Only for the content this upload sends: a newer change merged meanwhile has its own
+			if err := s.guarded(ctx, `UPDATE outbox SET upload_id = ?, updated_at = ? WHERE id = ? AND state = 'queued'
+				AND upload_id = '' AND staged IS ?`, upload.Upload, nowUnix(), o.id, o.staged); err != nil {
 				return err
 			}
+			o.uploadID = upload.Upload
 		}
 		if err := client.SendUpload(ctx, upload, file, nil); err != nil {
 			if remoteclient.KindOf(err) == remoteclient.KindNotFound {
 				// Expired or removed: a new upload
-				return s.store.tx(ctx, func(tx *sql.Tx) error {
-					_, err := tx.Exec(`UPDATE outbox SET upload_id = '', updated_at = ? WHERE id = ?`, nowUnix(), o.id)
-					return err
-				})
+				return s.guarded(ctx, `UPDATE outbox SET upload_id = '', updated_at = ? WHERE id = ? AND upload_id = ?`,
+					nowUnix(), o.id, o.uploadID)
+			}
+			var e *remoteclient.Error
+			if errors.As(err, &e) && e.Code == remoteapi.CodeUploadMismatch {
+				return s.refused(o, err)
 			}
 			return err
 		}
@@ -298,10 +353,24 @@ func (s *Service) upload(ctx context.Context, o *outboxRow, f folderGateway, cli
 			return err
 		}
 	}
+	return s.guarded(ctx, `UPDATE outbox SET state = 'uploaded', attempts = 0, updated_at = ? WHERE id = ?
+		AND state = 'queued' AND upload_id = ? AND staged IS ?`, nowUnix(), o.id, o.uploadID, o.staged)
+}
+
+// guarded runs an update of an operation that holds only if it is still as the step read it, and errStepAgain if
+// it isn't: the next pass takes it as it is then
+func (s *Service) guarded(ctx context.Context, query string, args ...any) error {
 	return s.store.tx(ctx, func(tx *sql.Tx) error {
-		_, err := tx.Exec(`UPDATE outbox SET state = 'uploaded', attempts = 0, updated_at = ? WHERE id = ?
-			AND state = 'queued'`, nowUnix(), o.id)
-		return err
+		res, err := tx.Exec(query, args...)
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			return errStepAgain
+		}
+		return nil
 	})
 }
 
@@ -336,9 +405,18 @@ var errStepAgain = errors.New("the operation changed")
 // prepare builds the request and stores it, exactly as it is sent and sent again, in the transaction that decides
 // what it is: the gateway IDs it refers to, its base, and whether an edit from a base the gateway has moved on from
 // becomes a conflict copy
-func (s *Service) prepare(o *outboxRow, f folderGateway) error {
+func (s *Service) prepare(read *outboxRow, f folderGateway) error {
 	var changes Changes
 	err := s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		// The operation as it is in this transaction, which nothing changes meanwhile: what the step read before may
+		// be older (a newer save merged into it, or a discard)
+		o, err := loadOutbox(tx, read.id)
+		if err != nil {
+			return err
+		}
+		if o.state != stateUploaded || o.uploadID != read.uploadID || o.staged != read.staged {
+			return errStepAgain
+		}
 		req := remoteapi.OperationRequest{ID: o.opID, Kind: o.kind, FolderID: f.remoteID}
 		gatewayID, err := gatewayIDOf(tx, o.item, f)
 		if err != nil {
@@ -346,15 +424,34 @@ func (s *Service) prepare(o *outboxRow, f folderGateway) error {
 		}
 		baseRev, baseContent := o.baseRev, o.baseContent
 		if baseRev == "" && o.kind != remoteapi.OpCreate {
+			// Following an earlier change of the item: based on what that one committed, and on nothing else (the
+			// gateway's latest revision may be another device's edit)
 			revision, contentID, state, err := previousResult(tx, o)
 			if err != nil {
 				return err
 			}
 			switch state {
-			case stateCommitted, stateConflict:
+			case stateCommitted:
 				baseRev, baseContent = revision, contentID
+			case stateConflict:
+				if o.kind == remoteapi.OpReplace {
+					p := newProjector(tx)
+					err := s.conflictCopy(tx, p, o)
+					changes.merge(p.changes)
+					return err
+				}
+				return blockTx(tx, o.id, "an earlier change of it was kept as a conflict copy")
 			case stateFailed, stateUnknown, stateBlocked:
 				return blockTx(tx, o.id, "an earlier change of it can't be sent")
+			case "":
+				var undone bool
+				if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM outbox WHERE item = ? AND id < ?
+					AND state = 'canceled' AND error != 'discarded')`, o.item, o.id).Scan(&undone); err != nil {
+					return err
+				}
+				if undone {
+					return blockTx(tx, o.id, "an earlier change of it was undone")
+				}
 			}
 		}
 		if o.kind != remoteapi.OpCreate && gatewayID == "" {
@@ -415,6 +512,19 @@ func (s *Service) prepare(o *outboxRow, f folderGateway) error {
 					return err
 				}
 				if kind == remoteapi.KindDirectory {
+					// Not while a change of something that was below it can't be sent: that change (a move out of
+					// it, say) would be lost with it
+					var stuck bool
+					if err := tx.QueryRow(`WITH RECURSIVE below(id) AS (SELECT ?1 UNION ALL
+							SELECT r.gateway_id FROM remote_items AS r JOIN below ON r.parent_gateway_id = below.id)
+						SELECT EXISTS (SELECT 1 FROM outbox AS o JOIN remote_items AS r ON r.item = o.item
+							WHERE r.gateway_id IN (SELECT id FROM below) AND o.id < ?2
+							AND o.state IN ('failed', 'unknown', 'blocked'))`, gatewayID, o.id).Scan(&stuck); err != nil {
+						return err
+					}
+					if stuck {
+						return blockTx(tx, o.id, "a change of something in it can't be sent: export or discard that first")
+					}
 					subtree := o.subtree
 					if !subtree.Valid {
 						if err := tx.QueryRow(`SELECT subtree_generation FROM remote_items WHERE gateway_id = ?`,
@@ -442,9 +552,13 @@ func (s *Service) prepare(o *outboxRow, f folderGateway) error {
 		if err != nil {
 			return err
 		}
+		// The base recorded is the one sent, which the result is checked against
+		if req.BaseRevision != "" {
+			baseRev = req.BaseRevision
+		}
 		_, err = tx.Exec(`UPDATE outbox SET payload = ?, state = 'submitted', authority_generation = ?, attempts = 0,
-			base_revision = ?, base_content_id = ?, updated_at = ? WHERE id = ?`, payload, f.generation, baseRev,
-			baseContent, nowUnix(), o.id)
+			base_revision = ?, base_content_id = ?, updated_at = ? WHERE id = ? AND state = 'uploaded'`, payload,
+			f.generation, baseRev, baseContent, nowUnix(), o.id)
 		return err
 	})
 	s.changed(changes)
@@ -537,9 +651,10 @@ func (s *Service) refused(o *outboxRow, err error) error {
 			return s.renameToConflict(tx, p, o)
 		case e.Kind == remoteclient.KindRevisionMismatch && o.kind == remoteapi.OpReplace:
 			return s.conflictCopy(tx, p, o)
-		case e.Kind == remoteclient.KindRevisionMismatch, e.Code == remoteapi.CodeNotEmpty:
+		case e.Kind == remoteclient.KindRevisionMismatch, e.Code == remoteapi.CodeNotEmpty,
+			e.Code == remoteapi.CodeIgnoredPath && o.kind == remoteapi.OpMove:
 			// Moving or removing an item that changed on the gateway is refused, which leaves it intact: so is the
-			// change here
+			// change here. So is a move to a name the gateway ignores, which would take it out of the folder.
 			s.log.Info("A move or removal was undone, as the item changed on the gateway", "operation", o.opID)
 			if _, err := tx.Exec(`UPDATE outbox SET state = 'canceled', error = ?, updated_at = ? WHERE id = ?`,
 				e.Error(), nowUnix(), o.id); err != nil {
@@ -555,17 +670,30 @@ func (s *Service) refused(o *outboxRow, err error) error {
 		case e.Kind == remoteclient.KindNotFound && o.kind == remoteapi.OpReplace:
 			return s.convertToCreate(tx, o)
 		case e.Code == remoteapi.CodeIgnoredPath && o.kind == remoteapi.OpCreate:
-			// The gateway's ignore patterns exclude it: it stays here only
+			// The gateway's ignore patterns exclude it: it stays here only, with everything made in it (a build
+			// directory, say), whose creations can't be sent either
 			if _, err := tx.Exec(`UPDATE outbox SET state = 'canceled', error = ?, updated_at = ? WHERE id = ?`,
 				e.Error(), nowUnix(), o.id); err != nil {
 				return err
 			}
-			_, err := tx.Exec(`UPDATE items SET local = local | ? WHERE id = ?`, localOnly|localCreated, o.item)
+			if _, err := tx.Exec(`WITH RECURSIVE sub(id) AS (SELECT ?1 UNION ALL
+					SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id WHERE i.deleted = 0)
+				UPDATE outbox SET state = 'canceled', error = 'in a directory the gateway ignores', updated_at = ?2
+				WHERE item IN (SELECT id FROM sub) AND item != ?1 AND state IN ('queued', 'uploaded', 'blocked')`,
+				o.item, nowUnix()); err != nil {
+				return err
+			}
+			_, err := tx.Exec(`WITH RECURSIVE sub(id) AS (SELECT ?1 UNION ALL
+					SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id WHERE i.deleted = 0)
+				UPDATE items SET local = local | ?2 WHERE id IN (SELECT id FROM sub)`, o.item, localOnly|localCreated)
 			return err
 		case e.Code == remoteapi.CodeUploadMismatch || (e.Kind == remoteclient.KindNotFound && o.needsUpload()):
-			// The upload is gone or used: upload again, and send the operation anew
+			// The upload is gone or used: upload again, and send the operation anew, after a while (an upload that
+			// keeps mismatching its content mustn't be sent again and again)
+			delay := min(time.Duration(1<<min(o.attempts+1, 8))*time.Second, 5*time.Minute)
 			_, err := tx.Exec(`UPDATE outbox SET upload_id = '', payload = NULL, op_id = ?, state = 'queued',
-				attempts = attempts + 1, updated_at = ? WHERE id = ?`, uuid.NewString(), nowUnix(), o.id)
+				attempts = attempts + 1, not_before = ?, updated_at = ? WHERE id = ?`, uuid.NewString(),
+				nowMillis()+delay.Milliseconds(), nowUnix(), o.id)
 			return err
 		}
 		_, err := tx.Exec(`UPDATE outbox SET state = 'failed', error = ?, updated_at = ? WHERE id = ?`, e.Error(),
@@ -613,7 +741,7 @@ func (s *Service) recordResult(o *outboxRow, f folderGateway, result remoteapi.O
 	case remoteapi.OperationPending:
 		return s.store.tx(context.Background(), func(tx *sql.Tx) error {
 			_, err := tx.Exec(`UPDATE outbox SET state = 'pending', server_op = ?, not_before = ?, updated_at = ?
-				WHERE id = ?`, result.Operation, nowMillis()+1000, nowUnix(), o.id)
+				WHERE id = ? AND state IN ('submitted', 'pending')`, result.Operation, nowMillis()+1000, nowUnix(), o.id)
 			return err
 		})
 	case remoteapi.OperationFailed:
@@ -766,8 +894,8 @@ func (s *Service) undo(tx *sql.Tx, p *projector, item int64) error {
 	}
 	if _, err := tx.Exec(`WITH RECURSIVE sub(id) AS (SELECT ?1 UNION ALL
 			SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id WHERE i.deleted = 1 AND i.local & ?2 != 0)
-		UPDATE items SET local = local & ?3 WHERE id IN (SELECT id FROM sub)`, item, localFolded,
-		localOnly); err != nil {
+		UPDATE items SET local = local & ~?3 WHERE id IN (SELECT id FROM sub)`, item, localFolded,
+		localMoved|localDeleted|localFolded); err != nil {
 		return err
 	}
 	for _, id := range gatewayIDs {
@@ -784,6 +912,8 @@ func (c *cache) adopt(path, contentID string, size int64) error {
 		return err
 	}
 	tmp := c.contentPath(contentID) + ".adopt"
+	// One left by a crash would stop the clone
+	os.Remove(tmp)
 	f, _, err := cloneFile(path, tmp)
 	if err != nil {
 		return err

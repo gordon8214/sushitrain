@@ -10,6 +10,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,5 +146,37 @@ func TestServiceFlagsWin(t *testing.T) {
 		if err != nil || s.Enabled != enabled || s.Listen != ":20920" {
 			t.Fatalf("default %v: %+v %v", enabled, s, err)
 		}
+	}
+}
+
+func TestFailedSettingsLeaveTheServiceAsItWas(t *testing.T) {
+	e := gatewaytest.NewEngine(t, "default", nil)
+	home := t.TempDir()
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy.Close()
+	w, err := newServiceSwitch(serveOptions{service: gateway.Config{Home: home, ServiceName: "switch.test",
+		SpoolQuota: 64 << 20, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}},
+		serviceDefaults{settings: serviceSettings{Listen: "127.0.0.1:0"}}, e.Backend, gateway.NewAdminServer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.set(serviceSettings{Enabled: true, Listen: "127.0.0.1:0"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.stop() })
+	if err := w.set(serviceSettings{Enabled: true, Listen: "127.0.0.1:0", PublicHost: "nas.example.org:443"}); err == nil {
+		t.Fatal("a host name with a port was accepted")
+	}
+	if err := w.set(serviceSettings{Enabled: true, Listen: busy.Addr().String()}); err == nil {
+		t.Fatal("a port in use was accepted")
+	}
+	if st := w.status(); !st.Running || st.Listen != "127.0.0.1:0" {
+		t.Fatalf("not running as before: %+v", st)
+	}
+	if s, _, err := loadSettings(home); err != nil || s.Listen != "127.0.0.1:0" {
+		t.Fatalf("the failed settings were kept: %+v %v", s, err)
 	}
 }

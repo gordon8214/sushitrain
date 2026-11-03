@@ -402,3 +402,37 @@ func TestLocalGatewayIsRefused(t *testing.T) {
 		t.Fatalf("pairing with this machine: %v", err)
 	}
 }
+
+// A partial download whose file was removed (the cache was emptied) starts over, rather than trusting the record of
+// its verified blocks
+func TestEmptiedTransfersStartOver(t *testing.T) {
+	contents := make([]byte, 3<<20)
+	_, _ = rand.Read(contents)
+	e := gatewaytest.NewEngine(t, "docs", nil)
+	e.Write("big.bin", string(contents))
+	g := gatewaytest.NewGateway(t, e, "")
+	g.Export(false)
+	ts := newTestService(t, g, 0)
+	entry := ts.mustLookup("docs/big.bin")
+	r, err := ts.OpenFile(entry.Item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ReadAt(context.Background(), make([]byte, 4096), 0); err != nil {
+		t.Fatal(err)
+	}
+	r.Close()
+	ts.restart()
+	parts, _ := filepath.Glob(filepath.Join(ts.cfg.CacheDir, "Transfers", "*.part"))
+	if len(parts) == 0 {
+		t.Fatal("no partial download to remove")
+	}
+	for _, p := range parts {
+		if err := os.Remove(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := ts.read(ts.mustLookup("docs/big.bin")); !bytes.Equal(got, contents) {
+		t.Fatal("read other bytes than the gateway's after the partial file was removed")
+	}
+}

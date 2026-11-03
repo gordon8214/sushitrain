@@ -14,9 +14,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/godbus/dbus/v5"
 	"t-shaped.nl/sushitrain/v2/files"
@@ -26,8 +28,12 @@ import (
 // file are moved into it), the file otherwise
 func credentialStore(mode, stateDir string, logger *slog.Logger) (files.CredentialStore, error) {
 	file := &files.FileCredentials{Path: filepath.Join(stateDir, "credentials.json")}
-	if mode == "file" {
+	switch mode {
+	case "file":
 		return file, nil
+	case "auto", "keyring":
+	default:
+		return nil, fmt.Errorf("--credentials %q: give auto, keyring or file", mode)
 	}
 	keyring, err := files.NewSecretService("synctrain")
 	if err != nil {
@@ -38,11 +44,37 @@ func credentialStore(mode, stateDir string, logger *slog.Logger) (files.Credenti
 		return file, nil
 	}
 	if moved, err := files.MoveCredentials(file, keyring); err != nil {
+		// Those left in the file are still read from it, until a later start moves them
 		logger.Warn("Could not move credentials into the keyring", "error", err)
+		return &fallbackCredentials{keyring: keyring, file: file}, nil
 	} else if moved > 0 {
 		logger.Info("Moved credentials into the keyring", "count", moved)
 	}
 	return keyring, nil
+}
+
+// fallbackCredentials keeps credentials in the keyring, and reads those not moved there yet from the file
+type fallbackCredentials struct {
+	keyring files.CredentialStore
+	file    *files.FileCredentials
+}
+
+func (f *fallbackCredentials) Credential(serviceID string) (string, error) {
+	if credential, err := f.keyring.Credential(serviceID); err != nil || credential != "" {
+		return credential, err
+	}
+	return f.file.Credential(serviceID)
+}
+
+func (f *fallbackCredentials) SetCredential(serviceID, credential string) error {
+	return f.keyring.SetCredential(serviceID, credential)
+}
+
+func (f *fallbackCredentials) DeleteCredential(serviceID string) error {
+	if err := f.file.DeleteCredential(serviceID); err != nil {
+		return err
+	}
+	return f.keyring.DeleteCredential(serviceID)
 }
 
 // notifier shows desktop notifications, at most one of a kind every ten minutes
@@ -100,10 +132,19 @@ func bookmarksPath() string {
 	return filepath.Join(xdgDir("XDG_CONFIG_HOME", ".config"), "gtk-3.0", "bookmarks")
 }
 
+// bookmarksMutex keeps two syncs (of folders added and removed at once) from writing the file over each other
+var bookmarksMutex sync.Mutex
+
 // syncBookmarks puts each folder in the sidebar of Nautilus and the file chooser, and takes out bookmarks of folders
-// that are no longer in the mount. Other bookmarks are left as they are.
+// that are no longer in the mount. Other bookmarks, also of places inside the folders, are left as they are.
 func syncBookmarks(mount string, folders []files.Folder, logger *slog.Logger) {
+	bookmarksMutex.Lock()
+	defer bookmarksMutex.Unlock()
 	path := bookmarksPath()
+	// A link (from a dotfiles repository, say) stays one: the file it points to is written
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
 	existing, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		logger.Warn("Could not read GTK's bookmarks", "error", err)
@@ -112,40 +153,74 @@ func syncBookmarks(mount string, folders []files.Folder, logger *slog.Logger) {
 	prefix := files.FileURI(mount) + "/"
 	want := map[string]string{}
 	for _, f := range folders {
-		want[files.FileURI(filepath.Join(mount, f.DirName))] = f.Label
+		want[files.FileURI(filepath.Join(mount, f.DirName))] = bookmarkLabel(f)
 	}
 	var out bytes.Buffer
 	scanner := bufio.NewScanner(bytes.NewReader(existing))
+	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	for scanner.Scan() {
 		line := scanner.Text()
 		uri, _, _ := strings.Cut(line, " ")
-		if strings.HasPrefix(uri, prefix) {
-			if _, ok := want[uri]; !ok {
+		// A folder's own bookmark is the URI of its directory in the mount, one name below it
+		if rest, ok := strings.CutPrefix(uri, prefix); ok && rest != "" && !strings.Contains(rest, "/") {
+			label, ok := want[uri]
+			if !ok {
 				// A folder that was removed
 				continue
 			}
 			delete(want, uri)
+			line = uri + " " + label
 		}
 		out.WriteString(line + "\n")
 	}
-	if len(want) == 0 && out.Len() == len(existing) {
+	if err := scanner.Err(); err != nil {
+		logger.Warn("Could not read GTK's bookmarks", "error", err)
 		return
 	}
 	for uri, label := range want {
 		fmt.Fprintf(&out, "%s %s\n", uri, label)
 	}
+	if bytes.Equal(out.Bytes(), existing) {
+		return
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		logger.Warn("Could not write GTK's bookmarks", "error", err)
 		return
 	}
-	tmp := path + ".synctrain"
-	if err := os.WriteFile(tmp, out.Bytes(), 0o644); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".bookmarks-*")
+	if err != nil {
 		logger.Warn("Could not write GTK's bookmarks", "error", err)
 		return
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	defer os.Remove(tmp.Name())
+	_, err = tmp.Write(out.Bytes())
+	if err == nil {
+		err = tmp.Chmod(0o644)
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
 		logger.Warn("Could not write GTK's bookmarks", "error", err)
 	}
+}
+
+// bookmarkLabel is a folder's label as one line of the bookmarks file: the gateway chose it, and a line break in it
+// would add a bookmark of its own
+func bookmarkLabel(f files.Folder) string {
+	label := strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			return ' '
+		}
+		return r
+	}, f.Label))
+	if label == "" {
+		return f.DirName
+	}
+	return label
 }
 
 // excludeFromBackups adds the mount to Déjà Dup's excluded folders, when Déjà Dup is installed: it backs up the home
@@ -156,22 +231,61 @@ func excludeFromBackups(mount string, logger *slog.Logger) {
 		// Not installed
 		return
 	}
-	current := strings.TrimSpace(string(out))
-	if strings.Contains(current, "'"+mount+"'") {
+	current, ok := parseStringArray(string(out))
+	if !ok {
+		logger.Warn("Could not read Déjà Dup's excluded folders", "value", strings.TrimSpace(string(out)))
 		return
 	}
-	var list string
-	switch {
-	case current == "@as []" || current == "[]":
-		list = "['" + mount + "']"
-	case strings.HasSuffix(current, "]"):
-		list = strings.TrimSuffix(current, "]") + ", '" + mount + "']"
-	default:
+	if slices.Contains(current, mount) {
 		return
 	}
+	list := formatStringArray(append(current, mount))
 	if err := exec.Command("gsettings", "set", "org.gnome.DejaDup", "exclude-list", list).Run(); err != nil {
 		logger.Warn("Could not exclude the folders from Déjà Dup's backups", "error", err)
 		return
 	}
 	logger.Info("Excluded the folders from Déjà Dup's backups", "path", mount)
+}
+
+// parseStringArray reads an array of strings as gsettings prints one (GVariant text): either quote, and backslash
+// escapes
+func parseStringArray(text string) ([]string, bool) {
+	text = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(text), "@as"))
+	if !strings.HasPrefix(text, "[") || !strings.HasSuffix(text, "]") {
+		return nil, false
+	}
+	text = text[1 : len(text)-1]
+	list := []string{}
+	for i := 0; i < len(text); {
+		switch c := text[i]; c {
+		case ' ', ',':
+			i++
+		case '\'', '"':
+			var b strings.Builder
+			for i++; i < len(text) && text[i] != c; i++ {
+				if text[i] == '\\' && i+1 < len(text) {
+					i++
+				}
+				b.WriteByte(text[i])
+			}
+			if i >= len(text) {
+				return nil, false
+			}
+			i++
+			list = append(list, b.String())
+		default:
+			return nil, false
+		}
+	}
+	return list, true
+}
+
+// formatStringArray writes an array of strings as GVariant text
+func formatStringArray(list []string) string {
+	quote := strings.NewReplacer(`\`, `\\`, `'`, `\'`)
+	quoted := make([]string, len(list))
+	for i, v := range list {
+		quoted[i] = "'" + quote.Replace(v) + "'"
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }

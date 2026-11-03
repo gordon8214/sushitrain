@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"t-shaped.nl/sushitrain/v2/remoteapi"
 )
@@ -99,8 +100,12 @@ func (e *Error) Is(target error) bool {
 	return ok && t.Kind == e.Kind && t.Status == 0 && t.Code == "" && t.Err == nil
 }
 
-// Transient reports whether trying again later may succeed without any other change
+// Transient reports whether trying again later may succeed without any other change. An operation the gateway
+// finished (one whose replay answers with how it ended) never is.
 func (e *Error) Transient() bool {
+	if e.Operation != nil && e.Operation.State != remoteapi.OperationPending {
+		return false
+	}
 	switch e.Kind {
 	case KindUnavailable, KindOverloaded, KindUnreachable, KindInsufficientStorage:
 		return true
@@ -153,13 +158,14 @@ func statusError(resp *http.Response, body []byte, gone Kind) *Error {
 		Operation *remoteapi.Operation  `json:"operation"`
 	}
 	_ = json.Unmarshal(body, &detail)
-	e := &Error{Status: resp.StatusCode, Code: detail.Error.Code, Message: detail.Error.Message, Item: detail.Error.Item,
-		Operation: detail.Operation}
+	e := &Error{Status: resp.StatusCode, Code: printable(detail.Error.Code, 64),
+		Message: printable(detail.Error.Message, 512), Item: detail.Error.Item, Operation: detail.Operation}
 	if after, ok := parseRetryAfter(resp.Header.Get("Retry-After")); ok {
 		e.RetryAfter = after
 	} else if detail.Error.RetryAfter > 0 {
-		e.RetryAfter = time.Duration(detail.Error.RetryAfter) * time.Second
+		e.RetryAfter = time.Duration(min(detail.Error.RetryAfter, int(maxRetryAfter/time.Second))) * time.Second
 	}
+	e.RetryAfter = min(e.RetryAfter, maxRetryAfter)
 	switch resp.StatusCode {
 	case http.StatusUnauthorized:
 		e.Kind = KindUnauthenticated
@@ -205,6 +211,24 @@ func statusError(resp *http.Response, body []byte, gone Kind) *Error {
 	return e
 }
 
+// The longest wait a gateway's Retry-After gets: one asking for more is checked on again after this
+const maxRetryAfter = time.Hour
+
+// printable is text from the gateway as errors show it: in terminals, logs and the window. Control characters (as
+// terminal escape sequences) and bidirectional text controls are replaced, and it is cut short at limit bytes.
+func printable(s string, limit int) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			return unicode.ReplacementChar
+		}
+		return r
+	}, s)
+	if len(s) > limit {
+		s = strings.ToValidUTF8(s[:limit], "") + "…"
+	}
+	return s
+}
+
 // parseRetryAfter reads seconds or an HTTP date
 func parseRetryAfter(value string) (time.Duration, bool) {
 	value = strings.TrimSpace(value)
@@ -212,7 +236,7 @@ func parseRetryAfter(value string) (time.Duration, bool) {
 		return 0, false
 	}
 	if seconds, err := strconv.Atoi(value); err == nil {
-		return time.Duration(max(seconds, 0)) * time.Second, true
+		return time.Duration(min(max(seconds, 0), int(maxRetryAfter/time.Second))) * time.Second, true
 	}
 	if t, err := http.ParseTime(value); err == nil {
 		return max(time.Until(t), 0), true

@@ -39,3 +39,40 @@ func TestBookmarks(t *testing.T) {
 		t.Fatalf("bookmarks after removing a folder:\n%s", got)
 	}
 }
+
+func TestBookmarksLeaveTheUsersAndTakeNoLines(t *testing.T) {
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	path := filepath.Join(config, "gtk-3.0", "bookmarks")
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	// The user's own bookmark of a place inside a folder stays
+	os.WriteFile(path, []byte("file:///mnt/Synctrain/Photos/Trips Trips\n"), 0o644)
+	syncBookmarks("/mnt/Synctrain", []files.Folder{{DirName: "Photos", Label: "Photos\nsmb://evil/share Documents"}},
+		slog.Default())
+	data, _ := os.ReadFile(path)
+	if got := string(data); got != "file:///mnt/Synctrain/Photos/Trips Trips\n"+
+		"file:///mnt/Synctrain/Photos Photos smb://evil/share Documents\n" {
+		t.Fatalf("bookmarks:\n%s", got)
+	}
+}
+
+func TestStringArrays(t *testing.T) {
+	for _, text := range []string{`@as []`, `['/home/a']`, `["/home/o'brien/x", '/home/b']`} {
+		list, ok := parseStringArray(text)
+		if !ok {
+			t.Fatalf("%s wasn't read", text)
+		}
+		again, ok := parseStringArray(formatStringArray(list))
+		if !ok || len(again) != len(list) {
+			t.Fatalf("%s: %q, then %q", text, list, again)
+		}
+		for i := range list {
+			if again[i] != list[i] {
+				t.Fatalf("%s: %q, then %q", text, list, again)
+			}
+		}
+	}
+	if list, _ := parseStringArray(`["/home/o'brien/x"]`); len(list) != 1 || list[0] != "/home/o'brien/x" {
+		t.Fatalf("%q", list)
+	}
+}

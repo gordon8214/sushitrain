@@ -48,18 +48,48 @@ type secret struct {
 
 // NewSecretService connects to the session's Secret Service, or fails if there is none
 func NewSecretService(application string) (*SecretService, error) {
-	conn, err := dbus.ConnectSessionBus()
-	if err != nil {
+	s := &SecretService{Application: application}
+	if err := s.connect(); err != nil {
 		return nil, err
 	}
-	s := &SecretService{Application: application, conn: conn}
-	var output dbus.Variant
-	if err := conn.Object(secretsName, secretsPath).Call(secretsService+".OpenSession", 0, "plain",
-		dbus.MakeVariant("")).Store(&output, &s.session); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("opening a Secret Service session: %w", err)
-	}
 	return s, nil
+}
+
+// connect opens a connection and a session. Callers hold the mutex, but for a new one.
+func (s *SecretService) connect() error {
+	conn, err := dbus.ConnectSessionBus()
+	if err != nil {
+		return err
+	}
+	var output dbus.Variant
+	var session dbus.ObjectPath
+	if err := conn.Object(secretsName, secretsPath).Call(secretsService+".OpenSession", 0, "plain",
+		dbus.MakeVariant("")).Store(&output, &session); err != nil {
+		conn.Close()
+		return fmt.Errorf("opening a Secret Service session: %w", err)
+	}
+	if s.conn != nil {
+		s.conn.Close()
+	}
+	s.conn, s.session = conn, session
+	return nil
+}
+
+// retry runs fn, and once more on a new session if the keyring lost the one it had (gnome-keyring restarted).
+// Callers hold the mutex.
+func (s *SecretService) retry(fn func() error) error {
+	err := fn()
+	var e dbus.Error
+	lost := errors.Is(err, dbus.ErrClosed) || (errors.As(err, &e) &&
+		(e.Name == "org.freedesktop.Secret.Error.NoSession" || e.Name == "org.freedesktop.DBus.Error.UnknownObject" ||
+			e.Name == "org.freedesktop.DBus.Error.ServiceUnknown" || e.Name == "org.freedesktop.DBus.Error.NoReply"))
+	if !lost {
+		return err
+	}
+	if err := s.connect(); err != nil {
+		return err
+	}
+	return fn()
 }
 
 func (s *SecretService) Close() error {
@@ -89,15 +119,20 @@ func (s *SecretService) find(serviceID string) (dbus.ObjectPath, error) {
 func (s *SecretService) Credential(serviceID string) (string, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	item, err := s.find(serviceID)
-	if err != nil || item == "" {
-		return "", err
-	}
-	var value secret
-	if err := s.conn.Object(secretsName, item).Call(secretsItem+".GetSecret", 0, s.session).Store(&value); err != nil {
-		return "", err
-	}
-	return string(value.Value), nil
+	var credential string
+	err := s.retry(func() error {
+		item, err := s.find(serviceID)
+		if err != nil || item == "" {
+			return err
+		}
+		var value secret
+		if err := s.conn.Object(secretsName, item).Call(secretsItem+".GetSecret", 0, s.session).Store(&value); err != nil {
+			return err
+		}
+		credential = string(value.Value)
+		return nil
+	})
+	return credential, err
 }
 
 func (s *SecretService) SetCredential(serviceID, credential string) error {
@@ -107,33 +142,37 @@ func (s *SecretService) SetCredential(serviceID, credential string) error {
 		"org.freedesktop.Secret.Item.Label":      dbus.MakeVariant("Synctrain: gateway " + serviceID),
 		"org.freedesktop.Secret.Item.Attributes": dbus.MakeVariant(s.attributes(serviceID)),
 	}
-	value := secret{Session: s.session, Value: []byte(credential), ContentType: "text/plain"}
-	var item, prompt dbus.ObjectPath
-	if err := s.conn.Object(secretsName, defaultCollection).Call(secretsCollection+".CreateItem", 0, properties, value,
-		true).Store(&item, &prompt); err != nil {
-		return err
-	}
-	if prompt != noPrompt {
-		return errKeyringLocked
-	}
-	return nil
+	return s.retry(func() error {
+		value := secret{Session: s.session, Value: []byte(credential), ContentType: "text/plain"}
+		var item, prompt dbus.ObjectPath
+		if err := s.conn.Object(secretsName, defaultCollection).Call(secretsCollection+".CreateItem", 0, properties,
+			value, true).Store(&item, &prompt); err != nil {
+			return err
+		}
+		if prompt != noPrompt {
+			return errKeyringLocked
+		}
+		return nil
+	})
 }
 
 func (s *SecretService) DeleteCredential(serviceID string) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	item, err := s.find(serviceID)
-	if err != nil || item == "" {
-		return err
-	}
-	var prompt dbus.ObjectPath
-	if err := s.conn.Object(secretsName, item).Call(secretsItem+".Delete", 0).Store(&prompt); err != nil {
-		return err
-	}
-	if prompt != noPrompt {
-		return errKeyringLocked
-	}
-	return nil
+	return s.retry(func() error {
+		item, err := s.find(serviceID)
+		if err != nil || item == "" {
+			return err
+		}
+		var prompt dbus.ObjectPath
+		if err := s.conn.Object(secretsName, item).Call(secretsItem+".Delete", 0).Store(&prompt); err != nil {
+			return err
+		}
+		if prompt != noPrompt {
+			return errKeyringLocked
+		}
+		return nil
+	})
 }
 
 // MoveCredentials moves credentials from one store to another (from the file kept without a keyring, once there is

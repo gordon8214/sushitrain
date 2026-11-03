@@ -302,14 +302,17 @@ func TestManifestVerifier(t *testing.T) {
 	for i := range hashes {
 		sum := sha256.Sum256([]byte{byte(i)})
 		hashes[i] = sum[:]
-		blocks = append(blocks, remoteapi.ManifestBlock{Offset: int64(i) * 100, Size: 100,
+		blocks = append(blocks, remoteapi.ManifestBlock{Offset: int64(i) * minBlockSize, Size: minBlockSize,
 			Hash: remoteapi.B64.EncodeToString(sum[:])})
 	}
-	contentID := remoteapi.FormatContentID(remoteapi.BlocksHash(hashes), 300)
-	lease := remoteapi.ReadLease{ContentID: contentID, Size: 300, BlockCount: 3}
+	contentID := remoteapi.FormatContentID(remoteapi.BlocksHash(hashes), 3*minBlockSize)
+	lease := remoteapi.ReadLease{ContentID: contentID, Size: 3 * minBlockSize, BlockCount: 3}
 	page := remoteapi.ManifestPage{ContentID: contentID, Blocks: blocks}
 
-	v, _ := NewManifestVerifier(lease)
+	v, err := NewManifestVerifier(lease)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := v.Add(page, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -340,6 +343,10 @@ func TestManifestVerifier(t *testing.T) {
 		},
 		"a block too large": func(p *remoteapi.ManifestPage, l *remoteapi.ReadLease) int {
 			p.Blocks[2].Size = MaxBlockSize + 1
+			return 0
+		},
+		"more blocks than the size can have": func(p *remoteapi.ManifestPage, l *remoteapi.ReadLease) int {
+			l.BlockCount = 1 << 50
 			return 0
 		},
 	}

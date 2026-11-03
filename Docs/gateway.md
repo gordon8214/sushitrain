@@ -98,7 +98,7 @@ its place. It also keeps `<home>/synctrain-gateway/` readable by its own user on
 ```
 synctrain-gateway status
 synctrain-gateway service --off
-synctrain-gateway service --on --listen :20921 --public-host nas.example.org
+synctrain-gateway service --on --listen :20921 --public-host nas.example.org    # unless serve's options set them
 synctrain-gateway exports --add Documents --write
 synctrain-gateway pair --folder Documents:write
 synctrain-gateway clients
@@ -112,6 +112,8 @@ Synctrain for Linux), and its address and public host changed with it. Those set
 `<home>/synctrain-gateway/service.json`; what serve's options or environment set can't be changed this way. While the
 service is off, Syncthing and the admin socket run as usual, and the service's commands answer that it is off. On a
 Linux desktop, Synctrain runs the gateway with the service off until it is turned on: see [linux.md](linux.md).
+Without `--service on`, a service that can't start (its port is taken, say) leaves Syncthing running and says why in
+`synctrain-gateway service`; a server that should stop instead runs with `--service on`.
 
 ### Replacing a stock Syncthing
 

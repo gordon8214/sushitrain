@@ -201,6 +201,10 @@ func (s *Service) Create(parent int64, name string, dir bool) (Entry, error) {
 		} else if localOnlyName(name) {
 			local |= localOnly
 		}
+		// In a directory the gateway refused (its ignore patterns exclude it), everything stays here too
+		if d.local&localOnly != 0 {
+			local |= localOnly
+		}
 		res, err := tx.Exec(`INSERT INTO items (folder, parent, name, kind, mod_ns, node, local, changed_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, d.folder, parent, name, kind, time.Now().UnixNano(), node, local,
 			nowMillis())
@@ -276,8 +280,10 @@ func (s *Service) removeLocked(tx *sql.Tx, r *localRow) error {
 		return err
 	}
 	if !r.gateway.Valid && !sent {
-		// Nothing of it reached the gateway: drop its unsent creation and edits
-		if err := s.cancelQueued(tx, r.id); err != nil {
+		// Nothing of it reached the gateway: drop its unsent creation and edits, also those waiting for review, which
+		// would otherwise refer to nothing
+		if _, err := tx.Exec(`UPDATE outbox SET state = 'canceled', error = 'removed', updated_at = ? WHERE item = ?
+			AND state IN ('queued', 'uploaded', 'failed', 'blocked')`, nowUnix(), r.id); err != nil {
 			return err
 		}
 		_, err := tx.Exec(`DELETE FROM items WHERE id = ?`, r.id)
@@ -302,7 +308,7 @@ func (s *Service) removeLocked(tx *sql.Tx, r *localRow) error {
 func (s *Service) creationSent(q queryer, item int64) (bool, error) {
 	var sent bool
 	err := q.QueryRow(`SELECT EXISTS (SELECT 1 FROM outbox WHERE item = ? AND kind = 'create'
-		AND state IN ('submitted', 'pending', 'unknown'))`, item).Scan(&sent)
+		AND state IN ('submitted', 'pending', 'unknown', 'committed'))`, item).Scan(&sent)
 	return sent, err
 }
 
@@ -411,11 +417,13 @@ func (s *Service) SetModTime(node uint64, t time.Time) error {
 	if wc := s.workingCopy(node); wc != nil {
 		wc.mutex.Lock()
 		wc.modNs = t.UnixNano()
+		wc.version++
 		wc.mutex.Unlock()
 	}
+	// A change of its own, so that a settle that read the time before doesn't send the old one
 	return s.store.tx(context.Background(), func(tx *sql.Tx) error {
-		_, err := tx.Exec(`UPDATE items SET mod_ns = ? WHERE node = ? AND deleted = 0 AND local & ? != 0`,
-			t.UnixNano(), node, localCreated|localContent)
+		_, err := tx.Exec(`UPDATE items SET mod_ns = ?, changed_at = ? WHERE node = ? AND deleted = 0 AND local & ? != 0`,
+			t.UnixNano(), nowMillis(), node, localCreated|localContent)
 		return err
 	})
 }
@@ -434,6 +442,10 @@ type workingCopy struct {
 	modNs    int64
 	version  uint64
 	detached bool
+	// Set once a settle consumed it: a handle opened after that takes a new one
+	retired bool
+	// Whether its row says it is being written, which recovery after a crash then doesn't trust
+	writingRecorded bool
 }
 
 func (s *Service) workingCopy(node uint64) *workingCopy {
@@ -443,13 +455,40 @@ func (s *Service) workingCopy(node uint64) *workingCopy {
 }
 
 // detachNode marks a node's working copy as no longer showing an item: what is still written to it is dropped when
-// its last handle is closed
+// its last handle is closed, or now when none is open. Callers hold no transaction.
 func (s *Service) detachNode(node uint64) {
-	if wc := s.workingCopy(node); wc != nil {
-		wc.mutex.Lock()
-		wc.detached = true
-		wc.mutex.Unlock()
+	wc := s.workingCopy(node)
+	if wc == nil {
+		return
 	}
+	wc.mutex.Lock()
+	wc.detached = true
+	gone := wc.writers == 0
+	if gone {
+		s.dropWorkingCopy(wc)
+	}
+	wc.mutex.Unlock()
+	if gone {
+		s.mutex.Lock()
+		if s.work[node] == wc {
+			delete(s.work, node)
+		}
+		s.mutex.Unlock()
+	}
+}
+
+// dropWorkingCopy removes a detached working copy that nothing writes. Callers hold its mutex.
+func (s *Service) dropWorkingCopy(wc *workingCopy) {
+	if wc.file != nil {
+		wc.file.Close()
+		wc.file = nil
+		os.Remove(filepath.Join(s.workDir(), wc.name))
+	}
+	wc.retired = true
+	_ = s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`DELETE FROM work WHERE node = ? AND detached = 1`, wc.node)
+		return err
+	})
 }
 
 func (s *Service) workDir() string {
@@ -477,14 +516,27 @@ func (s *Service) OpenWriter(e Entry, truncate bool) (*Writer, error) {
 	if e.Kind != kindFile {
 		return nil, ErrIsDir
 	}
-	s.mutex.Lock()
-	wc := s.work[e.Node]
-	if wc == nil {
-		wc = &workingCopy{node: e.Node, item: e.Item, size: e.Size, modNs: e.ModTime.UnixNano()}
-		s.work[e.Node] = wc
+	var wc *workingCopy
+	for {
+		s.mutex.Lock()
+		wc = s.work[e.Node]
+		if wc == nil {
+			wc = &workingCopy{node: e.Node, item: e.Item, size: e.Size, modNs: e.ModTime.UnixNano()}
+			s.work[e.Node] = wc
+		}
+		s.mutex.Unlock()
+		wc.mutex.Lock()
+		if !wc.retired {
+			break
+		}
+		// Settled just now: a new one starts from the content that settle left
+		wc.mutex.Unlock()
+		s.mutex.Lock()
+		if s.work[e.Node] == wc {
+			delete(s.work, e.Node)
+		}
+		s.mutex.Unlock()
 	}
-	s.mutex.Unlock()
-	wc.mutex.Lock()
 	wc.writers++
 	wc.mutex.Unlock()
 	w := &Writer{s: s, wc: wc, entry: e}
@@ -497,21 +549,49 @@ func (s *Service) OpenWriter(e Entry, truncate bool) (*Writer, error) {
 	return w, nil
 }
 
-// ensure makes the node's working copy, from the item's content unless empty. Callers hold the working copy's mutex.
+// ensure makes the node's working copy, from the item's content unless empty, and records that it is being written
+// before the write that needs it is answered. Callers hold the working copy's mutex; it is let go while content is
+// fetched, so that reads and listings of the file don't wait for the network.
 func (w *Writer) ensure(ctx context.Context, empty bool) error {
 	wc := w.wc
 	if wc.file != nil {
-		return nil
+		if wc.writingRecorded || wc.detached {
+			return nil
+		}
+		// Written again before it was settled: a crash from now on may leave it torn
+		err := w.s.store.tx(context.Background(), func(tx *sql.Tx) error {
+			_, err := tx.Exec(`UPDATE work SET writing = 1 WHERE node = ?`, wc.node)
+			return err
+		})
+		if err == nil {
+			wc.writingRecorded = true
+		}
+		return err
 	}
 	if err := os.MkdirAll(w.s.workDir(), 0o700); err != nil {
 		return err
 	}
 	name := fmt.Sprintf("%d-%s", wc.node, randomName())
 	path := filepath.Join(w.s.workDir(), name)
+	// copyContent without the working copy's mutex; another handle may have made the working copy meanwhile
+	fetch := func() (*os.File, int64, error) {
+		wc.mutex.Unlock()
+		f, size, err := w.s.copyContent(ctx, w.entry, path)
+		wc.mutex.Lock()
+		if err == nil && wc.file != nil {
+			f.Close()
+			os.Remove(path)
+			return nil, 0, errMadeMeanwhile
+		}
+		return f, size, err
+	}
 	if wc.detached {
 		// Removed or replaced while open: written to a copy that is dropped when it is closed, as a file removed on a
 		// local filesystem is
-		f, size, err := w.s.copyContent(ctx, w.entry, path)
+		f, size, err := fetch()
+		if errors.Is(err, errMadeMeanwhile) {
+			return nil
+		}
 		if err != nil {
 			if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600); err != nil {
 				return err
@@ -535,7 +615,10 @@ func (w *Writer) ensure(ctx context.Context, empty bool) error {
 		}
 		wc.file, wc.size = f, 0
 	} else {
-		f, size, err := w.s.copyContent(ctx, w.entry, path)
+		f, size, err := fetch()
+		if errors.Is(err, errMadeMeanwhile) {
+			return w.ensure(ctx, empty)
+		}
 		if err != nil {
 			os.Remove(path)
 			return err
@@ -543,7 +626,20 @@ func (w *Writer) ensure(ctx context.Context, empty bool) error {
 		wc.file, wc.size = f, size
 	}
 	wc.name = name
-	// The working copy is recorded before the write that needed it is answered
+	// The working copy is on disk, and recorded, before the write that needed it is answered
+	if err := wc.file.Sync(); err != nil {
+		wc.file.Close()
+		wc.file = nil
+		os.Remove(path)
+		return err
+	}
+	if err := syncDir(w.s.workDir()); err != nil {
+		wc.file.Close()
+		wc.file = nil
+		os.Remove(path)
+		return err
+	}
+	var replaced sql.NullString
 	err := w.s.store.tx(context.Background(), func(tx *sql.Tx) error {
 		r, err := liveItem(tx, wc.item)
 		if err != nil {
@@ -553,6 +649,10 @@ func (w *Writer) ensure(ctx context.Context, empty bool) error {
 			return fs.ErrNotExist
 		}
 		if err := captureBase(tx, wc.item); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(`SELECT file FROM work WHERE node = ?`, wc.node).Scan(&replaced); err != nil &&
+			!errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 		if _, err := tx.Exec(`INSERT INTO work (node, item, file, writing) VALUES (?, ?, ?, 1)
@@ -574,8 +674,16 @@ func (w *Writer) ensure(ctx context.Context, empty bool) error {
 		os.Remove(path)
 		return err
 	}
+	wc.writingRecorded = true
+	// A working copy left by the daemon before (whose content this one started from) isn't needed any more
+	if replaced.Valid && replaced.String != name {
+		os.Remove(filepath.Join(w.s.workDir(), replaced.String))
+	}
 	return nil
 }
+
+// errMadeMeanwhile means another handle made the working copy while this one fetched its content
+var errMadeMeanwhile = errors.New("the working copy was made meanwhile")
 
 // copyContent copies an item's current content into a new file at path (a reflink where the filesystem has them),
 // fetching it from the gateway if it isn't here
@@ -589,6 +697,9 @@ func (s *Service) copyContent(ctx context.Context, e Entry, path string) (*os.Fi
 		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 		return f, 0, err
 	}
+	// Pinned, so that eviction doesn't remove it between the check and the copy
+	s.cache.pin(e.ContentID)
+	defer s.cache.unpin(e.ContentID)
 	cached, err := s.cache.cached(e.ContentID)
 	if err != nil {
 		return nil, 0, err
@@ -625,6 +736,10 @@ func (s *Service) copyContent(ctx context.Context, e Entry, path string) (*os.Fi
 			break
 		}
 	}
+	if off != r.Size() {
+		f.Close()
+		return nil, 0, fmt.Errorf("fetched %d of %d bytes", off, r.Size())
+	}
 	return f, off, nil
 }
 
@@ -632,10 +747,14 @@ func (s *Service) copyContent(ctx context.Context, e Entry, path string) (*os.Fi
 func (s *Service) localContentPath(item int64) (string, error) {
 	var rel sql.NullString
 	err := s.store.db.QueryRow(`SELECT local_content FROM items WHERE id = ?`, item).Scan(&rel)
-	if errors.Is(err, sql.ErrNoRows) || !rel.Valid {
+	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
-	return filepath.Join(s.cfg.StateDir, rel.String), err
+	if err != nil || !rel.Valid {
+		// An error mustn't pass for "no unsent content": the working copy would start from the gateway's
+		return "", err
+	}
+	return filepath.Join(s.cfg.StateDir, rel.String), nil
 }
 
 // WriteAt writes at off
@@ -682,7 +801,11 @@ func (w *Writer) Sync() error {
 	if err := wc.file.Sync(); err != nil {
 		return err
 	}
-	return w.s.recordWorkingCopy(wc, true)
+	if err := w.s.recordWorkingCopy(wc, true); err != nil {
+		return err
+	}
+	wc.writingRecorded = true
+	return nil
 }
 
 // recordWorkingCopy stores the working copy's length and time with its item. Callers hold its mutex.
@@ -718,17 +841,27 @@ func (w *Writer) Close() error {
 				_, err := tx.Exec(`DELETE FROM work WHERE node = ? AND detached = 1`, wc.node)
 				return err
 			})
-		} else {
-			err = w.s.recordWorkingCopy(wc, false)
+		} else if err = wc.file.Sync(); err == nil {
+			// Marked whole only once it is on disk: recovery sends what isn't marked as being written
+			if err = w.s.recordWorkingCopy(wc, false); err == nil {
+				wc.writingRecorded = false
+			}
 		}
 	}
+	// Without a file nothing is left of it; a handle opened from now on makes a new one
+	drop := last && wc.file == nil
+	if drop {
+		wc.retired = true
+	}
 	wc.mutex.Unlock()
-	if last {
+	if drop {
 		w.s.mutex.Lock()
-		if wc.file == nil && w.s.work[wc.node] == wc {
+		if w.s.work[wc.node] == wc {
 			delete(w.s.work, wc.node)
 		}
 		w.s.mutex.Unlock()
+	}
+	if last {
 		w.s.settleLater(w.entry.Folder)
 	}
 	return err

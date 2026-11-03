@@ -18,6 +18,8 @@ describe=${describe#v}
 version=${describe%%-*}
 rest=${describe#*-}
 release="${rest%%-*}.${rest#*-}"
+# A tree with changes isn't the commit: its package mustn't pass for that commit's
+git -C "$root" diff --quiet HEAD 2>/dev/null || release="$release.dirty"
 
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT

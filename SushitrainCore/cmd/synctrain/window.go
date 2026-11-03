@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
+	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
@@ -29,7 +30,12 @@ type mainWindow struct {
 	win    *adw.ApplicationWindow
 	toasts *adw.ToastOverlay
 	// Stops the current page's refreshing
-	stop func()
+	stop       func()
+	switchMode *gio.SimpleAction
+	// Set while the machine's mode is set up or changed, which nothing else may start meanwhile
+	changing bool
+	// Set once the window is closed; a mode change still running then reports with a notification
+	closed bool
 }
 
 func newMainWindow(app *adw.Application) *mainWindow {
@@ -40,11 +46,13 @@ func newMainWindow(app *adw.Application) *mainWindow {
 	w.win.ConnectCloseRequest(func() bool {
 		if w.stop != nil {
 			w.stop()
+			w.stop = nil
 		}
+		w.closed = true
 		return false
 	})
-	switchMode := gio.NewSimpleAction("switch-mode", nil)
-	switchMode.ConnectActivate(func(*glib.Variant) {
+	w.switchMode = gio.NewSimpleAction("switch-mode", nil)
+	w.switchMode.ConnectActivate(func(*glib.Variant) {
 		switch readMode() {
 		case modeFiles:
 			w.askSynchronize(true)
@@ -52,7 +60,7 @@ func newMainWindow(app *adw.Application) *mainWindow {
 			w.leaveSynchronize()
 		}
 	})
-	w.win.AddAction(switchMode)
+	w.win.AddAction(w.switchMode)
 	about := gio.NewSimpleAction("about", nil)
 	about.ConnectActivate(func(*glib.Variant) { w.about() })
 	w.win.AddAction(about)
@@ -131,8 +139,58 @@ func (w *mainWindow) parent() *gtk.Window {
 
 func (w *mainWindow) toast(message string) {
 	t := adw.NewToast(message)
+	// Names in messages come from gateways, clients and other devices: never markup
+	t.SetUseMarkup(false)
 	t.SetTimeout(5)
 	w.toasts.AddToast(t)
+}
+
+// report tells the outcome of a mode change: in a dialog, or in a notification once the window is closed
+func (w *mainWindow) report(heading, body string) {
+	if !w.closed {
+		w.inform(heading, body)
+		return
+	}
+	n := gio.NewNotification(heading)
+	n.SetBody(body)
+	w.app.SendNotification("mode", n)
+}
+
+// beginChange shows that the machine's mode is being set up or changed, until endChange. The page is replaced, so
+// nothing on it can start another change or a daemon meanwhile, and closing the window doesn't end the program before
+// the change is done. It reports false when a change runs already.
+func (w *mainWindow) beginChange(what string) bool {
+	if w.changing {
+		return false
+	}
+	w.changing = true
+	if w.stop != nil {
+		w.stop()
+		w.stop = nil
+	}
+	w.switchMode.SetEnabled(false)
+	w.app.Hold()
+	page := adw.NewStatusPage()
+	page.SetTitle(what)
+	page.SetDescription("This can take a few minutes. It goes on if the window is closed.")
+	spinner := adw.NewSpinner()
+	spinner.SetSizeRequest(48, 48)
+	spinner.SetHAlign(gtk.AlignCenter)
+	page.SetChild(spinner)
+	toolbar := adw.NewToolbarView()
+	toolbar.AddTopBar(adw.NewHeaderBar())
+	toolbar.SetContent(page)
+	w.toasts.SetChild(toolbar)
+	return true
+}
+
+func (w *mainWindow) endChange() {
+	w.changing = false
+	w.switchMode.SetEnabled(true)
+	if !w.closed {
+		w.show()
+	}
+	w.app.Release()
 }
 
 func (w *mainWindow) failed(err error) {
@@ -197,28 +255,56 @@ func choiceRow(title, subtitle string, activate func()) *adw.ActionRow {
 	return r
 }
 
-// setUpFiles starts Files mode: the daemon runs from now on, at every login
+// setUpFiles starts Files mode: the daemon runs from now on, at every login. A failure leaves it off.
 func (w *mainWindow) setUpFiles() {
-	w.toast("Starting Synctrain Files…")
+	if !w.beginChange("Starting Synctrain Files") {
+		return
+	}
 	background(func() (struct{}, error) {
-		if err := systemctl("enable", "--now", "synctrain-files.service"); err != nil {
-			return struct{}{}, err
+		err := systemctl("enable", "--now", "synctrain-files.service")
+		if err == nil {
+			err = waitForService("synctrain-files.service", filesSocket(), time.Minute)
 		}
-		if err := waitForSocket(filesSocket(), 20*time.Second); err != nil {
-			return struct{}{}, err
+		if err == nil {
+			err = writeMode(modeFiles)
 		}
-		return struct{}{}, writeMode(modeFiles)
+		if err != nil {
+			stopUnit("synctrain-files.service")
+		}
+		return struct{}{}, err
 	}, func(_ struct{}, err error) {
 		if err != nil {
-			w.toast("Synctrain Files couldn't start: " + err.Error())
-			return
+			w.report("Synctrain Files Couldn't Start", sentence(err))
 		}
-		w.show()
+		w.endChange()
 	})
 }
 
+// editing reports whether the person is typing in a widget, which a refresh mustn't overwrite
+func editing(widget gtk.Widgetter) bool {
+	return gtk.BaseWidget(widget).StateFlags()&gtk.StateFlagFocusWithin != 0
+}
+
+// debouncer runs only the last of calls made in quick succession, as when stepping through numbers
+type debouncer struct {
+	source coreglib.SourceHandle
+}
+
+func (d *debouncer) call(fn func()) {
+	if d.source != 0 {
+		coreglib.SourceRemove(d.source)
+	}
+	d.source = coreglib.TimeoutAdd(800, func() bool {
+		d.source = 0
+		fn()
+		return false
+	})
+}
+
+// row is a list row; its text is never markup, as names in it come from gateways, clients and other devices
 func row(title, subtitle string) *adw.ActionRow {
 	r := adw.NewActionRow()
+	r.SetUseMarkup(false)
 	r.SetTitle(title)
 	if subtitle != "" {
 		r.SetSubtitle(subtitle)

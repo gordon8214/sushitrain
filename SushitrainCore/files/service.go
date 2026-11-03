@@ -77,9 +77,11 @@ type Service struct {
 	work         map[uint64]*workingCopy
 	settleTimers map[int64]*time.Timer
 	busySince    map[int64]time.Time
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
+	// Since when a folder's changes are held back by one that keeps changing
+	heldSince map[int64]time.Time
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
 
 	// Settling and collecting staged content take turns
 	settleMutex sync.Mutex
@@ -114,7 +116,7 @@ func Open(cfg Config) (*Service, error) {
 	}
 	s := &Service{cfg: cfg, store: store, log: cfg.Logger, clients: map[string]*remoteclient.Client{},
 		loops: map[int64]context.CancelFunc{}, work: map[uint64]*workingCopy{}, settleTimers: map[int64]*time.Timer{},
-		busySince: map[int64]time.Time{}, outboxWake: make(chan struct{}, 1)}
+		busySince: map[int64]time.Time{}, heldSince: map[int64]time.Time{}, outboxWake: make(chan struct{}, 1)}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	if s.cache, err = openCache(s); err != nil {
 		store.Close()
@@ -591,6 +593,10 @@ func uniqueDirName(tx *sql.Tx, label, id string) (string, error) {
 	if !validName(base) || base == trackerIgnoreName {
 		base = normalizedName(strings.ReplaceAll(id, "/", "-"))
 	}
+	// Labels and IDs come from the gateway: neither may make a name that isn't one
+	if !validName(base) || base == trackerIgnoreName || len(base) > 200 {
+		base = "Folder"
+	}
 	for i := 1; ; i++ {
 		name := base
 		if i > 1 {
@@ -620,18 +626,34 @@ func (s *Service) RemoveFolder(id int64) (string, int, error) {
 	if n > 0 {
 		return "", 0, fmt.Errorf("%w: %d (wait for them, or export or discard them)", ErrUnresolved, n)
 	}
-	var label string
-	if err := s.store.db.QueryRow(`SELECT label FROM folders WHERE id = ?`, id).Scan(&label); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", 0, errors.New("no such folder")
+	// Nothing new can be changed in it while its files are moved out: a change made meanwhile would go with it
+	var canWrite bool
+	err = s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		if err := tx.QueryRow(`SELECT can_write FROM folders WHERE id = ?`, id).Scan(&canWrite); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return errors.New("no such folder")
+			}
+			return err
 		}
+		_, err := tx.Exec(`UPDATE folders SET can_write = 0 WHERE id = ?`, id)
+		return err
+	})
+	if err != nil {
 		return "", 0, err
 	}
-	dest, moved, err := s.leftovers(id, label)
+	reopen := func() {
+		_ = s.store.tx(context.Background(), func(tx *sql.Tx) error {
+			_, err := tx.Exec(`UPDATE folders SET can_write = ? WHERE id = ?`, canWrite, id)
+			return err
+		})
+	}
+	dest, moved, err := s.leftovers(id)
 	if err != nil {
+		reopen()
 		return "", 0, fmt.Errorf("moving files that are only here out of the folder: %w", err)
 	}
 	if err := s.removeFolder(id); err != nil {
+		reopen()
 		return "", 0, err
 	}
 	return dest, moved, nil
@@ -641,6 +663,12 @@ func (s *Service) removeFolder(id int64) error {
 	s.stopLoop(id)
 	var changes Changes
 	err := s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		// A handle opened before writing stopped may have changed something since it was counted
+		if n, err := unresolved(tx, id); err != nil {
+			return err
+		} else if n > 0 {
+			return fmt.Errorf("%w: %d (wait for them, or export or discard them)", ErrUnresolved, n)
+		}
 		var dirName string
 		var node int64
 		if err := tx.QueryRow(`SELECT f.dir_name, i.node FROM folders AS f JOIN items AS i ON i.id = f.root_item
@@ -664,7 +692,7 @@ func (s *Service) removeFolder(id int64) error {
 				return err
 			}
 		}
-		changes.entry(rootNode, dirName, uint64(node))
+		changes.removed(rootNode, dirName, uint64(node))
 		return nil
 	})
 	if err != nil {

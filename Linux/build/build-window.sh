@@ -5,8 +5,8 @@
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 goroot=$(go env GOROOT)
-podman image exists synctrain-window-build ||
-	podman build -t synctrain-window-build -f "$root/Linux/build/Containerfile" "$root/Linux/build"
+# Built every time, which is quick once cached, so that a change to the Containerfile is taken
+podman build -q -t synctrain-window-build -f "$root/Linux/build/Containerfile" "$root/Linux/build" >/dev/null
 mkdir -p "$(go env GOMODCACHE)" "$(go env GOCACHE)"
 version=$(git -C "$root" describe --always --dirty 2>/dev/null || echo dev)
 podman run --rm --security-opt label=disable \

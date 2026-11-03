@@ -9,10 +9,12 @@ for items in a Synctrain mount, and a column with their state. The daemon does t
 attributes; Previous Versions opens Synctrain's window."""
 
 import os
-import subprocess
+import re
+import sys
+import time
 from urllib.parse import unquote, urlparse
 
-from gi.repository import GObject, Nautilus
+from gi.repository import Gio, GObject, Nautilus
 
 STATE = "user.synctrain.state"
 KEEP = "user.synctrain.keep"
@@ -29,17 +31,26 @@ LABELS = {
 }
 
 
+_mounts = ([], 0.0)
+
+
 def mounts():
-    """The directories Synctrain is mounted at"""
+    """The directories Synctrain is mounted at, read again at most every few seconds (Nautilus asks for each file)"""
+    global _mounts
+    found, read_at = _mounts
+    if time.monotonic() - read_at < 5:
+        return found
     found = []
     try:
-        with open("/proc/self/mounts") as f:
+        with open("/proc/self/mounts", encoding="utf-8", errors="surrogateescape") as f:
             for line in f:
                 fields = line.split()
                 if len(fields) > 2 and fields[2] == "fuse.synctrain":
-                    found.append(fields[1].encode().decode("unicode_escape"))
+                    # Spaces and other characters are written as octal escapes; the rest is the path as it is
+                    found.append(re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), fields[1]))
     except OSError:
         pass
+    _mounts = (found, time.monotonic())
     return found
 
 
@@ -83,11 +94,11 @@ class Synctrain(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvider, N
         kept = [xattr(p, KEEP) == "1" for p in paths]
         if not all(kept):
             keep = Nautilus.MenuItem(name="Synctrain::keep", label="Keep on This Device")
-            keep.connect("activate", self.set_keep, paths, b"1")
+            keep.connect("activate", self.set_keep, files, paths, b"1")
             items.append(keep)
         if any(kept):
             stop = Nautilus.MenuItem(name="Synctrain::stop-keeping", label="Stop Keeping on This Device")
-            stop.connect("activate", self.set_keep, paths, b"0")
+            stop.connect("activate", self.set_keep, files, paths, b"0")
             items.append(stop)
         if len(paths) == 1 and not files[0].is_directory():
             versions = Nautilus.MenuItem(name="Synctrain::versions", label="Previous Versions…")
@@ -95,12 +106,19 @@ class Synctrain(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvider, N
             items.append(versions)
         return items
 
-    def set_keep(self, menu, paths, value):
+    def set_keep(self, menu, files, paths, value):
+        failed = []
         for path in paths:
             try:
                 os.setxattr(path, KEEP, value)
-            except OSError:
-                pass
+            except OSError as e:
+                failed.append((path, e))
+        for f in files:
+            f.invalidate_extension_info()
+        for path, e in failed:
+            # Not kept or kept as asked (an item kept with a folder that contains it can only stop with that folder)
+            print(f"Synctrain: {os.path.basename(path)}: {e.strerror}", file=sys.stderr)
 
     def versions(self, menu, path):
-        subprocess.Popen(["synctrain", "versions", path], start_new_session=True)
+        # Reaped by GLib, unlike a child of subprocess
+        Gio.Subprocess.new(["synctrain", "versions", path], Gio.SubprocessFlags.NONE)

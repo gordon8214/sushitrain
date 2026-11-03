@@ -24,6 +24,9 @@ import (
 // MaxBlockSize is the largest block a manifest may describe (Syncthing's largest block size)
 const MaxBlockSize = 16 << 20
 
+// minBlockSize is Syncthing's smallest block, which only a file's last block may be under
+const minBlockSize = 128 << 10
+
 // CreateReadLease creates a read lease for the item's revision, or returns the one this client has, with its
 // preparation progress. A 412 means the revision is no longer current, and carries the current item.
 func (c *Client) CreateReadLease(ctx context.Context, itemID, revision string) (remoteapi.ReadLease, error) {
@@ -78,6 +81,11 @@ func NewManifestVerifier(lease remoteapi.ReadLease) (*ManifestVerifier, error) {
 	identity, size, ok := remoteapi.ParseContentID(lease.ContentID)
 	if !ok || size != lease.Size || lease.BlockCount < 0 {
 		return nil, protocolError("the lease's content ID %q doesn't describe its content", lease.ContentID)
+	}
+	// Syncthing's blocks are 128 KiB at least, except the last; a count beyond that can't be right, and isn't
+	// allocated for
+	if lease.BlockCount > int(size/minBlockSize)+1 {
+		return nil, protocolError("the lease has %d blocks for %d bytes", lease.BlockCount, size)
 	}
 	return &ManifestVerifier{contentID: lease.ContentID, identity: identity, size: size, blockCount: lease.BlockCount,
 		hasher: sha256.New()}, nil
@@ -135,7 +143,7 @@ func (c *Client) Manifest(ctx context.Context, lease remoteapi.ReadLease) ([]Blo
 	if err != nil {
 		return nil, err
 	}
-	blocks := make([]Block, 0, lease.BlockCount)
+	blocks := make([]Block, 0, min(lease.BlockCount, 4096))
 	for verifier.Next() < lease.BlockCount {
 		from := verifier.Next()
 		page, err := c.ManifestPage(ctx, lease.Lease, "", from, 0)

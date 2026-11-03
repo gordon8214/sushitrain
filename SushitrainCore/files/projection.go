@@ -32,15 +32,22 @@ type Changes struct {
 }
 
 // EntryChange is a name in a directory (by the directory's node) that changed. Node is the node it resolved to
-// before, if any, which the kernel should drop.
+// before, if any. Gone says that node is gone, rather than moved or showing other content under another node: the
+// kernel then treats it as removed.
 type EntryChange struct {
 	Parent uint64
 	Name   string
 	Node   uint64
+	Gone   bool
 }
 
 func (c *Changes) entry(parent uint64, name string, node uint64) {
 	c.Entries = append(c.Entries, EntryChange{Parent: parent, Name: name, Node: node})
+}
+
+// removed records a name whose item is gone
+func (c *Changes) removed(parent uint64, name string, node uint64) {
+	c.Entries = append(c.Entries, EntryChange{Parent: parent, Name: name, Node: node, Gone: true})
 }
 
 func (c *Changes) merge(other Changes) {
@@ -516,7 +523,7 @@ func (p *projector) place(gatewayID string, mayDisplace bool) (bool, error) {
 		attrsChanged := current.size != size || current.modNs != r.modNs
 		if current.deleted || moved || contentChanged || attrsChanged || current.folder != parent.folder {
 			node := current.node
-			if contentChanged && !current.deleted {
+			if contentChanged {
 				// A new node, so that handles on the old content keep their own pages
 				if node, err = allocate(p.tx, metaNextNode); err != nil {
 					return false, err
@@ -583,6 +590,14 @@ func (p *projector) removeRow(row *itemRow, unplace bool) error {
 			return err
 		}
 		sub := keep + `, gone(id) AS (SELECT id FROM sub WHERE id NOT IN (SELECT id FROM kept))`
+		if keeps {
+			// What goes from directories that stay is dropped by the kernel too
+			if err := p.removedBelow(sub+` SELECT i.parent, i.name, i.node FROM items AS i WHERE i.id IN
+				(SELECT id FROM gone) AND i.deleted = 0 AND (i.parent = ?1 OR i.parent IN (SELECT id FROM kept))`,
+				row.id); err != nil {
+				return err
+			}
+		}
 		if unplace {
 			if _, err := p.tx.Exec(sub+` UPDATE remote_items SET placed = 0 WHERE item IN (SELECT id FROM gone)`,
 				row.id); err != nil {
@@ -625,7 +640,41 @@ func (p *projector) removeRow(row *itemRow, unplace bool) error {
 	if err != nil {
 		return err
 	}
-	p.changes.entry(parent, row.name, uint64(row.node))
+	p.changes.removed(parent, row.name, uint64(row.node))
+	return nil
+}
+
+// removedBelow records the items a query returns (parent, name, node) as gone
+func (p *projector) removedBelow(query string, args ...any) error {
+	rows, err := p.tx.Query(query, args...)
+	if err != nil {
+		return err
+	}
+	type gone struct {
+		parent sql.NullInt64
+		name   string
+		node   int64
+	}
+	var list []gone
+	for rows.Next() {
+		var g gone
+		if err := rows.Scan(&g.parent, &g.name, &g.node); err != nil {
+			rows.Close()
+			return err
+		}
+		list = append(list, g)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, g := range list {
+		parent, err := p.nodeOf(g.parent)
+		if err != nil {
+			return err
+		}
+		p.changes.removed(parent, g.name, uint64(g.node))
+	}
 	return nil
 }
 
@@ -679,16 +728,18 @@ func (p *projector) placeWaiting(folder int64) error {
 
 // removeUnseen ends a complete snapshot (with the changes after its start): items it didn't show are gone
 func (p *projector) removeUnseen(folder, mark int64) error {
+	// A page at a time, each after the last, so that the rows looked at once aren't looked at again
+	var after int64
 	for {
-		rows, err := p.tx.Query(`SELECT gateway_id FROM remote_items WHERE folder = ? AND seen_mark != ? AND deleted = 0
-			LIMIT 500`, folder, mark)
+		rows, err := p.tx.Query(`SELECT rowid, gateway_id FROM remote_items WHERE folder = ? AND seen_mark != ?
+			AND deleted = 0 AND rowid > ? ORDER BY rowid LIMIT 500`, folder, mark, after)
 		if err != nil {
 			return err
 		}
 		var unseen []string
 		for rows.Next() {
 			var gatewayID string
-			if err := rows.Scan(&gatewayID); err != nil {
+			if err := rows.Scan(&after, &gatewayID); err != nil {
 				rows.Close()
 				return err
 			}

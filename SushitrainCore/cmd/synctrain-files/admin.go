@@ -10,9 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,7 +21,7 @@ import (
 // mountPath turns a path the CLI was given (absolute, in the mount) into one relative to the mount
 func mountPath(mount, path string) (string, error) {
 	rel, err := filepath.Rel(mount, filepath.Clean(path))
-	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, "../") {
 		return "", errors.New(path + " is not in " + mount)
 	}
 	return filepath.ToSlash(rel), nil
@@ -160,6 +158,10 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 		if err != nil {
 			return nil, err
 		}
+		// The daemon's working directory means nothing to its clients
+		if !filepath.IsAbs(p.Dest) {
+			return nil, errors.New("the destination must be an absolute path")
+		}
 		return nil, s.ExportEdit(p.ID, p.Dest)
 	})
 	a.Register("pending.discard", func(ctx context.Context, params json.RawMessage) (any, error) {
@@ -270,10 +272,8 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 	})
 }
 
-// previewDir is where versions are downloaded for previewing: the runtime directory, which goes at logout
+// previewDir is where versions are downloaded for previewing (and removed a day later): on disk, in this user's own
+// cache, rather than the runtime directory, which is memory, or /tmp, which is anyone's
 func previewDir() string {
-	if dir := os.Getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(dir) {
-		return filepath.Join(dir, "synctrain", "versions")
-	}
-	return filepath.Join(os.TempDir(), "synctrain-versions-"+strconv.Itoa(os.Getuid()))
+	return filepath.Join(xdgDir("XDG_CACHE_HOME", ".cache"), "synctrain", "previews")
 }

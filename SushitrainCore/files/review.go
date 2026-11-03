@@ -122,15 +122,20 @@ func (s *Service) ExportEdit(id int64, dest string) error {
 	return out.Close()
 }
 
+// The states of an operation that discarding it gives up: not those on their way to the gateway
+const discardableStates = `('queued', 'uploaded', 'failed', 'unknown', 'blocked')`
+
 // DiscardEdit gives up an edit that can't be sent (or one not sent yet) and those of its item after it: the item
-// shows what the gateway has again, and an item the gateway never had goes
+// shows what it showed before them, which is what the gateway has unless an earlier edit of it is still to be sent.
+// An item whose creation is discarded goes, with what was made below it.
 func (s *Service) DiscardEdit(id int64) error {
 	var changes Changes
+	var detach []uint64
 	err := s.store.tx(context.Background(), func(tx *sql.Tx) error {
 		var item int64
-		var state string
-		err := tx.QueryRow(`SELECT item, state FROM outbox WHERE id = ? AND state IN `+unresolvedStates, id).
-			Scan(&item, &state)
+		var state, kind string
+		err := tx.QueryRow(`SELECT item, state, kind FROM outbox WHERE id = ? AND state IN `+unresolvedStates, id).
+			Scan(&item, &state, &kind)
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("no edit %d", id)
 		}
@@ -140,9 +145,19 @@ func (s *Service) DiscardEdit(id int64) error {
 		if state == stateSubmitted || state == statePending {
 			return fmt.Errorf("edit %d is being sent", id)
 		}
+		var exists bool
+		if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM items WHERE id = ?)`, item).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			// Its item was removed here before it reached the gateway: the edit is all that is left
+			_, err := tx.Exec(`UPDATE outbox SET state = 'canceled', error = 'discarded', updated_at = ?
+				WHERE item = ? AND id >= ? AND state IN `+discardableStates, nowUnix(), item, id)
+			return err
+		}
 		p := newProjector(tx)
 		defer func() { changes = p.changes }()
-		if err := s.discardItem(tx, p, item); err != nil {
+		if detach, err = s.discardItem(tx, p, item, id, kind == remoteapi.OpCreate); err != nil {
 			return err
 		}
 		return p.finish()
@@ -151,19 +166,71 @@ func (s *Service) DiscardEdit(id int64) error {
 		return err
 	}
 	s.changed(changes)
+	for _, node := range detach {
+		s.detachNode(node)
+	}
 	s.collectStagedSoon()
 	s.wakeOutbox()
 	return nil
 }
 
-// discardItem drops what is pending of an item and of everything below it
-func (s *Service) discardItem(tx *sql.Tx, p *projector, item int64) error {
-	rows, err := tx.Query(`WITH RECURSIVE sub(id) AS (SELECT ?1 UNION ALL
-			SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id)
-		SELECT i.id, i.parent, i.name, i.node, i.deleted, r.gateway_id FROM sub JOIN items AS i ON i.id = sub.id
-		LEFT JOIN remote_items AS r ON r.item = i.id`, item)
+// discardItem drops the edits of an item from operation from on, and, when that is its creation, the item and what
+// was made below it. It returns the nodes whose working copies no longer show anything, to detach after the commit.
+func (s *Service) discardItem(tx *sql.Tx, p *projector, item, from int64, creation bool) ([]uint64, error) {
+	// An earlier edit still to be sent keeps the item as it made it
+	var earlier sql.NullString
+	var hasEarlier bool
+	err := tx.QueryRow(`SELECT staged FROM outbox WHERE item = ? AND id < ? AND state IN `+unresolvedStates+`
+		ORDER BY id DESC LIMIT 1`, item, from).Scan(&earlier)
+	switch {
+	case err == nil:
+		hasEarlier = true
+	case !errors.Is(err, sql.ErrNoRows):
+		return nil, err
+	}
+	if hasEarlier {
+		var parent sql.NullInt64
+		var name string
+		var node int64
+		if err := tx.QueryRow(`SELECT parent, name, node FROM items WHERE id = ?`, item).Scan(&parent, &name,
+			&node); err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(`UPDATE outbox SET state = 'canceled', error = 'discarded', updated_at = ?
+			WHERE item = ? AND id >= ? AND state IN `+discardableStates, nowUnix(), item, from); err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(`UPDATE work SET detached = 1 WHERE item = ?`, item); err != nil {
+			return nil, err
+		}
+		next, err := allocate(tx, metaNextNode)
+		if err != nil {
+			return nil, err
+		}
+		// Its content goes back to what the earlier edit sends, under a new node for handles open on the other
+		if _, err := tx.Exec(`UPDATE items SET node = ?, local_content = ?, local = local & ~? WHERE id = ?`, next,
+			earlier, localContent, item); err != nil {
+			return nil, err
+		}
+		parentNode, err := p.nodeOf(parent)
+		if err != nil {
+			return nil, err
+		}
+		p.changes.entry(parentNode, name, uint64(node))
+		return []uint64{uint64(node)}, nil
+	}
+
+	query := `SELECT i.id, i.parent, i.name, i.node, i.deleted, i.local, r.gateway_id FROM items AS i
+		LEFT JOIN remote_items AS r ON r.item = i.id WHERE i.id = ?1`
+	if creation {
+		query = `WITH RECURSIVE sub(id) AS (SELECT ?1 UNION ALL
+				SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id)
+			SELECT i.id, i.parent, i.name, i.node, i.deleted, i.local, r.gateway_id FROM sub
+			JOIN items AS i ON i.id = sub.id LEFT JOIN remote_items AS r ON r.item = i.id`
+	}
+	rows, err := tx.Query(query, item)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	type entry struct {
 		id      int64
@@ -171,80 +238,93 @@ func (s *Service) discardItem(tx *sql.Tx, p *projector, item int64) error {
 		name    string
 		node    int64
 		deleted bool
+		local   int
 		gateway sql.NullString
 	}
 	var list []entry
 	for rows.Next() {
 		var e entry
-		if err := rows.Scan(&e.id, &e.parent, &e.name, &e.node, &e.deleted, &e.gateway); err != nil {
+		if err := rows.Scan(&e.id, &e.parent, &e.name, &e.node, &e.deleted, &e.local, &e.gateway); err != nil {
 			rows.Close()
-			return err
+			return nil, err
 		}
 		list = append(list, e)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return err
+		return nil, err
 	}
-	for _, e := range list {
+	for _, e := range list[1:] {
+		if e.local&localOnly != 0 && !e.deleted {
+			return nil, fmt.Errorf("%s holds files that are only on this machine, such as %q: move them out first",
+				list[0].name, e.name)
+		}
+	}
+	var detach []uint64
+	for i, e := range list {
+		// The item's own edits from the discarded one on, and every edit of what was made below it
+		first := int64(0)
+		if i == 0 {
+			first = from
+		}
 		if _, err := tx.Exec(`UPDATE outbox SET state = 'canceled', error = 'discarded', updated_at = ?
-			WHERE item = ? AND state IN `+unresolvedStates, nowUnix(), e.id); err != nil {
-			return err
+			WHERE item = ? AND id >= ? AND state IN `+discardableStates, nowUnix(), e.id, first); err != nil {
+			return nil, err
 		}
 		if _, err := tx.Exec(`UPDATE work SET detached = 1 WHERE item = ?`, e.id); err != nil {
-			return err
+			return nil, err
 		}
 		if _, err := tx.Exec(`UPDATE items SET local = 0, local_content = NULL, base_revision = NULL,
 			base_content_id = NULL, base_subtree = NULL WHERE id = ?`, e.id); err != nil {
-			return err
+			return nil, err
 		}
-		s.detachNode(uint64(e.node))
+		detach = append(detach, uint64(e.node))
 	}
 	// Bottom up: an item the gateway never had goes; another shows the gateway's state, with a new node for content
 	// that changes back
 	for i := len(list) - 1; i >= 0; i-- {
 		e := list[i]
 		if e.gateway.Valid {
-			if _, err := tx.Exec(`UPDATE items SET node = ? WHERE id = ?`, mustAllocate(tx), e.id); err != nil {
-				return err
+			next, err := allocate(tx, metaNextNode)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := tx.Exec(`UPDATE items SET node = ? WHERE id = ?`, next, e.id); err != nil {
+				return nil, err
 			}
 			parentNode, err := p.nodeOf(e.parent)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			p.changes.entry(parentNode, e.name, uint64(e.node))
 			if _, err := p.place(e.gateway.String, true); err != nil {
-				return err
+				return nil, err
 			}
 			continue
 		}
 		if !e.deleted {
 			parentNode, err := p.nodeOf(e.parent)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			p.changes.entry(parentNode, e.name, uint64(e.node))
+			p.changes.removed(parentNode, e.name, uint64(e.node))
 		}
 		if _, err := tx.Exec(`DELETE FROM items WHERE id = ?`, e.id); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
-}
-
-func mustAllocate(tx *sql.Tx) int64 {
-	node, err := allocate(tx, metaNextNode)
-	if err != nil {
-		panic(err)
-	}
-	return node
+	return detach, nil
 }
 
 // Unresolved counts a folder's changes that the gateway hasn't committed: not settled, on their way, or waiting for
 // review
 func (s *Service) Unresolved(folder int64) (int, error) {
+	return unresolved(s.store.db, folder)
+}
+
+func unresolved(q queryer, folder int64) (int, error) {
 	var n int
-	err := s.store.db.QueryRow(`SELECT
+	err := q.QueryRow(`SELECT
 		(SELECT COUNT(*) FROM outbox WHERE folder = ?1 AND state IN `+unresolvedStates+`) +
 		(SELECT COUNT(*) FROM items WHERE folder = ?1 AND local & ?2 != 0 AND local & ?3 = 0) +
 		(SELECT COUNT(*) FROM work AS w JOIN items AS i ON i.id = w.item WHERE i.folder = ?1 AND w.detached = 0
@@ -331,9 +411,32 @@ func (s *Service) recover() error {
 		if !w.writing {
 			continue
 		}
+		if w.local.Int64&localOnly != 0 {
+			// A file that is never sent (an editor's swap file): it keeps what it has
+			if err := s.store.tx(context.Background(), func(tx *sql.Tx) error {
+				_, err := tx.Exec(`UPDATE work SET writing = 0 WHERE node = ?`, w.node)
+				return err
+			}); err != nil {
+				return err
+			}
+			continue
+		}
 		st, err := s.stage(sql.NullString{String: filepath.Join("Work", w.file), Valid: true})
 		if err != nil {
-			return err
+			// One file that can't be recovered (its working copy is gone after a power loss, say) mustn't keep the
+			// rest from starting; with its file gone, its change is lost
+			s.log.Warn("Could not recover a change that was being written", "item", w.item, "error", err)
+			if errors.Is(err, fs.ErrNotExist) {
+				_ = s.store.tx(context.Background(), func(tx *sql.Tx) error {
+					if _, err := tx.Exec(`DELETE FROM work WHERE node = ?`, w.node); err != nil {
+						return err
+					}
+					_, err := tx.Exec(`UPDATE items SET local = local & ~?, local_content = NULL WHERE id = ?
+						AND local_content = ?`, localContent, w.item, filepath.Join("Work", w.file))
+					return err
+				})
+			}
+			continue
 		}
 		err = s.store.tx(context.Background(), func(tx *sql.Tx) error {
 			kind, itemKind := "replace", ""
@@ -367,13 +470,37 @@ func (s *Service) recover() error {
 		os.Remove(path)
 		s.log.Warn("A file was being written when Synctrain stopped; its content is kept for review", "item", w.item)
 	}
+	// Working copies no row refers to (made as the daemon stopped, or replaced) are of no use
+	referenced := map[string]bool{}
+	rows, err = s.store.db.Query(`SELECT file FROM work`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var file string
+		if err := rows.Scan(&file); err != nil {
+			rows.Close()
+			return err
+		}
+		referenced[file] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	entries, _ := os.ReadDir(s.workDir())
+	for _, entry := range entries {
+		if !referenced[entry.Name()] {
+			os.Remove(filepath.Join(s.workDir(), entry.Name()))
+		}
+	}
 	return s.collectStaged()
 }
 
 // leftovers moves a folder's files that are only here (and so would be lost with it) out of the mount, to a new
 // directory named after the folder in ~/Sync, or in the home folder if ~/Sync is itself synchronized. It refuses
 // unless all of them moved.
-func (s *Service) leftovers(folder int64, label string) (string, int, error) {
+func (s *Service) leftovers(folder int64) (string, int, error) {
 	rows, err := s.store.db.Query(`SELECT i.id, w.file, i.local_content FROM items AS i
 		LEFT JOIN work AS w ON w.node = i.node AND w.detached = 0
 		WHERE i.folder = ? AND i.deleted = 0 AND i.kind = ? AND i.local & ? != 0`, folder, kindFile, localOnly)
@@ -406,25 +533,51 @@ func (s *Service) leftovers(folder int64, label string) (string, int, error) {
 	if _, err := os.Stat(filepath.Join(base, ".stfolder")); err == nil {
 		base = home
 	}
-	dest := filepath.Join(base, label+" (not synchronized)")
-	for i := 2; ; i++ {
-		if _, err := os.Lstat(dest); errors.Is(err, fs.ErrNotExist) {
-			break
-		}
-		dest = filepath.Join(base, fmt.Sprintf("%s (not synchronized %d)", label, i))
-	}
+	// Named after the folder's directory in the mount, which is one valid name, never after the label as the
+	// gateway gave it
 	var root string
 	if err := s.store.db.QueryRow(`SELECT dir_name FROM folders WHERE id = ?`, folder).Scan(&root); err != nil {
 		return "", 0, err
 	}
+	if !validName(root) {
+		root = "Folder"
+	}
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		return "", 0, err
+	}
+	var dest string
+	for i := 1; ; i++ {
+		dest = filepath.Join(base, root+" (not synchronized)")
+		if i > 1 {
+			dest = filepath.Join(base, fmt.Sprintf("%s (not synchronized %d)", root, i))
+		}
+		if filepath.Dir(dest) != base {
+			return "", 0, fmt.Errorf("%q can't be a directory name", root)
+		}
+		// A new directory, this user's only, which nothing else could have put in place beforehand
+		err := os.Mkdir(dest, 0o700)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return "", 0, err
+		}
+	}
+	into, err := os.OpenRoot(dest)
+	if err != nil {
+		return "", 0, err
+	}
+	defer into.Close()
 	for _, l := range list {
 		rel, err := s.itemPath(l.item)
 		if err != nil {
 			return "", 0, err
 		}
-		target := filepath.Join(dest, strings.TrimPrefix(rel, root+"/"))
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return "", 0, err
+		target := strings.TrimPrefix(rel, root+"/")
+		if dir := filepath.Dir(target); dir != "." {
+			if err := into.MkdirAll(dir, 0o700); err != nil {
+				return "", 0, err
+			}
 		}
 		var src string
 		switch {
@@ -433,7 +586,7 @@ func (s *Service) leftovers(folder int64, label string) (string, int, error) {
 		case l.content.Valid:
 			src = filepath.Join(s.cfg.StateDir, l.content.String)
 		}
-		out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		out, err := into.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
 			return "", 0, err
 		}

@@ -51,11 +51,15 @@ install -Dm644 %{_sourcedir}/linux.md %{buildroot}%{_docdir}/%{name}/linux.md
 %preun
 %systemd_user_preun synctrain-files.service synctrain-gateway.service
 
+# Not restarted on an upgrade: restarting synctrain-files unmounts ~/Synctrain under open files. The new version runs
+# from the next login, or when the window starts it again.
 %postun
-%systemd_user_postun_with_restart synctrain-files.service synctrain-gateway.service
+%systemd_user_postun synctrain-files.service synctrain-gateway.service
 
 %files
+%dir %{_licensedir}/%{name}
 %license %{_licensedir}/%{name}/LICENSE
+%dir %{_docdir}/%{name}
 %doc %{_docdir}/%{name}/linux.md
 %{_bindir}/synctrain
 %{_bindir}/synctrain-files
@@ -65,4 +69,6 @@ install -Dm644 %{_sourcedir}/linux.md %{buildroot}%{_docdir}/%{name}/linux.md
 %{_datadir}/applications/com.gordonbyrnes.Synctrain.desktop
 %{_metainfodir}/com.gordonbyrnes.Synctrain.metainfo.xml
 %{_datadir}/icons/hicolor/256x256/apps/com.gordonbyrnes.Synctrain.png
+%dir %{_datadir}/nautilus-python
+%dir %{_datadir}/nautilus-python/extensions
 %{_datadir}/nautilus-python/extensions/synctrain.py

@@ -7,6 +7,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -14,8 +15,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode"
 
 	"t-shaped.nl/sushitrain/v2/adminsock"
 	"t-shaped.nl/sushitrain/v2/files"
@@ -38,7 +41,7 @@ func statusCommand(args []string) error {
 	fs, cf := newFlagSet("status")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return flag.ErrHelp
 	}
 	var st files.Status
 	if err := adminsock.Call(cf.path(), "status", nil, &st); err != nil {
@@ -63,7 +66,8 @@ func printGateways(gateways []files.Gateway) {
 			if state == "" {
 				state = "ok"
 			}
-			fmt.Fprintf(w, "%s\t%s:%d\t%s\t%d\t%s\n", g.Name, g.Host, g.Port, g.ServiceID, g.Folders, state)
+			fmt.Fprintf(w, "%s\t%s:%d\t%s\t%d\t%s\n", printable(g.Name), printable(g.Host), g.Port, g.ServiceID,
+				g.Folders, state)
 		}
 	})
 }
@@ -83,7 +87,8 @@ func printFolders(folders []files.Folder) {
 			default:
 				state = "ok"
 			}
-			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", f.ID, f.DirName, f.Gateway, f.RemoteID, access, state)
+			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", f.ID, printable(f.DirName), printable(f.Gateway),
+				printable(f.RemoteID), access, state)
 		}
 	})
 }
@@ -91,23 +96,33 @@ func printFolders(folders []files.Folder) {
 func pairCommand(args []string) error {
 	fs, cf := newFlagSet("pair")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: synctrain-files pair [options] <synctrain+pair:// link>")
+		fmt.Fprintln(os.Stderr, "Usage: synctrain-files pair [options] <synctrain+pair:// link, or - to read it from "+
+			"standard input>")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return flag.ErrHelp
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
 		return flag.ErrHelp
 	}
+	link := fs.Arg(0)
+	if link == "-" {
+		// The link holds a secret, which other users can read in a command line
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil && line == "" {
+			return fmt.Errorf("reading the link: %w", err)
+		}
+		link = strings.TrimSpace(line)
+	}
 	fmt.Println("Asking the gateway to pair; approve this device there.")
 	var g files.Gateway
-	if err := adminsock.Call(cf.path(), "pair", map[string]string{"link": fs.Arg(0)}, &g); err != nil {
+	if err := adminsock.Call(cf.path(), "pair", map[string]string{"link": link}, &g); err != nil {
 		return err
 	}
 	fmt.Printf("Paired with %s (%s). Add its folders with: synctrain-files folders --gateway %s --add <folder>\n",
-		g.Name, g.ServiceID, g.ServiceID)
+		printable(g.Name), g.ServiceID, g.ServiceID)
 	return nil
 }
 
@@ -116,7 +131,7 @@ func gatewaysCommand(args []string) error {
 	forget := fs.String("forget", "", "forget the gateway with this service ID (remove its folders first)")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return flag.ErrHelp
 	}
 	if *forget != "" {
 		return adminsock.Call(cf.path(), "gateways.forget", map[string]string{"serviceID": *forget}, nil)
@@ -139,7 +154,7 @@ func foldersCommand(args []string) error {
 	remove := fs.String("remove", "", "remove the folder with this ID (as listed) from this device; it stays on the gateway")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return flag.ErrHelp
 	}
 	switch {
 	case *remove != "":
@@ -164,7 +179,7 @@ func foldersCommand(args []string) error {
 			&f); err != nil {
 			return err
 		}
-		fmt.Printf("Added %s as %s\n", f.Label, f.DirName)
+		fmt.Printf("Added %s as %s\n", printable(f.Label), printable(f.DirName))
 		return nil
 	case *gateway != "":
 		var remote []files.RemoteFolder
@@ -181,7 +196,7 @@ func foldersCommand(args []string) error {
 				if f.Write {
 					access = "write"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", f.ID, f.Label, access, f.DirName)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", printable(f.ID), printable(f.Label), access, printable(f.DirName))
 			}
 		})
 		return nil
@@ -217,7 +232,7 @@ func keepCommand(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return flag.ErrHelp
 	}
 	paths, err := absolutePaths(fs.Args())
 	if err != nil || len(paths) == 0 {
@@ -235,22 +250,27 @@ func keepCommand(args []string) error {
 func stateCommand(args []string) error {
 	fs, cf := newFlagSet("state")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return flag.ErrHelp
 	}
 	paths, err := absolutePaths(fs.Args())
 	if err != nil || len(paths) == 0 {
 		return errors.New("usage: synctrain-files state <path>…")
 	}
+	failed := 0
 	table("STATE\tPATH", func(w *tabwriter.Writer) {
 		for _, p := range paths {
 			var st files.ItemState
 			if err := adminsock.Call(cf.path(), "state", map[string]string{"path": p}, &st); err != nil {
-				fmt.Fprintf(w, "error\t%s: %v\n", p, err)
+				fmt.Fprintf(w, "error\t%s: %v\n", printable(p), err)
+				failed++
 				continue
 			}
-			fmt.Fprintf(w, "%s\t%s\n", st.State, p)
+			fmt.Fprintf(w, "%s\t%s\n", st.State, printable(p))
 		}
 	})
+	if failed > 0 {
+		return fmt.Errorf("%d of %d paths failed", failed, len(paths))
+	}
 	return nil
 }
 
@@ -260,7 +280,7 @@ func pendingCommand(args []string) error {
 	discard := fs.String("discard", "", "discard the edit with this ID: the file shows what the gateway has again")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return flag.ErrHelp
 	}
 	switch {
 	case *export != "":
@@ -293,7 +313,7 @@ func pendingCommand(args []string) error {
 	}
 	table("ID\tSTATE\tCHANGE\tPATH\tREASON", func(w *tabwriter.Writer) {
 		for _, e := range edits {
-			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", e.ID, e.State, e.Kind, e.Path, e.Error)
+			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", e.ID, e.State, e.Kind, printable(e.Path), printable(e.Error))
 		}
 	})
 	return nil
@@ -301,9 +321,12 @@ func pendingCommand(args []string) error {
 
 func waitCommand(args []string) error {
 	fs, cf := newFlagSet("wait")
-	timeout := fs.Duration("timeout", 10*time.Minute, "how long to wait at most")
+	timeout := fs.Duration("timeout", 10*time.Minute, "how long to wait at most (10m at most)")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return flag.ErrHelp
+	}
+	if *timeout <= 0 || *timeout > 10*time.Minute {
+		return errors.New("--timeout must be between 0 and 10m (the daemon waits no longer)")
 	}
 	paths, err := absolutePaths(fs.Args())
 	if err != nil || len(paths) == 0 {
@@ -315,4 +338,15 @@ func waitCommand(args []string) error {
 		}
 	}
 	return nil
+}
+
+// printable replaces control characters (terminal escape sequences, line breaks) and bidirectional text controls in
+// text from gateways, so that printing it can't change what the terminal shows
+func printable(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			return unicode.ReplacementChar
+		}
+		return r
+	}, s)
 }

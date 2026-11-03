@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -126,17 +127,38 @@ func (c *Client) UploadOffset(ctx context.Context, uploadID, token string) (int6
 	return offset, nil
 }
 
+// How long a chunk may go without any of it being sent, or without an answer after it was: an idle timeout, as the
+// Swift client's, so that a slow link still gets each chunk through however long it takes
+const stallTimeout = 2 * time.Minute
+
+// progressReader tells of each read of a request's body
+type progressReader struct {
+	r        io.Reader
+	progress func()
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	if n > 0 {
+		p.progress()
+	}
+	return n, err
+}
+
 // AppendUpload sends chunk at offset, with its checksum, so that a request cut off appends nothing; it returns the
 // new offset. A 409 (the gateway has another offset) and a 460 (checksum mismatch) come back as errors with that
-// Status.
+// Status. It is given up once it makes no progress for stallTimeout.
 func (c *Client) AppendUpload(ctx context.Context, uploadID, token string, offset int64, chunk []byte) (int64, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	req, err := c.newRequest(ctx, "PATCH", []string{"v1", "uploads", uploadID}, nil, withToken(token),
-		bytes.NewReader(chunk))
+	stalled := time.AfterFunc(stallTimeout, cancel)
+	defer stalled.Stop()
+	body := &progressReader{r: bytes.NewReader(chunk), progress: func() { stalled.Reset(stallTimeout) }}
+	req, err := c.newRequest(ctx, "PATCH", []string{"v1", "uploads", uploadID}, nil, withToken(token), body)
 	if err != nil {
 		return 0, err
 	}
+	req.ContentLength = int64(len(chunk))
 	sum := sha256.Sum256(chunk)
 	req.Header.Set("Tus-Resumable", tusVersion)
 	req.Header.Set("Content-Type", "application/offset+octet-stream")
@@ -182,28 +204,38 @@ func (c *Client) SendUpload(ctx context.Context, upload remoteapi.Upload, src io
 		return err
 	}
 	buffer := make([]byte, min(UploadChunkSize, max(upload.Length, 1)))
+	// Over the whole upload, so that a refusal that keeps coming back ends it
 	retries := 0
 	for offset < upload.Length {
 		n := int(min(int64(len(buffer)), upload.Length-offset))
-		if _, err := src.ReadAt(buffer[:n], offset); err != nil && !(errors.Is(err, io.EOF) && n > 0) {
-			return err
+		read, err := src.ReadAt(buffer[:n], offset)
+		if read != n {
+			if err == nil || errors.Is(err, io.EOF) {
+				err = io.ErrUnexpectedEOF
+			}
+			return fmt.Errorf("reading what to upload at %d: %w", offset, err)
 		}
 		next, err := c.AppendUpload(ctx, upload.Upload, "", offset, buffer[:n])
 		var e *Error
-		if errors.As(err, &e) && (e.Status == http.StatusConflict || e.Status == StatusChecksumMismatch) && retries < 3 {
+		switch {
+		case errors.As(err, &e) && e.Code == remoteapi.CodeUploadMismatch:
+			// The whole upload didn't match its digest, and the gateway emptied it: sending it again from the same
+			// content can't do better
+			return err
+		case errors.As(err, &e) && (e.Status == http.StatusConflict || e.Status == StatusChecksumMismatch) &&
+			retries < 5:
 			retries++
 			if offset, err = c.UploadOffset(ctx, upload.Upload, ""); err != nil {
 				return err
 			}
 			continue
-		}
-		if err != nil {
+		case err != nil:
 			return err
 		}
 		if next <= offset || next > upload.Length {
 			return protocolError("the upload's offset went from %d to %d", offset, next)
 		}
-		offset, retries = next, 0
+		offset = next
 		if progress != nil {
 			progress(offset)
 		}

@@ -354,6 +354,15 @@ func (d *daemon) start() {
 	if err := d.cmd.Start(); err != nil {
 		d.t.Fatal(err)
 	}
+	// Killed, and its mount taken away, if the test ends before it does that itself
+	cmd := d.cmd
+	d.t.Cleanup(func() {
+		if cmd.ProcessState == nil {
+			cmd.Process.Signal(syscall.SIGKILL)
+			cmd.Wait()
+			exec.Command("fusermount3", "-uz", filepath.Join(d.dir, "mnt")).Run()
+		}
+	})
 	gatewaytest.WaitFor(d.t, 30*time.Second, "the daemon to mount", func() bool {
 		var st unix.Statfs_t
 		return unix.Statfs(filepath.Join(d.dir, "mnt"), &st) == nil && st.Type == unix.FUSE_SUPER_MAGIC

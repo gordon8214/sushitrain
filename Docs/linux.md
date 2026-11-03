@@ -30,6 +30,9 @@ MPL (README, License), so the package is for your own machines.
 To build the programs only: `make -C SushitrainCore linux` (the two daemons, statically linked) and
 `make -C SushitrainCore linux-window` (the window, with GTK's development packages).
 
+Removing the package leaves `syncthing.service` masked if Synctrain took it over: `systemctl --user unmask
+syncthing.service` gives it back (with a Syncthing at least as new as Synctrain's engine).
+
 ## The window
 
 The first time, Synctrain asks what the machine does. Its main menu switches to the other mode later.
@@ -42,7 +45,9 @@ other devices see no change:
    from Syncthing Tray) is asked to stop through its REST API.
 2. The configuration, identity and database are copied next to the home, to `syncthing.before-synctrain-<time>`
    (reflinks on btrfs, which take no space until either side changes).
-3. `synctrain-gateway.service` starts on the home. If anything fails, what ran before is put back.
+3. `synctrain-gateway.service` starts on the home. If anything fails before that, what ran before is put back. Once
+   Synctrain's engine has started on the home, it may have changed the database, so `syncthing.service` stays masked,
+   and the window says where the copy of the home is.
 
 Syncthing Tray keeps working against the same REST API, but turn off its launcher (Settings › Launcher) if it starts
 Syncthing itself, or it competes for the home at the next login. A Syncthing run as a system service
@@ -222,15 +227,19 @@ real gateway in-process (`gateway/gatewaytest`), also on macOS; the FUSE tests r
 
 ```bash
 cd SushitrainCore
-go test -tags noassets ./remoteapi ./remoteclient ./files/... ./cmd/synctrain-gateway
+go test -tags noassets ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin ./sthome \
+    ./cmd/synctrain-gateway ./cmd/synctrain-files
 make linux-test   # test executables to run on another Linux host
 ```
 
 `Linux/test/e2e-files.sh` runs a scratch gateway and Files daemon on one machine, in `/tmp`, without touching the
 session's own. The window can be checked without a desktop through GTK's Broadway backend (`gtk4-broadwayd :5`, then
 `GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 synctrain` and http://127.0.0.1:8085 in a browser that is in view, since a
-hidden page holds Broadway's frames back). `STHOMEDIR`, `SYNCTRAIN_GATEWAY_ADMIN`, `SYNCTRAIN_FILES_SOCKET` and
-`XDG_CONFIG_HOME` point it at scratch daemons and a scratch mode.
+hidden page holds Broadway's frames back; a headless Chrome works too). `SYNCTRAIN_FILES_SOCKET`, `SYNCTRAIN_GATEWAY_ADMIN`
+and `STHOMEDIR` point it at scratch daemons, and `XDG_CONFIG_HOME` at a scratch mode. Setting a mode up or switching
+starts and stops the real units with `systemctl --user`: to try it without touching your own, put a stand-in
+`systemctl` first on the window's `PATH` that runs scratch daemons (the window refuses when `STHOMEDIR` or
+`SYNCTRAIN_GATEWAY_ADMIN` differ from your service manager's, as its units would use another home).
 
 The client follows the Swift client in `SynctrainFileProviderKit` and `Docs/remote-api/invariants.md`: a change to the
 API needs both.

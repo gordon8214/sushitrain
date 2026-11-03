@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	"t-shaped.nl/sushitrain/v2/gateway"
@@ -223,11 +224,14 @@ func (w *serviceSwitch) status() gatewayadmin.ServiceStatus {
 func (w *serviceSwitch) set(s serviceSettings) error {
 	if s.Listen != "" {
 		if _, _, err := net.SplitHostPort(s.Listen); err != nil {
-			return fmt.Errorf("listen address %q: %w", s.Listen, err)
+			return fmt.Errorf("the listening address %q isn't host:port", s.Listen)
 		}
 	}
 	if s.PublicPort < 0 || s.PublicPort > 65535 {
-		return errors.New("the public port must be between 1 and 65535")
+		return errors.New("the public port must be between 1 and 65535 (or 0 for the listening port)")
+	}
+	if _, _, err := net.SplitHostPort(strings.TrimSpace(s.PublicHost)); err == nil {
+		return fmt.Errorf("the host name for clients %q has a port: give the host only", s.PublicHost)
 	}
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
@@ -243,6 +247,23 @@ func (w *serviceSwitch) set(s serviceSettings) error {
 	if s.Listen == "" {
 		s.Listen = w.settings.Listen
 	}
+	previous := w.settings
+	if err := w.apply(s); err != nil {
+		// What ran before runs again, so that a typo doesn't leave paired clients without the service
+		if previous.Enabled {
+			slog.Warn("The remote file service couldn't start with new settings; back to the previous ones",
+				"error", err)
+		}
+		if restoreErr := w.apply(previous); restoreErr != nil {
+			slog.Warn("The remote file service couldn't start with its previous settings either", "error", restoreErr)
+		}
+		return err
+	}
+	return nil
+}
+
+// apply keeps settings and starts, stops or restarts the service to match. Callers hold the mutex.
+func (w *serviceSwitch) apply(s serviceSettings) error {
 	if err := saveSettings(w.opts.service.Home, s); err != nil {
 		return err
 	}

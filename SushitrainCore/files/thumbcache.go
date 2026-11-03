@@ -7,6 +7,7 @@
 package files
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/md5"
@@ -14,11 +15,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/draw"
 	_ "image/jpeg" // the gateway's thumbnails are JPEGs
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -91,16 +94,17 @@ func (s *Service) FillThumbnails(dirPath string, entries []Entry) {
 		t.mutex.Lock()
 		known, ok := t.done[key]
 		if !ok || known != mtime {
+			if len(t.done) >= maxThumbnailsKnown {
+				// Forgotten: a thumbnail already in the cache is found there again
+				clear(t.done)
+			}
 			t.done[key] = mtime
 		}
 		t.mutex.Unlock()
 		if ok && known == mtime {
 			continue
 		}
-		if have, _ := pngTextValue(filepath.Join(t.dir, "large", key+".png"), "Thumb::MTime"); have ==
-			strconv.FormatInt(mtime, 10) {
-			continue
-		}
+		// Whether the cache has it already is checked on the thumbnailer's goroutine: a listing never waits for it
 		select {
 		case t.queue <- thumbnailJob{item: e.Item, path: path, mtime: mtime}:
 		default:
@@ -118,6 +122,11 @@ func (t *thumbnailer) run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case job := <-t.queue:
+			key := thumbnailKey(fileURI(job.path))
+			if have, _ := pngTextValue(filepath.Join(t.dir, "large", key+".png"), "Thumb::MTime"); have ==
+				strconv.FormatInt(job.mtime, 10) {
+				continue
+			}
 			if err := t.fill(ctx, job); err != nil && ctx.Err() == nil {
 				t.s.log.Debug("No thumbnail from the gateway", "path", job.path, "error", err)
 				t.mutex.Lock()
@@ -158,16 +167,41 @@ func (t *thumbnailer) fill(ctx context.Context, job thumbnailJob) error {
 	if err != nil {
 		return err
 	}
+	// Its size is checked before it is decoded: the gateway's thumbnails are at most 1024 pixels on a side, and a
+	// much larger image would take the memory of the whole session
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	if (format != "jpeg" && format != "png") || cfg.Width > maxThumbnailSide || cfg.Height > maxThumbnailSide {
+		return fmt.Errorf("the gateway's thumbnail is a %dx%d %s", cfg.Width, cfg.Height, format)
+	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
+	rgba := toRGBA(img)
 	for _, size := range thumbnailSizes {
-		if err := t.write(filepath.Join(t.dir, size.dir), key, downscale(img, size.size), uri, job.mtime); err != nil {
+		if err := t.write(filepath.Join(t.dir, size.dir), key, downscale(rgba, size.size), uri, job.mtime); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+const (
+	// The largest thumbnail from a gateway that is decoded
+	maxThumbnailSide = 2048
+	// How many files' thumbnails are remembered as done before the record starts over
+	maxThumbnailsKnown = 100_000
+)
+
+// toRGBA is an image as RGBA pixels from (0, 0), made once for all the sizes downscaled from it
+func toRGBA(src image.Image) *image.RGBA {
+	b := src.Bounds()
+	rgba := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(rgba, rgba.Bounds(), src, b.Min, draw.Src)
+	return rgba
 }
 
 // write writes a thumbnail with the attributes the freedesktop specification checks it by
@@ -263,41 +297,54 @@ func withPNGText(data []byte, text map[string]string) ([]byte, error) {
 
 // pngTextValue reads a tEXt value of a PNG file ("" when it has none)
 func pngTextValue(path, key string) (string, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	for pos := 8; pos+8 <= len(data); {
-		length := int(binary.BigEndian.Uint32(data[pos:]))
-		kind := string(data[pos+4 : pos+8])
-		if pos+8+length > len(data) || kind == "IDAT" {
-			break
+	defer f.Close()
+	// Only the chunks before the image data, where text chunks are: not the whole file
+	r := bufio.NewReader(f)
+	if _, err := r.Discard(8); err != nil {
+		return "", nil
+	}
+	var header [8]byte
+	for {
+		if _, err := io.ReadFull(r, header[:]); err != nil {
+			return "", nil
+		}
+		length := int64(binary.BigEndian.Uint32(header[:4]))
+		kind := string(header[4:8])
+		if kind == "IDAT" || length > 1<<20 {
+			return "", nil
 		}
 		if kind == "tEXt" {
-			chunk := data[pos+8 : pos+8+length]
+			chunk := make([]byte, length)
+			if _, err := io.ReadFull(r, chunk); err != nil {
+				return "", nil
+			}
 			if k, v, ok := bytes.Cut(chunk, []byte{0}); ok && string(k) == key {
 				return string(v), nil
 			}
+			length = 0
 		}
-		pos += 12 + length
+		// The chunk's data (unless read) and its CRC
+		if _, err := r.Discard(int(length) + 4); err != nil {
+			return "", nil
+		}
 	}
-	return "", nil
 }
 
 // downscale shrinks an image so that its longer side is at most size, averaging the pixels it combines
-func downscale(src image.Image, size int) image.Image {
-	b := src.Bounds()
-	w, h := b.Dx(), b.Dy()
+func downscale(rgba *image.RGBA, size int) image.Image {
+	w, h := rgba.Bounds().Dx(), rgba.Bounds().Dy()
 	if w <= size && h <= size {
-		return src
+		return rgba
 	}
 	nw, nh := size, h*size/w
 	if h > w {
 		nw, nh = w*size/h, size
 	}
 	nw, nh = max(nw, 1), max(nh, 1)
-	rgba := image.NewRGBA(image.Rect(0, 0, w, h))
-	draw.Draw(rgba, rgba.Bounds(), src, b.Min, draw.Src)
 	dst := image.NewRGBA(image.Rect(0, 0, nw, nh))
 	for y := range nh {
 		y0, y1 := y*h/nh, max((y+1)*h/nh, y*h/nh+1)

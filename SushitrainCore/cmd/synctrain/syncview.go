@@ -48,13 +48,18 @@ type syncView struct {
 	service      *adw.SwitchRow
 	serviceState *adw.ActionRow
 	port         *adw.SpinRow
+	portChange   debouncer
 	host         *adw.EntryRow
 	pairButton   *gtk.Button
 	exports      *listGroup
 	clients      *listGroup
 	operations   *adw.ActionRow
-	// The rows of clients, whose subtitles change without the rows being made again (which would close them)
+	// The rows of clients and their folder access, which change without the rows being made again (which would
+	// close them)
 	clientRows map[string]*adw.ExpanderRow
+	grantRows  map[string]map[string]*adw.ComboRow
+	// The folders last shown, for their labels
+	shownFolders []gatewayadmin.Folder
 
 	// Set while settings are shown, so that showing them doesn't change them
 	showing bool
@@ -66,10 +71,9 @@ type syncState struct {
 	service    gatewayadmin.ServiceStatus
 	folders    []gatewayadmin.Folder
 	devices    []gatewayadmin.Device
-	status     gatewayadmin.Status
+	exports    []gatewayadmin.Export
 	clients    []gatewayadmin.Client
 	operations []gatewayadmin.PendingOperation
-	linger     bool
 }
 
 // Access to a folder, as the combo rows offer it: for sharing it, and for a client
@@ -130,7 +134,10 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 			command = "enable-linger"
 		}
 		background(func() (struct{}, error) { return struct{}{}, run("loginctl", command) },
-			func(_ struct{}, err error) { w.failed(err) })
+			func(_ struct{}, err error) {
+				w.failed(err)
+				v.showLinger()
+			})
 	})
 	this.Add(v.linger)
 	v.folders = newListGroup("Folders", "Add and share folders in the web GUI.")
@@ -152,7 +159,8 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 	v.service.SetTitle("Serve Paired Clients")
 	v.service.NotifyProperty("active", func() {
 		if !v.showing {
-			v.setService(func(s *gatewayadmin.ServiceSettings) { s.Enabled = v.service.Active() })
+			enabled := v.service.Active()
+			v.setService(func(s *gatewayadmin.ServiceSettings) { s.Enabled = enabled })
 		}
 	})
 	service.Add(v.service)
@@ -162,7 +170,11 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 	v.port = adw.NewSpinRowWithRange(1, 65535, 1)
 	v.port.SetTitle("Port")
 	v.port.NotifyProperty("value", func() {
-		if !v.showing {
+		if v.showing {
+			return
+		}
+		// Each change restarts the service: only the last of a quick series is sent
+		v.portChange.call(func() {
 			port := int(v.port.Value())
 			v.setService(func(s *gatewayadmin.ServiceSettings) {
 				// The same address, or all of them
@@ -172,7 +184,7 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 				}
 				s.Listen = host + ":" + strconv.Itoa(port)
 			})
-		}
+		})
 	})
 	service.Add(v.port)
 	v.host = adw.NewEntryRow()
@@ -197,7 +209,7 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 	stack.AddTitledWithIcon(remotePage, "remote", "Remote Files", "network-server-symbolic")
 	toolbar.SetContent(stack)
 
-	background(func() (gatewayadmin.Home, error) { return describeHome() }, func(h gatewayadmin.Home, err error) {
+	background(describeHome, func(h gatewayadmin.Home, err error) {
 		if err != nil {
 			w.toast("Syncthing's home can't be read: " + err.Error())
 			return
@@ -207,6 +219,7 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 		v.webGUI.SetSensitive(h.GUIURL != "")
 		v.refresh()
 	})
+	v.showLinger()
 	timer := coreglib.TimeoutSecondsAdd(2, func() bool {
 		v.refresh()
 		return true
@@ -218,34 +231,44 @@ func (v *syncView) call(method string, params, result any) error {
 	return adminsock.Call(v.home.Socket, method, params, result)
 }
 
+// showLinger shows whether this user's services run while they aren't logged in (asked once, not at every refresh)
+func (v *syncView) showLinger() {
+	background(func() (bool, error) { return lingering(), nil }, func(on bool, _ error) {
+		v.showing = true
+		v.linger.SetActive(on)
+		v.showing = false
+	})
+}
+
 // refresh shows what the gateway has now
 func (v *syncView) refresh() {
 	if v.busy || v.home.Socket == "" {
 		return
 	}
 	v.busy = true
+	socket := v.home.Socket
 	background(func() (syncState, error) {
 		var st syncState
-		st.linger = lingering()
-		if err := v.call("service.status", nil, &st.service); err != nil {
+		call := func(method string, result any) error { return callBounded(socket, method, nil, result) }
+		if err := call("service.status", &st.service); err != nil {
 			return st, err
 		}
-		if err := v.call("folders.list", nil, &st.folders); err != nil {
+		if err := call("folders.list", &st.folders); err != nil {
 			return st, err
 		}
-		if err := v.call("devices.list", nil, &st.devices); err != nil {
+		if err := call("devices.list", &st.devices); err != nil {
 			return st, err
 		}
 		if !st.service.Running {
 			return st, nil
 		}
-		if err := v.call("status", nil, &st.status); err != nil {
+		if err := call("exports.list", &st.exports); err != nil {
 			return st, err
 		}
-		if err := v.call("clients.list", nil, &st.clients); err != nil {
+		if err := call("clients.list", &st.clients); err != nil {
 			return st, err
 		}
-		return st, v.call("operations.pending", nil, &st.operations)
+		return st, call("operations.pending", &st.operations)
 	}, func(st syncState, err error) {
 		v.busy = false
 		v.banner.SetRevealed(err != nil)
@@ -256,18 +279,31 @@ func (v *syncView) refresh() {
 	})
 }
 
+// label is a folder's label, or its ID without one
+func label(f gatewayadmin.Folder) string {
+	if f.Label != "" {
+		return f.Label
+	}
+	return f.ID
+}
+
+func (v *syncView) folderLabel(id string) string {
+	for _, f := range v.shownFolders {
+		if f.ID == id {
+			return label(f)
+		}
+	}
+	return id
+}
+
 func (v *syncView) show(st syncState) {
 	v.showing = true
 	defer func() { v.showing = false }()
-	v.linger.SetActive(st.linger)
-	sort.Slice(st.folders, func(i, j int) bool { return st.folders[i].Label < st.folders[j].Label })
+	sort.Slice(st.folders, func(i, j int) bool { return label(st.folders[i]) < label(st.folders[j]) })
+	v.shownFolders = st.folders
 	v.folders.set(key(st.folders), func() []gtk.Widgetter {
 		var rows []gtk.Widgetter
 		for _, f := range st.folders {
-			label := f.Label
-			if label == "" {
-				label = f.ID
-			}
 			state := f.State
 			if f.Paused {
 				state = "paused"
@@ -276,7 +312,7 @@ func (v *syncView) show(st syncState) {
 			if len(f.Devices) > 0 {
 				shared = "shared with " + plural(len(f.Devices), "device", "devices")
 			}
-			r := row(label, strings.Join(nonEmpty(f.Path, state, shared), " · "))
+			r := row(label(f), strings.Join(nonEmpty(f.Path, state, shared), " · "))
 			path := f.Path
 			r.AddSuffix(iconButton("folder-open-symbolic", "Open", func() { v.w.openPath(path) }))
 			rows = append(rows, r)
@@ -323,13 +359,13 @@ func (v *syncView) show(st syncState) {
 	default:
 		v.serviceState.SetSubtitle("Off")
 	}
-	if i := strings.LastIndex(s.Listen, ":"); i >= 0 {
-		if port, err := strconv.Atoi(s.Listen[i+1:]); err == nil {
+	if i := strings.LastIndex(s.Listen, ":"); i >= 0 && !editing(v.port) {
+		if port, err := strconv.Atoi(s.Listen[i+1:]); err == nil && float64(port) != v.port.Value() {
 			v.port.SetValue(float64(port))
 		}
 	}
 	v.port.SetSensitive(!fixed(s, "listen"))
-	if !v.host.HasFocus() && v.host.Text() != s.PublicHost {
+	if !editing(v.host) && v.host.Text() != s.PublicHost {
 		v.host.SetText(s.PublicHost)
 	}
 	v.host.SetSensitive(!fixed(s, "publicHost"))
@@ -337,41 +373,39 @@ func (v *syncView) show(st syncState) {
 	v.operations.SetVisible(len(st.operations) > 0)
 	v.operations.SetSubtitle(strconv.Itoa(len(st.operations)))
 
-	exported := map[string]gatewayadmin.ExportStatus{}
-	// What the rows show, without what changes all the time (states, item counts, when clients were last seen)
-	type shownExport struct {
-		ID, Label string
-		Write     bool
-	}
-	var exports []shownExport
-	for _, e := range st.status.Exports {
+	exported := map[string]gatewayadmin.Export{}
+	for _, e := range st.exports {
 		exported[e.FolderID] = e
-		exports = append(exports, shownExport{e.FolderID, e.Label, e.AllowWrite})
 	}
-	var folders []shownExport
+	// What the rows show, without what changes all the time (states, when clients were last seen, their access,
+	// which is shown in place below)
+	type shownFolder struct {
+		ID, Label string
+		Access    int
+	}
+	var shared, all []shownFolder
 	for _, f := range st.folders {
-		folders = append(folders, shownExport{ID: f.ID, Label: f.Label})
+		access := 0
+		if e, ok := exported[f.ID]; ok {
+			access = 1
+			if e.AllowWrite {
+				access = 2
+			}
+			shared = append(shared, shownFolder{ID: f.ID, Label: label(f)})
+		}
+		all = append(all, shownFolder{f.ID, label(f), access})
 	}
-	v.exports.set(key([]any{s.Running, folders, exports}), func() []gtk.Widgetter {
+	v.exports.set(key([]any{s.Running, all}), func() []gtk.Widgetter {
 		if !s.Running {
 			return []gtk.Widgetter{row("The remote file service is off", "Turn it on to share folders.")}
 		}
 		var rows []gtk.Widgetter
-		for _, f := range st.folders {
-			label := f.Label
-			if label == "" {
-				label = f.ID
-			}
-			access := 0
-			if e, ok := exported[f.ID]; ok {
-				access = 1
-				if e.AllowWrite {
-					access = 2
-				}
-			}
+		for _, f := range all {
 			folderID := f.ID
-			rows = append(rows, accessRow(label, f.ID, exportNames, access, func(access int) {
-				v.setExport(folderID, access)
+			rows = append(rows, accessRow(f.Label, f.ID, exportNames, f.Access, func(access int) {
+				if !v.showing {
+					v.setExport(folderID, access)
+				}
 			}))
 		}
 		if len(rows) == 0 {
@@ -380,23 +414,19 @@ func (v *syncView) show(st syncState) {
 		return rows
 	})
 	type shownClient struct {
-		ID, Name    string
-		Revoked     bool
-		Permissions map[string]string
+		ID, Name string
+		Revoked  bool
 	}
 	var clients []shownClient
 	for _, c := range st.clients {
-		clients = append(clients, shownClient{c.ClientID, c.Name, c.Revoked, c.Permissions})
+		clients = append(clients, shownClient{c.ClientID, c.Name, c.Revoked})
 	}
-	clientSubtitle := func(c gatewayadmin.Client) string {
-		seen := "never seen"
-		if !c.LastSeen.IsZero() {
-			seen = "last seen " + c.LastSeen.Local().Format("2 Jan 2006 15:04")
-		}
-		return strings.Join(nonEmpty(c.Platform, seen, plural(len(c.Permissions), "folder", "folders")), " · ")
+	access := func(c gatewayadmin.Client, folderID string) int {
+		return map[string]int{"read": 1, "write": 2}[c.Permissions[folderID]]
 	}
-	v.clients.set(key([]any{s.Running, clients, exports}), func() []gtk.Widgetter {
+	v.clients.set(key([]any{s.Running, clients, shared}), func() []gtk.Widgetter {
 		v.clientRows = map[string]*adw.ExpanderRow{}
+		v.grantRows = map[string]map[string]*adw.ComboRow{}
 		if !s.Running {
 			return []gtk.Widgetter{row("The remote file service is off", "")}
 		}
@@ -408,18 +438,19 @@ func (v *syncView) show(st syncState) {
 				continue
 			}
 			r := adw.NewExpanderRow()
+			r.SetUseMarkup(false)
 			r.SetTitle(c.Name)
 			v.clientRows[c.ClientID] = r
-			for _, e := range st.status.Exports {
-				label := e.Label
-				if label == "" {
-					label = e.FolderID
-				}
-				access := map[string]int{"read": 1, "write": 2}[c.Permissions[e.FolderID]]
-				folderID := e.FolderID
-				r.AddRow(accessRow(label, "", grantNames, access, func(access int) {
-					v.setPermission(client.ClientID, folderID, access)
-				}))
+			v.grantRows[c.ClientID] = map[string]*adw.ComboRow{}
+			for _, f := range shared {
+				folderID := f.ID
+				grant := accessRow(f.Label, "", grantNames, access(c, f.ID), func(access int) {
+					if !v.showing {
+						v.setPermission(client.ClientID, folderID, access)
+					}
+				})
+				v.grantRows[c.ClientID][f.ID] = grant
+				r.AddRow(grant)
 			}
 			revoke := textButton("Revoke…", func() { v.revoke(client) })
 			revoke.AddCSSClass("destructive-action")
@@ -433,7 +464,17 @@ func (v *syncView) show(st syncState) {
 	})
 	for _, c := range st.clients {
 		if r, ok := v.clientRows[c.ClientID]; ok {
-			r.SetSubtitle(clientSubtitle(c))
+			seen := "never seen"
+			if !c.LastSeen.IsZero() {
+				seen = "last seen " + c.LastSeen.Local().Format("2 Jan 2006 15:04")
+			}
+			r.SetSubtitle(strings.Join(nonEmpty(c.Platform, seen, plural(len(c.Permissions), "folder", "folders")),
+				" · "))
+		}
+		for folderID, grant := range v.grantRows[c.ClientID] {
+			if a := uint(access(c, folderID)); grant.Selected() != a {
+				grant.SetSelected(a)
+			}
 		}
 	}
 }
@@ -441,6 +482,7 @@ func (v *syncView) show(st syncState) {
 // accessRow chooses access to a folder: 0 none, 1 read, 2 read and write
 func accessRow(title, subtitle string, names []string, access int, changed func(int)) *adw.ComboRow {
 	r := adw.NewComboRow()
+	r.SetUseMarkup(false)
 	r.SetTitle(title)
 	if subtitle != "" && subtitle != title {
 		r.SetSubtitle(subtitle)
@@ -462,19 +504,25 @@ func fixed(s gatewayadmin.ServiceStatus, setting string) bool {
 
 // setService changes the remote file service's settings
 func (v *syncView) setService(change func(*gatewayadmin.ServiceSettings)) {
-	background(func() (gatewayadmin.ServiceStatus, error) {
+	background(func() (struct{}, error) {
 		var st gatewayadmin.ServiceStatus
 		if err := v.call("service.status", nil, &st); err != nil {
-			return st, err
+			return struct{}{}, err
 		}
 		settings := st.ServiceSettings
 		change(&settings)
-		err := v.call("service.set", settings, &st)
-		return st, err
-	}, func(_ gatewayadmin.ServiceStatus, err error) {
-		v.w.failed(err)
-		v.refresh()
-	})
+		return struct{}{}, v.call("service.set", settings, nil)
+	}, v.changed)
+}
+
+// changed shows what the gateway has after a change. A refused one is undone on the page: the rows showing the
+// choice are made again from what the gateway has.
+func (v *syncView) changed(_ struct{}, err error) {
+	if err != nil {
+		v.w.toast(err.Error())
+		v.exports.key, v.clients.key = "", ""
+	}
+	v.refresh()
 }
 
 func (v *syncView) setExport(folderID string, access int) {
@@ -483,20 +531,14 @@ func (v *syncView) setExport(folderID string, access int) {
 			return struct{}{}, v.call("exports.remove", gatewayadmin.Export{FolderID: folderID}, nil)
 		}
 		return struct{}{}, v.call("exports.set", gatewayadmin.Export{FolderID: folderID, AllowWrite: access == 2}, nil)
-	}, func(_ struct{}, err error) {
-		v.w.failed(err)
-		v.refresh()
-	})
+	}, v.changed)
 }
 
 func (v *syncView) setPermission(clientID, folderID string, access int) {
 	background(func() (struct{}, error) {
 		return struct{}{}, v.call("clients.permission", map[string]string{"clientID": clientID, "folderID": folderID,
 			"access": []string{"", "read", "write"}[access]}, nil)
-	}, func(_ struct{}, err error) {
-		v.w.failed(err)
-		v.refresh()
-	})
+	}, v.changed)
 }
 
 func (v *syncView) revoke(c gatewayadmin.Client) {
@@ -504,37 +546,49 @@ func (v *syncView) revoke(c gatewayadmin.Client) {
 		"Revoke", true, func() {
 			background(func() (struct{}, error) {
 				return struct{}{}, v.call("clients.revoke", map[string]string{"clientID": c.ClientID}, nil)
-			}, func(_ struct{}, err error) {
-				v.w.failed(err)
-				v.refresh()
-			})
+			}, v.changed)
 		})
+}
+
+// pairing is a pairing dialog, which may be closed while its calls run
+type pairing struct {
+	v       *syncView
+	d       *adw.Dialog
+	content *gtk.Box
+	closed  bool
+}
+
+func (p *pairing) close() {
+	if !p.closed {
+		p.d.Close()
+	}
 }
 
 // pair shows a pairing code, waits for a client to submit it, and asks which folders it gets
 func (v *syncView) pair() {
-	d := adw.NewDialog()
-	d.SetTitle("Pair a Phone or Machine")
-	d.SetContentWidth(480)
+	p := &pairing{v: v, d: adw.NewDialog(), content: gtk.NewBox(gtk.OrientationVertical, 12)}
+	p.d.SetTitle("Pair a Phone or Machine")
+	p.d.SetContentWidth(480)
 	toolbar := adw.NewToolbarView()
 	toolbar.AddTopBar(adw.NewHeaderBar())
-	content := gtk.NewBox(gtk.OrientationVertical, 12)
-	content.SetMarginStart(24)
-	content.SetMarginEnd(24)
-	content.SetMarginBottom(24)
-	toolbar.SetContent(content)
-	d.SetChild(toolbar)
-	closed := false
-	d.ConnectClosed(func() { closed = true })
-	d.Present(v.w.win)
+	p.content.SetMarginStart(24)
+	p.content.SetMarginEnd(24)
+	p.content.SetMarginBottom(24)
+	toolbar.SetContent(p.content)
+	p.d.SetChild(toolbar)
+	p.d.ConnectClosed(func() { p.closed = true })
+	p.d.Present(v.w.win)
 
 	background(func() (gatewayadmin.PairingSession, error) {
 		var session gatewayadmin.PairingSession
 		err := v.call("pairing.start", nil, &session)
 		return session, err
 	}, func(session gatewayadmin.PairingSession, err error) {
+		if p.closed {
+			return
+		}
 		if err != nil {
-			d.Close()
+			p.close()
 			v.w.toast("Pairing can't start: " + err.Error())
 			return
 		}
@@ -542,9 +596,9 @@ func (v *syncView) pair() {
 			"or paste the link in Synctrain on a machine in Files mode. It works once, until " +
 			session.Expires.Local().Format("15:04") + ".")
 		explanation.SetWrap(true)
-		content.Append(explanation)
+		p.content.Append(explanation)
 		if picture := qrPicture(session.URL); picture != nil {
-			content.Append(picture)
+			p.content.Append(picture)
 		}
 		copyLink := textButton("Copy Link", func() {
 			v.w.win.Clipboard().SetText(session.URL)
@@ -552,94 +606,71 @@ func (v *syncView) pair() {
 		})
 		copyLink.SetHAlign(gtk.AlignCenter)
 		copyLink.AddCSSClass("pill")
-		content.Append(copyLink)
+		p.content.Append(copyLink)
 		waiting := gtk.NewLabel("Waiting for a client…")
 		waiting.AddCSSClass("dim-label")
-		content.Append(waiting)
-		v.waitForPairing(d, content, session, &closed)
+		p.content.Append(waiting)
+		p.wait(session)
 	})
 }
 
-// waitForPairing asks the gateway for a request with the session's code until one comes, the code expires or the
-// dialog is closed, and then shows the request for approval
-func (v *syncView) waitForPairing(d *adw.Dialog, content *gtk.Box, session gatewayadmin.PairingSession,
-	closed *bool) {
+// wait asks the gateway for a request with the session's code until one comes, the code expires or the dialog is
+// closed, and then shows the request for approval
+func (p *pairing) wait(session gatewayadmin.PairingSession) {
 	background(func() (gatewayadmin.PendingPairing, error) {
 		var request gatewayadmin.PendingPairing
-		err := v.call("pairing.wait", map[string]string{"sessionID": session.SessionID}, &request)
+		err := p.v.call("pairing.wait", map[string]string{"sessionID": session.SessionID}, &request)
 		return request, err
 	}, func(request gatewayadmin.PendingPairing, err error) {
 		switch {
-		case *closed:
+		case p.closed:
 			return
 		case err != nil && strings.Contains(err.Error(), gatewayadmin.NoPairingRequestYet):
 			if time.Now().After(session.Expires) {
-				d.Close()
-				v.w.toast("The pairing code expired")
+				p.close()
+				p.v.w.toast("The pairing code expired")
 				return
 			}
-			v.waitForPairing(d, content, session, closed)
+			p.wait(session)
 		case err != nil:
-			d.Close()
-			v.w.toast("Pairing failed: " + err.Error())
+			p.close()
+			p.v.w.toast("Pairing failed: " + err.Error())
 		default:
-			v.approve(d, content, request)
+			p.approve(request)
 		}
 	})
 }
 
 // approve shows a client that submitted the code, with the folders it would get
-func (v *syncView) approve(d *adw.Dialog, content *gtk.Box, request gatewayadmin.PendingPairing) {
-	for child := content.FirstChild(); child != nil; child = content.FirstChild() {
-		content.Remove(child)
+func (p *pairing) approve(request gatewayadmin.PendingPairing) {
+	v := p.v
+	for child := p.content.FirstChild(); child != nil; child = p.content.FirstChild() {
+		p.content.Remove(child)
 	}
 	title := gtk.NewLabel(fmt.Sprintf("“%s” (%s) wants to pair.", request.ClientName, request.Platform))
 	title.SetWrap(true)
 	title.AddCSSClass("title-4")
-	content.Append(title)
+	p.content.Append(title)
 	if request.Replaces != "" {
 		note := gtk.NewLabel("It uses the identity of the paired client “" + request.Replaces + "”, whose access " +
 			"approving it replaces.")
 		note.SetWrap(true)
-		content.Append(note)
+		p.content.Append(note)
 	}
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Folders It Gets")
-	content.Append(group)
-	grants := map[string]int{}
-	background(func() (gatewayadmin.Status, error) {
-		var st gatewayadmin.Status
-		err := v.call("status", nil, &st)
-		return st, err
-	}, func(st gatewayadmin.Status, err error) {
-		if err != nil {
-			v.w.failed(err)
-			return
-		}
-		for _, e := range st.Exports {
-			access := 1
-			if e.AllowWrite {
-				access = 2
-			}
-			folderID := e.FolderID
-			grants[folderID] = access
-			label := e.Label
-			if label == "" {
-				label = e.FolderID
-			}
-			group.Add(accessRow(label, "", grantNames, access, func(access int) { grants[folderID] = access }))
-		}
-		if len(st.Exports) == 0 {
-			group.SetDescription("No folders are shared yet: it gets none until you share some and give it access.")
-		}
-	})
+	p.content.Append(group)
 	buttons := gtk.NewBox(gtk.OrientationHorizontal, 12)
 	buttons.SetHAlign(gtk.AlignCenter)
 	buttons.SetMarginTop(12)
+	grants := map[string]int{}
+	var deny, approve *gtk.Button
 	answer := func(method string, params any, done string) {
+		deny.SetSensitive(false)
+		approve.SetSensitive(false)
 		background(func() (struct{}, error) { return struct{}{}, v.call(method, params, nil) },
 			func(_ struct{}, err error) {
-				d.Close()
+				p.close()
 				if err != nil {
 					v.w.toast(err.Error())
 					return
@@ -648,11 +679,11 @@ func (v *syncView) approve(d *adw.Dialog, content *gtk.Box, request gatewayadmin
 				v.refresh()
 			})
 	}
-	deny := textButton("Deny", func() {
+	deny = textButton("Deny", func() {
 		answer("pairing.deny", map[string]string{"requestID": request.RequestID}, "Denied")
 	})
 	deny.AddCSSClass("pill")
-	approve := textButton("Approve", func() {
+	approve = textButton("Approve", func() {
 		access := map[string]string{}
 		for folderID, a := range grants {
 			if a > 0 {
@@ -664,9 +695,39 @@ func (v *syncView) approve(d *adw.Dialog, content *gtk.Box, request gatewayadmin
 	})
 	approve.AddCSSClass("pill")
 	approve.AddCSSClass("suggested-action")
+	// Until the folders it would get are known
+	approve.SetSensitive(false)
 	buttons.Append(deny)
 	buttons.Append(approve)
-	content.Append(buttons)
+	p.content.Append(buttons)
+	background(func() ([]gatewayadmin.Export, error) {
+		var exports []gatewayadmin.Export
+		err := v.call("exports.list", nil, &exports)
+		return exports, err
+	}, func(exports []gatewayadmin.Export, err error) {
+		if p.closed {
+			return
+		}
+		if err != nil {
+			group.SetDescription("The shared folders can't be listed: " + err.Error())
+			return
+		}
+		for _, e := range exports {
+			access := 1
+			if e.AllowWrite {
+				access = 2
+			}
+			folderID := e.FolderID
+			grants[folderID] = access
+			group.Add(accessRow(v.folderLabel(folderID), "", grantNames, access, func(access int) {
+				grants[folderID] = access
+			}))
+		}
+		if len(exports) == 0 {
+			group.SetDescription("No folders are shared yet: it gets none until you share some and give it access.")
+		}
+		approve.SetSensitive(true)
+	})
 }
 
 // qrPicture shows a QR code of text, or nil when it can't be made
@@ -741,22 +802,51 @@ func run(name string, args ...string) error {
 	return err
 }
 
+// synchronizeCheck is what setting Synchronize mode up needs to know first, found away from the main loop
+type synchronizeCheck struct {
+	home gatewayadmin.Home
+	// Why it can't be set up, when it can't
+	refusal string
+	tray    bool
+}
+
+func checkSynchronize() (synchronizeCheck, error) {
+	var c synchronizeCheck
+	h, err := describeHome()
+	if err != nil {
+		return c, err
+	}
+	c.home = h
+	switch {
+	case h.Problem != "":
+		c.refusal = "The Syncthing in " + h.Dir + " can't be taken over: " + h.Problem + "."
+	case environmentDiffers() != "":
+		c.refusal = environmentDiffers() + " is set here but not in your user's service manager, where Synctrain " +
+			"runs: set it there too (systemctl --user set-environment), or not at all."
+	case systemSyncthing():
+		c.refusal = "Syncthing runs as a system service (syncthing@" + userName() + "): have an administrator " +
+			"disable it first."
+	case !h.Exists && systemctl("is-active", "--quiet", "syncthing.service") == nil:
+		c.refusal = "syncthing.service runs with a home Synctrain can't find (" + h.Dir + " has no configuration). " +
+			"Stop it, or start Synctrain with that home as STHOMEDIR in your user's service manager."
+	}
+	c.tray = trayStartsSyncthing()
+	return c, nil
+}
+
 // askSynchronize sets Synchronize mode up after asking: a new Syncthing, the one already here taken over in place, or
 // the one Synctrain ran before. From Files mode, the folders of ~/Synctrain are taken off this machine first.
 func (w *mainWindow) askSynchronize(fromFiles bool) {
-	background(describeHome, func(h gatewayadmin.Home, err error) {
+	background(checkSynchronize, func(c synchronizeCheck, err error) {
 		switch {
 		case err != nil:
-			w.toast("Synchronize mode can't be set up: " + err.Error())
+			w.inform("Synchronize Mode Can't Be Set Up", sentence(err))
 			return
-		case h.Problem != "":
-			w.toast("The Syncthing in " + h.Dir + " can't be taken over: " + h.Problem)
-			return
-		case systemSyncthing():
-			w.toast("Syncthing runs as a system service (syncthing@" + userName() + "): have an administrator " +
-				"disable it first")
+		case c.refusal != "":
+			w.inform("Synchronize Mode Can't Be Set Up", c.refusal)
 			return
 		}
+		h := c.home
 		id := h.DeviceID
 		if len(id) > 7 {
 			id = id[:7]
@@ -778,62 +868,74 @@ func (w *mainWindow) askSynchronize(fromFiles bool) {
 				"syncthing.service is stopped and masked, and the configuration and database are copied aside first. "+
 				"Going back to the stock Syncthing needs a version at least as new as Synctrain's.", id,
 				plural(len(h.Folders), "folder", "folders"), plural(h.Devices, "other device", "other devices"))
-			if trayStartsSyncthing() {
-				body += "\n\nSyncthing Tray is set to start Syncthing itself: turn that off in its settings " +
-					"(Launcher), or it competes with Synctrain at the next login."
-			}
+		}
+		if c.tray {
+			body += "\n\nSyncthing Tray is set to start Syncthing itself: turn that off in its settings " +
+				"(Launcher), or it competes with Synctrain at the next login."
 		}
 		if fromFiles {
 			heading, action = "Switch to Synchronize?", "Switch"
-			body = "The folders in " + mountName + " are taken off this machine first. They stay on their " +
-				"gateways: changes made here are sent before that, and files that are only here are moved out of " +
-				"them. The pairings with gateways stay, for switching back.\n\n" + body
+			body = "The folders in " + mountName + " are taken off this machine. They stay on their gateways: " +
+				"changes made here are sent first, and files that are only here are moved out of them. The " +
+				"pairings with gateways stay, for switching back.\n\n" + body
 		}
 		w.confirm(heading, body, action, false, func() { w.startSynchronize(h, fromFiles) })
 	})
 }
 
-// startSynchronize leaves Files mode (when switching from it), takes over the Syncthing here (when there is one that
-// Synctrain didn't run before) and starts the gateway's unit. The mode changes last: a failure puts back what ran.
-func (w *mainWindow) startSynchronize(h gatewayadmin.Home, fromFiles bool) {
-	w.toast("Starting Synctrain…")
-	type result struct {
-		backup   string
-		removals []files.Removal
+// synchronizeResult is what a setup of Synchronize mode has to tell, whether it worked or not
+type synchronizeResult struct {
+	backup   string
+	removals []files.Removal
+	// Set once the gateway may have opened Syncthing's database, which the stock Syncthing then mustn't be
+	// restarted on: the engine's may be newer
+	gatewayStarted bool
+}
+
+func (r synchronizeResult) notes() string {
+	var notes []string
+	if r.backup != "" {
+		notes = append(notes, "The previous configuration and database are in "+r.backup+".")
 	}
-	background(func() (result, error) {
-		var r result
+	for _, removal := range r.removals {
+		if removal.Moved > 0 {
+			notes = append(notes, "Files that were only on this machine are in "+removal.Leftovers+".")
+		}
+	}
+	return strings.Join(notes, "\n\n")
+}
+
+// startSynchronize takes over the Syncthing here (when there is one that Synctrain didn't run before), leaves Files
+// mode (when switching from it) and starts the gateway's unit. Files mode is left last of what can be undone, as its
+// folders can't be put back. The mode changes last; a failure puts back what ran, except the stock Syncthing once
+// the gateway may have changed its database.
+func (w *mainWindow) startSynchronize(h gatewayadmin.Home, fromFiles bool) {
+	if !w.beginChange("Starting Syncthing") {
+		return
+	}
+	background(func() (synchronizeResult, error) {
+		var r synchronizeResult
 		var undos []func()
 		undo := func() {
 			for i := len(undos) - 1; i >= 0; i-- {
 				undos[i]()
 			}
 		}
-		if fromFiles {
-			if running(filesSocket()) {
-				if err := callFiles("leave", map[string]time.Duration{"timeout": 2 * time.Minute},
-					&r.removals); err != nil {
-					return r, err
-				}
-			}
-			if err := systemctl("disable", "--now", "synctrain-files.service"); err != nil {
-				return r, err
-			}
-			undos = append(undos, func() { _ = systemctl("enable", "--now", "synctrain-files.service") })
-		}
-		if h.Exists && !h.Taken {
+		switch {
+		case h.Exists && !h.Taken:
 			wasActive := systemctl("is-active", "--quiet", "syncthing.service") == nil
 			if wasActive {
 				if err := systemctl("stop", "syncthing.service"); err != nil {
-					undo()
 					return r, err
 				}
 			}
 			if err := systemctl("mask", "syncthing.service"); err != nil {
-				undo()
 				return r, err
 			}
 			undos = append(undos, func() {
+				if r.gatewayStarted {
+					return
+				}
 				_ = systemctl("unmask", "syncthing.service")
 				if wasActive {
 					_ = systemctl("start", "syncthing.service")
@@ -844,41 +946,59 @@ func (w *mainWindow) startSynchronize(h gatewayadmin.Home, fromFiles bool) {
 				undo()
 				return r, err
 			}
-			r.backup = h.Dir + ".before-synctrain-" + time.Now().Format("20060102-150405")
-			if _, err := gatewayCommand("home", "--backup", r.backup); err != nil {
+			backup := h.Dir + ".before-synctrain-" + time.Now().Format("20060102-150405")
+			if _, err := gatewayCommand("home", "--backup", backup); err != nil {
 				undo()
 				return r, err
 			}
-		}
-		if err := systemctl("enable", "--now", "synctrain-gateway.service"); err != nil {
-			undo()
-			return r, err
-		}
-		if err := waitForSocket(h.Socket, time.Minute); err != nil {
-			_ = systemctl("disable", "--now", "synctrain-gateway.service")
-			undo()
-			return r, err
-		}
-		return r, writeMode(modeSynchronize)
-	}, func(r result, err error) {
-		if err != nil {
-			w.inform("Synctrain Couldn't Start Syncthing", sentence(err))
-			w.show()
-			return
-		}
-		var notes []string
-		if r.backup != "" {
-			notes = append(notes, "Its previous configuration and database are in "+r.backup+".")
-		}
-		for _, removal := range r.removals {
-			if removal.Moved > 0 {
-				notes = append(notes, "Files that were only on this machine are in "+removal.Leftovers+".")
+			r.backup = backup
+		case h.Locked:
+			// Taken before, with something else running on it now (a Syncthing started outside its masked unit)
+			if _, err := gatewayCommand("home", "--stop"); err != nil {
+				return r, err
 			}
 		}
-		if len(notes) > 0 {
-			w.inform("Synctrain Runs Syncthing", strings.Join(notes, "\n\n"))
+		if fromFiles {
+			if running(filesSocket()) {
+				if err := callFiles("leave", map[string]time.Duration{"timeout": 2 * time.Minute},
+					&r.removals); err != nil {
+					undo()
+					return r, err
+				}
+			}
+			if err := systemctl("disable", "--now", "synctrain-files.service"); err != nil {
+				undo()
+				return r, err
+			}
+			undos = append(undos, func() { _ = systemctl("enable", "--now", "synctrain-files.service") })
 		}
-		w.show()
+		r.gatewayStarted = true
+		err := systemctl("enable", "--now", "synctrain-gateway.service")
+		if err == nil {
+			// A large database may be migrated first
+			err = waitForService("synctrain-gateway.service", h.Socket, 10*time.Minute)
+		}
+		if err == nil {
+			err = writeMode(modeSynchronize)
+		}
+		if err != nil {
+			stopUnit("synctrain-gateway.service")
+			undo()
+		}
+		return r, err
+	}, func(r synchronizeResult, err error) {
+		notes := r.notes()
+		switch {
+		case err != nil && r.gatewayStarted && r.backup != "":
+			w.report("Synctrain Couldn't Start Syncthing", sentence(err)+"\n\nsyncthing.service stays masked, as "+
+				"Synctrain's engine may have changed the database. "+notes+" To go back, restore it there, then "+
+				"unmask and start syncthing.service.")
+		case err != nil:
+			w.report("Synctrain Couldn't Start Syncthing", strings.TrimSpace(sentence(err)+"\n\n"+notes))
+		case notes != "":
+			w.report("Synctrain Runs Syncthing", notes)
+		}
+		w.endChange()
 	})
 }
 
@@ -890,27 +1010,31 @@ func (w *mainWindow) leaveSynchronize() {
 		"another system instead.\n\nPhones and machines paired with this one can't reach its folders until you " +
 		"switch back."
 	w.confirm("Switch to Files?", body, "Switch", false, func() {
-		w.toast("Starting Synctrain Files…")
+		if !w.beginChange("Starting Synctrain Files") {
+			return
+		}
 		background(func() (struct{}, error) {
 			// syncthing.service stays masked: the engine's database may be newer than the stock Syncthing's
 			if err := systemctl("disable", "--now", "synctrain-gateway.service"); err != nil {
 				return struct{}{}, err
 			}
-			if err := systemctl("enable", "--now", "synctrain-files.service"); err != nil {
-				_ = systemctl("enable", "--now", "synctrain-gateway.service")
-				return struct{}{}, err
+			err := systemctl("enable", "--now", "synctrain-files.service")
+			if err == nil {
+				err = waitForService("synctrain-files.service", filesSocket(), time.Minute)
 			}
-			if err := waitForSocket(filesSocket(), 20*time.Second); err != nil {
-				_ = systemctl("disable", "--now", "synctrain-files.service")
-				_ = systemctl("enable", "--now", "synctrain-gateway.service")
-				return struct{}{}, err
+			if err == nil {
+				err = writeMode(modeFiles)
 			}
-			return struct{}{}, writeMode(modeFiles)
+			if err != nil {
+				stopUnit("synctrain-files.service")
+				_ = systemctl("enable", "--now", "synctrain-gateway.service")
+			}
+			return struct{}{}, err
 		}, func(_ struct{}, err error) {
 			if err != nil {
-				w.inform("Synctrain Files Couldn't Start", sentence(err))
+				w.report("Synctrain Files Couldn't Start", sentence(err))
 			}
-			w.show()
+			w.endChange()
 		})
 	})
 }

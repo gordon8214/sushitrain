@@ -215,13 +215,27 @@ func (a *Server) serve(ctx context.Context, conn net.Conn) {
 	}
 }
 
-// Call sends one request to an admin socket and decodes the result into result (if not nil)
+// Call sends one request to an admin socket and decodes the result into result (if not nil). It waits for the
+// answer as long as the method takes; CallContext bounds that.
 func Call(path, method string, params any, result any) error {
-	conn, err := net.DialTimeout("unix", path, 5*time.Second)
+	return CallContext(context.Background(), path, method, params, result)
+}
+
+// CallContext is Call, giving up when ctx is done (its deadline bounds the whole exchange)
+func CallContext(ctx context.Context, path, method string, params any, result any) error {
+	var dialer net.Dialer
+	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	conn, err := dialer.DialContext(dialCtx, "unix", path)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("connecting to the service at %s: %w", path, err)
 	}
 	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Now()) })
+	defer stop()
 	req := Request{Method: method}
 	if params != nil {
 		if req.Params, err = json.Marshal(params); err != nil {

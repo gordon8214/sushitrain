@@ -98,6 +98,8 @@ jobs:
     # The release Synctrain for Linux targets, so that the window links the same GTK and libadwaita
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:44
+    permissions:
+      contents: read
     steps:
       - name: Install build tools
         run: |
@@ -105,7 +107,7 @@ jobs:
             libadwaita-devel gobject-introspection-devel rpm-build systemd-rpm-macros desktop-file-utils appstream
 
       - name: Check out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # Tags, for the package's version
           fetch-depth: 0
@@ -126,7 +128,7 @@ jobs:
       - name: Test
         working-directory: SushitrainCore
         run: |
-          go test -tags noassets ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin \
+          go test -tags noassets ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin ./sthome \
             ./cmd/synctrain-gateway ./cmd/synctrain-files
 
       - name: Validate desktop files

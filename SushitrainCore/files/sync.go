@@ -98,6 +98,12 @@ func (s *Service) refreshFolder(ctx context.Context, f folderRef, client *remote
 			// The gateway can't serve this cursor (pruned, or another authority generation): take a fresh snapshot,
 			// keeping everything stored until it is complete
 			s.log.Info("Taking a fresh listing", "folder", f.dirName, "reason", err)
+			// Perhaps a new authority generation, which must be known before anything else is sent
+			if g, gerr := s.gatewayRef(f.serviceID); gerr == nil {
+				if cerr := s.checkCapabilities(ctx, g, client); cerr != nil {
+					return cerr
+				}
+			}
 			if err := s.resetCursor(f.id); err != nil {
 				return err
 			}
@@ -114,8 +120,11 @@ func (s *Service) refreshFolder(ctx context.Context, f folderRef, client *remote
 		}
 		err = s.apply(ctx, func(p *projector) error {
 			var stored string
-			if err := p.tx.QueryRow(`SELECT cursor FROM cursors WHERE folder = ?`, f.id).Scan(&stored); err != nil ||
-				stored != st.cursor {
+			err := p.tx.QueryRow(`SELECT cursor FROM cursors WHERE folder = ?`, f.id).Scan(&stored)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			if err != nil || stored != st.cursor {
 				return errSyncPosition
 			}
 			for _, item := range page.Changes {
@@ -123,7 +132,7 @@ func (s *Service) refreshFolder(ctx context.Context, f folderRef, client *remote
 					return err
 				}
 			}
-			_, err := p.tx.Exec(`UPDATE cursors SET cursor = ? WHERE folder = ?`, page.Cursor, f.id)
+			_, err = p.tx.Exec(`UPDATE cursors SET cursor = ? WHERE folder = ?`, page.Cursor, f.id)
 			return err
 		})
 		if errors.Is(err, errSyncPosition) {
@@ -161,6 +170,10 @@ func (s *Service) runSnapshot(ctx context.Context, f folderRef, client *remotecl
 		}
 		if page.Next == "" {
 			next.catchUpCur = next.startCur
+			if next.catchUpCur == "" {
+				// Nothing to follow its changes from
+				return remoteclient.ErrProtocolViolation
+			}
 		} else if page.Next == row.nextPage {
 			return remoteclient.ErrProtocolViolation
 		}
@@ -238,6 +251,9 @@ func (s *Service) checkSnapshot(tx *sql.Tx, folder int64, row *snapshotRow) erro
 	var mark int64
 	err := tx.QueryRow(`SELECT snapshot_id, next_page, catch_up_cursor, mark FROM snapshots WHERE folder = ?`, folder).
 		Scan(&id, &next, &catchUp, &mark)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
 	if err != nil || id.String != row.id || next.String != row.nextPage || catchUp.String != row.catchUpCur ||
 		mark != row.mark {
 		return errSyncPosition
@@ -330,12 +346,24 @@ func (s *Service) checkCapabilities(ctx context.Context, g gatewayRef, client *r
 	pins := g.pins
 	if len(pins) > 0 && caps.Certificate != nil && caps.Certificate.Next != nil && caps.Certificate.Next.SPKI != "" &&
 		!containsString(pins, caps.Certificate.Next.SPKI) {
-		// The gateway announced its next key: accept it too, so that the change doesn't need pairing again
-		pins = []string{pins[0], caps.Certificate.Next.SPKI}
+		// The gateway announced its next key: accept it too, so that the change doesn't need pairing again. The key
+		// it uses now stays, whichever of the pins that is.
+		current := pins[0]
+		if caps.Certificate.SPKI != "" && containsString(pins, caps.Certificate.SPKI) {
+			current = caps.Certificate.SPKI
+		}
+		pins = []string{current, caps.Certificate.Next.SPKI}
 	}
+	pinsChanged := joinWords(pins) != joinWords(g.pins)
 	features := joinWords(caps.Features)
 	err = s.store.tx(ctx, func(tx *sql.Tx) error {
-		if g.generation != 0 && g.generation != caps.AuthorityGeneration {
+		// As stored now: another folder's check may have recorded the new generation since g was read
+		var generation sql.NullInt64
+		if err := tx.QueryRow(`SELECT authority_generation FROM gateways WHERE service_id = ?`, g.serviceID).
+			Scan(&generation); err != nil {
+			return err
+		}
+		if generation.Int64 != 0 && generation.Int64 != caps.AuthorityGeneration {
 			s.log.Warn("The gateway's database was reset or restored: taking fresh listings", "gateway", caps.ServiceName)
 			if _, err := tx.Exec(`DELETE FROM cursors WHERE folder IN (SELECT id FROM folders WHERE service_id = ?)`,
 				g.serviceID); err != nil {
@@ -348,7 +376,8 @@ func (s *Service) checkCapabilities(ctx context.Context, g gatewayRef, client *r
 			// Whether what was sent took effect can't be known: it is never sent again, and waits for review
 			if _, err := tx.Exec(`UPDATE outbox SET state = 'unknown', error = 'the gateway''s database was reset or
 				restored since it was sent', updated_at = ? WHERE state IN ('submitted', 'pending')
-				AND folder IN (SELECT id FROM folders WHERE service_id = ?)`, nowUnix(), g.serviceID); err != nil {
+				AND authority_generation IS NOT ? AND folder IN (SELECT id FROM folders WHERE service_id = ?)`,
+				nowUnix(), caps.AuthorityGeneration, g.serviceID); err != nil {
 				return err
 			}
 		}
@@ -358,6 +387,10 @@ func (s *Service) checkCapabilities(ctx context.Context, g gatewayRef, client *r
 	})
 	if err != nil {
 		return err
+	}
+	if pinsChanged {
+		// The next connection pins the new keys
+		s.dropClient(g.serviceID)
 	}
 	return s.refreshAccess(ctx, g.serviceID, client)
 }
@@ -405,7 +438,7 @@ func (s *Service) refreshAccess(ctx context.Context, serviceID string, client *r
 				id); err != nil {
 				return err
 			}
-			nodes, err := tx.Query(`SELECT node FROM items WHERE folder = ? AND node != 0`, id)
+			nodes, err := tx.Query(`SELECT node FROM items WHERE folder = ? AND node != 0 AND deleted = 0`, id)
 			if err != nil {
 				return err
 			}

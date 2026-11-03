@@ -22,7 +22,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 var errUnsupportedSchema = errors.New("the index was created by a newer version")
 
@@ -157,6 +157,7 @@ var schema = []string{
 	`CREATE UNIQUE INDEX items_node ON items(node)`,
 	`CREATE INDEX items_folder ON items(folder, deleted)`,
 	`CREATE INDEX items_content ON items(content_id) WHERE deleted = 0`,
+	keepIndex,
 	// Where each folder's change feed is, and its snapshot in progress
 	`CREATE TABLE cursors (
 		folder INTEGER PRIMARY KEY,
@@ -188,6 +189,14 @@ var schema = []string{
 		etag TEXT NOT NULL DEFAULT '',
 		updated_at INTEGER NOT NULL
 	)`,
+}
+
+// keepIndex finds what is kept on this device without reading every item
+const keepIndex = `CREATE INDEX items_keep ON items(id) WHERE keep = 1 AND deleted = 0`
+
+// migrations bring an index made with an earlier schema up to date: migrations[v-1] goes from version v to v+1
+var migrations = [][]string{
+	{keepIndex},
 }
 
 const (
@@ -241,7 +250,15 @@ func (s *Store) migrate() error {
 		case version > schemaVersion:
 			return fmt.Errorf("%w (schema %d)", errUnsupportedSchema, version)
 		case version != 0:
-			return fmt.Errorf("no migration from schema %d", version)
+			for _, step := range migrations[version-1:] {
+				for _, statement := range step {
+					if _, err := tx.Exec(statement); err != nil {
+						return fmt.Errorf("updating the index from schema %d: %w", version, err)
+					}
+				}
+			}
+			_, err := tx.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion))
+			return err
 		}
 		for _, statement := range schema {
 			if _, err := tx.Exec(statement); err != nil {

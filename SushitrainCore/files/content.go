@@ -26,8 +26,10 @@ import (
 )
 
 const (
-	// Downloads running at once, as in the Kit
-	maxTransfers = 4
+	// Downloads running at once, as in the Kit, and of those for files kept on this device (which nobody waits for):
+	// fewer, so that a file someone opens doesn't wait behind them
+	maxTransfers     = 4
+	maxKeepTransfers = 2
 	// Bytes asked for at once in the background, and while a read waits for particular blocks
 	rangeBytes       = 8 << 20
 	urgentRangeBytes = 1 << 20
@@ -55,14 +57,18 @@ type cache struct {
 	pinned    map[string]int
 	transfers map[string]*transfer
 	slots     chan struct{}
-	wake      chan struct{}
-	stopped   chan struct{}
+	keepSlots chan struct{}
+	// When content was last recorded as used, so that opening it often doesn't write each time
+	touched map[string]int64
+	wake    chan struct{}
+	stopped chan struct{}
 }
 
 func openCache(s *Service) (*cache, error) {
 	c := &cache{s: s, contentDir: filepath.Join(s.cfg.CacheDir, "Content"),
 		transfersDir: filepath.Join(s.cfg.CacheDir, "Transfers"), pinned: map[string]int{},
-		transfers: map[string]*transfer{}, slots: make(chan struct{}, maxTransfers), wake: make(chan struct{}, 1),
+		transfers: map[string]*transfer{}, slots: make(chan struct{}, maxTransfers),
+		keepSlots: make(chan struct{}, maxKeepTransfers), touched: map[string]int64{}, wake: make(chan struct{}, 1),
 		stopped: make(chan struct{})}
 	for _, dir := range []string{c.contentDir, c.transfersDir} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -75,12 +81,42 @@ func openCache(s *Service) (*cache, error) {
 		return nil, err
 	}
 	entries, _ := os.ReadDir(c.transfersDir)
+	partial := map[string]bool{}
 	for _, entry := range entries {
 		if contentID, ok := strings.CutSuffix(entry.Name(), ".part"); !ok || !resumable[contentID] {
 			_ = os.Remove(filepath.Join(c.transfersDir, entry.Name()))
+		} else {
+			partial[contentID] = true
+		}
+	}
+	// Records of downloads whose partial file is gone (the cache was emptied) say nothing of what is on disk
+	for contentID := range resumable {
+		if !partial[contentID] {
+			if err := c.forgetTransfer(contentID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// Content that no record refers to (a download that was published as the daemon stopped) is never evicted
+	known, err := c.contentSet(`SELECT content_id FROM content`)
+	if err != nil {
+		return nil, err
+	}
+	entries, _ = os.ReadDir(c.contentDir)
+	for _, entry := range entries {
+		if !known[entry.Name()] {
+			_ = os.Remove(filepath.Join(c.contentDir, entry.Name()))
 		}
 	}
 	return c, nil
+}
+
+// forgetTransfer drops the record of a download's verified blocks
+func (c *cache) forgetTransfer(contentID string) error {
+	return c.s.store.tx(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`DELETE FROM transfers WHERE content_id = ?`, contentID)
+		return err
+	})
 }
 
 func (c *cache) contentPath(contentID string) string {
@@ -164,9 +200,19 @@ func (c *cache) cached(contentID string) (bool, error) {
 	return true, nil
 }
 
+// touch records that content was used, at most once a minute: eviction needs no finer order, and each record is a
+// write to the disk
 func (c *cache) touch(contentID string) {
+	now := nowUnix()
+	c.mutex.Lock()
+	if now-c.touched[contentID] < 60 {
+		c.mutex.Unlock()
+		return
+	}
+	c.touched[contentID] = now
+	c.mutex.Unlock()
 	_ = c.s.store.tx(context.Background(), func(tx *sql.Tx) error {
-		_, err := tx.Exec(`UPDATE content SET last_used = ? WHERE content_id = ?`, nowUnix(), contentID)
+		_, err := tx.Exec(`UPDATE content SET last_used = ? WHERE content_id = ?`, now, contentID)
 		return err
 	})
 }
@@ -326,6 +372,8 @@ type transfer struct {
 	wanted   []int
 	refs     int
 	keep     bool
+	// Whether something reads it, rather than only keeping it here
+	read     bool
 	running  bool
 	closed   bool
 	done     bool
@@ -341,8 +389,20 @@ func (c *cache) transferFor(contentID string, item, size int64, keep bool) (*tra
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	t, ok := c.transfers[contentID]
-	if !ok || t.failed() {
-		file, err := os.OpenFile(c.partialPath(contentID), os.O_RDWR|os.O_CREATE, 0o600)
+	if ok && t.failed() {
+		// A failed one that still runs (as it stops) gives way when it ends; a new one starts over
+		t.mutex.Lock()
+		running := t.running
+		t.mutex.Unlock()
+		if running {
+			return nil, ErrContentUnavailable
+		}
+		ok = false
+	}
+	if !ok {
+		path := c.partialPath(contentID)
+		_, statErr := os.Stat(path)
+		file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 		if err != nil {
 			return nil, err
 		}
@@ -351,7 +411,13 @@ func (c *cache) transferFor(contentID string, item, size int64, keep bool) (*tra
 			return nil, err
 		}
 		t = &transfer{c: c, contentID: contentID, item: item, size: size, file: file, changed: make(chan struct{})}
-		if err := t.resume(); err != nil {
+		if statErr != nil {
+			// A new partial file has none of the blocks a record of an earlier one says were verified
+			if err := c.forgetTransfer(contentID); err != nil {
+				file.Close()
+				return nil, err
+			}
+		} else if err := t.resume(); err != nil {
 			c.s.log.Warn("Could not resume a download; starting over", "error", err)
 		}
 		c.transfers[contentID] = t
@@ -360,6 +426,7 @@ func (c *cache) transferFor(contentID string, item, size int64, keep bool) (*tra
 	defer t.mutex.Unlock()
 	t.refs++
 	t.keep = t.keep || keep
+	t.read = t.read || !keep
 	if !t.running && !t.done {
 		t.start()
 	}
@@ -374,15 +441,16 @@ func (c *cache) release(t *transfer) {
 	if t.refs--; t.refs > 0 {
 		return
 	}
-	// Nothing reads it any more: the download stops, and resumes from its verified blocks when needed again
+	// Nothing reads it any more: the download stops, and resumes from its verified blocks when needed again. One that
+	// still runs (as it stops, or publishes) leaves when it ends, so that a new one doesn't use the same partial file.
 	if t.stop != nil {
 		t.stop()
 	}
 	if !t.running {
 		t.closeFile()
-	}
-	if c.transfers[t.contentID] == t {
-		delete(c.transfers, t.contentID)
+		if c.transfers[t.contentID] == t {
+			delete(c.transfers, t.contentID)
+		}
 	}
 }
 
@@ -493,28 +561,41 @@ func (t *transfer) stopAndWait() {
 
 func (t *transfer) run(ctx context.Context) {
 	defer func() {
+		t.c.mutex.Lock()
 		t.mutex.Lock()
 		t.running = false
 		finished := t.finished
 		t.notify()
 		if t.refs <= 0 {
 			t.closeFile()
+			if t.c.transfers[t.contentID] == t {
+				delete(t.c.transfers, t.contentID)
+			}
 		}
 		t.mutex.Unlock()
+		t.c.mutex.Unlock()
 		close(finished)
 	}()
-	select {
-	case t.c.slots <- struct{}{}:
-	case <-ctx.Done():
-		return
-	}
-	defer func() { <-t.c.slots }()
 	backoff := time.Second
 	for ctx.Err() == nil {
+		// A slot for each attempt, not while waiting to try again, so that downloads from a gateway out of reach
+		// don't hold up the others
+		t.mutex.Lock()
+		slots := t.c.slots
+		if !t.read {
+			slots = t.c.keepSlots
+		}
+		t.mutex.Unlock()
+		select {
+		case slots <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
 		err := t.fetch(ctx)
 		if err == nil {
 			err = t.publish()
 		}
+		<-slots
 		if err == nil {
 			return
 		}
@@ -552,11 +633,26 @@ func (t *transfer) fail(err error) {
 func (t *transfer) lease(ctx context.Context) (remoteapi.ReadLease, *remoteclient.Client, error) {
 	var gatewayID, revision, serviceID string
 	var contentID sql.NullString
+	t.mutex.Lock()
+	item := t.item
+	t.mutex.Unlock()
 	err := t.c.s.store.db.QueryRow(`SELECT r.gateway_id, r.revision, r.content_id, f.service_id FROM remote_items AS r
-		JOIN folders AS f ON f.id = r.folder WHERE r.item = ? AND r.deleted = 0`, t.item).
+		JOIN folders AS f ON f.id = r.folder WHERE r.item = ? AND r.deleted = 0`, item).
 		Scan(&gatewayID, &revision, &contentID, &serviceID)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && contentID.String != t.contentID) {
-		return remoteapi.ReadLease{}, nil, ErrVersionChanged
+		// The item it was started for changed; another with the same content serves as well
+		var other int64
+		err = t.c.s.store.db.QueryRow(`SELECT r.item, r.gateway_id, r.revision, r.content_id, f.service_id
+			FROM remote_items AS r JOIN folders AS f ON f.id = r.folder WHERE r.content_id = ? AND r.deleted = 0
+			AND r.item IS NOT NULL LIMIT 1`, t.contentID).Scan(&other, &gatewayID, &revision, &contentID, &serviceID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return remoteapi.ReadLease{}, nil, ErrVersionChanged
+		}
+		if err == nil {
+			t.mutex.Lock()
+			t.item = other
+			t.mutex.Unlock()
+		}
 	}
 	if err != nil {
 		return remoteapi.ReadLease{}, nil, err
@@ -626,6 +722,7 @@ func (t *transfer) fetch(ctx context.Context) error {
 	}
 	etag := `"` + t.contentID + `"`
 	buffer := make([]byte, 0, remoteclient.MaxBlockSize)
+	leases := 0
 	for {
 		first, last, ok := t.nextRange()
 		if !ok {
@@ -634,9 +731,11 @@ func (t *transfer) fetch(ctx context.Context) error {
 		start := t.blocks[first].Offset
 		end := t.blocks[last].Offset + int64(t.blocks[last].Size) - 1
 		r, err := client.ReadRange(ctx, lease.Lease, "", start, end, etag)
-		if errors.Is(err, remoteclient.ErrLeaseExpired) {
+		if errors.Is(err, remoteclient.ErrLeaseExpired) && leases < 3 {
 			// Expired, or the gateway no longer has the leased content prepared: lease again (the content must be the
-			// same) and go on with the blocks verified so far
+			// same) and go on with the blocks verified so far. Leases that keep expiring at once wait, as other
+			// errors do.
+			leases++
 			if lease, client, err = t.lease(ctx); err != nil {
 				return err
 			}
@@ -645,6 +744,7 @@ func (t *transfer) fetch(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		leases = 0
 		if r.ETag != etag {
 			r.Body.Close()
 			return remoteclient.ErrProtocolViolation
@@ -731,28 +831,44 @@ func (t *transfer) publish() error {
 		return err
 	}
 	buffer := make([]byte, remoteclient.MaxBlockSize)
+	bad := 0
 	for i, b := range t.blocks {
 		data := buffer[:b.Size]
 		if _, err := t.file.ReadAt(data, b.Offset); err != nil {
 			return err
 		}
 		if remoteclient.VerifyBlock(b, data) != nil {
-			// Not what was verified (a power loss, a disk error): fetch it again
+			// Not what was verified (a power loss, a disk error): fetched again, with every other one like it
 			t.mutex.Lock()
 			t.verified[i] = false
 			t.count--
 			t.mutex.Unlock()
-			return fmt.Errorf("block %d of %s changed on disk", i, t.contentID)
+			bad++
 		}
 	}
-	if err := os.Rename(t.c.partialPath(t.contentID), t.c.contentPath(t.contentID)); err != nil {
+	if bad > 0 {
+		t.mutex.Lock()
+		bitmap := encodeBitmap(t.verified)
+		t.mutex.Unlock()
+		_ = t.c.s.store.tx(context.Background(), func(tx *sql.Tx) error {
+			_, err := tx.Exec(`UPDATE transfers SET verified = ? WHERE content_id = ?`, bitmap, t.contentID)
+			return err
+		})
+		return fmt.Errorf("%d blocks of %s changed on disk", bad, t.contentID)
+	}
+	err := os.Rename(t.c.partialPath(t.contentID), t.c.contentPath(t.contentID))
+	if errors.Is(err, os.ErrNotExist) {
+		// Published already, by an attempt whose record of it failed: the record is what is left to do
+		_, err = os.Stat(t.c.contentPath(t.contentID))
+	}
+	if err != nil {
 		return err
 	}
 	if dir, err := os.Open(t.c.contentDir); err == nil {
 		_ = dir.Sync()
 		dir.Close()
 	}
-	err := t.c.s.store.tx(context.Background(), func(tx *sql.Tx) error {
+	err = t.c.s.store.tx(context.Background(), func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`INSERT INTO content (content_id, size, last_used) VALUES (?, ?, ?)
 			ON CONFLICT (content_id) DO UPDATE SET last_used = excluded.last_used`, t.contentID, t.size,
 			nowUnix()); err != nil {
@@ -808,6 +924,10 @@ func (t *transfer) wait(ctx context.Context, off int64, n int) error {
 			}
 		}
 		if !t.running {
+			if t.c.s.ctx.Err() != nil {
+				t.mutex.Unlock()
+				return ErrContentUnavailable
+			}
 			t.start()
 		}
 		changed := t.changed
@@ -891,6 +1011,17 @@ func (s *Service) SetKeep(item int64, keep bool) error {
 			return fs.ErrNotExist
 		}
 		if !keep {
+			// Kept because a directory above it is: only that directory can stop it
+			var above sql.NullString
+			if err := tx.QueryRow(`WITH RECURSIVE up(id) AS (SELECT parent FROM items WHERE id = ?
+					UNION ALL SELECT i.parent FROM items AS i JOIN up ON i.id = up.id WHERE i.parent IS NOT NULL)
+				SELECT i.name FROM items AS i JOIN up ON i.id = up.id WHERE i.keep = 1 AND i.deleted = 0 LIMIT 1`,
+				item).Scan(&above); err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			if above.Valid {
+				return fmt.Errorf("%w: it is kept with %q, which contains it", ErrKeptAbove, above.String)
+			}
 			// Stop keeping it all: nothing below keeps its own mark
 			_, err = tx.Exec(`WITH RECURSIVE sub(id) AS (SELECT id FROM items WHERE parent = ? AND deleted = 0
 				UNION ALL SELECT i.id FROM items AS i JOIN sub ON i.parent = sub.id WHERE i.deleted = 0)
@@ -907,6 +1038,9 @@ func (s *Service) SetKeep(item int64, keep bool) error {
 	}
 	return s.cache.evictBelow(item)
 }
+
+// ErrKeptAbove refuses to stop keeping an item that is kept because a directory containing it is
+var ErrKeptAbove = errors.New("it is kept with a directory that contains it")
 
 // keptContent is the content of everything kept on this device
 const keptContent = `WITH RECURSIVE kept(id) AS (
@@ -953,12 +1087,23 @@ func (c *cache) downloadKept() error {
 			continue
 		}
 		t, err := c.transferFor(m.contentID, m.item, m.size, true)
+		if errors.Is(err, ErrContentUnavailable) {
+			continue
+		}
 		if err != nil {
 			return err
 		}
 		// The transfer holds itself until it is done; then it is released
+		t.mutex.Lock()
+		finished := t.finished
+		t.mutex.Unlock()
+		if finished == nil {
+			// Complete already
+			c.release(t)
+			continue
+		}
 		go func() {
-			<-t.finished
+			<-finished
 			c.release(t)
 		}()
 	}

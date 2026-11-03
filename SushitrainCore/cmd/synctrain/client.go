@@ -9,6 +9,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -32,13 +33,6 @@ func background[T any](fn func() (T, error), done func(T, error)) {
 	}()
 }
 
-func runtimeDir() string {
-	if dir := os.Getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(dir) {
-		return dir
-	}
-	return os.TempDir()
-}
-
 func configDir() string {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(dir) {
 		return dir
@@ -47,17 +41,36 @@ func configDir() string {
 	return filepath.Join(home, ".config")
 }
 
-// filesSocket is synctrain-files's admin socket (as its default)
+// filesSocket is synctrain-files's admin socket, where the daemon makes it by default: in the runtime directory, or
+// else in its state directory (never in a directory others can write, such as /tmp)
 func filesSocket() string {
 	if env := os.Getenv("SYNCTRAIN_FILES_SOCKET"); env != "" {
 		return env
 	}
-	return filepath.Join(runtimeDir(), "synctrain", "files.sock")
+	if dir := os.Getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(dir) {
+		return filepath.Join(dir, "synctrain", "files.sock")
+	}
+	state := os.Getenv("XDG_STATE_HOME")
+	if !filepath.IsAbs(state) {
+		home, _ := os.UserHomeDir()
+		state = filepath.Join(home, ".local", "state")
+	}
+	return filepath.Join(state, "synctrain", "files", "files.sock")
 }
 
-// callFiles calls a method of synctrain-files
+// callFiles calls a method of synctrain-files, waiting as long as it takes
 func callFiles(method string, params, result any) error {
 	return adminsock.Call(filesSocket(), method, params, result)
+}
+
+// How long the pages' refreshes wait for a daemon's answer: one that hangs mustn't stop the refreshes after it
+const refreshTimeout = 15 * time.Second
+
+// callBounded calls an admin method that answers at once, giving up after refreshTimeout
+func callBounded(socket, method string, params, result any) error {
+	ctx, cancel := context.WithTimeout(context.Background(), refreshTimeout)
+	defer cancel()
+	return adminsock.CallContext(ctx, socket, method, params, result)
 }
 
 // running reports whether something serves the admin socket
@@ -118,16 +131,46 @@ func systemctl(args ...string) error {
 	return nil
 }
 
-// waitForSocket waits until a daemon serves its socket
-func waitForSocket(socket string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+// waitForService waits until a unit's daemon serves its socket, while the unit hasn't failed, and at most limit (a
+// gateway may migrate a large database first)
+func waitForService(unit, socket string, limit time.Duration) error {
+	deadline := time.Now().Add(limit)
 	for !running(socket) {
+		if systemctl("is-failed", "--quiet", unit) == nil {
+			return fmt.Errorf("%s stopped (see journalctl --user -u %s)", unit, unit)
+		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("the service didn't start (see journalctl --user -e)")
+			return fmt.Errorf("%s didn't start within %s (see journalctl --user -u %s)", unit, limit, unit)
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
 	return nil
+}
+
+// stopUnit stops a unit enabled for a mode that couldn't be set up, so that it doesn't start at the next login either
+func stopUnit(unit string) {
+	_ = systemctl("disable", "--now", unit)
+	_ = systemctl("reset-failed", unit)
+}
+
+// environmentDiffers names a variable that points synctrain-gateway at another Syncthing home or admin socket here
+// than in the user's service manager, where its unit runs ("" when none does): the window and the unit would then
+// disagree about which Syncthing they take over
+func environmentDiffers() string {
+	manager := map[string]string{}
+	if out, err := exec.Command("systemctl", "--user", "show-environment").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			if name, value, ok := strings.Cut(line, "="); ok {
+				manager[name] = value
+			}
+		}
+	}
+	for _, name := range []string{"STHOMEDIR", "SYNCTRAIN_GATEWAY_ADMIN"} {
+		if os.Getenv(name) != manager[name] {
+			return name
+		}
+	}
+	return ""
 }
 
 // humanBytes is a size as GNOME shows sizes

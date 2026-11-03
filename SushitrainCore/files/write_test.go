@@ -631,3 +631,146 @@ func TestLeavingFilesMode(t *testing.T) {
 		t.Fatalf("the cache isn't empty: %+v %v", st, err)
 	}
 }
+
+// A handle opened as a settle commits writes to a working copy of its own, which is sent too
+func TestWriteWhileSettling(t *testing.T) {
+	g := writableGateway(t, map[string]string{"log.txt": "zero"})
+	var ts *testService
+	var once sync.Once
+	written := make(chan error, 1)
+	ts = newTestServiceWith(t, g, func(c *Config) {
+		c.SettleDelay = testSettleDelay
+		c.Hook = func(point string) error {
+			if point != "settle.committed" {
+				return nil
+			}
+			once.Do(func() {
+				// It waits for the settle to retire the working copy it would otherwise have written to
+				go func() {
+					e := ts.mustLookup("docs/log.txt")
+					w, err := ts.OpenWriter(e, false)
+					if err == nil {
+						_, err = w.WriteAt(context.Background(), []byte("two!"), 0)
+						if closeErr := w.Close(); err == nil {
+							err = closeErr
+						}
+					}
+					written <- err
+				}()
+			})
+			return nil
+		}
+	})
+	ts.write(ts.mustLookup("docs/log.txt"), "one!", true)
+	if err := <-written; err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(5 * testSettleDelay)
+	ts.settled()
+	ts.gatewayHas("log.txt", "two!")
+}
+
+// A save merged into an operation while its upload ran is sent, not the content uploaded before it
+func TestSaveDuringUpload(t *testing.T) {
+	g := writableGateway(t, map[string]string{"doc.txt": "base"})
+	var ts *testService
+	var once sync.Once
+	ts = newTestServiceWith(t, g, func(c *Config) {
+		c.SettleDelay = testSettleDelay
+		c.Hook = func(point string) error {
+			if point != "outbox.uploaded" {
+				return nil
+			}
+			once.Do(func() {
+				// The second save settles into the same operation before the first upload is recorded
+				ts.write(ts.mustLookup("docs/doc.txt"), "second", true)
+				gatewaytest.WaitFor(t, 30*time.Second, "the second save to settle", func() bool {
+					var queued int
+					_ = ts.store.db.QueryRow(`SELECT COUNT(*) FROM outbox WHERE state = 'queued'
+						AND upload_id = ''`).Scan(&queued)
+					return queued == 1
+				})
+			})
+			return nil
+		}
+	})
+	ts.write(ts.mustLookup("docs/doc.txt"), "first", true)
+	time.Sleep(5 * testSettleDelay)
+	ts.settled()
+	ts.gatewayHas("doc.txt", "second")
+	if edits, err := ts.Edits(); err != nil || len(edits) != 0 {
+		t.Fatalf("edits left: %+v %v", edits, err)
+	}
+}
+
+// An edit stuck on an item that was removed here before it was ever sent can't keep the folder forever
+func TestRemovedItemTakesItsStuckEdits(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	g := writableGateway(t, nil)
+	ts := newTestService(t, g, 0)
+	g.Stop()
+	ts.create("docs", "torn.txt", "x")
+	gatewaytest.WaitFor(t, 30*time.Second, "the creation to be queued", func() bool {
+		var n int
+		_ = ts.store.db.QueryRow(`SELECT COUNT(*) FROM outbox WHERE kind = 'create'`).Scan(&n)
+		return n == 1
+	})
+	// As recovery after a crash leaves a file that was being written
+	if _, err := ts.store.db.Exec(`UPDATE outbox SET state = 'blocked' WHERE kind = 'create'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Remove(ts.dir("docs"), "torn.txt", false); err != nil {
+		t.Fatal(err)
+	}
+	if edits, err := ts.Edits(); err != nil || len(edits) != 0 {
+		t.Fatalf("edits of a removed item: %+v %v", edits, err)
+	}
+	g.Start()
+	if _, _, err := ts.RemoveFolder(ts.folder.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// mv log.1 log.2; mv log log.1: the second move waits for the name the first frees, and nothing conflicts
+func TestRotation(t *testing.T) {
+	g := writableGateway(t, map[string]string{"log": "newest", "log.1": "older"})
+	ts := newTestService(t, g, 0)
+	docs := ts.dir("docs")
+	if _, err := ts.Rename(docs, "log.1", docs, "log.2", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Rename(docs, "log", docs, "log.1", false); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(5 * testSettleDelay)
+	ts.settled()
+	ts.gatewayHas("log.1", "newest")
+	ts.gatewayHas("log.2", "older")
+	ts.gatewayLacks("log")
+	if edits, err := ts.Edits(); err != nil || len(edits) != 0 {
+		t.Fatalf("edits left: %+v %v", edits, err)
+	}
+}
+
+// mv other/x dir/; rm -r dir: x is removed on the gateway too, though it wasn't in dir there
+func TestRemovingADirectoryWithWhatMovedIntoIt(t *testing.T) {
+	g := writableGateway(t, map[string]string{"other/x.txt": "x", "dir/y.txt": "y"})
+	ts := newTestService(t, g, 0)
+	if _, err := ts.Rename(ts.dir("docs/other"), "x.txt", ts.dir("docs/dir"), "x.txt", false); err != nil {
+		t.Fatal(err)
+	}
+	dir := ts.dir("docs/dir")
+	for _, name := range []string{"x.txt", "y.txt"} {
+		if _, err := ts.Remove(dir, name, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := ts.Remove(ts.dir("docs"), "dir", true); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(5 * testSettleDelay)
+	ts.settled()
+	ts.gatewayLacks("dir")
+	ts.gatewayLacks("other/x.txt")
+	ts.gatewayLacks("dir/x.txt")
+}

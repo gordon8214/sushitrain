@@ -666,7 +666,13 @@ func (s *Service) runReconciler(ctx context.Context) {
 // For tests of clients (gatewaytest), which change a folder and expect its change log to show it.
 func (s *Service) ReconcileNow(ctx context.Context, folder string) error {
 	lock := s.folderLock(folder)
-	lock.Lock()
+	for !lock.TryLock() {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
 	err := s.reconcileLocked(ctx, folder)
 	lock.Unlock()
 	if err != nil {
