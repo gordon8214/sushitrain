@@ -58,6 +58,7 @@ require (
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/go-licenses v1.6.0 // indirect
 	github.com/google/licenseclassifier v0.0.0-20210722185704-3043a050f148 // indirect
+	github.com/hanwen/go-fuse/v2 v2.12.1 // indirect
 	github.com/hooklift/assert v0.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/jackpal/gateway v1.2.0 // indirect

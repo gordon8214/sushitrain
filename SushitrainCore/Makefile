@@ -7,7 +7,7 @@ PATH := $(shell pwd):/opt/homebrew/bin:$(HOME)/go/bin:$(PATH)
 SHELL := env PATH="$(PATH)" /bin/bash
 GO_VERSION := $(shell go version)
 
-.PHONY: clean install deps test test-engine gateway-linux gateway-test-linux
+.PHONY: clean install deps test test-engine gateway-linux gateway-test-linux linux linux-test
 
 build: build/SushitrainCore.xcframework
 
@@ -71,6 +71,21 @@ gateway-linux:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -tags noupgrade -ldflags "-s -w -X main.version=$(GATEWAY_VERSION) \
 		-X $(SYNCTHING_BUILD).Version=$(SYNCTHING_VERSION) -X $(SYNCTHING_BUILD).Tags=noupgrade $(BUILDER_LDFLAGS)" \
 		-o build/linux-amd64/synctrain-gateway ./cmd/synctrain-gateway
+
+# Synctrain for Linux (Docs/linux.md, built on the Linux host): the daemons are static, like the gateway
+LINUX_VERSION ?= $(shell git describe --always --dirty 2>/dev/null)
+linux: gateway-linux
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(LINUX_VERSION)" \
+		-o build/linux-amd64/synctrain-files ./cmd/synctrain-files
+
+# Test executables of Synctrain for Linux, to run on a Linux host (go test -c). Fixtures are read from ../Docs, so run
+# them from a checkout's SushitrainCore/<package> directory. The FUSE tests need /dev/fuse and fusermount3.
+LINUX_TEST_PACKAGES = remoteapi adminsock remoteclient files files/fusefs
+linux-test:
+	for p in $(LINUX_TEST_PACKAGES); do \
+		GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -c -tags noassets -o build/linux-amd64/$$(echo $$p | tr / -).test \
+			./$$p || exit 1; \
+	done
 
 # Test executables to run on a Linux host (go test -c), including the multi-device integration tests
 gateway-test-linux:

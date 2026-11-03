@@ -1,0 +1,20 @@
+# Synctrain for Linux, Files mode: the folders of a gateway in ~/Synctrain, fetched as they are read (Docs/linux.md).
+# Enabled instead of synctrain-gateway.service, never with it.
+[Unit]
+Description=Synctrain Files (folders of a gateway, fetched on demand)
+Documentation=https://github.com/gordon8214/sushitrain/blob/file-provider/Docs/linux.md
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/synctrain-files serve
+# A daemon that stopped without unmounting leaves a mount that answers nothing
+ExecStopPost=-/usr/bin/fusermount3 -uz %h/Synctrain
+Restart=on-failure
+RestartSec=5
+# Fetching waits on the network; stay out of the way of interactive work
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+
+[Install]
+WantedBy=default.target
