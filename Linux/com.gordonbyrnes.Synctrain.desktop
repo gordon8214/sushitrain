@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Synctrain
+Comment=Synchronize folders with Syncthing, or open the folders of a gateway on another system
+Exec=synctrain
+Icon=com.gordonbyrnes.Synctrain
+Terminal=false
+Categories=Network;FileTransfer;GTK;
+Keywords=Syncthing;Sync;Files;Gateway;
+StartupNotify=true

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.gordonbyrnes.Synctrain</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MPL-2.0</project_license>
+  <name>Synctrain</name>
+  <summary>Synchronize folders, or open a gateway's folders on demand</summary>
+  <description>
+    <p>
+      Synctrain keeps folders in step with Syncthing, or shows the folders of a gateway on another system and
+      fetches their files as they are opened. It runs in one of two modes on each machine.
+    </p>
+    <ul>
+      <li>Synchronize: Syncthing runs here, every folder syncs all of its files, and phones and other machines can
+        reach the folders through its remote file service.</li>
+      <li>Files: no Syncthing runs here. The folders of a gateway on another system appear in ~/Synctrain, and files
+        are fetched as they are opened, kept for working offline, and sent back when they change.</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">com.gordonbyrnes.Synctrain.desktop</launchable>
+  <url type="homepage">https://github.com/gordon8214/sushitrain</url>
+  <url type="bugtracker">https://github.com/gordon8214/sushitrain/issues</url>
+  <developer id="com.gordonbyrnes">
+    <name>Gordon Byrnes</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+</component>

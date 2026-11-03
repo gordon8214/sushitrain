@@ -62,6 +62,8 @@ synctrain-gateway serve --home /var/syncthing/config --listen :20920 \
 | `--cert`, `--key` | `SYNCTRAIN_GATEWAY_CERT`, `SYNCTRAIN_GATEWAY_KEY` | Certificate files; reloaded when they change. Without them, a self-signed certificate is created |
 | `--public-host`, `--public-port` | `SYNCTRAIN_GATEWAY_HOST`, `SYNCTRAIN_GATEWAY_PORT` | Where phones connect, for pairing codes (the host without a port; behind a reverse proxy, set the proxy's port) |
 | `--proxy`, `--proxy-spki` | `SYNCTRAIN_GATEWAY_PROXY=1`, `SYNCTRAIN_GATEWAY_PROXY_SPKI` | Plain HTTP for a reverse proxy |
+| `--service` | `SYNCTRAIN_GATEWAY_SERVICE` | `on` or `off`: whether the remote file service runs, which `synctrain-gateway service` then can't change. By default it runs as that last set it |
+| `--service-default` | `SYNCTRAIN_GATEWAY_SERVICE_DEFAULT` | `on` (the default) or `off`: whether the remote file service runs before `synctrain-gateway service` first turns it on or off |
 | `--socket` | `SYNCTRAIN_GATEWAY_ADMIN` | Admin socket (default `<home>/synctrain-gateway/admin.sock`) |
 | `--admin-group` | `SYNCTRAIN_GATEWAY_ADMIN_GROUP=1` | Let members of the socket's group use it too (it is the owner's only otherwise) |
 | `--db-maintenance-interval`, `--db-delete-retention-interval` | `STDBMAINTENANCEINTERVAL`, `STDBDELETERETENTIONINTERVAL` | As for stock Syncthing (default `8h` and `10920h`) |
@@ -95,6 +97,8 @@ its place. It also keeps `<home>/synctrain-gateway/` readable by its own user on
 
 ```
 synctrain-gateway status
+synctrain-gateway service --off
+synctrain-gateway service --on --listen :20921 --public-host nas.example.org
 synctrain-gateway exports --add Documents --write
 synctrain-gateway pair --folder Documents:write
 synctrain-gateway clients
@@ -102,6 +106,12 @@ synctrain-gateway clients --revoke <client ID>
 synctrain-gateway devices --add <device ID> --name laptop
 synctrain-gateway folders --share Documents --device <device ID>
 ```
+
+The remote file service can be turned off and on while Syncthing runs (`synctrain-gateway service`, or the window of
+Synctrain for Linux), and its address and public host changed with it. Those settings are kept in
+`<home>/synctrain-gateway/service.json`; what serve's options or environment set can't be changed this way. While the
+service is off, Syncthing and the admin socket run as usual, and the service's commands answer that it is off. On a
+Linux desktop, Synctrain runs the gateway with the service off until it is turned on: see [linux.md](linux.md).
 
 ### Replacing a stock Syncthing
 

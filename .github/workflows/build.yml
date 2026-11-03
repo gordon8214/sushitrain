@@ -1,4 +1,4 @@
-name: "Build iOS+macOS app"
+name: "Build iOS, macOS and Linux apps"
 
 on:
   pull_request:
@@ -91,6 +91,58 @@ jobs:
         with:
           name: app
           path: dist/sushitrain-${{ github.sha }}.zip
+          retention-days: 3
+
+  linux:
+    name: Synctrain for Linux
+    # The release Synctrain for Linux targets, so that the window links the same GTK and libadwaita
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install build tools
+        run: |
+          dnf install -y --setopt=install_weak_deps=False git make gcc tar gzip pkgconf-pkg-config gtk4-devel \
+            libadwaita-devel gobject-introspection-devel rpm-build systemd-rpm-macros desktop-file-utils appstream
+
+      - name: Check out repository
+        uses: actions/checkout@v3
+        with:
+          # Tags, for the package's version
+          fetch-depth: 0
+
+      - name: Trust the checkout
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          # Building gotk4 takes long the first time
+          cache-dependency-path: SushitrainCore/go.sum
+
+      # The FUSE tests skip themselves without /dev/fuse
+      - name: Test
+        working-directory: SushitrainCore
+        run: |
+          go test -tags noassets ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin \
+            ./cmd/synctrain-gateway ./cmd/synctrain-files
+
+      - name: Validate desktop files
+        run: |
+          desktop-file-validate Linux/com.gordonbyrnes.Synctrain.desktop
+          appstreamcli validate --no-net Linux/com.gordonbyrnes.Synctrain.metainfo.xml
+
+      - name: Build package
+        run: |
+          Linux/build/build-rpm.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-rpm
+          path: SushitrainCore/build/rpm/x86_64/*.rpm
           retention-days: 3
 
   mac-release:

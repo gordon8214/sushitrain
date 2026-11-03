@@ -2,32 +2,93 @@
 
 Synctrain for Linux targets Fedora Workstation with GNOME. As on the Mac, a machine runs Synctrain in one of two modes:
 
-- **Synchronize**: it runs Syncthing, and every folder syncs all of its contents. On Linux that is `synctrain-gateway`
-  ([gateway.md](gateway.md)), which can also serve the machine's folders to phones and to machines in Files mode.
+- **Synchronize**: it runs Syncthing, and every folder syncs all of its contents. Phones and machines in Files mode can
+  reach its folders through the remote file service, once it is turned on.
 - **Files**: it runs no Syncthing. The folders of a gateway on another system, which has all their files, appear in
   `~/Synctrain`, and files are fetched from the gateway as they are read.
 
-This page is about Files mode, which is `synctrain-files`.
+Three programs make it up: `synctrain` is the window, `synctrain-gateway` runs Syncthing in Synchronize mode
+([gateway.md](gateway.md)), and `synctrain-files` is the daemon of Files mode. Each daemon is a systemd user service,
+and only the one of the machine's mode is enabled. They run without the window, which only manages them and keeps no
+state of its own; the mode is in `~/.config/synctrain/mode`.
 
-## Building
+## Installing
 
-On a Linux host with Go (see `SushitrainCore/go.mod` for the version):
+On a Fedora host with Go (the release in `SushitrainCore/go.mod`, newer than Fedora's) and `rpm-build`:
 
 ```bash
-make -C SushitrainCore linux
+Linux/build/build-rpm.sh
+sudo dnf install SushitrainCore/build/rpm/x86_64/synctrain-*.rpm
 ```
 
-This builds `SushitrainCore/build/linux-amd64/synctrain-files` and `synctrain-gateway`, both statically linked. The
-daemon needs `fuse3` (`fusermount3`), which Fedora Workstation has.
+The window links GTK 4 and libadwaita. Without `gtk4-devel` and `libadwaita-devel` installed, the script builds it in a
+rootless podman container (`Linux/build/build-window.sh`, Fedora with those packages, using the host's Go and module
+cache). The package needs `fuse3`, and recommends `nautilus-python` (the Nautilus extension), `ffmpeg-free` and
+`poppler-utils` (video and PDF thumbnails for phones). The names Sushitrain and Synctrain and the logo aren't under the
+MPL (README, License), so the package is for your own machines.
 
-## Running
+To build the programs only: `make -C SushitrainCore linux` (the two daemons, statically linked) and
+`make -C SushitrainCore linux-window` (the window, with GTK's development packages).
+
+## The window
+
+The first time, Synctrain asks what the machine does. Its main menu switches to the other mode later.
+
+**Synchronize** starts Syncthing at every login. With Syncthing already set up here (`~/.local/state/syncthing`, or the
+legacy `~/.config/syncthing`), Synctrain takes it over in place, with the same device ID, folders and database, so
+other devices see no change:
+
+1. `syncthing.service` is stopped and masked, so that it doesn't start again; a Syncthing that systemd didn't start (as
+   from Syncthing Tray) is asked to stop through its REST API.
+2. The configuration, identity and database are copied next to the home, to `syncthing.before-synctrain-<time>`
+   (reflinks on btrfs, which take no space until either side changes).
+3. `synctrain-gateway.service` starts on the home. If anything fails, what ran before is put back.
+
+Syncthing Tray keeps working against the same REST API, but turn off its launcher (Settings › Launcher) if it starts
+Syncthing itself, or it competes for the home at the next login. A Syncthing run as a system service
+(`syncthing@<user>`) has to be disabled by an administrator first. Going back to the stock Syncthing needs a version at
+least as new as Synctrain's engine: stop Synctrain (switch to Files mode, or `systemctl --user disable --now
+synctrain-gateway`), unmask `syncthing.service` and start it.
+
+In Synchronize mode, the window shows the device ID, Syncthing's folders and devices, and opens the web GUI, where
+folders and devices are added and Syncthing is set up as usual. **Remote Files** manages the remote file service:
+
+- It is off until you turn it on. Then it listens on port 20920; the host name in pairing codes is the machine's name
+  unless you give another (the one phones reach it at).
+- **Shared folders** are what clients may be given: not shared, read only (which includes previous versions), or read
+  and write.
+- **Pair…** shows a code to scan in Synctrain on an iPhone, iPad or Mac, with a link to paste in Synctrain on a machine
+  in Files mode. When a client submits it, you choose which folders it gets, and approve or deny.
+- **Clients** lists paired phones and machines; each one's access per folder can be changed, and a client revoked.
+- **Keep Running After Logging Out** turns on systemd's linger for your user, so that phones reach the folders while
+  nobody is logged in.
+
+**Files** starts `synctrain-files.service`. Its pages are the folders in `~/Synctrain` (Add…, Remove from This Device),
+the gateways (Pair… with a link from the gateway, Forget), changes that aren't on their gateway yet (Export…, Discard),
+and the cache's size. **Previous Versions** of a file, opened from Nautilus (or `synctrain versions <path>`), lists what
+the folder's versioning keeps on the gateway, to open, restore or save a copy of.
+
+**Switching modes** follows the Mac's order, and the mode changes last, so a switch that stops halfway can be repeated:
+
+- From Files to Synchronize, changes being sent are waited for (two minutes at most); if any isn't on its gateway then,
+  nothing changes. Otherwise each folder is taken out of `~/Synctrain`, files that were only here are moved out first
+  (as when a folder is removed, below), and the cache is emptied. The pairings with gateways stay, for switching back.
+- From Synchronize to Files, Syncthing stops and its folders stay where they are, to synchronize again when the machine
+  switches back. `syncthing.service` stays masked. Clients of the remote file service can't reach the folders meanwhile.
+
+## Files mode
+
+The rest of this page is about Files mode, which is `synctrain-files`. Everything the window does is also a command.
+
+### Running
 
 ```bash
 synctrain-files serve
 ```
 
 It mounts the folders at `~/Synctrain` and follows their gateways until it is stopped (`SIGINT` or `SIGTERM`, or
-unmounting `~/Synctrain`, as Nautilus's sidebar does). As a systemd user service, with the binary in `/usr/bin`:
+unmounting `~/Synctrain`, as Nautilus's sidebar does). The package installs it as a systemd user service, which the
+window enables; without the package, with the binary in `/usr/bin`:
 
 ```bash
 cp Linux/systemd/synctrain-files.service ~/.config/systemd/user/
@@ -51,10 +112,11 @@ The credentials of gateways are kept in the desktop's keyring (GNOME Keyring), a
 it: while it is locked, it waits. Without a keyring (on a server, say), or with `--credentials file`, they are kept in
 `credentials.json` in the state directory, which only the user can read; they move into the keyring once there is one.
 
-## Gateways and folders
+### Gateways and folders
 
-1. On the gateway, start pairing: `synctrain-gateway pair --folder <folder>:read` on a Linux server, or Settings ›
-   Remote file service on a Mac in Synchronize mode. It shows a `synctrain+pair://` link.
+1. On the gateway, start pairing: Pair… in Synctrain's Remote Files on a Linux machine in Synchronize mode,
+   `synctrain-gateway pair --folder <folder>:read` on a server, or Settings › Remote file service on a Mac in Synchronize
+   mode. It shows a `synctrain+pair://` link.
 2. Here: `synctrain-files pair '<link>'`, then approve the request on the gateway.
 3. `synctrain-files folders --gateway <service ID>` lists the gateway's folders for this machine, and
    `synctrain-files folders --gateway <service ID> --add <folder>` adds one. It appears in `~/Synctrain`, named after
@@ -64,7 +126,7 @@ it: while it is locked, it waits. Without a keyring (on a server, say), or with 
 `~/Synctrain` (it stays on the gateway), and `synctrain-files gateways --forget <service ID>` forgets a gateway whose
 folders are all removed. A gateway on this machine can't be paired with: Files mode shows the folders of another system.
 
-## Files
+### Files
 
 Listing needs no network: the index follows each folder's changes on the gateway, and they show as they arrive. A file
 is fetched when it is read, in blocks, each checked against the hashes Syncthing keeps of the file; a read waits only for
@@ -87,7 +149,7 @@ synctrain-files state ~/Synctrain/Documents/*.pdf
 The same through extended attributes: `setfattr -n user.synctrain.keep -v 1 <path>` (or `-v 0`), and
 `getfattr -n user.synctrain.state <path>`, which is `remote`, `partial`, `local` or `kept`.
 
-## Changing files
+### Changing files
 
 Files and directories in `~/Synctrain` are changed as on a local disk, in folders the gateway lets this machine write
 (in others, a write fails with "Read-only file system"):
@@ -120,7 +182,7 @@ it up, so that the file shows the gateway's version again. Nothing is sent twice
 A folder whose changes aren't on the gateway can't be removed. Files that stay here are moved out when it is, to a new
 directory named after the folder in `~/Sync` (or in your home folder if `~/Sync` is itself synchronized).
 
-## GNOME
+### GNOME
 
 Each folder is a bookmark in the sidebar of Nautilus and of the file chooser while it is here. Changes that can't be
 sent, and files that can't be opened because their gateway is out of reach, are notified (at most once in ten
@@ -136,10 +198,10 @@ GNOME treats `~/Synctrain` as a local disk, and some of its programs read every 
   be fetched, so browsing a folder of photos downloads nothing.
 
 **The Nautilus extension** adds Keep on This Device, Stop Keeping on This Device and Previous Versions… to the menu of
-items in `~/Synctrain`, and a Synctrain column to the list view. It needs `nautilus-python`:
+items in `~/Synctrain`, and a Synctrain column to the list view. The package installs it; it needs `nautilus-python`
+(`sudo dnf install nautilus-python`, then `nautilus -q`). Without the package:
 
 ```bash
-sudo dnf install nautilus-python
 mkdir -p ~/.local/share/nautilus-python/extensions
 cp Linux/nautilus/synctrain.py ~/.local/share/nautilus-python/extensions/
 nautilus -q
@@ -147,20 +209,28 @@ nautilus -q
 
 ## Limitations so far
 
-- Symbolic links on the gateway are not shown.
+- Symbolic links on the gateway are not shown in Files mode.
+- One mode per machine: a machine in Synchronize mode can't also show another gateway's folders.
 
 ## Development
 
-The client is Go in `SushitrainCore`: `remoteapi` (the API's types, shared with the gateway), `remoteclient` (a client
-of a gateway), `files` (the index, sync and cache) and `files/fusefs` (the mount), with the daemon in
-`cmd/synctrain-files`. `remoteclient` and `files` are tested against a real gateway in-process (`gateway/gatewaytest`),
-also on macOS; the FUSE tests run on Linux with `/dev/fuse`:
+The Go code is in `SushitrainCore`: `remoteapi` (the remote file API's types, shared with the gateway), `remoteclient`
+(a client of a gateway), `files` (the index, sync and cache of Files mode) and `files/fusefs` (the mount), with the
+daemon in `cmd/synctrain-files`; `gatewayadmin` (what the gateway's admin socket answers) and `cmd/synctrain-gateway`;
+and the window in `cmd/synctrain` (gotk4 and libadwaita, Linux only). `remoteclient` and `files` are tested against a
+real gateway in-process (`gateway/gatewaytest`), also on macOS; the FUSE tests run on Linux with `/dev/fuse`:
 
 ```bash
 cd SushitrainCore
-go test -tags noassets ./remoteapi ./remoteclient ./files/...
+go test -tags noassets ./remoteapi ./remoteclient ./files/... ./cmd/synctrain-gateway
 make linux-test   # test executables to run on another Linux host
 ```
+
+`Linux/test/e2e-files.sh` runs a scratch gateway and Files daemon on one machine, in `/tmp`, without touching the
+session's own. The window can be checked without a desktop through GTK's Broadway backend (`gtk4-broadwayd :5`, then
+`GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 synctrain` and http://127.0.0.1:8085 in a browser that is in view, since a
+hidden page holds Broadway's frames back). `STHOMEDIR`, `SYNCTRAIN_GATEWAY_ADMIN`, `SYNCTRAIN_FILES_SOCKET` and
+`XDG_CONFIG_HOME` point it at scratch daemons and a scratch mode.
 
 The client follows the Swift client in `SynctrainFileProviderKit` and `Docs/remote-api/invariants.md`: a change to the
 API needs both.
