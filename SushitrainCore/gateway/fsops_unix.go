@@ -131,8 +131,8 @@ func (d *dir) openFile(name string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), d.path+"/"+name), nil
 }
 
-// hasXattrs reports whether the existing regular file name in d has extended attributes. A file it can't check
-// counts as having some.
+// hasXattrs reports whether the existing regular file name in d has extended attributes that replacing it would lose
+// (systemXattr ones are given to the new file anyway). A file it can't check counts as having some.
 func (d *dir) hasXattrs(name string) bool {
 	f, err := d.openFile(name)
 	if err != nil {
@@ -144,7 +144,22 @@ func (d *dir) hasXattrs(name string) bool {
 		// The filesystem doesn't have any
 		return false
 	}
-	return err != nil || n > 0
+	if err != nil {
+		return true
+	}
+	if n == 0 {
+		return false
+	}
+	names := make([]byte, n)
+	if n, err = unix.Flistxattr(int(f.Fd()), names); err != nil {
+		return true
+	}
+	for _, attr := range strings.Split(strings.TrimRight(string(names[:n]), "\x00"), "\x00") {
+		if !systemXattr(attr) {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *dir) mkdir(name string, mode uint32) error {

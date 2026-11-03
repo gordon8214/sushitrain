@@ -26,3 +26,8 @@ func statMtime(st *unix.Stat_t) (int64, int64) {
 func cloneFile(src, dst string) error {
 	return unix.Clonefile(src, dst, unix.CLONE_NOFOLLOW)
 }
+
+// systemXattr reports whether the system labels every file with the attribute: none on macOS
+func systemXattr(string) bool {
+	return false
+}

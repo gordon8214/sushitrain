@@ -8,6 +8,7 @@ package gateway
 
 import (
 	"os"
+	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -41,4 +42,10 @@ func cloneFile(src, dst string) error {
 		return err
 	}
 	return out.Close()
+}
+
+// systemXattr reports whether the system labels every file with the attribute, so that a file which has it has
+// nothing of its own: security.* (an SELinux label, which policy gives a new file too)
+func systemXattr(name string) bool {
+	return strings.HasPrefix(name, "security.")
 }
