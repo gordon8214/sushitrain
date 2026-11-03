@@ -430,6 +430,8 @@ func serviceCommand(args []string) error {
 		if *publicPort >= 0 {
 			settings.PublicPort = *publicPort
 		}
+		// What it answers replaces what was shown, including what it leaves out (as the key while it's off)
+		st = gatewayadmin.ServiceStatus{}
 		if err := gateway.AdminCall(socket, "service.set", settings, &st); err != nil {
 			return err
 		}
@@ -444,8 +446,13 @@ func serviceCommand(args []string) error {
 		state = "on, but not running: " + st.Error
 	}
 	fmt.Println("Remote file service:", state)
-	if st.PublicHost != "" || st.PublicPort != 0 {
+	switch {
+	case st.PublicHost != "" && st.PublicPort != 0:
 		fmt.Printf("Clients connect to %s, port %d\n", printable(st.PublicHost), st.PublicPort)
+	case st.PublicHost != "":
+		fmt.Printf("Clients connect to %s\n", printable(st.PublicHost))
+	case st.PublicPort != 0:
+		fmt.Printf("Clients connect to port %d\n", st.PublicPort)
 	}
 	if st.SPKI != "" {
 		fmt.Printf("Certificate public key (SPKI SHA-256): %s\n", st.SPKI)
