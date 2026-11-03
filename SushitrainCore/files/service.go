@@ -178,10 +178,14 @@ func (s *Service) Start() error {
 	for _, f := range folders {
 		s.startLoop(f)
 	}
-	s.wg.Add(3)
+	s.wg.Add(4)
 	go func() {
 		defer s.wg.Done()
 		s.cache.run(s.ctx)
+	}()
+	go func() {
+		defer s.wg.Done()
+		s.runPruning(s.ctx)
 	}()
 	go func() {
 		defer s.wg.Done()
