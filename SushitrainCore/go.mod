@@ -18,8 +18,10 @@ replace google.golang.org/genproto v0.0.0-20220815135757-37a418bb8959 => google.
 replace github.com/syncthing/syncthing => github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261102064454-ee6b696b5cf6
 
 require (
+	github.com/godbus/dbus/v5 v5.2.4
 	github.com/gofrs/flock v0.13.1
 	github.com/google/uuid v1.6.0
+	github.com/hanwen/go-fuse/v2 v2.12.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/hooklift/iso9660 v1.0.0
 	github.com/mattn/go-sqlite3 v1.14.52
@@ -58,7 +60,6 @@ require (
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/go-licenses v1.6.0 // indirect
 	github.com/google/licenseclassifier v0.0.0-20210722185704-3043a050f148 // indirect
-	github.com/hanwen/go-fuse/v2 v2.12.1 // indirect
 	github.com/hooklift/assert v0.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/jackpal/gateway v1.2.0 // indirect

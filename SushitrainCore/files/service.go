@@ -48,6 +48,8 @@ type Config struct {
 	Hook func(point string) error
 	// How long a folder must be quiet before its changes are sent (DefaultSettleDelay when 0)
 	SettleDelay time.Duration
+	// The freedesktop thumbnail cache, filled from the gateways' thumbnails ($XDG_CACHE_HOME/thumbnails when empty)
+	ThumbnailDir string
 }
 
 // Notice is something to tell the person using the machine
@@ -62,10 +64,11 @@ const DefaultCacheBudget = 5 << 30
 
 // Service is a client of gateways with the folders added from them
 type Service struct {
-	cfg   Config
-	store *Store
-	log   *slog.Logger
-	cache *cache
+	cfg        Config
+	store      *Store
+	log        *slog.Logger
+	cache      *cache
+	thumbnails *thumbnailer
 
 	mutex        sync.Mutex
 	clients      map[string]*remoteclient.Client
@@ -117,6 +120,7 @@ func Open(cfg Config) (*Service, error) {
 		store.Close()
 		return nil, err
 	}
+	s.thumbnails = newThumbnailer(s)
 	if err := s.recover(); err != nil {
 		store.Close()
 		return nil, fmt.Errorf("recovering changes: %w", err)
@@ -172,10 +176,16 @@ func (s *Service) Start() error {
 	for _, f := range folders {
 		s.startLoop(f)
 	}
-	s.wg.Add(2)
+	s.wg.Add(3)
 	go func() {
 		defer s.wg.Done()
 		s.cache.run(s.ctx)
+	}()
+	go func() {
+		defer s.wg.Done()
+		if s.thumbnails != nil {
+			s.thumbnails.run(s.ctx)
+		}
 	}()
 	go func() {
 		defer s.wg.Done()

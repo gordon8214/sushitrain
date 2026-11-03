@@ -470,3 +470,8 @@ func (s *Service) SentCount() int {
 	_ = s.store.db.QueryRow(`SELECT COUNT(*) FROM outbox WHERE state IN ('committed', 'conflict')`).Scan(&n)
 	return n
 }
+
+// ItemPath is an item's slash-separated path below the mount's root
+func (s *Service) ItemPath(item int64) (string, error) {
+	return s.itemPath(item)
+}

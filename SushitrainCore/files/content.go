@@ -817,6 +817,8 @@ func (t *transfer) wait(ctx context.Context, off int64, n int) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
+			t.c.s.notify(Notice{Kind: "unreachable", Message: "A file can't be opened: its gateway can't be reached, " +
+				"or can't provide it now."})
 			return ErrContentUnavailable
 		}
 	}

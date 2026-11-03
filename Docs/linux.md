@@ -36,7 +36,7 @@ systemctl --user enable --now synctrain-files
 
 | What | Where | Option |
 | --- | --- | --- |
-| The index of the folders, changes not on the gateway yet, and the credentials of gateways | `~/.local/state/synctrain/files` | `--state` |
+| The index of the folders, and changes not on the gateway yet | `~/.local/state/synctrain/files` | `--state` |
 | Files fetched from gateways, and downloads in progress | `~/.cache/synctrain` | `--cache` |
 | The folders | `~/Synctrain` | `--mount` |
 | The admin socket the commands below use | `$XDG_RUNTIME_DIR/synctrain/files.sock` | `--socket` |
@@ -46,6 +46,10 @@ beyond that. Files kept on purpose (below) don't count. `--log-level debug` logs
 program behind each request it refuses.
 
 Only one daemon runs with a state directory: a second one refuses to start.
+
+The credentials of gateways are kept in the desktop's keyring (GNOME Keyring), and the daemon never asks to unlock
+it: while it is locked, it waits. Without a keyring (on a server, say), or with `--credentials file`, they are kept in
+`credentials.json` in the state directory, which only the user can read; they move into the keyring once there is one.
 
 ## Gateways and folders
 
@@ -118,19 +122,32 @@ directory named after the folder in `~/Sync` (or in your home folder if `~/Sync`
 
 ## GNOME
 
+Each folder is a bookmark in the sidebar of Nautilus and of the file chooser while it is here. Changes that can't be
+sent, and files that can't be opened because their gateway is out of reach, are notified (at most once in ten
+minutes). When Déjà Dup is installed, `~/Synctrain` is added to the folders it leaves out of backups.
+
 GNOME treats `~/Synctrain` as a local disk, and some of its programs read every file they see:
 
 - **Search (LocalSearch)** would read everything to index it. `~/Synctrain` has a `.trackerignore`, so it isn't
   indexed; searching in Nautilus there looks at names only.
-- **Thumbnails**: programs that make thumbnails or extract metadata may read files that are here already, but are
-  refused files that would have to be fetched, so browsing a folder of photos in Nautilus downloads nothing. Such files
-  have no thumbnail until they are here.
+- **Thumbnails** come from the gateway: when Nautilus lists a directory, the daemon puts the gateway's thumbnails of
+  its images (and, when the gateway has ffmpeg and pdftoppm, videos and PDFs) in GNOME's thumbnail cache. GNOME's own
+  thumbnailers and metadata extractors may read files that are here already, but are refused files that would have to
+  be fetched, so browsing a folder of photos downloads nothing.
+
+**The Nautilus extension** adds Keep on This Device, Stop Keeping on This Device and Previous Versions… to the menu of
+items in `~/Synctrain`, and a Synctrain column to the list view. It needs `nautilus-python`:
+
+```bash
+sudo dnf install nautilus-python
+mkdir -p ~/.local/share/nautilus-python/extensions
+cp Linux/nautilus/synctrain.py ~/.local/share/nautilus-python/extensions/
+nautilus -q
+```
 
 ## Limitations so far
 
-- Credentials are kept in a file only the owner can read (`credentials.json` in the state directory), not in GNOME's
-  keyring.
-- Symbolic links on the gateway are not shown. Previous versions can't be browsed here yet.
+- Symbolic links on the gateway are not shown.
 
 ## Development
 

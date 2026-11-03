@@ -66,7 +66,8 @@ func decode[T any](params json.RawMessage) (T, error) {
 	return v, json.Unmarshal(params, &v)
 }
 
-func registerAdmin(a *adminsock.Server, s *files.Service, mount string) {
+// registerAdmin registers the daemon's methods. foldersChanged is called after a folder is added or removed.
+func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersChanged func()) {
 	a.Register("status", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		gateways, err := s.Gateways()
 		if err != nil {
@@ -125,7 +126,11 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string) {
 		if err != nil {
 			return nil, err
 		}
-		return s.AddFolder(ctx, p.ServiceID, p.FolderID)
+		f, err := s.AddFolder(ctx, p.ServiceID, p.FolderID)
+		if err == nil {
+			foldersChanged()
+		}
+		return f, err
 	})
 	a.Register("folders.remove", func(ctx context.Context, params json.RawMessage) (any, error) {
 		p, err := decode[struct{ ID int64 }](params)
@@ -133,6 +138,9 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string) {
 			return nil, err
 		}
 		dest, moved, err := s.RemoveFolder(p.ID)
+		if err == nil {
+			foldersChanged()
+		}
 		return Removal{Leftovers: dest, Moved: moved}, err
 	})
 	a.Register("keep", func(ctx context.Context, params json.RawMessage) (any, error) {

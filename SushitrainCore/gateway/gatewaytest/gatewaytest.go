@@ -184,6 +184,7 @@ func (g *Gateway) Start() {
 		ServiceName:   "gateway.test",
 		Logger:        slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
 		SpoolQuota:    64 << 20,
+		Thumbnails:    gateway.NewCommandRenderer(),
 	}, g.Engine.Backend)
 	if err != nil {
 		g.t.Fatal(err)

@@ -158,7 +158,6 @@ func TestMount(t *testing.T) {
 		t.Fatalf("the whole file: %v", err)
 	}
 
-
 	// Changes on the gateway show without remounting, past what the kernel cached
 	if _, err := os.Stat(m.path("docs/sub/b.txt")); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("b.txt before it exists: %v", err)

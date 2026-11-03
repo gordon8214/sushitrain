@@ -36,6 +36,8 @@ func serve(args []string) error {
 	budget := fs.Int64("cache-budget", files.DefaultCacheBudget>>20, "MiB of content to keep, beyond kept files")
 	logLevel := fs.String("log-level", envOr("SYNCTRAIN_FILES_LOG_LEVEL", "info"), "debug, info, warn or error")
 	fuseDebug := fs.Bool("fuse-debug", false, "log every FUSE request")
+	credentials := fs.String("credentials", "auto", "where to keep gateways' credentials: keyring, file, or auto "+
+		"(the keyring when there is one)")
 	allowLocal := fs.Bool("allow-local-gateway", false, "allow pairing with a gateway on this machine (for tests)")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -66,13 +68,19 @@ func serve(args []string) error {
 	}
 	defer lock.Unlock()
 
+	store, err := credentialStore(*credentials, *stateDir, logger)
+	if err != nil {
+		return err
+	}
+	notices := newNotifier(logger)
 	service, err := files.Open(files.Config{
 		StateDir:          *stateDir,
 		CacheDir:          *cacheDir,
-		Credentials:       &files.FileCredentials{Path: filepath.Join(*stateDir, "credentials.json")},
+		Credentials:       store,
 		CacheBudget:       *budget << 20,
 		AllowLocalGateway: *allowLocal,
 		Logger:            logger,
+		Notify:            notices.notify,
 	})
 	if err != nil {
 		return err
@@ -90,8 +98,15 @@ func serve(args []string) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	foldersChanged := func() {
+		if folders, err := service.Folders(); err == nil {
+			syncBookmarks(*mount, folders, logger)
+		}
+	}
+	foldersChanged()
+	excludeFromBackups(*mount, logger)
 	admin := adminsock.NewServer()
-	registerAdmin(admin, service, *mount)
+	registerAdmin(admin, service, *mount, foldersChanged)
 	socket := cf.path()
 	if err := os.MkdirAll(filepath.Dir(socket), 0o700); err != nil {
 		unmount(m, *mount, logger)

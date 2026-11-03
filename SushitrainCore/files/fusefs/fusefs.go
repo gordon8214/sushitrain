@@ -50,7 +50,8 @@ const trackerIgnore = "Synctrain: files here are fetched from a gateway when rea
 // content that is here, but are refused content that would have to be fetched, so that browsing doesn't download
 // everything. Matched against the start of the name of the opening process's executable.
 var readerNames = []string{
-	"gdk-pixbuf-thumbnailer", "glycin-thumbnailer", "totem-video-thumbnailer", "ffmpegthumbnailer",
+	"gdk-pixbuf-thumbnailer", "glycin-thumbnailer", "gst-video-thumbnailer", "gst-audio-thumbnailer",
+	"totem-video-thumbnailer", "ffmpegthumbnailer",
 	"evince-thumbnailer", "papers-thumbnailer", "atril-thumbnailer", "xreader-thumbnailer", "gnome-thumbnail-font",
 	"gsf-office-thumbnailer", "gnome-epub-thumbnailer", "gnome-mobi-thumbnailer", "tumblerd", "localsearch-extractor",
 	"tracker-extract", "tracker-miner-fs", "localsearch-3",
@@ -432,6 +433,10 @@ func (d *dir) Readdir(ctx context.Context) (gofs.DirStream, syscall.Errno) {
 	children, err := d.m.service.Children(d.item)
 	if err != nil {
 		return nil, errno(err)
+	}
+	// What is listed is about to be shown: its thumbnails come from the gateway
+	if rel, err := d.m.service.ItemPath(d.item); err == nil {
+		d.m.service.FillThumbnails(filepath.Join(d.m.dir, filepath.FromSlash(rel)), children)
 	}
 	return d.m.readdir(children), 0
 }

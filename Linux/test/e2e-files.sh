@@ -35,7 +35,13 @@ cat > home/config.xml <<'XML'
 XML
 echo "hello from the gateway" > docs/readme.txt
 head -c 20000000 /dev/urandom > docs/big.bin
-for i in 1 2 3; do head -c 300000 /dev/urandom > "docs/photos/img$i.jpg"; done
+python3 -c '
+import sys, random
+from PIL import Image
+for i in (1, 2, 3):
+    img = Image.new("RGB", (1600, 1200), (random.randrange(256), random.randrange(256), 90))
+    img.save("docs/photos/img%d.jpg" % i, quality=90)
+' || { echo "making photos needs python3-pillow"; exit 1; }
 
 STNODEFAULTFOLDER=1 "$BIN/synctrain-gateway" serve --home home --listen 127.0.0.1:20921 --public-host 127.0.0.1 \
 	--socket gw.sock > gateway.log 2>&1 &
@@ -45,8 +51,9 @@ for i in $(seq 1 60); do [ -S gw.sock ] && break; sleep 0.5; done
 sleep 3
 "$BIN/synctrain-gateway" exports --socket gw.sock --add docs --write || exit 1
 
-"$BIN/synctrain-files" serve --state files-state --cache files-cache --mount mnt --socket files.sock \
-	--allow-local-gateway --log-level debug > files.log 2>&1 &
+# A scratch thumbnail cache and file credentials: the session's own are left alone
+XDG_CACHE_HOME="$ROOT/xdg-cache" "$BIN/synctrain-files" serve --state files-state --cache files-cache --mount mnt \
+	--socket files.sock --credentials file --allow-local-gateway --log-level debug > files.log 2>&1 &
 FILES_PID=$!
 for i in $(seq 1 40); do [ -S files.sock ] && break; sleep 0.5; done
 [ -S files.sock ] || { echo "files daemon did not start"; cat files.log; exit 1; }
@@ -78,6 +85,20 @@ getfattr -n user.synctrain.state mnt/Documents/big.bin
 cmp mnt/Documents/big.bin docs/big.bin && echo "whole file matches"
 sleep 1
 getfattr -n user.synctrain.state mnt/Documents/big.bin
+echo "== thumbnails"
+# GNOME's image thumbnailer is refused a file that would have to be fetched
+glycin-thumbnailer --input "file://$ROOT/mnt/Documents/photos/img1.jpg" --output "$ROOT/thumb.png" --size 256 \
+	>/dev/null 2>&1
+grep -q 'Refused to fetch a file for a program that reads everything.*glycin-thumbnailer' files.log &&
+	echo "the thumbnailer was refused"
+echo "img1.jpg is $(getfattr --only-values -n user.synctrain.state mnt/Documents/photos/img1.jpg)"
+# Listing the directory puts the gateway's thumbnails in the cache
+ls mnt/Documents/photos > /dev/null
+URI_MD5=$(python3 -c 'import hashlib, sys; print(hashlib.md5(sys.argv[1].encode()).hexdigest())' \
+	"file://$ROOT/mnt/Documents/photos/img2.jpg")
+for i in $(seq 1 40); do [ -e "xdg-cache/thumbnails/large/$URI_MD5.png" ] && break; sleep 0.25; done
+ls xdg-cache/thumbnails/*/"$URI_MD5.png" 2>&1
+echo "img2.jpg is $(getfattr --only-values -n user.synctrain.state mnt/Documents/photos/img2.jpg)"
 echo "== keep"
 setfattr -n user.synctrain.keep -v 1 mnt/Documents/photos
 for i in $(seq 1 40); do [ "$(getfattr --only-values -n user.synctrain.state mnt/Documents/photos/img3.jpg 2>/dev/null)" = kept ] && break; sleep 0.5; done
