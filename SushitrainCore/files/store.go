@@ -22,7 +22,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 var errUnsupportedSchema = errors.New("the index was created by a newer version")
 
@@ -203,12 +203,15 @@ var migrations = [][]string{
 	{keepIndex},
 	{`ALTER TABLE outbox ADD COLUMN awaited_generation INTEGER`,
 		`ALTER TABLE outbox ADD COLUMN resends INTEGER NOT NULL DEFAULT 0`},
+	{`INSERT OR IGNORE INTO meta (key, value) SELECT '` + metaNextFolder + `', IFNULL(MAX(id), 0) + 1 FROM folders`},
 }
 
 const (
 	metaClientID = "client_id"
 	metaNextNode = "next_node"
 	metaNextMark = "next_mark"
+	// Folder IDs aren't used again, unlike SQLite's row IDs
+	metaNextFolder = "next_folder"
 )
 
 // rootNode is the FUSE inode number of the mount's root; items' nodes are allocated after it
@@ -273,9 +276,10 @@ func (s *Store) migrate() error {
 		}
 		for key, value := range map[string]string{
 			// The stable client identity, kept across re-pairing and rebuilds
-			metaClientID: uuid.NewString(),
-			metaNextNode: strconv.Itoa(rootNode + 1),
-			metaNextMark: "1",
+			metaClientID:   uuid.NewString(),
+			metaNextNode:   strconv.Itoa(rootNode + 1),
+			metaNextMark:   "1",
+			metaNextFolder: "1",
 		} {
 			if err := setMeta(tx, key, value); err != nil {
 				return err

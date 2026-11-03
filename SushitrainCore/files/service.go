@@ -72,7 +72,7 @@ type Service struct {
 
 	mutex        sync.Mutex
 	clients      map[string]*remoteclient.Client
-	loops        map[int64]context.CancelFunc
+	loops        map[int64]*folderLoop
 	invalidator  func(Changes)
 	work         map[uint64]*workingCopy
 	settleTimers map[int64]*time.Timer
@@ -115,7 +115,7 @@ func Open(cfg Config) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{cfg: cfg, store: store, log: cfg.Logger, clients: map[string]*remoteclient.Client{},
-		loops: map[int64]context.CancelFunc{}, work: map[uint64]*workingCopy{}, settleTimers: map[int64]*time.Timer{},
+		loops: map[int64]*folderLoop{}, work: map[uint64]*workingCopy{}, settleTimers: map[int64]*time.Timer{},
 		busySince: map[int64]time.Time{}, heldSince: map[int64]time.Time{}, outboxWake: make(chan struct{}, 1)}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	if s.cache, err = openCache(s); err != nil {
@@ -551,13 +551,13 @@ func (s *Service) AddFolder(ctx context.Context, serviceID, remoteID string) (Fo
 		if err != nil {
 			return err
 		}
-		res, err = tx.Exec(`INSERT INTO folders (service_id, remote_id, label, dir_name, root_item, can_read, can_write,
-			added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, serviceID, remoteID, rf.Label, dirName, root, rf.Permissions.Read,
-			rf.Permissions.Write, nowUnix())
-		if err != nil {
+		// Never the ID of a removed folder, so that nothing left of one can be taken for this one's
+		if id, err = allocate(tx, metaNextFolder); err != nil {
 			return err
 		}
-		if id, err = res.LastInsertId(); err != nil {
+		if _, err := tx.Exec(`INSERT INTO folders (id, service_id, remote_id, label, dir_name, root_item, can_read,
+			can_write, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, serviceID, remoteID, rf.Label, dirName, root,
+			rf.Permissions.Read, rf.Permissions.Write, nowUnix()); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`UPDATE items SET folder = ? WHERE id = ?`, id, root); err != nil {
@@ -724,6 +724,12 @@ func (s *Service) Refresh(ctx context.Context, id int64) error {
 	return errors.New("no such folder")
 }
 
+// folderLoop is the goroutine that keeps a folder up to date
+type folderLoop struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
 func (s *Service) startLoop(f folderRef) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -731,21 +737,31 @@ func (s *Service) startLoop(f folderRef) {
 		return
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
-	s.loops[f.id] = cancel
+	loop := &folderLoop{cancel: cancel, done: make(chan struct{})}
+	s.loops[f.id] = loop
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		defer close(loop.done)
 		s.followFolder(ctx, f)
 	}()
 }
 
+// stopLoop stops a folder's loop and waits until it has, so that nothing it was doing is written afterwards (into a
+// folder being removed, say)
 func (s *Service) stopLoop(id int64) {
 	s.mutex.Lock()
-	cancel, ok := s.loops[id]
+	loop, ok := s.loops[id]
 	delete(s.loops, id)
 	s.mutex.Unlock()
-	if ok {
-		cancel()
+	if !ok {
+		return
+	}
+	loop.cancel()
+	select {
+	case <-loop.done:
+	case <-time.After(time.Minute):
+		s.log.Warn("A folder's updates didn't stop", "folder", id)
 	}
 }
 

@@ -73,8 +73,8 @@ const outboxColumns = `id, op_id, folder, item, kind, item_kind, state, base_rev
 func scanOutbox(row interface{ Scan(...any) error }) (*outboxRow, error) {
 	var o outboxRow
 	err := row.Scan(&o.id, &o.opID, &o.folder, &o.item, &o.kind, &o.itemKind, &o.state, &o.baseRev, &o.baseContent,
-		&o.subtree, &o.awaited, &o.resends, &o.targetPar, &o.targetName, &o.staged, &o.digest, &o.size, &o.modNs, &o.uploadID, &o.payload,
-		&o.serverOp, &o.generation, &o.attempts)
+		&o.subtree, &o.awaited, &o.resends, &o.targetPar, &o.targetName, &o.staged, &o.digest, &o.size, &o.modNs,
+		&o.uploadID, &o.payload, &o.serverOp, &o.generation, &o.attempts)
 	return &o, err
 }
 

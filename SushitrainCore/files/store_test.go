@@ -7,8 +7,10 @@
 package files
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // An index made by an earlier version is brought up to date when it is opened
@@ -22,6 +24,7 @@ func TestMigratingAnIndex(t *testing.T) {
 	for _, statement := range []string{
 		`ALTER TABLE outbox DROP COLUMN awaited_generation`,
 		`ALTER TABLE outbox DROP COLUMN resends`,
+		`DELETE FROM meta WHERE key = '` + metaNextFolder + `'`,
 		`PRAGMA user_version = 2`,
 	} {
 		if _, err := s.db.Exec(statement); err != nil {
@@ -43,4 +46,32 @@ func TestMigratingAnIndex(t *testing.T) {
 		t.Fatalf("the outbox wasn't brought up to date: %v", err)
 	}
 	rows.Close()
+	if next, err := metaValue(s.db, metaNextFolder); err != nil || next != "1" {
+		t.Fatalf("the next folder ID is %q: %v", next, err)
+	}
+}
+
+// A folder added after one was removed doesn't get its ID, which something left of the removed one could refer to
+func TestFolderIDsAreNotUsedAgain(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	g := writableGateway(t, map[string]string{"doc.txt": "doc"})
+	ts := newTestService(t, g, 0)
+	removed := ts.folder.ID
+	if _, _, err := ts.RemoveFolder(removed); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	added, err := ts.AddFolder(ctx, ts.folder.ServiceID, g.Engine.FolderID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added.ID == removed {
+		t.Fatalf("the new folder got the removed one's ID %d", removed)
+	}
+	ts.folder = added
+	ts.refresh()
+	if got := ts.readPath("docs/doc.txt"); got != "doc" {
+		t.Fatalf("doc.txt reads %q", got)
+	}
 }
