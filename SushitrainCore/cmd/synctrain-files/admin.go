@@ -10,44 +10,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"t-shaped.nl/sushitrain/v2/adminsock"
 	"t-shaped.nl/sushitrain/v2/files"
 )
-
-// Status is what the status command shows
-type Status struct {
-	Version  string          `json:"version"`
-	Mount    string          `json:"mount"`
-	Gateways []files.Gateway `json:"gateways"`
-	Folders  []files.Folder  `json:"folders"`
-}
-
-// RemoteFolder is a folder a gateway lets this client access, and whether it is here
-type RemoteFolder struct {
-	ID       string `json:"id"`
-	Label    string `json:"label"`
-	Write    bool   `json:"write"`
-	Added    bool   `json:"added"`
-	DirName  string `json:"dirName,omitempty"`
-	Selected bool   `json:"selective,omitempty"`
-}
-
-// Removal is where files that were only here went when their folder was removed
-type Removal struct {
-	Leftovers string `json:"leftovers,omitempty"`
-	Moved     int    `json:"moved"`
-}
-
-// ItemState is the state of an item in the mount
-type ItemState struct {
-	Path  string `json:"path"`
-	State string `json:"state"`
-	Keep  bool   `json:"keep"`
-}
 
 // mountPath turns a path the CLI was given (absolute, in the mount) into one relative to the mount
 func mountPath(mount, path string) (string, error) {
@@ -77,7 +48,7 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 		if err != nil {
 			return nil, err
 		}
-		return Status{Version: versionString(), Mount: mount, Gateways: gateways, Folders: folders}, nil
+		return files.Status{Version: versionString(), Mount: mount, Gateways: gateways, Folders: folders}, nil
 	})
 	a.Register("pair", func(ctx context.Context, params json.RawMessage) (any, error) {
 		p, err := decode[struct{ Link string }](params)
@@ -109,9 +80,9 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 		if err != nil {
 			return nil, err
 		}
-		var result []RemoteFolder
+		var result []files.RemoteFolder
 		for _, f := range remote {
-			rf := RemoteFolder{ID: f.ID, Label: f.Label, Write: f.Permissions.Write, Selected: f.Selective}
+			rf := files.RemoteFolder{ID: f.ID, Label: f.Label, Write: f.Permissions.Write, Selective: f.Selective}
 			for _, h := range here {
 				if h.ServiceID == p.ServiceID && h.RemoteID == f.ID {
 					rf.Added, rf.DirName = true, h.DirName
@@ -141,7 +112,7 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 		if err == nil {
 			foldersChanged()
 		}
-		return Removal{Leftovers: dest, Moved: moved}, err
+		return files.Removal{Leftovers: dest, Moved: moved}, err
 	})
 	a.Register("keep", func(ctx context.Context, params json.RawMessage) (any, error) {
 		p, err := decode[struct {
@@ -204,6 +175,66 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 		defer cancel()
 		return nil, s.Wait(ctx, e.Item)
 	})
+	// item resolves the path a request names, in the mount
+	item := func(params json.RawMessage) (files.Entry, error) {
+		p, err := decode[struct{ Path string }](params)
+		if err != nil {
+			return files.Entry{}, err
+		}
+		rel, err := mountPath(mount, p.Path)
+		if err != nil {
+			return files.Entry{}, err
+		}
+		return s.Resolve(rel)
+	}
+	version := func(params json.RawMessage) (files.Entry, string, error) {
+		e, err := item(params)
+		if err != nil {
+			return e, "", err
+		}
+		p, err := decode[struct{ Version string }](params)
+		return e, p.Version, err
+	}
+	a.Register("versions.list", func(ctx context.Context, params json.RawMessage) (any, error) {
+		e, err := item(params)
+		if err != nil {
+			return nil, err
+		}
+		return s.Versions(ctx, e.Item)
+	})
+	a.Register("versions.preview", func(ctx context.Context, params json.RawMessage) (any, error) {
+		e, id, err := version(params)
+		if err != nil {
+			return nil, err
+		}
+		path, err := s.VersionToFile(ctx, e.Item, id, previewDir())
+		return map[string]string{"file": path}, err
+	})
+	a.Register("versions.restore", func(ctx context.Context, params json.RawMessage) (any, error) {
+		e, id, err := version(params)
+		if err != nil {
+			return nil, err
+		}
+		return nil, s.RestoreVersion(ctx, e.Item, id)
+	})
+	a.Register("versions.copy", func(ctx context.Context, params json.RawMessage) (any, error) {
+		e, id, err := version(params)
+		if err != nil {
+			return nil, err
+		}
+		name, err := s.CopyVersion(ctx, e.Item, id)
+		return map[string]string{"name": name}, err
+	})
+	a.Register("storage", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return s.Storage()
+	})
+	a.Register("storage.budget", func(ctx context.Context, params json.RawMessage) (any, error) {
+		p, err := decode[struct{ Bytes int64 }](params)
+		if err != nil {
+			return nil, err
+		}
+		return nil, s.SetCacheBudget(p.Bytes)
+	})
 	a.Register("state", func(ctx context.Context, params json.RawMessage) (any, error) {
 		p, err := decode[struct{ Path string }](params)
 		if err != nil {
@@ -218,6 +249,14 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 			return nil, err
 		}
 		state, err := s.State(e)
-		return ItemState{Path: p.Path, State: state, Keep: e.Keep}, err
+		return files.ItemState{Path: p.Path, State: state, Keep: e.Keep}, err
 	})
+}
+
+// previewDir is where versions are downloaded for previewing: the runtime directory, which goes at logout
+func previewDir() string {
+	if dir := os.Getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(dir) {
+		return filepath.Join(dir, "synctrain", "versions")
+	}
+	return filepath.Join(os.TempDir(), "synctrain-versions-"+strconv.Itoa(os.Getuid()))
 }

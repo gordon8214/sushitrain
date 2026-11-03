@@ -40,7 +40,7 @@ func statusCommand(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	var st Status
+	var st files.Status
 	if err := adminsock.Call(cf.path(), "status", nil, &st); err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func gatewaysCommand(args []string) error {
 	if *forget != "" {
 		return adminsock.Call(cf.path(), "gateways.forget", map[string]string{"serviceID": *forget}, nil)
 	}
-	var st Status
+	var st files.Status
 	if err := adminsock.Call(cf.path(), "status", nil, &st); err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func foldersCommand(args []string) error {
 		if err != nil {
 			return errors.New("--remove takes a folder's ID, as listed")
 		}
-		var removal Removal
+		var removal files.Removal
 		if err := adminsock.Call(cf.path(), "folders.remove", map[string]int64{"id": id}, &removal); err != nil {
 			return err
 		}
@@ -167,7 +167,7 @@ func foldersCommand(args []string) error {
 		fmt.Printf("Added %s as %s\n", f.Label, f.DirName)
 		return nil
 	case *gateway != "":
-		var remote []RemoteFolder
+		var remote []files.RemoteFolder
 		if err := adminsock.Call(cf.path(), "folders.remote", map[string]string{"serviceID": *gateway},
 			&remote); err != nil {
 			return err
@@ -186,7 +186,7 @@ func foldersCommand(args []string) error {
 		})
 		return nil
 	}
-	var st Status
+	var st files.Status
 	if err := adminsock.Call(cf.path(), "status", nil, &st); err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func stateCommand(args []string) error {
 	}
 	table("STATE\tPATH", func(w *tabwriter.Writer) {
 		for _, p := range paths {
-			var st ItemState
+			var st files.ItemState
 			if err := adminsock.Call(cf.path(), "state", map[string]string{"path": p}, &st); err != nil {
 				fmt.Fprintf(w, "error\t%s: %v\n", p, err)
 				continue

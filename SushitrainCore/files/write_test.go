@@ -549,3 +549,45 @@ func TestRemovingAFolderWithChanges(t *testing.T) {
 		t.Fatalf("the lock file moved out: %q, %v", data, err)
 	}
 }
+
+func TestAccessChangesAreNoticed(t *testing.T) {
+	g := writableGateway(t, map[string]string{"a.txt": "a"})
+	ts := newTestService(t, g, 0)
+	clients, err := g.Clients()
+	if err != nil || len(clients) != 1 {
+		t.Fatalf("%+v %v", clients, err)
+	}
+	if err := g.SetPermission(clients[0].ClientID, "docs", "read"); err != nil {
+		t.Fatal(err)
+	}
+	ts.mutex.Lock()
+	ts.changes = nil
+	ts.mutex.Unlock()
+
+	client, err := ts.client(ts.folder.ServiceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := ts.gatewayRef(ts.folder.ServiceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.checkCapabilities(context.Background(), ref, client); err != nil {
+		t.Fatal(err)
+	}
+	if e := ts.mustLookup("docs/a.txt"); e.Writable {
+		t.Fatal("a file of a folder made read-only is writable")
+	}
+	if _, err := ts.Create(ts.dir("docs"), "new.txt", false); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("created a file in a folder made read-only: %v", err)
+	}
+	ts.mutex.Lock()
+	attrs := 0
+	for _, c := range ts.changes {
+		attrs += len(c.Attrs)
+	}
+	ts.mutex.Unlock()
+	if attrs < 2 {
+		t.Fatalf("the kernel wasn't told that %d nodes changed", attrs)
+	}
+}

@@ -334,7 +334,7 @@ func (s *Service) checkCapabilities(ctx context.Context, g gatewayRef, client *r
 		pins = []string{pins[0], caps.Certificate.Next.SPKI}
 	}
 	features := joinWords(caps.Features)
-	return s.store.tx(ctx, func(tx *sql.Tx) error {
+	err = s.store.tx(ctx, func(tx *sql.Tx) error {
 		if g.generation != 0 && g.generation != caps.AuthorityGeneration {
 			s.log.Warn("The gateway's database was reset or restored: taking fresh listings", "gateway", caps.ServiceName)
 			if _, err := tx.Exec(`DELETE FROM cursors WHERE folder IN (SELECT id FROM folders WHERE service_id = ?)`,
@@ -356,4 +356,76 @@ func (s *Service) checkCapabilities(ctx context.Context, g gatewayRef, client *r
 			WHERE service_id = ?`, caps.ServiceName, caps.AuthorityGeneration, features, joinWords(pins), g.serviceID)
 		return err
 	})
+	if err != nil {
+		return err
+	}
+	return s.refreshAccess(ctx, g.serviceID, client)
+}
+
+// refreshAccess records what each folder added from a gateway lets this machine do now, as the gateway can change a
+// client's access at any time (or approve pairing again with other grants). The kernel drops the modes it has of
+// the files of a folder whose access changed.
+func (s *Service) refreshAccess(ctx context.Context, serviceID string, client *remoteclient.Client) error {
+	remote, err := client.Folders(ctx)
+	if err != nil {
+		return err
+	}
+	access := map[string]remoteapi.FolderPermissions{}
+	for _, f := range remote {
+		access[f.ID] = f.Permissions
+	}
+	var changes Changes
+	err = s.store.tx(ctx, func(tx *sql.Tx) error {
+		changes = Changes{}
+		rows, err := tx.Query(`SELECT id, remote_id, can_read, can_write FROM folders WHERE service_id = ?`, serviceID)
+		if err != nil {
+			return err
+		}
+		changed := map[int64]remoteapi.FolderPermissions{}
+		for rows.Next() {
+			var id int64
+			var remoteID string
+			var had remoteapi.FolderPermissions
+			if err := rows.Scan(&id, &remoteID, &had.Read, &had.Write); err != nil {
+				rows.Close()
+				return err
+			}
+			if now := access[remoteID]; now != had {
+				changed[id] = now
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for id, now := range changed {
+			s.log.Info("The gateway changed this machine's access to a folder", "folder", id, "read", now.Read,
+				"write", now.Write)
+			if _, err := tx.Exec(`UPDATE folders SET can_read = ?, can_write = ? WHERE id = ?`, now.Read, now.Write,
+				id); err != nil {
+				return err
+			}
+			nodes, err := tx.Query(`SELECT node FROM items WHERE folder = ? AND node != 0`, id)
+			if err != nil {
+				return err
+			}
+			for nodes.Next() {
+				var node uint64
+				if err := nodes.Scan(&node); err != nil {
+					nodes.Close()
+					return err
+				}
+				changes.Attrs = append(changes.Attrs, node)
+			}
+			nodes.Close()
+			if err := nodes.Err(); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err == nil {
+		s.changed(changes)
+	}
+	return err
 }

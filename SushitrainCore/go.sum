@@ -678,6 +678,10 @@ github.com/d4l3k/messagediff v1.2.1 h1:ZcAIMYsUg0EAp9X+tt8/enBE/Q8Yd5kzPynLyKptt
 github.com/d4l3k/messagediff v1.2.1/go.mod h1:Oozbb1TVXFac9FtSIxHBMnBCq2qeH/2KkEQxENCrlLo=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/diamondburned/gotk4-adwaita/pkg v0.0.0-20261031204147-41c057c79b39 h1:HHjqiQdenUolB652OV8akZYxMKIaADJijVs7Zt3q/dA=
+github.com/diamondburned/gotk4-adwaita/pkg v0.0.0-20261031204147-41c057c79b39/go.mod h1:Nl+CqqQj2EoLnieVZQyUtbRs1jLpbIB7qY/pCZBFiEw=
+github.com/diamondburned/gotk4/pkg v0.4.2-0.20261031093702-169e0f82bca8 h1:PAjHfU8YbA6xP24O86RG5lAiZ3F8lStkQddWn7glBgU=
+github.com/diamondburned/gotk4/pkg v0.4.2-0.20261031093702-169e0f82bca8/go.mod h1:BAEEDXtj5srQ1S2++5HX2K1s9c6CtuWSa60dAywrkRM=
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=

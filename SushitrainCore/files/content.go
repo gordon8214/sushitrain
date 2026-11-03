@@ -1002,7 +1002,7 @@ func (c *cache) evict() error {
 	}
 	sort.SliceStable(entries, func(i, j int) bool { return !entries[i].shown && entries[j].shown })
 	for _, e := range entries {
-		if total <= c.s.cfg.CacheBudget && e.shown {
+		if total <= c.s.cacheBudget() && e.shown {
 			break
 		}
 		removed, err := c.remove(e.contentID)
