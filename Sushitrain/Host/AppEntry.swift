@@ -17,6 +17,9 @@
 			}
 			// Before anything reads them
 			TestRun.redirectPreferences()
+			#if SYNCTRAIN_BENCHMARK
+				EngineBenchmark.prepare()
+			#endif
 			CrashWatch.shared.start()
 
 			AppMode.current = AppMode.resolve()

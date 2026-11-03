@@ -388,6 +388,10 @@ struct RouteView: View {
 			if let folder = self.appState.client.folder(withID: folderID) {
 				if folder.exists() {
 					BrowserView(folder: folder, prefix: prefix ?? "", userSettings: appState.userSettings)
+						#if SYNCTRAIN_BENCHMARK
+							.onAppear { EngineBenchmark.folderIsVisible = true }
+							.onDisappear { EngineBenchmark.folderIsVisible = false }
+						#endif
 				}
 				else {
 					ContentUnavailableView(

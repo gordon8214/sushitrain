@@ -45,7 +45,9 @@ ENGINE_TAGS = noupgrade
 MACOS_VERSION = 27.0
 
 build/SushitrainCore.xcframework: src/*.go gateway/*.go sthome/*.go Makefile go.mod go.sum notices.html
-	go tool gomobile bind -target macos -macosversion $(MACOS_VERSION) -tags $(ENGINE_TAGS) -trimpath \
+	# gomobile replaces CGO_CFLAGS, dropping Go's default -O2. CPPFLAGS reaches every C/C++ compile unchanged,
+	# so restore optimization here, particularly for SQLite's amalgamation.
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS) -O2" go tool gomobile bind -target macos -macosversion $(MACOS_VERSION) -tags $(ENGINE_TAGS) -trimpath \
 		-ldflags "$(ENGINE_LDFLAGS)" -o ./build/SushitrainCore.xcframework ./src
 
 install: build

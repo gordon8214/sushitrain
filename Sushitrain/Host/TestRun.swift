@@ -8,9 +8,8 @@
 	import ObjectiveC
 	import SynctrainHostKit
 
-	/// A debug run with `SYNCTRAIN_TEST_ROOT` (EngineLocations.testRoot): the app's preferences are kept in the scratch
-	/// directory instead of the real ones, and nothing is changed in other apps' settings, so that the real app is as it
-	/// was afterwards
+	/// A debug or dedicated benchmark run with `SYNCTRAIN_TEST_ROOT` (EngineLocations.testRoot): preferences stay in
+	/// the scratch directory, and nothing changes in other apps' settings, so the real app stays as it was.
 	enum TestRun {
 		static var isActive: Bool {
 			EngineLocations.testRoot != nil
@@ -48,7 +47,7 @@
 		/// the many places that use it, so that it also covers `@AppStorage`, AppKit and what comes later. A preference left
 		/// behind in the real ones can change what the real app does: `lastRunBuild` hides the offer to take over Syncthing.
 		static func redirectPreferences() {
-			#if DEBUG
+			#if DEBUG || SYNCTRAIN_BENCHMARK
 				guard let root = EngineLocations.testRoot, let bundleIdentifier = Bundle.main.bundleIdentifier else {
 					return
 				}

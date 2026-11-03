@@ -1216,9 +1216,8 @@ struct EngineMenuState: Equatable {
 			}
 		#elseif os(macOS)
 			let newBadge = numLongTimeNoSee > 0 ? String(numLongTimeNoSee) : ""
-			if NSApplication.shared.dockTile.badgeLabel != newBadge {
-				Log.info("Set dock tile badgeLabel \(numLongTimeNoSee)")
-			}
+			guard (NSApplication.shared.dockTile.badgeLabel ?? "") != newBadge else { return }
+			Log.info("Set dock tile badgeLabel \(numLongTimeNoSee)")
 			NSApplication.shared.dockTile.badgeLabel = newBadge
 			NSApplication.shared.dockTile.display()
 		#endif
@@ -1423,7 +1422,8 @@ extension SushitrainDelegate: SushitrainClientDelegateProtocol {
 	func onEvent(_ event: String?) {
 		let appState = self.appState
 		DispatchQueue.main.async {
-			appState.update()
+			// Status, badges and views share the existing refresh throttle. A file burst must not query the engine
+			// and redraw the Dock once per event before that throttle has a chance to coalesce it.
 			appState.changePublisher.send()
 		}
 	}

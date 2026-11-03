@@ -909,3 +909,45 @@ temporary keychain and folder, which it removes after the build.
 
    Both should print `accepted` and `source=Notarized Developer ID`.
 4. Publish the draft.
+
+## Optimized isolated performance runs
+
+The Go framework's normal build explicitly restores `-O2` through
+`CGO_CPPFLAGS`. Gomobile supplies its own `CGO_CFLAGS` for the Apple SDK and
+architecture, replacing Go's default optimization flags. Without this override,
+the embedded SQLite amalgamation is compiled without optimization, even in a
+Release app. `CGO_CPPFLAGS` reaches both C and C++ compilation and preserves the
+SDK flags that gomobile requires.
+
+Status and badge queries use the existing half-second refresh throttle, and the
+Dock redraws only when its badge changes.
+
+The sibling `syncthing-tools/scripts/build_benchmark.sh` builds a dedicated
+Release app with `SWIFT_ACTIVE_COMPILATION_CONDITIONS=SYNCTRAIN_BENCHMARK` and
+`SWIFT_OPTIMIZATION_LEVEL=-O`. This is separate from a normal release and from
+Debug testing. The flag enables `SYNCTRAIN_TEST_ROOT`, preference redirection,
+window-state controls and the main-run-loop latency probe. The root must contain
+`.synctrain-benchmark`; a benchmark build fails closed without it. File Provider
+and crash relaunch stay disabled. Normal Release builds ignore the test root.
+
+Use the tools repository's harness rather than launching this build against a
+real configuration. It generates identical disposable configurations for the
+standalone and embedded engines, controls scanning priority and window state,
+records engine provenance, and applies workload deadlines. Its README documents
+execution, suspension/restoration of real engines, the detached job lifecycle,
+raw evidence and the focused one-hour comparison for tools issue #47.
+The build script restores the prior production Go framework after copying the
+benchmark app, preserving the version used by subsequent normal builds.
+
+Qualification on November 2, 2026 compared the retained optimized Release code
+with Syncthing.app on the same M4 Max, engine commit and settings. Scan and sync
+medians were comparable; small-file pull used about 45% less CPU. The measured
+bounded app costs were about 0.32 seconds of startup time, 0.66 CPU-seconds per
+startup, and typically 35-41 MiB of additional process RSS. The automated startup
+CPU flag remains documented, along with the larger transient memory peaks.
+Both engines ran at nice 9, which applies to this whole app too; the main-run-loop
+probe's largest observed scheduling delay during hashing was 17 ms. See the
+sibling tools README's issue #47 section for the qualified counts, unchanged-code
+send evidence, scope and explicit acceptance reasons; this also records the
+measured niceness/UI impact relevant to issue #22. Normal app builds still need
+`make core` before building or archiving, as described above.

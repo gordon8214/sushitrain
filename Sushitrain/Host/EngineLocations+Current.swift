@@ -10,8 +10,8 @@ extension EngineLocations {
 	/// This app's engine locations.
 	///
 	/// In the App Sandbox on macOS they stay where earlier versions kept them in the container, until the app moves out
-	/// of it. In debug builds on macOS, `SYNCTRAIN_TEST_ROOT` puts them under a scratch directory, which then is the
-	/// home directory, so a manual test run leaves the real ones alone (the engine expands `~` with `HOME`, so set that
+	/// of it. In debug or dedicated benchmark builds on macOS, `SYNCTRAIN_TEST_ROOT` puts them under a scratch
+	/// home directory, so a test run leaves the real ones alone (the engine expands `~` with `HOME`, so set that
 	/// too).
 	static let current: EngineLocations = {
 		#if os(macOS)
@@ -32,9 +32,17 @@ extension EngineLocations {
 		#endif
 	}()
 
-	/// The scratch directory `SYNCTRAIN_TEST_ROOT` names, in debug builds on macOS
+	/// The scratch directory `SYNCTRAIN_TEST_ROOT` names, in debug or dedicated benchmark builds on macOS
 	static var testRoot: URL? {
-		#if DEBUG && os(macOS)
+		#if (DEBUG || SYNCTRAIN_BENCHMARK) && os(macOS)
+			#if SYNCTRAIN_BENCHMARK
+				let environment = ProcessInfo.processInfo.environment
+				guard let path = environment["SYNCTRAIN_TEST_ROOT"], path.hasPrefix("/"),
+					FileManager.default.fileExists(atPath: path + "/.synctrain-benchmark")
+				else {
+					fatalError("A benchmark build requires a disposable SYNCTRAIN_TEST_ROOT with its harness marker")
+				}
+			#endif
 			if let root = ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_ROOT"], !root.isEmpty {
 				return URL(fileURLWithPath: root, isDirectory: true)
 			}
