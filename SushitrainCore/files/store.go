@@ -22,7 +22,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 var errUnsupportedSchema = errors.New("the index was created by a newer version")
 
@@ -121,7 +121,8 @@ var schema = []string{
 	// Operations to send, in order per folder. payload is the request exactly as sent, stored before it is sent the
 	// first time (one operation ID per intent, replayed unchanged). staged is the immutable copy of the content to
 	// upload, in the state directory. A row whose base_revision is empty takes it from the result of the operation
-	// before it on the same item.
+	// before it on the same item. awaited_generation is the subtree generation a directory's removal the gateway found
+	// out of date waits for the change feed to reach, before it is checked and sent again (resends times so far).
 	`CREATE TABLE outbox (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		op_id TEXT NOT NULL UNIQUE,
@@ -133,6 +134,8 @@ var schema = []string{
 		base_revision TEXT NOT NULL DEFAULT '',
 		base_content_id TEXT NOT NULL DEFAULT '',
 		subtree_generation INTEGER,
+		awaited_generation INTEGER,
+		resends INTEGER NOT NULL DEFAULT 0,
 		target_parent INTEGER,
 		target_name TEXT NOT NULL DEFAULT '',
 		staged TEXT,
@@ -197,6 +200,8 @@ const keepIndex = `CREATE INDEX items_keep ON items(id) WHERE keep = 1 AND delet
 // migrations bring an index made with an earlier schema up to date: migrations[v-1] goes from version v to v+1
 var migrations = [][]string{
 	{keepIndex},
+	{`ALTER TABLE outbox ADD COLUMN awaited_generation INTEGER`,
+		`ALTER TABLE outbox ADD COLUMN resends INTEGER NOT NULL DEFAULT 0`},
 }
 
 const (

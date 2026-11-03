@@ -809,3 +809,58 @@ func TestDirectoryMadeAgainGoesFirst(t *testing.T) {
 		t.Fatalf("edits left: %+v %v", edits, err)
 	}
 }
+
+// rm -r of a directory while a save in it is on its way: the save changes what the gateway has below the directory
+// after it was removed here, which the removal must get past. With another device's change in it, it is undone.
+func TestRemovingADirectoryWhileASaveInItIsSent(t *testing.T) {
+	for _, theirs := range []bool{false, true} {
+		t.Run(map[bool]string{false: "own", true: "theirs"}[theirs], func(t *testing.T) {
+			g := writableGateway(t, map[string]string{"dir/f.txt": "v1", "dir/g.txt": "g"})
+			var ts *testService
+			var once sync.Once
+			ts = newTestServiceWith(t, g, func(c *Config) {
+				c.SettleDelay = testSettleDelay
+				c.Hook = func(point string) error {
+					if point != "outbox.submit" {
+						return nil
+					}
+					once.Do(func() {
+						dir := ts.dir("docs/dir")
+						for _, name := range []string{"f.txt", "g.txt"} {
+							if _, err := ts.Remove(dir, name, false); err != nil {
+								t.Error(err)
+							}
+						}
+						if _, err := ts.Remove(ts.dir("docs"), "dir", true); err != nil {
+							t.Error(err)
+						}
+						if theirs {
+							g.Engine.Write("dir/new.txt", "theirs")
+							g.Sync()
+						}
+					})
+					return nil
+				}
+			})
+			ts.write(ts.mustLookup("docs/dir/f.txt"), "v2", true)
+			time.Sleep(5 * testSettleDelay)
+			ts.settled()
+			ts.refresh()
+			if theirs {
+				ts.gatewayHas("dir/new.txt", "theirs")
+				ts.gatewayHas("dir/f.txt", "v2")
+				if got := ts.readPath("docs/dir/new.txt"); got != "theirs" {
+					t.Fatalf("the other device's file reads %q", got)
+				}
+			} else {
+				ts.gatewayLacks("dir")
+				if _, ok := ts.lookup("docs/dir"); ok {
+					t.Fatal("the directory came back")
+				}
+			}
+			if edits, err := ts.Edits(); err != nil || len(edits) != 0 {
+				t.Fatalf("edits left: %+v %v", edits, err)
+			}
+		})
+	}
+}

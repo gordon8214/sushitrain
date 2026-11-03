@@ -51,6 +51,8 @@ type outboxRow struct {
 	baseRev     string
 	baseContent string
 	subtree     sql.NullInt64
+	awaited     sql.NullInt64
+	resends     int
 	targetPar   sql.NullInt64
 	targetName  string
 	staged      sql.NullString
@@ -65,13 +67,13 @@ type outboxRow struct {
 }
 
 const outboxColumns = `id, op_id, folder, item, kind, item_kind, state, base_revision, base_content_id,
-	subtree_generation, target_parent, target_name, staged, digest, size, mod_ns, upload_id, payload, server_op,
-	authority_generation, attempts`
+	subtree_generation, awaited_generation, resends, target_parent, target_name, staged, digest, size, mod_ns,
+	upload_id, payload, server_op, authority_generation, attempts`
 
 func scanOutbox(row interface{ Scan(...any) error }) (*outboxRow, error) {
 	var o outboxRow
 	err := row.Scan(&o.id, &o.opID, &o.folder, &o.item, &o.kind, &o.itemKind, &o.state, &o.baseRev, &o.baseContent,
-		&o.subtree, &o.targetPar, &o.targetName, &o.staged, &o.digest, &o.size, &o.modNs, &o.uploadID, &o.payload,
+		&o.subtree, &o.awaited, &o.resends, &o.targetPar, &o.targetName, &o.staged, &o.digest, &o.size, &o.modNs, &o.uploadID, &o.payload,
 		&o.serverOp, &o.generation, &o.attempts)
 	return &o, err
 }
@@ -436,6 +438,59 @@ func previousResult(q queryer, o *outboxRow) (revision, contentID, state string,
 // errStepAgain means the operation changed (it became another one): the next pass takes it from its new state
 var errStepAgain = errors.New("the operation changed")
 
+// errFeedBehind means an operation waits for the change feed to show what the gateway reported
+var errFeedBehind = errors.New("waiting for the change feed to catch up with the gateway")
+
+// How many times a directory's removal the gateway found out of date is checked and sent again
+const maxRemovalResends = 5
+
+// removalStillSeen checks a directory's removal the gateway found out of date, once the change feed has reached the
+// subtree generation it reported: it may go again, with the feed's generation, only if the directory is where it was
+// removed here and everything the gateway has below it is something removed here, with the content this client last
+// had of it (so only this client's own changes came in between). Returns the generation to send, and whether it may.
+func removalStillSeen(tx *sql.Tx, o *outboxRow, gatewayID string, f folderGateway) (int64, bool, error) {
+	var generation sql.NullInt64
+	var deleted bool
+	var name string
+	var parent sql.NullString
+	if err := tx.QueryRow(`SELECT subtree_generation, deleted, name, parent_gateway_id FROM remote_items
+		WHERE gateway_id = ?`, gatewayID).Scan(&generation, &deleted, &name, &parent); err != nil {
+		return 0, false, err
+	}
+	if deleted {
+		// Removed on the gateway meanwhile: the gateway answers that the removal holds
+		return generation.Int64, true, nil
+	}
+	if generation.Int64 < o.awaited.Int64 {
+		return 0, false, errFeedBehind
+	}
+	var itemName string
+	var itemParent sql.NullInt64
+	if err := tx.QueryRow(`SELECT name, parent FROM items WHERE id = ?`, o.item).Scan(&itemName,
+		&itemParent); err != nil {
+		return 0, false, err
+	}
+	var parentID string
+	if itemParent.Valid {
+		var err error
+		if parentID, err = gatewayIDOf(tx, itemParent.Int64, f); err != nil {
+			return 0, false, err
+		}
+	}
+	if normalizedName(name) != itemName || parent.String != parentID {
+		// Moved or renamed on the gateway
+		return 0, false, nil
+	}
+	var unseen bool
+	err := tx.QueryRow(`WITH RECURSIVE below(id) AS (SELECT ?1 UNION ALL
+			SELECT r.gateway_id FROM remote_items AS r JOIN below ON r.parent_gateway_id = below.id WHERE r.deleted = 0)
+		SELECT EXISTS (SELECT 1 FROM remote_items AS r LEFT JOIN items AS i ON i.id = r.item
+			WHERE r.gateway_id IN (SELECT id FROM below) AND r.gateway_id != ?1 AND (i.id IS NULL OR i.deleted = 0
+				OR (r.kind != ?2 AND IFNULL(r.content_id, '') != IFNULL(i.content_id, ''))))`, gatewayID,
+		remoteapi.KindDirectory).Scan(&unseen)
+	return generation.Int64, !unseen, err
+}
+
 // prepare builds the request and stores it, exactly as it is sent and sent again, in the transaction that decides
 // what it is: the gateway IDs it refers to, its base, and whether an edit from a base the gateway has moved on from
 // becomes a conflict copy
@@ -560,6 +615,25 @@ func (s *Service) prepare(read *outboxRow, f folderGateway) error {
 						return blockTx(tx, o.id, "a change of something in it can't be sent: export or discard that first")
 					}
 					subtree := o.subtree
+					if o.awaited.Valid {
+						generation, seen, err := removalStillSeen(tx, o, gatewayID, f)
+						if err != nil {
+							return err
+						}
+						if !seen {
+							s.log.Info("A removal was undone, as something in it changed on the gateway",
+								"operation", o.opID)
+							if _, err := tx.Exec(`UPDATE outbox SET state = 'canceled', updated_at = ? WHERE id = ?`,
+								nowUnix(), o.id); err != nil {
+								return err
+							}
+							p := newProjector(tx)
+							err := s.undo(tx, p, o.item)
+							changes.merge(p.changes)
+							return err
+						}
+						subtree = sql.NullInt64{Int64: generation, Valid: true}
+					}
 					if !subtree.Valid {
 						if err := tx.QueryRow(`SELECT subtree_generation FROM remote_items WHERE gateway_id = ?`,
 							gatewayID).Scan(&subtree); err != nil {
@@ -685,6 +759,16 @@ func (s *Service) refused(o *outboxRow, err error) error {
 			return s.renameToConflict(tx, p, o)
 		case e.Kind == remoteclient.KindRevisionMismatch && o.kind == remoteapi.OpReplace:
 			return s.conflictCopy(tx, p, o)
+		case e.Kind == remoteclient.KindRevisionMismatch && o.kind == remoteapi.OpDelete && e.Item != nil &&
+			e.Item.Kind == remoteapi.KindDirectory && o.resends < maxRemovalResends:
+			// Something changed below the directory since it was removed here, which may be only what this client
+			// sent meanwhile (a save in it that was on its way): once the change feed has reached what the gateway
+			// reported, it is checked and sent again, as a new intent (prepare)
+			_, err := tx.Exec(`UPDATE outbox SET awaited_generation = ?, subtree_generation = NULL,
+				resends = resends + 1, op_id = ?, payload = NULL, state = 'uploaded', not_before = ?, error = ?,
+				updated_at = ? WHERE id = ?`, e.Item.SubtreeGeneration, uuid.NewString(), nowMillis()+1000, e.Error(),
+				nowUnix(), o.id)
+			return err
 		case e.Kind == remoteclient.KindRevisionMismatch, e.Code == remoteapi.CodeNotEmpty,
 			e.Code == remoteapi.CodeIgnoredPath && o.kind == remoteapi.OpMove:
 			// Moving or removing an item that changed on the gateway is refused, which leaves it intact: so is the
