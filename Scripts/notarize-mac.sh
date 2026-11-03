@@ -175,7 +175,12 @@ ln -s /Applications "$contents/Applications"
 hdiutil create -volname "Synctrain" -srcfolder "$contents" -format ULFO -ov "$disk_image"
 rm -rf "$contents"
 
-identity=$(codesign --display --verbose=2 "$app" 2>&1 | sed -n 's/^Authority=//p' | head -n 1)
+# By the hash of the app's own certificate: a name can match more than one in the keychain (a renewed certificate, say),
+# and codesign then refuses it as ambiguous
+certificates=$(mktemp -d)
+codesign --display --extract-certificates="$certificates/certificate" "$app" 2>/dev/null
+identity=$(shasum -a 1 "$certificates/certificate0" | cut -d ' ' -f 1)
+rm -rf "$certificates"
 codesign --sign "$identity" --timestamp "$disk_image"
 notarize "$disk_image"
 xcrun stapler staple "$disk_image"
