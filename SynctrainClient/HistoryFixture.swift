@@ -36,7 +36,6 @@
 						ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_HISTORY_STORAGE"].map { URL(fileURLWithPath: $0) }
 						?? URL.temporaryDirectory.appending(path: "Synctrain-history-fixture-\(UUID().uuidString)")
 					let container = SharedContainer(baseURL: root)
-					try container.createDirectories()
 					let credentials = InMemoryCredentialStore(credentials: [
 						"fixture-online": "fixture", "fixture-offline": "fixture", "fixture-alias": "fixture",
 					])
@@ -44,6 +43,11 @@
 						let configuration = URLSessionConfiguration.ephemeral
 						configuration.protocolClasses = [HistoryFixtureProtocol.self]
 						return configuration
+					}
+					// Leave storage untouched until the History Sources page first reads it.
+					if ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_HISTORY_EMPTY"] == "1" {
+						self.environment = environment
+						return
 					}
 					var endpoints = [
 						RemoteEndpoint(serviceID: "fixture-online", host: "history.fixture.test", port: 443, displayName: "Archive NAS"),

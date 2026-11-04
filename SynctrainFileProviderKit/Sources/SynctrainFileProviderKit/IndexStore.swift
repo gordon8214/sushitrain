@@ -9,6 +9,7 @@ import Foundation
 /// call opens the database and closes it again.
 public struct IndexStore: Sendable {
 	public let url: URL
+	private let container: SharedContainer?
 
 	static let schemaVersion = 2
 
@@ -19,13 +20,24 @@ public struct IndexStore: Sendable {
 
 	public init(url: URL) {
 		self.url = url
+		container = nil
 	}
 
 	public init(container: SharedContainer) {
 		url = container.indexURL
+		self.container = container
 	}
 
 	func withConnection<T>(_ block: (SQLiteConnection) throws(IndexError) -> T) throws(IndexError) -> T {
+		// History-only clients can open the index before Files startup prepares its directory.
+		if let container, !FileManager.default.fileExists(atPath: container.fileProviderURL.path(percentEncoded: false)) {
+			do {
+				try container.createDirectories()
+			}
+			catch {
+				throw .unavailable(error.localizedDescription)
+			}
+		}
 		let connection = try SQLiteConnection(url: url)
 		try Self.createSchemaIfNeeded(connection)
 		return try block(connection)
