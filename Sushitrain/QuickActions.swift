@@ -123,6 +123,7 @@ class QuickActionService {
 			// could not finish is recovered at the next start.
 			let client = appState?.client
 			Task {
+				await MCPIntegration.shared.stop()
 				await FinderIntegration.shared.stop()
 				await GatewayController.shared.stopBeforeQuitting()
 				if let client {

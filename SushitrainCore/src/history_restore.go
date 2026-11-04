@@ -24,6 +24,7 @@ import (
 	"github.com/syncthing/syncthing/lib/osutil"
 	"github.com/syncthing/syncthing/lib/syncthing"
 	"github.com/syncthing/syncthing/lib/versioner"
+	"t-shaped.nl/sushitrain/v2/safecopy"
 )
 
 // ClientDeviceID identifies this folder's engine when deduplicating history sources.
@@ -49,6 +50,9 @@ func (fld *Folder) CanRestoreDownloadedVersion() bool {
 }
 
 func (fld *Folder) withHistoryTarget(name string, fn func(context.Context, syncthing.FolderHandle, string) error) error {
+	return fld.withHistoryTargetContext(context.Background(), name, fn)
+}
+func (fld *Folder) withHistoryTargetContext(parent context.Context, name string, fn func(context.Context, syncthing.FolderHandle, string) error) error {
 	if name == "" || !finderPathAllowed(name) || !fld.CanRestoreDownloadedVersion() {
 		return errRestoreTargetChanged
 	}
@@ -56,7 +60,7 @@ func (fld *Folder) withHistoryTarget(name string, fn func(context.Context, synct
 	if internals == nil {
 		return ErrStillLoading
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
 	return internals.RunInFolderLoop(ctx, fld.FolderID, func(ctx context.Context, h syncthing.FolderHandle) error {
 		// The admitted handle may belong to a newly configured root. Never use a pre-admission path.
@@ -173,142 +177,176 @@ func (fld *Folder) CaptureRestoreTarget(name string) (string, error) {
 func (fld *Folder) RestoreDownloadedVersion(name, source, expected string, modifiedNs int64) error {
 	return fld.restoreDownloadedVersion(name, source, expected, modifiedNs, false)
 }
+func (fld *Folder) RestoreDownloadedVersionContext(ctx context.Context, name, source, expected string, modifiedNs int64) error {
+	return fld.restoreDownloadedVersionContext(ctx, name, source, expected, modifiedNs, false)
+}
 func (fld *Folder) restoreDownloadedVersion(name, source, expected string, modifiedNs int64, complete bool) error {
+	return fld.restoreDownloadedVersionContext(context.Background(), name, source, expected, modifiedNs, complete)
+}
+func (fld *Folder) restoreDownloadedVersionContext(parent context.Context, name, source, expected string, modifiedNs int64, complete bool) error {
 	var captured historyTarget
 	if err := json.Unmarshal([]byte(expected), &captured); err != nil {
 		return err
 	}
-	return fld.withHistoryTarget(name, func(ctx context.Context, h syncthing.FolderHandle, rootPath string) error {
-		current, err := captureHistoryTarget(ctx, h, rootPath, name)
+	input, err := safecopy.OpenRegular(source)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	var mode *os.FileMode
+	var applyMetadata func(string) error
+	if complete {
+		info, err := input.Stat()
 		if err != nil {
 			return err
 		}
-		if captured != current {
-			return errRestoreTargetChanged
-		}
-		input, err := os.Open(source)
-		if err != nil {
-			return err
-		}
-		defer input.Close()
-		root, err := os.OpenRoot(rootPath)
-		if err != nil {
-			return err
-		}
-		defer root.Close()
-		temp := filepath.Join(filepath.Dir(name), ".syncthing.history-"+rand.Text()+".tmp")
-		output, err := root.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err != nil {
-			return err
-		}
-		defer root.Remove(temp)
-		hash := sha256.New()
-		_, copyErr := io.Copy(io.MultiWriter(output, hash), historyContextReader{ctx, input})
-		syncErr := output.Sync()
-		closeErr := output.Close()
-		if err := errors.Join(copyErr, syncErr, closeErr, ctx.Err()); err != nil {
-			return err
-		}
-		mode := os.FileMode(0o644)
-		if captured.Exists {
-			mode = os.FileMode(captured.Mode)
-		}
-		if complete {
-			if err := copyHistoryMetadata(source, filepath.Join(rootPath, temp)); err != nil {
-				return err
-			}
-			sourceInfo, err := input.Stat()
+		value := info.Mode().Perm()
+		mode = &value
+		applyMetadata = func(destination string) error {
+			current, err := os.Stat(source)
 			if err != nil {
 				return err
 			}
-			mode = sourceInfo.Mode().Perm()
-		}
-		if err := root.Chmod(temp, mode); err != nil {
-			return err
-		}
-		if err := root.Chtimes(temp, time.Unix(0, modifiedNs), time.Unix(0, modifiedNs)); err != nil {
-			return err
-		}
-
-		staged, err := root.Open(temp)
-		if err != nil {
-			return err
-		}
-		syncStagedErr := staged.Sync()
-		staged.Close()
-		if syncStagedErr != nil {
-			return syncStagedErr
-		}
-		stagedMetadata, err := historyMetadataHash(filepath.Join(rootPath, temp))
-		if err != nil {
-			return err
-		}
-		// Check again after staging, in case another application edited the file while it was copied.
-		latest, err := captureHistoryTarget(ctx, h, rootPath, name)
-		if err != nil {
-			return err
-		}
-		if latest != captured {
-			return errRestoreTargetChanged
-		}
-		if captured.Exists && captured.Hash == hex.EncodeToString(hash.Sum(nil)) && (!complete || captured.MetadataHash == stagedMetadata && captured.Mode == uint32(mode) && captured.Modified == modifiedNs) {
-			return nil
-		}
-		journal := ""
-		var record historyJournal
-		archive := h.Archive
-		hasVersioner := h.HasVersioner()
-		if cfg := fld.folderConfiguration(); cfg == nil || cfg.Filesystem().URI() != rootPath {
-			return errRestoreTargetChanged
-		} else if !hasVersioner && cfg.Versioning.Type != "" {
-			// Send Only runners have no versioner handle, even when destination versioning is configured.
-			configured, err := versioner.New(*cfg)
-			if err != nil {
-				return err
+			if !os.SameFile(info, current) {
+				return errors.New("the snapshot source changed")
 			}
-			archive, hasVersioner = configured.Archive, true
-			if platformVersioner, ok := versioner.WithPlatformData(configured); ok {
-				archive = func(path string) error {
-					current, exists, err := h.CurrentFile(path)
-					if err != nil {
-						return err
-					}
-					if !exists || current.Deleted {
-						return errors.New("cannot archive without indexed platform metadata")
-					}
-					return platformVersioner.ArchiveWithPlatformData(path, current.Platform, false)
-				}
-			}
+			return copyHistoryMetadata(source, destination)
 		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		pendingDirectory := filepath.Join(fld.client.CurrentConfigDirectory(), "history-restores")
-		if current.Exists && (hasVersioner || complete) {
-			journal, record, err = beginHistoryJournal(ctx, root, name, temp, captured.Hash, hex.EncodeToString(hash.Sum(nil)), pendingDirectory, captured.MetadataHash, stagedMetadata)
-			if err != nil {
-				return err
-			}
-			if err := ctx.Err(); err != nil {
-				return errors.Join(err, recoverHistoryJournal(root, journal, record, pendingDirectory))
-			}
-			if hasVersioner {
-				if err := archive(name); err != nil {
-					return errors.Join(err, recoverHistoryJournal(root, journal, record, pendingDirectory))
-				}
-			}
-		}
-		if err := ctx.Err(); err != nil {
-			if journal != "" {
-				return errors.Join(err, recoverHistoryJournal(root, journal, record, pendingDirectory))
-			}
-			return err
-		}
-		if err := publishHistoryFile(root, temp, name, journal, record, pendingDirectory); err != nil {
-			return err
-		}
-		return h.Scan(ctx, []string{name})
+	}
+	return fld.withHistoryTargetContext(parent, name, func(ctx context.Context, h syncthing.FolderHandle, rootPath string) error {
+		return fld.restoreHistoryInput(ctx, h, rootPath, name, input, captured, modifiedNs, complete, mode, applyMetadata, nil)
 	})
+}
+
+// The caller already owns the folder loop. Never re-enter it during publication.
+func (fld *Folder) restoreHistoryInput(ctx context.Context, h syncthing.FolderHandle, rootPath, name string, input io.Reader, captured historyTarget, modifiedNs int64, complete bool, sourceMode *os.FileMode, applyMetadata func(string) error, finishSource func() error) error {
+	current, err := captureHistoryTarget(ctx, h, rootPath, name)
+	if err != nil {
+		return err
+	}
+	if captured != current {
+		return errRestoreTargetChanged
+	}
+	root, err := os.OpenRoot(rootPath)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	temp := filepath.Join(filepath.Dir(name), ".syncthing.history-"+rand.Text()+".tmp")
+	output, err := root.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	defer root.Remove(temp)
+	hash := sha256.New()
+	_, copyErr := io.Copy(io.MultiWriter(output, hash), historyContextReader{ctx, input})
+	syncErr := output.Sync()
+	closeErr := output.Close()
+	if err := errors.Join(copyErr, syncErr, closeErr, ctx.Err()); err != nil {
+		return err
+	}
+	if finishSource != nil {
+		if err := finishSource(); err != nil {
+			return err
+		}
+	}
+	mode := os.FileMode(0o644)
+	if captured.Exists {
+		mode = os.FileMode(captured.Mode)
+	}
+	if sourceMode != nil {
+		mode = *sourceMode
+	}
+	if applyMetadata != nil {
+		if err := applyMetadata(filepath.Join(rootPath, temp)); err != nil {
+			return err
+		}
+	}
+	if err := root.Chmod(temp, mode); err != nil {
+		return err
+	}
+	if err := root.Chtimes(temp, time.Unix(0, modifiedNs), time.Unix(0, modifiedNs)); err != nil {
+		return err
+	}
+
+	staged, err := root.Open(temp)
+	if err != nil {
+		return err
+	}
+	syncStagedErr := staged.Sync()
+	staged.Close()
+	if syncStagedErr != nil {
+		return syncStagedErr
+	}
+	stagedMetadata, err := historyMetadataHash(filepath.Join(rootPath, temp))
+	if err != nil {
+		return err
+	}
+	// Check again after staging, in case another application edited the file while it was copied.
+	latest, err := captureHistoryTarget(ctx, h, rootPath, name)
+	if err != nil {
+		return err
+	}
+	if latest != captured {
+		return errRestoreTargetChanged
+	}
+	if captured.Exists && captured.Hash == hex.EncodeToString(hash.Sum(nil)) && (!(complete || sourceMode != nil) || captured.MetadataHash == stagedMetadata && captured.Mode == uint32(mode) && captured.Modified == modifiedNs) {
+		return nil
+	}
+	journal := ""
+	var record historyJournal
+	archive := h.Archive
+	hasVersioner := h.HasVersioner()
+	if cfg := fld.folderConfiguration(); cfg == nil || cfg.Filesystem().URI() != rootPath {
+		return errRestoreTargetChanged
+	} else if !hasVersioner && cfg.Versioning.Type != "" {
+		// Send Only runners have no versioner handle, even when destination versioning is configured.
+		configured, err := versioner.New(*cfg)
+		if err != nil {
+			return err
+		}
+		archive, hasVersioner = configured.Archive, true
+		if platformVersioner, ok := versioner.WithPlatformData(configured); ok {
+			archive = func(path string) error {
+				current, exists, err := h.CurrentFile(path)
+				if err != nil {
+					return err
+				}
+				if !exists || current.Deleted {
+					return errors.New("cannot archive without indexed platform metadata")
+				}
+				return platformVersioner.ArchiveWithPlatformData(path, current.Platform, false)
+			}
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	pendingDirectory := filepath.Join(fld.client.CurrentConfigDirectory(), "history-restores")
+	if current.Exists && (hasVersioner || complete) {
+		journal, record, err = beginHistoryJournal(ctx, root, name, temp, captured.Hash, hex.EncodeToString(hash.Sum(nil)), pendingDirectory, captured.MetadataHash, stagedMetadata)
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return errors.Join(err, recoverHistoryJournal(root, journal, record, pendingDirectory))
+		}
+		if hasVersioner {
+			if err := archive(name); err != nil {
+				return errors.Join(err, recoverHistoryJournal(root, journal, record, pendingDirectory))
+			}
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		if journal != "" {
+			return errors.Join(err, recoverHistoryJournal(root, journal, record, pendingDirectory))
+		}
+		return err
+	}
+	if err := publishHistoryFile(root, temp, name, journal, record, pendingDirectory); err != nil {
+		return err
+	}
+	return h.Scan(ctx, []string{name})
 }
 
 // ValidateVersionExportDestination prevents Save As from bypassing guarded restoration of a synchronized file.

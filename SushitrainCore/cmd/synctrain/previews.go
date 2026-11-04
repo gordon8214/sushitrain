@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"t-shaped.nl/sushitrain/v2/desktopsettings"
 	"t-shaped.nl/sushitrain/v2/previewcache"
 	"t-shaped.nl/sushitrain/v2/safecopy"
 	"time"
@@ -28,49 +29,34 @@ import (
 )
 
 type Preferences struct {
-	HideDotfiles                bool
-	PreviewImages, PreviewMedia bool
-	ImageLimitMiB               int
-	Tray                        bool
-	Grid                        bool
+	desktopsettings.Preferences
+	baseline desktopsettings.Preferences
 }
 
-func preferencesPath() string { return filepath.Join(configDir(), "synctrain", "desktop.json") }
+func preferencesPath() string { return desktopsettings.Path() }
 func readPreferences() Preferences {
-	p := Preferences{HideDotfiles: true, PreviewImages: true, PreviewMedia: true, ImageLimitMiB: 16}
-	if b, e := os.ReadFile(preferencesPath()); e == nil {
-		json.Unmarshal(b, &p)
+	p, err := desktopsettings.Read(preferencesPath())
+	if err != nil {
+		p, _ = desktopsettings.Read("")
 	}
-	if p.ImageLimitMiB < 1 || p.ImageLimitMiB > 100 {
-		p.ImageLimitMiB = 16
-	}
-	return p
+	return Preferences{Preferences: p, baseline: p}
 }
-func writePreferences(p Preferences) error {
-	file := preferencesPath()
-	if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
-		return err
+func writePreferences(p *Preferences) error {
+	before, after := desktopsettings.Values(p.baseline), desktopsettings.Values(p.Preferences)
+	changes := map[string]string{}
+	for key, value := range after {
+		if before[key] != value {
+			changes[key] = value
+		}
 	}
-	b, err := json.Marshal(p)
-	if err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(file), ".desktop-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if err = tmp.Chmod(0600); err == nil {
-		_, err = tmp.Write(b)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	updated, err := desktopsettings.Update(ctx, preferencesPath(), p.baseline, changes)
 	if err == nil {
-		err = tmp.Sync()
+		p.Preferences = updated
+		p.baseline = updated
 	}
-	err = errors.Join(err, tmp.Close())
-	if err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), file)
+	return err
 }
 func (d *desktopUI) previewSettings() { d.subpage(func() { d.previewSettingsPage() }) }
 func (d *desktopUI) previewSettingsPage() {
@@ -87,7 +73,7 @@ func (d *desktopUI) previewSettingsPage() {
 		r.SetActive(*s.value)
 		r.NotifyProperty("active", func() {
 			*s.value = r.Active()
-			if err := writePreferences(d.preferences); err != nil {
+			if err := writePreferences(&d.preferences); err != nil {
 				d.error(err)
 			}
 		})
@@ -98,7 +84,7 @@ func (d *desktopUI) previewSettingsPage() {
 	limit.SetValue(float64(d.preferences.ImageLimitMiB))
 	limit.NotifyProperty("value", func() {
 		d.preferences.ImageLimitMiB = int(limit.Value())
-		if err := writePreferences(d.preferences); err != nil {
+		if err := writePreferences(&d.preferences); err != nil {
 			d.error(err)
 		}
 	})

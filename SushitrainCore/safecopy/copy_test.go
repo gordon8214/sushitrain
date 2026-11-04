@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -51,7 +52,19 @@ func TestHeldParentCannotBeRedirected(t *testing.T) {
 	defer dest.Close()
 	dest.File.WriteString("safe")
 	if err = os.Rename(parent, moved); err != nil {
-		t.Fatal(err)
+		if runtime.GOOS != "windows" {
+			t.Fatal(err)
+		}
+		// Windows locks the retained directory against rename. Confirm publication
+		// still succeeds in that held directory, preserving the same containment.
+		if err = dest.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		data, readErr := os.ReadFile(filepath.Join(parent, "export"))
+		if readErr != nil || string(data) != "safe" {
+			t.Fatal(string(data), readErr)
+		}
+		return
 	}
 	os.Mkdir(parent, 0700)
 	if err = dest.Commit(); err != nil {
@@ -94,5 +107,23 @@ func TestCanceledCopyDoesNotPublish(t *testing.T) {
 	entries, err := os.ReadDir(dir)
 	if err != nil || len(entries) != 0 {
 		t.Fatal("canceled export left content", entries, err)
+	}
+}
+
+func TestAbsentConfiguredProviderRootDoesNotBlockOutsideExports(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "provider", "not-created")
+	dest, err := Create(filepath.Join(dir, "export"), missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest.Close()
+	if _, err = os.Stat(filepath.Join(dir, "provider")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("configured root was created", err)
+	}
+	// The missing root pathname itself is also protected.
+	if dest, err = Create(filepath.Join(dir, "provider"), filepath.Join(dir, "provider")); err == nil {
+		dest.Close()
+		t.Fatal("export created the provider root")
 	}
 }

@@ -140,7 +140,7 @@ jobs:
       - name: Test
         working-directory: SushitrainCore
         run: |
-          timeout 360 go test -timeout 300s -tags noassets ./desktopapi ./enginecontrol ./linuxpolicy ./desktoptray ./history ./safecopy ./previewcache ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin ./sthome \
+          timeout 360 go test -timeout 300s -tags noassets ./desktopsettings ./mcpapi ./mcpcontrol ./mcpfiles ./mcpserver ./desktopapi ./enginecontrol ./linuxpolicy ./desktoptray ./history ./safecopy ./previewcache ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin ./sthome \
             ./cmd/synctrain-gateway ./cmd/synctrain-files
 
       - name: Test Nautilus integration

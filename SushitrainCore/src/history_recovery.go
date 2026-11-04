@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/syncthing/syncthing/lib/config"
+	"t-shaped.nl/sushitrain/v2/sharedfile"
 )
 
 const historyJournalPrefix = ".syncthing.history-journal-"
@@ -42,7 +43,7 @@ func syncHistoryDirectory(root *os.Root) error {
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return sharedfile.SyncDirectory(dir)
 }
 
 // A hard link preserves the complete original, including resource forks, before the versioner removes its name.

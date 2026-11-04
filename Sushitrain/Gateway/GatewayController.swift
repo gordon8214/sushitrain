@@ -489,4 +489,65 @@
 			}
 		}
 	}
+
+	extension GatewayController {
+		func mcpCall(_ method: String, parameters p: [String: Any]) async throws -> Data {
+			if method == "service.status" {
+				return try MCPIntegration.json([
+					"enabled": isEnabled, "running": state == .running,
+					"listen": ":\(settings.port)", "publicHost": settings.publicHost,
+					"serviceName": settings.serviceName, "contentCacheMiB": settings.contentCacheMiB,
+				])
+			}
+			if method == "service.set" {
+				var next = settings
+				if let listen = p["listen"] as? String {
+					guard listen.hasPrefix(":"), let port = Int(listen.dropFirst()), GatewaySettings.validPorts.contains(port) else {
+						throw MCPAppError("Use :PORT for this Mac's listening address.")
+					}
+					next.port = port
+				}
+				if let host = p["publicHost"] as? String { next.publicHost = host }
+				if let port = p["publicPort"] as? Int, port != next.port {
+					throw MCPAppError("unsupported: set the public port as part of the public host on macOS.")
+				}
+				apply(next)
+				setEnabled(p["enabled"] as? Bool ?? false)
+				await transition?.value
+				if case .failed(let message) = state { throw MCPAppError(message) }
+				return try await mcpCall("service.status", parameters: [:])
+			}
+			let service = try runningService()
+			let folder = p["folderID"] as? String ?? ""
+			let clientID = p["clientID"] as? String ?? ""
+			let requestID = p["requestID"] as? String ?? ""
+			switch method {
+			case "exports.list": return try await goBlocking(returning: { try service.exportsJSON() })
+			case "clients.list": return try await goBlocking(returning: { try service.clientsJSON() })
+			case "pairing.pending": return try await goBlocking(returning: { try service.pendingPairingsJSON() })
+			case "exports.set":
+				try await setExport(folderID: folder, exported: true, allowWrite: p["allowWrite"] as? Bool ?? false)
+			case "exports.remove": try await setExport(folderID: folder, exported: false, allowWrite: false)
+			case "clients.revoke": try await revoke(clientID: clientID)
+			case "clients.permission":
+				guard let access = GatewayAccess(rawValue: p["access"] as? String ?? "") else {
+					throw MCPAppError("Choose read, write, or an empty access value.")
+				}
+				try await setAccess(clientID: clientID, folderID: folder, access: access)
+			case "pairing.approve":
+				let raw = p["grants"] as? [String: String] ?? [:]
+				var grants: [String: GatewayAccess] = [:]
+				for (id, value) in raw {
+					guard let access = GatewayAccess(rawValue: value) else {
+						throw MCPAppError("Choose read or write for each folder.")
+					}
+					grants[id] = access
+				}
+				try await approvePairing(requestID: requestID, grants: grants)
+			case "pairing.deny": try await denyPairing(requestID: requestID)
+			default: throw MCPAppError("unsupported gateway operation")
+			}
+			return Data("null".utf8)
+		}
+	}
 #endif

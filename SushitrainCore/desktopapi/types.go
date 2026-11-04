@@ -8,6 +8,7 @@ type Request struct {
 	ID, Folder, Device, Path, Name, Action, Password, Section, Token string
 	Enabled                                                          bool
 	Offset                                                           int64
+	Limit                                                            int64
 	Values                                                           map[string]string
 }
 type Folder struct {
@@ -28,6 +29,7 @@ type Entry struct {
 }
 type Version struct {
 	ID                       string
+	Revision                 string
 	Size, Archived, Modified int64
 }
 

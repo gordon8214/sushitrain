@@ -7,7 +7,7 @@ export PATH := $(CURDIR):/opt/homebrew/bin:$(HOME)/go/bin:$(PATH)
 SHELL := /bin/bash
 GO_VERSION := $(shell go version)
 
-.PHONY: clean install deps test test-engine gateway-linux gateway-test-linux linux linux-window linux-test linux-nautilus linux-nautilus-test
+.PHONY: clean install deps test test-engine mcp-linux gateway-linux gateway-test-linux linux linux-window linux-test linux-nautilus linux-nautilus-test
 
 build: build/SushitrainCore.xcframework
 
@@ -44,11 +44,11 @@ ENGINE_TAGS = noupgrade
 # The app's MACOSX_DEPLOYMENT_TARGET. Without it the objects take the SDK's version, and the linker warns about each one.
 MACOS_VERSION = 27.0
 
-build/SushitrainCore.xcframework: src/*.go desktopapi/*.go gateway/*.go versionsnapshot/*.go sthome/*.go remoteapi/*.go remoteclient/*.go adminsock/*.go gatewayadmin/*.go files/*.go sharedfile/*.go sqlitefile/*.go previewcache/*.go Makefile go.mod go.sum notices.html
+build/SushitrainCore.xcframework: src/*.go hostbridge/*.go mcpapi/*.go mcpcontrol/*.go enginecontrol/*.go desktopapi/*.go gateway/*.go versionsnapshot/*.go sthome/*.go remoteapi/*.go remoteclient/*.go adminsock/*.go gatewayadmin/*.go files/*.go sharedfile/*.go sqlitefile/*.go previewcache/*.go Makefile go.mod go.sum notices.html
 	# gomobile replaces CGO_CFLAGS, dropping Go's default -O2. CPPFLAGS reaches every C/C++ compile unchanged,
 	# so restore optimization here, particularly for SQLite's amalgamation.
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS) -O2" go tool gomobile bind -target macos -macosversion $(MACOS_VERSION) -tags $(ENGINE_TAGS) -trimpath \
-		-ldflags "$(ENGINE_LDFLAGS)" -o ./build/SushitrainCore.xcframework ./src
+		-ldflags "$(ENGINE_LDFLAGS)" -o ./build/SushitrainCore.xcframework ./src ./hostbridge
 
 install: build
 
@@ -68,13 +68,16 @@ GATEWAY_VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo dev
 SYNCTHING_VERSION ?= $(ENGINE_VERSION)
 LINUX_ARCH ?= $(shell go env GOARCH)
 
-gateway-linux:
+gateway-linux: mcp-linux
 	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go build -trimpath -tags noupgrade -ldflags "-s -w -X main.version=$(GATEWAY_VERSION) \
 		-X $(SYNCTHING_BUILD).Version=$(SYNCTHING_VERSION) -X $(SYNCTHING_BUILD).Tags=noupgrade $(BUILDER_LDFLAGS)" \
 		-o build/linux-$(LINUX_ARCH)/synctrain-gateway ./cmd/synctrain-gateway
 
 # Synctrain for Linux (Docs/linux.md, built on the Linux host): the daemons are static, like the gateway
 LINUX_VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo dev)
+mcp-linux:
+	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags "-s -w -X main.version=$(LINUX_VERSION)" -o build/linux-$(LINUX_ARCH)/synctrain-mcp ./cmd/synctrain-mcp
+
 linux: gateway-linux
 	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(LINUX_VERSION)" \
 		-o build/linux-$(LINUX_ARCH)/synctrain-files ./cmd/synctrain-files
@@ -94,7 +97,7 @@ linux-nautilus-test:
 
 # Test executables of Synctrain for Linux, to run on a Linux host (go test -c). Fixtures are read from ../Docs, so run
 # them from a checkout's SushitrainCore/<package> directory. The FUSE tests need /dev/fuse and fusermount3.
-LINUX_TEST_PACKAGES = remoteapi adminsock remoteclient files files/fusefs enginecontrol linuxpolicy desktoptray history safecopy previewcache
+LINUX_TEST_PACKAGES = desktopsettings mcpapi mcpcontrol mcpfiles mcpserver remoteapi adminsock remoteclient files files/fusefs enginecontrol linuxpolicy desktoptray history safecopy previewcache
 linux-test:
 	for p in $(LINUX_TEST_PACKAGES); do \
 		GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go test -c -tags noassets -o build/linux-$(LINUX_ARCH)/$$(echo $$p | tr / -).test \

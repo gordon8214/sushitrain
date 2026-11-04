@@ -118,7 +118,7 @@ func (d *desktopUI) desktopSettings() {
 			d.error(err)
 			return
 		}
-		if err := writePreferences(next); err != nil {
+		if err := writePreferences(&next); err != nil {
 			d.error(err)
 			return
 		}

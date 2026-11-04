@@ -9,6 +9,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -24,6 +25,12 @@ func TestFinderPaths(t *testing.T) {
 		}
 	}
 	for _, path := range []string{"", "a/b.txt", "space %?#/café", `literal\name.txt`, "a/.stfolder", "a/.stignore", "a/.stversions/file"} {
+		if runtime.GOOS == "windows" && path == `literal\name.txt` {
+			if finderPathAllowed(path) {
+				t.Error("accepted a Windows separator as a literal filename")
+			}
+			continue
+		}
 		if !finderPathAllowed(path) {
 			t.Errorf("refused %q", path)
 		}

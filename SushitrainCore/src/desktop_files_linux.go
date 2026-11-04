@@ -172,22 +172,5 @@ func publishDesktopImport(parent *os.Root, output *os.File, name string) error {
 
 // DesktopExportVersion keeps native Save a Copy exclusive and cancellable.
 func (f *Folder) DesktopExportVersion(ctx context.Context, name string, v *FileVersion, destination string) error {
-	internals := f.client.internals()
-	if internals == nil {
-		return ErrStillLoading
-	}
-	input, err := internals.OpenFileVersion(f.FolderID, name, v.versionTime)
-	if err != nil {
-		return err
-	}
-	defer input.Close()
-	dest, err := safecopy.Create(destination)
-	if err != nil {
-		return err
-	}
-	defer dest.Close()
-	if _, err = safecopy.Copy(ctx, dest.File, input); err != nil {
-		return err
-	}
-	return dest.Commit()
+	return f.DesktopExportVersionChecked(ctx, name, v, destination, "")
 }

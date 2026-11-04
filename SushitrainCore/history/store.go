@@ -15,6 +15,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"t-shaped.nl/sushitrain/v2/sharedfile"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,6 +65,9 @@ func Open(state, cache string, forbidden ...string) (*Store, error) {
 		return nil, err
 	}
 	if err := os.MkdirAll(cache, 0700); err != nil {
+		return nil, err
+	}
+	if err := secureState(state); err != nil {
 		return nil, err
 	}
 	credentials, close, err := credentialStore(state)
@@ -142,7 +146,7 @@ func atomicJSON(path string, value any) error {
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return sharedfile.SyncDirectory(dir)
 }
 func (s *Store) save(list []Source) error { return atomicJSON(s.path, list) }
 func replaceSource(list []Source, source Source) []Source {
@@ -449,22 +453,29 @@ func (s *Store) Download(parent context.Context, p Request) (string, error) {
 	return dest, nil
 }
 func (s *Store) Export(parent context.Context, p Request) error {
+	return s.ExportWithForbidden(parent, p)
+}
+
+// ExportWithForbidden opens and retains the protected destination once, keeping
+// remote preparation and copying from following a later parent-path replacement.
+func (s *Store) ExportWithForbidden(parent context.Context, p Request, forbidden ...string) error {
 	ctx, done, err := s.begin(parent)
 	if err != nil {
 		return err
 	}
 	defer done()
+	roots := append(append([]string{}, s.forbidden...), forbidden...)
+	dest, err := safecopy.Create(p.Destination, roots...)
+	if err != nil {
+		return err
+	}
+	defer dest.Close()
 	source, client, version, reader, err := s.openVersion(ctx, p)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 	defer reader.Close()
-	dest, err := safecopy.Create(p.Destination, s.forbidden...)
-	if err != nil {
-		return err
-	}
-	defer dest.Close()
 	n, err := safecopy.Copy(ctx, dest.File, io.LimitReader(reader, version.Size+1))
 	if err != nil {
 		return err

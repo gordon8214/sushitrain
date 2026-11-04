@@ -73,6 +73,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include="..\build\$(Platform)\GoNotices.html" Link="GoNotices.html" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\build\$(Platform)\GoNotices.html')" />
+    <Content Include="..\build\$(Platform)\synctrain-mcp.exe" Link="synctrain-mcp.exe" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\build\$(Platform)\synctrain-host.exe" Link="synctrain-host.exe" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\build\$(Platform)\Synctrain.Provider.exe" Link="Synctrain.Provider.exe" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

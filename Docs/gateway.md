@@ -249,3 +249,10 @@ The bridge admits only this user's Apple-signed BetterFinder from team UF6P8KZZN
 host's signature in return. Its versioned requests are bounded; version handles expire with the host/configuration
 or after one hour. Temporary materializations are released after copying and swept after interrupted sessions.
 The app's existing history windows and other-platform clients keep their existing content-only export behavior.
+
+## Assistant access
+
+The bundled [MCP server](mcp.md) provides structured inspection and management
+through local stdio. Start Synctrain and explicitly enable MCP in Settings;
+enabling it grants full management access. Headless gateways use the documented
+local enable/disable command and can connect remote clients through SSH.

@@ -118,6 +118,12 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 		if d.closed {
 			return false
 		}
+		next := readPreferences()
+		if next.Preferences != d.preferences.Preferences && !d.saving && !d.dirty {
+			d.preferences = next
+			_ = configureTray(next.Tray)
+			d.showRoute()
+		}
 		if d.route == "Overview" && !d.saving {
 			if d.overviewRefresh != nil {
 				d.overviewRefresh()

@@ -31,6 +31,7 @@
 			CrashWatch.shared.logLastRun()
 			let mode = AppMode.resolve()
 			let model = AppModel()
+			MCPIntegration.shared.start()
 			_mode = State(initialValue: mode)
 			_model = State(initialValue: model)
 			if mode != nil {

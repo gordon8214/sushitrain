@@ -5,6 +5,7 @@ package history
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"t-shaped.nl/sushitrain/v2/files"
 	"t-shaped.nl/sushitrain/v2/remoteclient"
 	"testing"
@@ -22,7 +23,7 @@ func TestSourcesSurviveReopen(t *testing.T) {
 		t.Fatalf("sources lost: %#v %v", read, err)
 	}
 	st, _ := os.Stat(store.path)
-	if st.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && st.Mode().Perm() != 0600 {
 		t.Fatalf("sources permissions: %v", st.Mode())
 	}
 	list[0].Enabled = false

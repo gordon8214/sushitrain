@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"t-shaped.nl/sushitrain/v2/safecopy"
 	"t-shaped.nl/sushitrain/v2/versionsnapshot"
 	"time"
 )
@@ -80,6 +81,9 @@ func (fld *Folder) VersionSnapshots(name string) (string, error) {
 	return string(data), err
 }
 func (fld *Folder) ExportVersionSnapshot(name, id, expected, destination string) error {
+	return fld.ExportVersionSnapshotContext(context.Background(), name, id, expected, destination)
+}
+func (fld *Folder) ExportVersionSnapshotContext(parent context.Context, name, id, expected, destination string) error {
 	stamp, err := snapshotTime(id)
 	if err != nil {
 		return err
@@ -105,27 +109,17 @@ func (fld *Folder) ExportVersionSnapshot(name, id, expected, destination string)
 	if err != nil || tag != expected {
 		return errVersionNotListed
 	}
-	out, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	out, err := safecopy.Create(destination)
 	if err != nil {
 		return err
 	}
-	ok := false
-	defer func() {
-		out.Close()
-		if !ok {
-			os.Remove(destination)
-		}
-	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer out.Close()
+	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
-	if err = versionsnapshot.Write(ctx, out, file, pd, fld.FolderID, name, id); err != nil {
+	if err = versionsnapshot.Write(ctx, out.File, file, pd, fld.FolderID, name, id); err != nil {
 		return err
 	}
-	if err = out.Sync(); err != nil {
-		return err
-	}
-	ok = true
-	return nil
+	return out.Commit()
 }
 func snapshotTime(id string) (time.Time, error) {
 	if !strings.HasPrefix(id, "ver_") {

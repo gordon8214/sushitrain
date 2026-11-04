@@ -286,3 +286,10 @@ starts and stops the real units with `systemctl --user`: to try it without touch
 
 The client follows the Swift client in `SynctrainFileProviderKit` and `Docs/remote-api/invariants.md`: a change to the
 API needs both.
+
+## Assistant access
+
+The bundled [MCP server](mcp.md) provides structured inspection and management
+through local stdio. Start Synctrain and explicitly enable MCP in Settings;
+enabling it grants full management access. Headless gateways use the documented
+local enable/disable command and can connect remote clients through SSH.

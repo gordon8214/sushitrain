@@ -24,8 +24,11 @@ import (
 
 	"github.com/gofrs/flock"
 	"t-shaped.nl/sushitrain/v2/adminsock"
+	"t-shaped.nl/sushitrain/v2/desktopsettings"
 	"t-shaped.nl/sushitrain/v2/files"
 	"t-shaped.nl/sushitrain/v2/files/fusefs"
+	"t-shaped.nl/sushitrain/v2/mcpcontrol"
+	"t-shaped.nl/sushitrain/v2/mcpfiles"
 )
 
 func serve(args []string) error {
@@ -107,6 +110,19 @@ func serve(args []string) error {
 	excludeFromBackups(*mount, logger)
 	admin := adminsock.NewServer()
 	registerAdmin(admin, service, *mount, foldersChanged)
+	mcpfiles.Register(admin, func(ctx context.Context, call func(context.Context, *files.Service, string) (any, error)) (any, error) {
+		result, err := call(ctx, service, *mount)
+		if err == nil {
+			foldersChanged()
+		}
+		return result, err
+	})
+	desktopsettings.Register(admin, desktopsettings.Path())
+	if _, err := mcpcontrol.Register(admin, mcpcontrol.DefaultSettingsPath(), func() string { return "files" }); err != nil {
+		admin.Close()
+		unmount(m, *mount, logger)
+		return err
+	}
 	socket := cf.path()
 	if err := os.MkdirAll(filepath.Dir(socket), 0o700); err != nil {
 		unmount(m, *mount, logger)

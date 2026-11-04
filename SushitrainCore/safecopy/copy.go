@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"t-shaped.nl/sushitrain/v2/sharedfile"
 )
 
 type Destination struct {
@@ -53,11 +54,11 @@ func Create(path string, forbidden ...string) (*Destination, error) {
 		if blocked == "" {
 			continue
 		}
-		real, err := filepath.EvalSymlinks(blocked)
+		real, err := resolveConfiguredRoot(blocked)
 		if err != nil {
 			return nil, err
 		}
-		rel, err := filepath.Rel(real, actual)
+		rel, err := filepath.Rel(real, filepath.Join(actual, filepath.Base(path)))
 		if err == nil && (rel == "." || rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
 			return nil, errors.New("choose a destination outside Synctrain's mounted folders")
 		}
@@ -82,6 +83,32 @@ func Create(path string, forbidden ...string) (*Destination, error) {
 	ok = true
 	return &Destination{File: f, root: root, name: name, temporary: temporary, identity: identity}, nil
 }
+
+// A configured provider location need not exist in Synchronize mode. Resolve
+// its existing ancestors without creating it, retaining the missing suffix for
+// containment checks. Other filesystem errors still fail closed.
+func resolveConfiguredRoot(path string) (string, error) {
+	full, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	real, err := filepath.EvalSymlinks(full)
+	if err == nil {
+		return real, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	parent := filepath.Dir(full)
+	if parent == full {
+		return "", err
+	}
+	resolved, err := resolveConfiguredRoot(parent)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(resolved, filepath.Base(full)), nil
+}
 func (d *Destination) Commit() error {
 	if err := d.File.Sync(); err != nil {
 		return err
@@ -93,7 +120,7 @@ func (d *Destination) Commit() error {
 	if err != nil {
 		return err
 	}
-	err = errors.Join(d.File.Close(), dir.Sync())
+	err = errors.Join(d.File.Close(), sharedfile.SyncDirectory(dir))
 	err = errors.Join(err, dir.Close())
 	if err != nil {
 		if info, e := d.root.Lstat(d.name); e == nil && os.SameFile(info, d.identity) {

@@ -21,6 +21,9 @@ func TestHistoryByPath(t *testing.T) {
 	e := newTestEngine(t, "docs", simpleVersioning)
 	stamp := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	name := "gone/café ?#.txt"
+	if runtime.GOOS == "windows" {
+		name = "gone/café +#.txt"
+	} // Win32 reserves question marks; keep URL-escaping coverage.
 	e.archiveVersion(name, "archived", stamp, stamp)
 	ts := newTestService(t, e, "")
 	ts.export(false)

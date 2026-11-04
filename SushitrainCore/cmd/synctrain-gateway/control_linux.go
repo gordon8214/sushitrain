@@ -10,10 +10,12 @@ import (
 	"github.com/syncthing/syncthing/lib/svcutil"
 	"github.com/syncthing/syncthing/lib/syncthing"
 	"path/filepath"
+	"t-shaped.nl/sushitrain/v2/desktopsettings"
 	"t-shaped.nl/sushitrain/v2/enginecontrol"
 	"t-shaped.nl/sushitrain/v2/gateway"
 	"t-shaped.nl/sushitrain/v2/history"
 	"t-shaped.nl/sushitrain/v2/linuxpolicy"
+	"t-shaped.nl/sushitrain/v2/mcpcontrol"
 	core "t-shaped.nl/sushitrain/v2/src"
 )
 
@@ -39,10 +41,21 @@ func registerNativeControl(ctx context.Context, a *gateway.AdminServer, app *syn
 	}
 	control := enginecontrol.New(c, func() error { go app.Stop(svcutil.ExitRestart); return nil })
 	if p, ok := cfg.(*linuxpolicy.Policy); ok {
-		control.Pause = p.SetPaused
+		control.Pause = func(ctx context.Context, ids []string, paused bool) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return p.SetPaused(ids, paused)
+		}
 		p.Register(a)
 	}
 	control.Register(a)
+	desktopsettings.Register(a, desktopsettings.Path())
+	if _, err := mcpcontrol.Register(a, mcpcontrol.DefaultSettingsPath(), func() string { return "synchronize" }); err != nil {
+		control.Close()
+		detach()
+		return err
+	}
 	if err := history.RegisterDesktop(a); err != nil {
 		control.Close()
 		detach()

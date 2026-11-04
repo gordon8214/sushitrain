@@ -7,6 +7,7 @@ package sushitrain
 
 import (
 	"cmp"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -284,4 +285,28 @@ func newestVersion(versions []syncthing.FileVersion) syncthing.FileVersion {
 	return slices.MaxFunc(versions, func(a, b syncthing.FileVersion) int {
 		return a.VersionTime.Compare(b.VersionTime)
 	})
+}
+
+// FileVersionRevision identifies the native archive selected by an external
+// client without exposing its filesystem location or platform metadata.
+func (f *Folder) FileVersionRevision(name string, v *FileVersion) (string, error) {
+	internals := f.client.internals()
+	if internals == nil {
+		return "", ErrStillLoading
+	}
+	file, err := internals.OpenFileVersion(f.FolderID, name, v.versionTime)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	return archiveRevision(info), nil
+}
+
+func archiveRevision(info fs.FileInfo) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s:%d:%d", historyFileIdentityFromSnapshot(info.Sys()), info.Size(), info.ModTime().UnixNano())))
+	return fmt.Sprintf("\"%x\"", sum)
 }

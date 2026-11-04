@@ -14,7 +14,7 @@ import (
 )
 
 type versionExporter interface {
-	DesktopExportVersion(context.Context, string, *core.FileVersion, string) error
+	DesktopExportVersionChecked(context.Context, string, *core.FileVersion, string, string) error
 }
 
 func (c *Control) exportVersion(ctx context.Context, p Request, v *core.FileVersion, preview bool) (any, error) {
@@ -27,7 +27,7 @@ func (c *Control) exportVersion(ctx context.Context, p Request, v *core.FileVers
 		return nil, errors.New("native exports are unavailable on this platform")
 	}
 	if !preview {
-		return nil, exporter.DesktopExportVersion(ctx, p.Path, v, p.Name)
+		return nil, exporter.DesktopExportVersionChecked(ctx, p.Path, v, p.Name, p.Token)
 	}
 	c.previewMu.Lock()
 	defer c.previewMu.Unlock()
@@ -49,7 +49,7 @@ func (c *Control) exportVersion(ctx context.Context, p Request, v *core.FileVers
 		return nil, err
 	}
 	dest := filepath.Join(dir, filepath.Base(p.Path))
-	if err = exporter.DesktopExportVersion(ctx, p.Path, v, dest); err != nil {
+	if err = exporter.DesktopExportVersionChecked(ctx, p.Path, v, dest, p.Token); err != nil {
 		os.RemoveAll(dir)
 		return nil, err
 	}

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/syncthing/syncthing/lib/config"
 )
@@ -69,7 +70,17 @@ func TestSelectiveFolders(t *testing.T) {
 
 	// The engine drops its patterns when it can't load the file, and tells nobody but the scan: there is no telling what
 	// they are
+	previous, err := os.Stat(ignoreFile)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(ignoreFile, []byte("#include missing.txt\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The native matcher caches by mtime. Fast writes on Windows can share
+	// a timestamp, so make this fixture's intended change explicit.
+	changed := previous.ModTime().Add(time.Second)
+	if err := os.Chtimes(ignoreFile, changed, changed); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.app.Internals.ScanFolderSubdirs("docs", nil); err == nil {

@@ -58,7 +58,7 @@ func TestHistoryRecoveryAfterArchiveAndFailedPublish(t *testing.T) {
 	if err := publishHistoryFile(root, record.Staged, record.Target, journal, record, filepath.Join(root.Name(), "pending")); err == nil {
 		t.Fatal("publication unexpectedly succeeded")
 	}
-	contents, err := root.ReadFile(record.Target)
+	contents, err := os.ReadFile(filepath.Join(root.Name(), record.Target))
 	if err != nil || string(contents) != "original" {
 		t.Fatalf("original was not recovered: %q %v", contents, err)
 	}
@@ -130,6 +130,7 @@ func TestHistoryRecoveryRequiresPendingRootEvenAfterReconfiguration(t *testing.T
 	if err := root.Rename(record.Target, "archived.txt"); err != nil {
 		t.Fatal(err)
 	}
+	root.Close()
 	moved := root.Name() + "-offline"
 	if err := os.Rename(root.Name(), moved); err != nil {
 		t.Fatal(err)
@@ -144,7 +145,7 @@ func TestHistoryRecoveryRequiresPendingRootEvenAfterReconfiguration(t *testing.T
 	if err := recoverHistoryRestores(nil, pendingDirectory); err != nil {
 		t.Fatal(err)
 	}
-	contents, err := root.ReadFile(record.Target)
+	contents, err := os.ReadFile(filepath.Join(root.Name(), record.Target))
 	if err != nil || string(contents) != "original" {
 		t.Fatalf("lost original: %q %v", contents, err)
 	}

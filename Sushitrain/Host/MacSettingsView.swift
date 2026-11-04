@@ -81,7 +81,7 @@
 
 		var body: some View {
 			MacSettingsView(mode: .synchronize) { category in
-				if appState.startupState == .started || appState.isEngineRestarting {
+				if category == .mcp || appState.startupState == .started || appState.isEngineRestarting {
 					SynchronizeSettingsDetail(category: category, presence: $presence)
 				}
 				else {
@@ -89,6 +89,7 @@
 						"Settings unavailable", systemImage: "gearshape", description: Text("Start the engine to change its settings."))
 				}
 			}
+			.task { MCPIntegration.shared.start(appState) }
 		}
 	}
 
@@ -99,6 +100,7 @@
 
 		var body: some View {
 			switch category {
+			case .mcp: MCPSettingsView()
 			case .historySources: HistorySourcesView()
 			case .general: GeneralSettingsView(userSettings: appState.userSettings, presence: $presence)
 			case .filesAndPreviews: FilesPreviewSettingsView(userSettings: appState.userSettings)

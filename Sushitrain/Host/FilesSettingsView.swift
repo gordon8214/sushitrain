@@ -24,6 +24,7 @@
 
 		var body: some View {
 			switch category {
+			case .mcp: MCPSettingsView()
 			case .historySources: HistorySourcesView()
 			case .general: FilesGeneralSettingsView(presence: $presence)
 			case .gateways: FilesGatewaysSettingsView()

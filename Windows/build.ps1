@@ -20,6 +20,7 @@ $compiler = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object { [versio
 $hostArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
 $engineVersion = [regex]::Match((Get-Content "$root\SushitrainCore\Makefile" -Raw), '(?m)^ENGINE_VERSION\s*=\s*(\S+)').Groups[1].Value
 if (-not $engineVersion) { throw 'Cannot read the engine version from SushitrainCore/Makefile.' }
+$appVersion = ([xml](Get-Content "$PSScriptRoot\Synctrain.App\Package.appxmanifest" -Raw)).Package.Identity.Version
 $certificate = $null
 if ($DevelopmentSign) {
     $certificate = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq 'CN=Gordon Byrnes' -and $_.FriendlyName -eq 'Synctrain development signing' -and $_.NotAfter -gt (Get-Date).AddDays(7) } | Select-Object -First 1
@@ -42,7 +43,7 @@ try {
         try {
             $flags = "-X github.com/syncthing/syncthing/lib/build.Version=$engineVersion -X github.com/syncthing/syncthing/lib/build.Tags=noupgrade,synctrain -X github.com/syncthing/syncthing/lib/build.User=synctrain -X github.com/syncthing/syncthing/lib/build.Host=gordon8214.github.io"
             $ErrorActionPreference = 'Continue'
-            $notices = & $go.Source tool go-licenses report ./cmd/synctrain-host --template=./notices.template.html 2> "$output\notices.log"
+            $notices = & $go.Source tool go-licenses report ./cmd/synctrain-host ./cmd/synctrain-mcp --template=./notices.template.html 2> "$output\notices.log"
             $noticeExit = $LASTEXITCODE
             $ErrorActionPreference = 'Stop'
             if ($noticeExit -ne 0) { throw 'Open-source notices could not be generated.' }
@@ -52,6 +53,8 @@ try {
             $hostExit = $LASTEXITCODE
             $ErrorActionPreference = 'Stop'
             if ($hostExit -ne 0) { throw 'The Go host did not build.' }
+            & $go.Source build -mod=readonly -trimpath -ldflags "-s -w -X main.version=$appVersion" -o "$output\synctrain-mcp.exe" ./cmd/synctrain-mcp
+            if ($LASTEXITCODE -ne 0) { throw 'The MCP helper did not build.' }
         } finally { Pop-Location }
         & $msbuild "$PSScriptRoot\Synctrain.Provider\Synctrain.Provider.vcxproj" /nologo /v:minimal /p:Configuration=Release "/p:Platform=$arch"
         if ($LASTEXITCODE -ne 0) { throw 'The native provider did not build.' }

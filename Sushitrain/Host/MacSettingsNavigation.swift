@@ -11,12 +11,13 @@
 	enum MacSettingsCategory: String, Hashable, Sendable, Identifiable {
 		case general, filesAndPreviews, network, bandwidth, engine, defaults
 		case remoteFileService, engineAccess, configuration, troubleshooting, advancedConfiguration
-		case gateways, finder, pendingEdits, historySources
+		case gateways, finder, pendingEdits, historySources, mcp
 
 		var id: String { rawValue }
 
 		var title: LocalizedStringResource {
 			switch self {
+			case .mcp: "MCP"
 			case .general: "General"
 			case .filesAndPreviews: "Files & Previews"
 			case .network: "Network"
@@ -37,6 +38,7 @@
 
 		var symbol: String {
 			switch self {
+			case .mcp: "terminal"
 			case .general: "gearshape"
 			case .filesAndPreviews: "doc.richtext"
 			case .network: "network"
@@ -64,10 +66,10 @@
 			case .synchronize:
 				[
 					.general, .filesAndPreviews, .network, .bandwidth, .engine, .defaults,
-					.remoteFileService, .historySources, .engineAccess, .configuration, .troubleshooting, .advancedConfiguration,
+					.remoteFileService, .mcp, .historySources, .engineAccess, .configuration, .troubleshooting, .advancedConfiguration,
 				]
 			case .filesInFinder:
-				[.general, .gateways, .historySources, .finder, .pendingEdits]
+				[.general, .gateways, .historySources, .finder, .pendingEdits, .mcp]
 			}
 		}
 

@@ -39,7 +39,7 @@ type Control struct {
 	cancel     context.CancelFunc
 	Client     *core.Client
 	Restart    func() error
-	Pause      func([]string, bool) error
+	Pause      func(context.Context, []string, bool) error
 	mu         sync.RWMutex
 	editors    map[string]*draft
 	closed     bool
@@ -66,7 +66,7 @@ func Strings(list *core.ListOfStrings) []string {
 	return out
 }
 func (c *Control) Register(a *adminsock.Server) {
-	for _, name := range []string{"engine.status", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.browsePage", "engine.thumbnail", "engine.search", "engine.pending", "engine.pendingFolders", "engine.ignored", "engine.stats", "engine.logs", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "engine.previewVersion", "engine.exportCurrent", "engine.resolvePath", "engine.captureRestore", "engine.restoreDownloaded", "settings.get", "settings.save", "settings.close", "configuration.export"} {
+	for _, name := range []string{"engine.diagnostics", "engine.differences", "engine.snapshots", "engine.exportSnapshot", "engine.inspect", "engine.read", "engine.replace", "engine.mkdir", "engine.import", "engine.rename", "engine.move", "engine.status", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.browsePage", "engine.thumbnail", "engine.search", "engine.pending", "engine.pendingFolders", "engine.ignored", "engine.stats", "engine.logs", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "engine.previewVersion", "engine.exportCurrent", "engine.resolvePath", "engine.captureRestore", "engine.restoreDownloaded", "settings.get", "settings.save", "settings.close", "configuration.export"} {
 		a.Register(name, func(ctx context.Context, params json.RawMessage) (any, error) {
 			var p Request
 			if len(params) > 0 {
@@ -97,6 +97,15 @@ func (c *Control) Call(ctx context.Context, method string, p Request) (any, erro
 		return nil, errors.New("the engine restarted; refresh this page")
 	}
 	cl := c.Client
+	if cl == nil {
+		return nil, errors.New("the engine is not running")
+	}
+	if cl.EngineState() != core.EngineStateRunning {
+		if method == "engine.status" {
+			return map[string]any{"state": cl.EngineState(), "error": cl.EngineError(), "engineVersion": core.Version()}, nil
+		}
+		return nil, errors.New("the engine is not running; wait for startup or restart it in Synctrain")
+	}
 	if p.Folder != "" {
 		if _, err := c.folder(p.Folder); err != nil {
 			return nil, err
@@ -112,9 +121,41 @@ func (c *Control) Call(ctx context.Context, method string, p Request) (any, erro
 		return nil, errors.New("choose a device")
 	}
 	switch method {
+	case "engine.diagnostics":
+		b, err := cl.DiagnosticsJSON()
+		return json.RawMessage(b), err
+	case "engine.differences":
+		f, err := c.folder(p.Folder)
+		if err != nil {
+			return nil, err
+		}
+		stats, err := f.Statistics()
+		if err != nil {
+			return nil, err
+		}
+		needed, err := f.FilesNeeded()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"statistics": stats, "needed": Strings(needed), "localChanges": f.LocalChangedItems(), "outOfSync": f.OutOfSyncItems()}, nil
+	case "engine.snapshots":
+		f, err := c.folder(p.Folder)
+		if err != nil {
+			return nil, err
+		}
+		text, err := f.VersionSnapshots(p.Path)
+		return json.RawMessage(text), err
+	case "engine.exportSnapshot":
+		f, err := c.folder(p.Folder)
+		if err != nil {
+			return nil, err
+		}
+		return nil, f.ExportVersionSnapshotContext(ctx, p.Path, p.ID, p.Token, p.Name)
+	case "engine.inspect", "engine.read", "engine.replace", "engine.mkdir", "engine.import", "engine.rename", "engine.move":
+		return c.fileOperation(ctx, method, p)
 	case "engine.status":
 		name, _ := cl.GetName()
-		return map[string]any{"deviceID": cl.DeviceID(), "name": name, "state": cl.EngineState(), "restartRequired": cl.IsEngineRestartRequired(), "guiURL": cl.GUIURL(), "guiEnabled": cl.IsGUIEnabled()}, nil
+		return map[string]any{"engineVersion": core.Version(), "error": cl.EngineError(), "deviceID": cl.DeviceID(), "name": name, "state": cl.EngineState(), "restartRequired": cl.IsEngineRestartRequired(), "guiURL": cl.GUIURL(), "guiEnabled": cl.IsGUIEnabled()}, nil
 	case "engine.folders":
 		out := []Folder{}
 		for _, id := range Strings(cl.Folders()) {
@@ -256,15 +297,25 @@ func (c *Control) Call(ctx context.Context, method string, p Request) (any, erro
 		for i := 0; i < list.Count(); i++ {
 			v := list.ItemAt(i)
 			id := fmt.Sprint(v.VersionTime().UnixMilliseconds())
+			revision, err := f.FileVersionRevision(p.Path, v)
+			if err != nil {
+				return nil, err
+			}
 			if id == p.ID {
+				if p.Token != "" && revision != p.Token {
+					return nil, errors.New("the selected archive changed; refresh before restoring or exporting it")
+				}
 				if method == "engine.restoreVersion" {
+					if p.Token != "" {
+						return nil, f.RestoreFileVersionChecked(ctx, p.Path, v, p.Token)
+					}
 					return nil, f.RestoreFileVersion(p.Path, v)
 				}
 				if method == "engine.exportVersion" || method == "engine.previewVersion" {
 					return c.exportVersion(ctx, p, v, method == "engine.previewVersion")
 				}
 			}
-			out = append(out, Version{id, v.Size, v.VersionTime().UnixMilliseconds(), v.ModTime().UnixMilliseconds()})
+			out = append(out, Version{ID: id, Revision: revision, Size: v.Size, Archived: v.VersionTime().UnixMilliseconds(), Modified: v.ModTime().UnixMilliseconds()})
 		}
 		if method != "engine.versions" {
 			return nil, errors.New("the selected version is no longer kept")
@@ -281,7 +332,7 @@ func (c *Control) Call(ctx context.Context, method string, p Request) (any, erro
 		if err != nil {
 			return nil, err
 		}
-		return nil, f.RestoreDownloadedVersion(p.Path, p.Name, p.Token, p.Offset)
+		return nil, f.RestoreDownloadedVersionContext(ctx, p.Path, p.Name, p.Token, p.Offset)
 	case "configuration.export":
 		data, err := os.ReadFile(cl.ConfigurationFilePath())
 		if err != nil {
@@ -317,18 +368,18 @@ func (c *Control) Call(ctx context.Context, method string, p Request) (any, erro
 			}
 			return nil, errors.New("native file actions are not available on this host")
 		}
-		return c.action(p)
+		return c.action(ctx, p)
 	}
 	return nil, fmt.Errorf("unknown engine operation %q", method)
 }
-func (c *Control) action(p Request) (any, error) {
+func (c *Control) action(ctx context.Context, p Request) (any, error) {
 	cl := c.Client
 	if c.Pause != nil && (p.Action == "pauseAll" || p.Action == "resumeAll" || (p.Device != "" && (p.Action == "pause" || p.Action == "resume"))) {
 		ids := c.peers()
 		if p.Device != "" {
 			ids = []string{p.Device}
 		}
-		return nil, c.Pause(ids, p.Action == "pause" || p.Action == "pauseAll")
+		return nil, c.Pause(ctx, ids, p.Action == "pause" || p.Action == "pauseAll")
 	}
 	if p.Folder != "" {
 		f, err := c.folder(p.Folder)
@@ -341,6 +392,9 @@ func (c *Control) action(p Request) (any, error) {
 		case "resume":
 			return nil, f.SetPaused(false)
 		case "rescan":
+			if p.Path != "" {
+				return nil, f.RescanSubdirectory(p.Path)
+			}
 			return nil, f.Rescan()
 		case "remove":
 			return nil, f.Unlink()
@@ -433,6 +487,14 @@ func (c *Control) action(p Request) (any, error) {
 		b, e := cl.LogFacilitiesJSON()
 		return json.RawMessage(b), e
 	case "logLevel":
+		levels := map[string]int64{"debug": -4, "info": 0, "warn": 4, "error": 8}
+		if p.ID != "" {
+			level, ok := levels[p.ID]
+			if !ok {
+				return nil, errors.New("choose debug, info, warn, or error")
+			}
+			p.Offset = level
+		}
 		cl.SetLogLevel(p.Name, int(p.Offset))
 		return nil, nil
 	}

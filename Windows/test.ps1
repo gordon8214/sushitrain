@@ -15,7 +15,7 @@ try {
     # Shared suites normally take about a minute; native Cloud Files takes 40–60
     # seconds. Every Go test process has a hard budget and prints stacks on expiry.
     $ErrorActionPreference = 'Continue'
-    & 'C:\Program Files\Go\bin\go.exe' test -count=1 -mod=readonly -tags noupgrade -timeout 180s ./remoteapi ./remoteclient ./adminsock ./files ./gateway ./gatewayadmin ./sthome ./src ./winplatform ./winhost ./cmd/synctrain-host
+    & 'C:\Program Files\Go\bin\go.exe' test -count=1 -mod=readonly -tags noupgrade -timeout 180s ./mcpapi ./mcpcontrol ./mcpfiles ./mcpserver ./history ./safecopy ./remoteapi ./remoteclient ./adminsock ./files ./gateway ./gatewayadmin ./sthome ./src ./winplatform ./winhost ./cmd/synctrain-host
     $testExit = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
     if ($testExit -ne 0) { throw 'Windows tests failed.' }

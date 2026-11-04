@@ -211,3 +211,10 @@ author / the respective owners:
 
 Syncthing is a trademark of the Syncthing Foundation. Read more over at [syncthing.net](https://syncthing.net). This project
 is not endorsed by, nor affiliated with, neither Syncthing contributors nor the Syncthing Foundation.
+
+## Assistant access
+
+The bundled [MCP server](./Docs/mcp.md) provides structured inspection and management
+through local stdio. Start Synctrain and explicitly enable MCP in Settings;
+enabling it grants full management access. Headless gateways use the documented
+local enable/disable command and can connect remote clients through SSH.

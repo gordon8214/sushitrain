@@ -31,10 +31,11 @@ git -C "$root" diff --quiet HEAD 2>/dev/null || release="$release.dirty"
 
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-cp "$core"/build/linux-"$LINUX_ARCH"/{synctrain,synctrain-files,synctrain-gateway,libsynctrain-nautilus.so} "$stage/"
+cp "$core"/build/linux-"$LINUX_ARCH"/{synctrain,synctrain-mcp,synctrain-files,synctrain-gateway,libsynctrain-nautilus.so} "$stage/"
 cp "$root"/Linux/systemd/*.service "$root"/Linux/com.gordonbyrnes.Synctrain.{desktop,metainfo.xml} \
-	"$root/LICENSE" "$root/Docs/linux.md" "$stage/"
+	"$root/LICENSE" "$root/Docs/linux.md" "$root/Docs/mcp.md" "$root/Docs/mcp-acceptance.md" "$stage/"
 cp "$root/Docs/logo.png" "$stage/com.gordonbyrnes.Synctrain.png"
+cp "$core/notices.html" "$stage/GoNotices.html"
 # The spec keeps no changelog: the git history is it
 rpmbuild -bb --define "_sourcedir $stage" --define "_rpmdir $core/build/rpm" --define "source_date_epoch_from_changelog 0" \
 	--define "synctrain_version $version" --define "synctrain_release $release" "$root/Linux/synctrain.spec"

@@ -88,6 +88,18 @@ enum RemotePairingError: LocalizedError, Sendable {
 		}
 	}
 
+	/// Shared entry point for non-UI clients; uses the same pairing and persistence path.
+	static func pair(link: String, purpose: GatewayUsage = .files) async throws -> RemoteEndpoint {
+		guard let invitation = invitation(from: link), let environment = RemoteEnvironment.shared else {
+			throw RemotePairingError.invalidLink
+		}
+		let (client, pending) = try await request(invitation, clientName: DeviceName.current, environment: environment)
+		let endpoint = try await awaitApproval(
+			invitation, client: client, pending: pending, environment: environment, purpose: purpose)
+		await RemoteCoordinator.shared.didPair(serviceID: endpoint.serviceID, purpose: purpose)
+		return endpoint
+	}
+
 	func cancel() {
 		task?.cancel()
 		task = nil

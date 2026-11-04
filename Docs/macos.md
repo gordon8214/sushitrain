@@ -1085,3 +1085,10 @@ opened only the requested folder's settings in the foreground. Production folder
 Standalone Previous Versions validation used the installed signed Release and the enabled TrueNAS history source.
 Finder opened AGENTS.md and icloud-materialize.sh in separate history windows with remote archives visible. Repeating
 the first file's command reused its window, and Done in the second window closed only that window.
+
+## Assistant access
+
+The bundled [MCP server](mcp.md) provides structured inspection and management
+through local stdio. Start Synctrain and explicitly enable MCP in Settings;
+enabling it grants full management access. Headless gateways use the documented
+local enable/disable command and can connect remote clients through SSH.

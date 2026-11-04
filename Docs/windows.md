@@ -206,3 +206,10 @@ manual acceptance checks; native x64 hardware and production signing retain the
 limits recorded above. Logs use the `quality-` prefix in
 `Windows/build/verification`, and the updated packages and checksums are in
 `Windows/build/artifacts`.
+
+## Assistant access
+
+The bundled [MCP server](mcp.md) provides structured inspection and management
+through local stdio. Start Synctrain and explicitly enable MCP in Settings;
+enabling it grants full management access. Headless gateways use the documented
+local enable/disable command and can connect remote clients through SSH.

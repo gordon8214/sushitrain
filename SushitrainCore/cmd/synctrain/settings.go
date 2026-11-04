@@ -16,6 +16,7 @@ import (
 func (d *desktopUI) settings() {
 	if d.mode == modeFiles {
 		g := d.group("Settings")
+		g.Add(choiceRow("MCP", "Local assistant access", d.mcpSettings))
 		g.Add(choiceRow("Files & Previews", "Browsing and native previews", d.previewSettings))
 		g.Add(choiceRow("Cache and Offline Storage", "Manage fetched and pinned files", func() { d.legacyFiles() }))
 		d.serviceButtons()
@@ -41,6 +42,7 @@ func (d *desktopUI) settings() {
 		{"Advanced Configuration", "Expert controls for every engine setting", "advanced/options"},
 	}
 	g := d.group("Settings")
+	g.Add(choiceRow("MCP", "Local assistant access", d.mcpSettings))
 	g.Add(choiceRow("Background Resource Use", "CPU and I/O priority for the whole synchronization service", func() { d.resourceSettings() }))
 	for _, c := range categories {
 		c := c

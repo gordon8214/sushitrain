@@ -11,6 +11,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -57,14 +58,17 @@ func (clt *Client) FinderRootsJSON() ([]byte, error) {
 }
 
 func finderPathAllowed(path string) bool {
-	if filepath.IsAbs(path) || strings.ContainsRune(path, '\x00') || fs.IsInternal(path) {
+	if runtime.GOOS == "windows" && strings.Contains(path, "\\") {
+		return false
+	}
+	if filepath.IsAbs(path) || filepath.VolumeName(path) != "" || strings.ContainsRune(path, '\x00') || fs.IsInternal(filepath.FromSlash(path)) {
 		return false
 	}
 	if path == "" {
 		return true
 	}
 	for _, part := range strings.Split(path, "/") {
-		if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".syncthing.") {
+		if part == "" || part == "." || part == ".." || strings.HasPrefix(strings.ToLower(part), ".syncthing.") {
 			return false
 		}
 	}

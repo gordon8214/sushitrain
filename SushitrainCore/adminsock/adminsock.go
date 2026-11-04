@@ -57,6 +57,8 @@ type Server struct {
 	listener   net.Listener
 	closeOnce  sync.Once
 	cleanup    []func()
+	// Authorize is an optional additional peer identity check, set before Listen.
+	Authorize func(net.Conn) error
 }
 
 func NewServer() *Server {
@@ -68,6 +70,21 @@ func (a *Server) Register(name string, method Method) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	a.methods[name] = method
+}
+
+// Invoke calls a registered operation in its owning process. Adapters use this
+// instead of copying handlers or opening another engine/database instance.
+func (a *Server) Invoke(ctx context.Context, name string, params json.RawMessage) (any, error) {
+	a.mutex.Lock()
+	method, ok := a.methods[name]
+	a.mutex.Unlock()
+	if !ok {
+		return nil, fmt.Errorf("unsupported operation %q on this host", name)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return method(ctx, params)
 }
 
 func (a *Server) Methods() []string {
@@ -135,6 +152,11 @@ func (a *Server) Close() {
 
 func (a *Server) serve(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
+	if a.Authorize != nil {
+		if err := a.Authorize(conn); err != nil {
+			return
+		}
+	}
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	reader := bufio.NewReader(conn)

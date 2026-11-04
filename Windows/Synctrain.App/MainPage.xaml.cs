@@ -468,6 +468,28 @@ public sealed partial class MainPage : Page
     private async Task ChooseLocation(){var path=await PickFolder();if(path is not null){await Call("root.set",new {Path=path});await Refresh();}}
     private async Task Settings(string mode)
     {
+        Body.Children.Add(ActionButton("History sources", HistorySources));
+        var mcp = await Call("mcp.settings");
+        var assistantAccess = new ToggleSwitch { Header = "Enable MCP", IsOn = B(mcp,"enabled") };
+        var confirmedAccess = assistantAccess.IsOn;
+        assistantAccess.Toggled += async (_, _) => {
+            var desired = assistantAccess.IsOn;
+            if (desired == confirmedAccess) return;
+            // Keep the last confirmed state visible if persistence fails.
+            assistantAccess.IsOn = confirmedAccess;
+            assistantAccess.IsEnabled = false;
+            try {
+                await Run(async () => {
+                    var updated = await Call("mcp.settings",new { enabled = desired });
+                    confirmedAccess = B(updated,"enabled");
+                    assistantAccess.IsOn = confirmedAccess;
+                });
+            } finally { assistantAccess.IsEnabled = true; }
+        };
+        Body.Children.Add(assistantAccess);
+        Text("Connected assistants have full management access, including changing settings and deleting accessible files. Changes can propagate to other devices.");
+        Body.Children.Add(new TextBox { Text = "{\"mcpServers\":{\"synctrain\":{\"command\":\"synctrain-mcp.exe\"}}}", IsReadOnly = true, TextWrapping = TextWrapping.Wrap });
+        Text("Start Synctrain before connecting. MCP uses local stdio and leaves the app running when clients disconnect.");
         var startup = await StartupTask.GetAsync("SynctrainStartup");
         var toggle = new ToggleSwitch { Header = "Start at login", IsOn = startup.State == StartupTaskState.Enabled };
         toggle.Toggled += async (_, _) => await Run(async () => { if (toggle.IsOn) { var result = await startup.RequestEnableAsync(); if (result != StartupTaskState.Enabled) throw new InvalidOperationException("Windows has disabled startup for Synctrain. Enable it in Settings → Apps → Startup."); } else startup.Disable(); }); Body.Children.Add(toggle);
@@ -482,4 +504,22 @@ public sealed partial class MainPage : Page
         var version=Package.Current.Id.Version;Text($"Synctrain for Windows {version.Major}.{version.Minor}.{version.Build}.{version.Revision}", true); Text("ARM64 and x64 · Windows Cloud Files · Mozilla Public License 2.0");
         Body.Children.Add(ActionButton("Open-source notices",()=>OpenPath(Path.Combine(AppContext.BaseDirectory,"GoNotices.html"))));
     }
+    private async Task HistorySources()
+    {
+        Detail(HistorySources);
+        ShowBody(); Body.Children.Clear(); Commands.PrimaryCommands.Clear(); Heading.Text = "History Sources";
+        Command("Back", Symbol.Back, LeaveDetails);
+        Command("Pair history source", Symbol.Add, async () => {
+            var link = await Input("Pair history source", "Paste the gateway's pairing link");
+            if (link is null) return;
+            await Call("history.pair", new { Link = link }, 660); await HistorySources();
+        });
+        foreach (var source in (await Call("history.sources"))?.AsArray() ?? []) {
+            var id = S(source?["Endpoint"], "serviceID"); var enabled = B(source,"Enabled");
+            Row(S(source,"Name"), S(source?["Endpoint"],"host"),
+                ActionButton(enabled ? "Disable" : "Enable", async () => { await Call("history.enable",new { ID=id, Enabled=!enabled }); await HistorySources(); }),
+                ActionButton("Forget", async () => { if(await Confirm("Forget history source?","Its independent history pairing will be removed.")) { await Call("history.forget",new { ID=id });await HistorySources(); } }));
+        }
+    }
+
 }

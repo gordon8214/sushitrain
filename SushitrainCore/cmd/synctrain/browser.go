@@ -296,7 +296,7 @@ func (d *desktopUI) showBrowser(rows []browserRow) {
 	}
 	d.button("List / Grid", func() {
 		d.preferences.Grid = !d.preferences.Grid
-		if err := writePreferences(d.preferences); err != nil {
+		if err := writePreferences(&d.preferences); err != nil {
 			d.error(err)
 			return
 		}

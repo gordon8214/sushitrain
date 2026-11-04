@@ -32,6 +32,7 @@ folders of a gateway on another system appear in ~/Synctrain, and files are fetc
 
 %install
 install -Dm755 %{_sourcedir}/synctrain %{buildroot}%{_bindir}/synctrain
+install -Dm755 %{_sourcedir}/synctrain-mcp %{buildroot}%{_bindir}/synctrain-mcp
 install -Dm755 %{_sourcedir}/synctrain-files %{buildroot}%{_bindir}/synctrain-files
 install -Dm755 %{_sourcedir}/synctrain-gateway %{buildroot}%{_bindir}/synctrain-gateway
 install -Dm644 %{_sourcedir}/synctrain-files.service %{buildroot}%{_userunitdir}/synctrain-files.service
@@ -45,6 +46,10 @@ install -Dm644 %{_sourcedir}/com.gordonbyrnes.Synctrain.png \
 install -Dm755 %{_sourcedir}/libsynctrain-nautilus.so %{buildroot}%{_libdir}/nautilus/extensions-4/libsynctrain-nautilus.so
 install -Dm644 %{_sourcedir}/LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 install -Dm644 %{_sourcedir}/linux.md %{buildroot}%{_docdir}/%{name}/linux.md
+
+install -Dm644 %{_sourcedir}/mcp.md %{buildroot}%{_docdir}/%{name}/mcp.md
+install -Dm644 %{_sourcedir}/mcp-acceptance.md %{buildroot}%{_docdir}/%{name}/mcp-acceptance.md
+install -Dm644 %{_sourcedir}/GoNotices.html %{buildroot}%{_docdir}/%{name}/GoNotices.html
 
 # The window enables one of the units when a mode is chosen; nothing runs before that
 %post
@@ -63,8 +68,12 @@ install -Dm644 %{_sourcedir}/linux.md %{buildroot}%{_docdir}/%{name}/linux.md
 %license %{_licensedir}/%{name}/LICENSE
 %dir %{_docdir}/%{name}
 %doc %{_docdir}/%{name}/linux.md
+%doc %{_docdir}/%{name}/mcp.md
+%doc %{_docdir}/%{name}/GoNotices.html
+%doc %{_docdir}/%{name}/mcp-acceptance.md
 %{_bindir}/synctrain
 %{_bindir}/synctrain-files
+%{_bindir}/synctrain-mcp
 %{_bindir}/synctrain-gateway
 %{_userunitdir}/synctrain-files.service
 %{_userunitdir}/synctrain-gateway.service

@@ -13,6 +13,7 @@
 		@State private var presence = AppPresence.menuBarAndDock
 
 		init() {
+			MCPIntegration.shared.start()
 			if ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_SETTINGS_FIXTURE"] == "populated" {
 				RemoteCoordinator.shared.loadSettingsFixture()
 			}

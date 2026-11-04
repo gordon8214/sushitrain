@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"t-shaped.nl/sushitrain/v2/adminsock"
+	"t-shaped.nl/sushitrain/v2/enginecontrol"
 	"t-shaped.nl/sushitrain/v2/files"
 	core "t-shaped.nl/sushitrain/v2/src"
 	"t-shaped.nl/sushitrain/v2/winplatform"
@@ -34,6 +35,8 @@ type Settings struct {
 }
 type Host struct {
 	mu                    sync.RWMutex
+	mcpMu                 sync.Mutex
+	mcpEngine             *enginecontrol.Control
 	gate                  sync.Mutex
 	transition            sync.Mutex
 	gatewayMu             sync.Mutex
@@ -113,6 +116,12 @@ func (h *Host) Close() {
 	h.stop()
 }
 func (h *Host) stop() error {
+	h.mcpMu.Lock()
+	if h.mcpEngine != nil {
+		h.mcpEngine.Close()
+		h.mcpEngine = nil
+	}
+	h.mcpMu.Unlock()
 	if h.gateway != nil {
 		h.gateway.Stop()
 		h.gateway = nil
@@ -412,6 +421,10 @@ type request struct {
 }
 
 func (h *Host) Register(server *adminsock.Server) {
+	if err := h.registerMCP(server); err != nil {
+		server.Register("mcp.call", func(context.Context, json.RawMessage) (any, error) { return nil, err })
+		server.Register("mcp.settings", func(context.Context, json.RawMessage) (any, error) { return nil, err })
+	}
 	methods := []string{"status", "mode.set", "root.set", "recovery.captures", "recovery.export", "home.import", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.pending", "engine.stats", "engine.logs", "engine.search", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "settings.get", "settings.save", "settings.close", "gateway.enable", "gateway.status", "gateway.exports", "gateway.export", "gateway.unexport", "gateway.clients", "gateway.revoke", "gateway.permission", "gateway.pair", "gateway.pending", "gateway.approve", "gateway.deny", "files.gateways", "files.pair", "files.forget", "files.available", "files.add", "files.remove", "files.folders", "files.children", "files.path", "files.entry", "files.read", "files.thumbnail", "files.keep", "files.create", "files.createAck", "files.rename", "files.delete", "files.stage", "files.stageAck", "files.resolve", "files.state", "projection.load", "projection.save", "projection.root.get", "projection.root.save", "projection.report", "files.download", "files.pending", "files.export", "files.discard", "files.versions", "files.restore", "files.copyVersion", "files.versionPreview", "files.storage", "files.budget"}
 	for _, method := range methods {
 		server.Register(method, func(ctx context.Context, data json.RawMessage) (any, error) {
