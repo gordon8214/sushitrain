@@ -3,11 +3,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
-PATH := $(shell pwd):/opt/homebrew/bin:$(HOME)/go/bin:$(PATH)
-SHELL := env PATH="$(PATH)" /bin/bash
+export PATH := $(CURDIR):/opt/homebrew/bin:$(HOME)/go/bin:$(PATH)
+SHELL := /bin/bash
 GO_VERSION := $(shell go version)
 
-.PHONY: clean install deps test test-engine gateway-linux gateway-test-linux linux linux-window linux-test
+.PHONY: clean install deps test test-engine gateway-linux gateway-test-linux linux linux-window linux-test linux-nautilus linux-nautilus-test
 
 build: build/SushitrainCore.xcframework
 
@@ -84,6 +84,13 @@ linux: gateway-linux
 linux-window:
 	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X main.version=$(LINUX_VERSION)" \
 		-o build/linux-$(LINUX_ARCH)/synctrain ./cmd/synctrain
+
+# Native Nautilus module and its bounded GLib suite; build on the target Linux architecture.
+linux-nautilus:
+	$(MAKE) -C ../Linux/nautilus LINUX_ARCH="$(LINUX_ARCH)" BUILD_DIR="$(CURDIR)/build/linux-$(LINUX_ARCH)"
+
+linux-nautilus-test:
+	$(MAKE) -C ../Linux/nautilus LINUX_ARCH="$(LINUX_ARCH)" BUILD_DIR="$(CURDIR)/build/linux-$(LINUX_ARCH)" test
 
 # Test executables of Synctrain for Linux, to run on a Linux host (go test -c). Fixtures are read from ../Docs, so run
 # them from a checkout's SushitrainCore/<package> directory. The FUSE tests need /dev/fuse and fusermount3.

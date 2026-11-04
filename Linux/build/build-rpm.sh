@@ -14,6 +14,12 @@ else
 	"$root/Linux/build/build-window.sh"
 fi
 
+if [[ "${SYNCTRAIN_CONTAINER_BUILD:-0}" != 1 ]] && pkg-config --exists libnautilus-extension-4 json-glib-1.0 gio-unix-2.0 2>/dev/null; then
+	make -C "$core" linux-nautilus
+else
+	"$root/Linux/build/build-window.sh" linux-nautilus
+fi
+
 # v2.8.85-137-g8a968ad: version 2.8.85, release 137.g8a968ad
 describe=$(git -C "$root" describe --tags --long --match 'v*' 2>/dev/null || echo v0.0.0-0-gunknown)
 describe=${describe#v}
@@ -25,9 +31,9 @@ git -C "$root" diff --quiet HEAD 2>/dev/null || release="$release.dirty"
 
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-cp "$core"/build/linux-"$LINUX_ARCH"/{synctrain,synctrain-files,synctrain-gateway} "$stage/"
+cp "$core"/build/linux-"$LINUX_ARCH"/{synctrain,synctrain-files,synctrain-gateway,libsynctrain-nautilus.so} "$stage/"
 cp "$root"/Linux/systemd/*.service "$root"/Linux/com.gordonbyrnes.Synctrain.{desktop,metainfo.xml} \
-	"$root/Linux/nautilus/synctrain.py" "$root/LICENSE" "$root/Docs/linux.md" "$stage/"
+	"$root/LICENSE" "$root/Docs/linux.md" "$stage/"
 cp "$root/Docs/logo.png" "$stage/com.gordonbyrnes.Synctrain.png"
 # The spec keeps no changelog: the git history is it
 rpmbuild -bb --define "_sourcedir $stage" --define "_rpmdir $core/build/rpm" --define "source_date_epoch_from_changelog 0" \

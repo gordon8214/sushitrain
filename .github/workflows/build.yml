@@ -116,7 +116,7 @@ jobs:
         run: |
           dnf install -y --setopt=install_weak_deps=False git make gcc tar gzip pkgconf-pkg-config gtk4-devel \
             libadwaita-devel gobject-introspection-devel rpm-build systemd-rpm-macros desktop-file-utils appstream \
-            python3-pylint nautilus-python dbus-daemon
+            nautilus-devel json-glib-devel dbus-daemon
 
       - name: Check out repository
         uses: actions/checkout@v4
@@ -145,8 +145,7 @@ jobs:
 
       - name: Test Nautilus integration
         run: |
-          timeout 60 python3 -m pylint Linux/nautilus/synctrain.py Linux/tests/test_nautilus.py
-          timeout 20 python3 -m unittest discover -s Linux/tests -v
+          make -C SushitrainCore linux-nautilus-test
 
       - name: Validate desktop files
         run: |
@@ -155,7 +154,7 @@ jobs:
 
       - name: Build package
         run: |
-          Linux/build/build-rpm.sh
+          timeout 1800 Linux/build/build-rpm.sh
 
       - name: Upload package
         uses: actions/upload-artifact@v4

@@ -18,7 +18,6 @@ Requires:       libadwaita >= 1.9
 Requires:       poppler-utils
 Requires:       gstreamer1-plugins-base
 Recommends:     gstreamer1-plugins-good
-Recommends:     nautilus-python
 # Video and PDF thumbnails for clients of the remote file service
 Recommends:     ffmpeg-free
 Recommends:     poppler-utils
@@ -43,7 +42,7 @@ install -Dm644 %{_sourcedir}/com.gordonbyrnes.Synctrain.metainfo.xml \
 	%{buildroot}%{_metainfodir}/com.gordonbyrnes.Synctrain.metainfo.xml
 install -Dm644 %{_sourcedir}/com.gordonbyrnes.Synctrain.png \
 	%{buildroot}%{_datadir}/icons/hicolor/256x256/apps/com.gordonbyrnes.Synctrain.png
-install -Dm644 %{_sourcedir}/synctrain.py %{buildroot}%{_datadir}/nautilus-python/extensions/synctrain.py
+install -Dm755 %{_sourcedir}/libsynctrain-nautilus.so %{buildroot}%{_libdir}/nautilus/extensions-4/libsynctrain-nautilus.so
 install -Dm644 %{_sourcedir}/LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 install -Dm644 %{_sourcedir}/linux.md %{buildroot}%{_docdir}/%{name}/linux.md
 
@@ -72,6 +71,4 @@ install -Dm644 %{_sourcedir}/linux.md %{buildroot}%{_docdir}/%{name}/linux.md
 %{_datadir}/applications/com.gordonbyrnes.Synctrain.desktop
 %{_metainfodir}/com.gordonbyrnes.Synctrain.metainfo.xml
 %{_datadir}/icons/hicolor/256x256/apps/com.gordonbyrnes.Synctrain.png
-%dir %{_datadir}/nautilus-python
-%dir %{_datadir}/nautilus-python/extensions
-%{_datadir}/nautilus-python/extensions/synctrain.py
+%{_libdir}/nautilus/extensions-4/libsynctrain-nautilus.so

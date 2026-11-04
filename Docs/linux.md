@@ -27,12 +27,15 @@ The window links GTK 4 and libadwaita 1.9 or newer. Without `gtk4-devel` and `li
 rootless podman container (`Linux/build/build-window.sh`, Fedora with those packages, using the host's Go and module
 cache). Use `SYNCTRAIN_CONTAINER_BUILD=1` to target Fedora 44 from a newer Fedora host; the container has a separate
 Go build cache so native GTK libraries cannot leak into the baseline build. The package needs `fuse3`, Poppler, and
-GStreamer base plugins, and recommends `nautilus-python` (the Nautilus extension), `ffmpeg-free` and
+GStreamer base plugins and the native Nautilus extensions library, and recommends `ffmpeg-free` and
 `poppler-utils` (video and PDF thumbnails for phones). The names Sushitrain and Synctrain and the logo aren't under the
 MPL (README, License), so the package is for your own machines.
 
 To build the programs only: `make -C SushitrainCore linux` (the two daemons, statically linked) and
 `make -C SushitrainCore linux-window` (the window, with GTK's development packages).
+Build the native Nautilus module with `make -C SushitrainCore linux-nautilus`; it needs `nautilus-devel` and
+`json-glib-devel`. Without those packages, `Linux/build/build-window.sh linux-nautilus` uses the Fedora 44 container.
+Run its native tests with `make -C SushitrainCore linux-nautilus-test` (normally under five seconds, limited to 20).
 
 Removing the package leaves `syncthing.service` masked if Synctrain took it over: `systemctl --user unmask
 syncthing.service` gives it back (with a Syncthing at least as new as Synctrain's engine).
@@ -235,12 +238,20 @@ GNOME treats `~/Synctrain` as a local disk, and some of its programs read every 
   be fetched, so browsing a folder of photos downloads nothing.
 
 **The Nautilus extension** adds Keep on This Device, Stop Keeping on This Device and Previous Versions… to the menu of
-items in `~/Synctrain`, and a Synctrain column to the list view. The package installs it; it needs `nautilus-python`
-(`sudo dnf install nautilus-python`, then `nautilus -q`). Without the package:
+items in `~/Synctrain`, and a Synctrain column to the list view. Previous Versions also applies to individual files
+in synchronized folders. The package bundles a compiled native module; Python and `nautilus-python` are not required.
+Restart Nautilus with `nautilus -q` after installation or upgrade.
+
+RPM upgrades remove the old package-owned Python extension. If you previously copied `synctrain.py` manually to
+`~/.local/share/nautilus-python/extensions/`, remove that specific copy before restarting Nautilus to avoid duplicate
+menu entries. Other Python extensions and `nautilus-python` can remain installed.
+
+Without the package, build on the target Linux architecture and install the module to Nautilus's extension directory:
 
 ```bash
-mkdir -p ~/.local/share/nautilus-python/extensions
-cp Linux/nautilus/synctrain.py ~/.local/share/nautilus-python/extensions/
+make -C SushitrainCore linux-nautilus
+sudo install -Dm755 SushitrainCore/build/linux-$(go env GOARCH)/libsynctrain-nautilus.so \
+  "$(pkg-config --variable=extensiondir libnautilus-extension-4)/libsynctrain-nautilus.so"
 nautilus -q
 ```
 
