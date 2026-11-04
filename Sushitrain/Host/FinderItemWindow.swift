@@ -8,7 +8,7 @@
 	@preconcurrency import SushitrainCore
 	import SynctrainHostKit
 
-	/// Finder info and folder settings requests never need a browser window, including when they start the app.
+	/// Finder info, folder settings, and history requests open independently of the browser, including at launch.
 	struct FinderItemWindow: View {
 		static let id = "finderItem"
 		static let isLaunch =
@@ -30,24 +30,31 @@
 		@State private var loadedDeliveryID: UUID?
 
 		var body: some View {
-			NavigationStack {
-				if action.kind == .settings, let folder {
-					FolderView(folder: folder)
-						.toolbar { Button("Done") { dismiss() } }
-				}
-				else if let entry {
-					EntryInfoView(entry: entry, showPath: true, siblings: nil)
-						.id(loadedDeliveryID)
-				}
-				else if unavailable {
-					ContentUnavailableView {
-						Label("Cannot Open Finder Item", systemImage: "exclamationmark.triangle")
-					} description: {
-						Text("The requested item is unavailable or belongs to a different configuration.")
-					}
+			Group {
+				if action.kind == .versions, let folder {
+					FileVersionsView(folder: folder, path: action.item.path.precomposedStringWithCanonicalMapping)
 				}
 				else {
-					ProgressView().controlSize(.large)
+					NavigationStack {
+						if action.kind == .settings, let folder {
+							FolderView(folder: folder)
+								.toolbar { Button("Done") { dismiss() } }
+						}
+						else if let entry {
+							EntryInfoView(entry: entry, showPath: true, siblings: nil)
+								.id(loadedDeliveryID)
+						}
+						else if unavailable {
+							ContentUnavailableView {
+								Label("Cannot Open Finder Item", systemImage: "exclamationmark.triangle")
+							} description: {
+								Text("The requested item is unavailable or belongs to a different configuration.")
+							}
+						}
+						else {
+							ProgressView().controlSize(.large)
+						}
+					}
 				}
 			}
 			.frame(minWidth: 600, minHeight: 500)
@@ -77,7 +84,7 @@
 				return
 			}
 			guard !Task.isCancelled else { return }
-			if action.kind == .settings {
+			if action.kind == .settings || action.kind == .versions {
 				self.folder = folder
 			}
 			else if let item = try? folder.getFileInformation(action.item.path.precomposedStringWithCanonicalMapping) {

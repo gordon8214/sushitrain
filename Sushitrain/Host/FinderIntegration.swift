@@ -188,7 +188,6 @@
 		let request: FinderActionRequest?
 		let claim: (UUID) -> Bool
 		let finish: (UUID) -> Void
-		@State private var presented: FinderAction?
 		@State private var error: String?
 		@State private var activeRequest: UUID?
 		@State private var delivery: Task<Void, Never>?
@@ -203,14 +202,6 @@
 			.onDisappear {
 				delivery?.cancel()
 				complete()
-			}
-			.sheet(item: $presented, onDismiss: complete) { action in
-				if action.kind == .versions, let folder = appState.client.folder(withID: action.item.folderID) {
-					NavigationStack {
-						FileVersionsView(folder: folder, path: action.item.path)
-							.toolbar { Button("Done") { presented = nil } }
-					}.frame(minWidth: 700, minHeight: 600)
-				}
 			}
 			.alert(
 				"Cannot Open Finder Item",
@@ -240,6 +231,10 @@
 
 		private func receive(_ request: FinderActionRequest) async {
 			let action = request.action
+			guard action.kind == .browse else {
+				complete()
+				return
+			}
 			let result = await FinderActionValidator.status(for: action, appState: appState)
 			guard !Task.isCancelled, activeRequest == request.id else { return }
 			guard let result else {
@@ -247,20 +242,13 @@
 				return
 			}
 			NSApplication.shared.activate()
-			if action.kind == .browse {
-				let prefix =
-					result.directory || action.item.path.isEmpty
-					? action.item.path : (action.item.path as NSString).deletingLastPathComponent
-				navigate(
-					.folder(
-						folderID: action.item.folderID, prefix: prefix.isEmpty ? "" : prefix.precomposedStringWithCanonicalMapping + "/"))
-				complete()
-			}
-			else {
-				var normalized = action
-				normalized.item.path = action.item.path.precomposedStringWithCanonicalMapping
-				presented = normalized
-			}
+			let prefix =
+				result.directory || action.item.path.isEmpty
+				? action.item.path : (action.item.path as NSString).deletingLastPathComponent
+			navigate(
+				.folder(
+					folderID: action.item.folderID, prefix: prefix.isEmpty ? "" : prefix.precomposedStringWithCanonicalMapping + "/"))
+			complete()
 		}
 	}
 #endif

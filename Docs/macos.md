@@ -1033,6 +1033,11 @@ forward; different items can have separate info windows.
 Each synchronized folder has one settings window, shared by requests from its files, subfolders, background, and
 sidebar entry. Repeating the command brings that window forward and preserves its current settings page. Different
 synchronized folders can have separate settings windows, alongside info windows and the browser.
+
+**Previous Versions…** opens its own foreground window for the selected file. Repeating the command for that file
+brings its history window forward; different files can have separate history windows. It also works when the browser
+is closed or has a sheet open, and starting Synctrain this way opens only the requested history window. Done closes
+the history window.
 These Finder utility windows remain separate even when macOS prefers tabs for document windows.
 
 Badges show **Up to Date** (green check), **Syncing** (blue arrows), **Waiting to Sync** (blue clock), **Paused**
@@ -1076,3 +1081,7 @@ subfolder reused the folder's window and preserved its selected page; different 
 windows. A display-name edit was saved, survived an app restart, and was restored. Folder Settings also opened while
 a history sheet remained active, and Done closed only the settings window. A cold launch of the normal signed Release
 opened only the requested folder's settings in the foreground. Production folder and device configuration was preserved.
+
+Standalone Previous Versions validation used the installed signed Release and the enabled TrueNAS history source.
+Finder opened AGENTS.md and icloud-materialize.sh in separate history windows with remote archives visible. Repeating
+the first file's command reused its window, and Done in the second window closed only that window.

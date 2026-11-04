@@ -138,12 +138,12 @@ public struct FinderAction: Codable, Hashable, Identifiable, Sendable {
 	/// Settings belong to the synchronized folder, so every entry in it reuses the same window.
 	public var windowAction: Self? {
 		switch kind {
-		case .info: return self
+		case .info, .versions: return self
 		case .settings:
 			var action = self
 			action.item.path = ""
 			return action
-		case .browse, .versions: return nil
+		case .browse: return nil
 		}
 	}
 	public var url: URL? {

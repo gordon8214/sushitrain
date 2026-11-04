@@ -194,9 +194,14 @@ private actor FinderTestSignal {
 	#expect(FinderAction(url: try #require(window.url)) == window)
 	let info = FinderAction(configuration: "config", item: file, kind: .info)
 	#expect(info.windowAction == info)
-	for kind in [FinderAction.Kind.browse, .versions] {
-		#expect(FinderAction(configuration: "config", item: file, kind: kind).windowAction == nil)
-	}
+	let versions = FinderAction(configuration: "config", item: file, kind: .versions)
+	#expect(versions.windowAction == versions)
+	#expect(versions.windowAction != info.windowAction)
+	#expect(FinderAction(url: try #require(versions.windowAction?.url)) == versions)
+	#expect(
+		FinderAction(configuration: "config", item: FinderItem(folderID: "root", path: "other/b.txt"), kind: .versions)
+			.windowAction != versions.windowAction)
+	#expect(FinderAction(configuration: "config", item: file, kind: .browse).windowAction == nil)
 }
 
 @Test func finderSnapshotsExpireAndRejectOtherConfigurations() {
