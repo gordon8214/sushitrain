@@ -47,7 +47,8 @@ with Quick Look. A Mac in [Files in Finder mode](macos.md#two-modes) runs no eng
 
 `synctrain-gateway` is a single executable that runs Syncthing (with its usual web GUI and REST API, as its
 `config.xml` sets them) and the remote file service. Build it with `make gateway-linux` in `SushitrainCore`
-(`build/linux-amd64/synctrain-gateway`, statically linked).
+(`build/linux-<architecture>/synctrain-gateway`, statically linked). The default architecture is the build host's;
+use `LINUX_ARCH=amd64` or `LINUX_ARCH=arm64` to select a target explicitly.
 
 ```
 synctrain-gateway serve --home /var/syncthing/config --listen :20920 \

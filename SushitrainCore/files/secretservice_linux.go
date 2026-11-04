@@ -7,9 +7,11 @@
 package files
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -57,22 +59,54 @@ func NewSecretService(application string) (*SecretService, error) {
 
 // connect opens a connection and a session. Callers hold the mutex, but for a new one.
 func (s *SecretService) connect() error {
-	conn, err := dbus.ConnectSessionBus()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return s.connectContext(ctx)
+}
+
+func (s *SecretService) connectContext(ctx context.Context) error {
+	// Dial first so cancellation can close the transport during authentication
+	// and Hello as well as OpenSession. The successful session outlives ctx.
+	conn, err := dbus.SessionBusPrivateNoAutoStartup()
 	if err != nil {
+		return err
+	}
+	stopHandshake := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stopHandshake()
+	if err = conn.Auth(nil); err == nil {
+		err = conn.Hello()
+	}
+	if err != nil {
+		conn.Close()
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return err
 	}
 	var output dbus.Variant
 	var session dbus.ObjectPath
-	if err := conn.Object(secretsName, secretsPath).Call(secretsService+".OpenSession", 0, "plain",
+	if err := conn.Object(secretsName, secretsPath).CallWithContext(ctx, secretsService+".OpenSession", 0, "plain",
 		dbus.MakeVariant("")).Store(&output, &session); err != nil {
 		conn.Close()
 		return fmt.Errorf("opening a Secret Service session: %w", err)
+	}
+	if !stopHandshake() || ctx.Err() != nil {
+		conn.Close()
+		return ctx.Err()
 	}
 	if s.conn != nil {
 		s.conn.Close()
 	}
 	s.conn, s.session = conn, session
 	return nil
+}
+
+// A disappeared or unresponsive keyring must not hold daemon startup, shutdown,
+// or another credential operation indefinitely. Never prompt to unlock it.
+func (s *SecretService) call(path dbus.ObjectPath, method string, args ...any) *dbus.Call {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return s.conn.Object(secretsName, path).CallWithContext(ctx, method, 0, args...)
 }
 
 // retry runs fn, and once more on a new session if the keyring lost the one it had (gnome-keyring restarted).
@@ -103,7 +137,7 @@ func (s *SecretService) attributes(serviceID string) map[string]string {
 // find returns the keyring's item for a gateway, if there is one
 func (s *SecretService) find(serviceID string) (dbus.ObjectPath, error) {
 	var unlocked, locked []dbus.ObjectPath
-	if err := s.conn.Object(secretsName, secretsPath).Call(secretsService+".SearchItems", 0,
+	if err := s.call(secretsPath, secretsService+".SearchItems",
 		s.attributes(serviceID)).Store(&unlocked, &locked); err != nil {
 		return "", err
 	}
@@ -126,7 +160,7 @@ func (s *SecretService) Credential(serviceID string) (string, error) {
 			return err
 		}
 		var value secret
-		if err := s.conn.Object(secretsName, item).Call(secretsItem+".GetSecret", 0, s.session).Store(&value); err != nil {
+		if err := s.call(item, secretsItem+".GetSecret", s.session).Store(&value); err != nil {
 			return err
 		}
 		credential = string(value.Value)
@@ -145,7 +179,7 @@ func (s *SecretService) SetCredential(serviceID, credential string) error {
 	return s.retry(func() error {
 		value := secret{Session: s.session, Value: []byte(credential), ContentType: "text/plain"}
 		var item, prompt dbus.ObjectPath
-		if err := s.conn.Object(secretsName, defaultCollection).Call(secretsCollection+".CreateItem", 0, properties,
+		if err := s.call(defaultCollection, secretsCollection+".CreateItem", properties,
 			value, true).Store(&item, &prompt); err != nil {
 			return err
 		}
@@ -165,7 +199,7 @@ func (s *SecretService) DeleteCredential(serviceID string) error {
 			return err
 		}
 		var prompt dbus.ObjectPath
-		if err := s.conn.Object(secretsName, item).Call(secretsItem+".Delete", 0).Store(&prompt); err != nil {
+		if err := s.call(item, secretsItem+".Delete").Store(&prompt); err != nil {
 			return err
 		}
 		if prompt != noPrompt {

@@ -33,7 +33,7 @@ import (
 )
 
 // syncView is Synchronize mode: Syncthing's folders and devices, and the remote file service through which phones
-// and machines in Files mode reach them. Syncthing's own settings stay in its web GUI.
+// and machines in Files mode reach them. Native management lives in the main sidebar.
 type syncView struct {
 	w      *mainWindow
 	home   gatewayadmin.Home
@@ -62,8 +62,10 @@ type syncView struct {
 	shownFolders []gatewayadmin.Folder
 
 	// Set while settings are shown, so that showing them doesn't change them
-	showing bool
-	busy    bool
+	showing           bool
+	busy              bool
+	closed, hostDirty bool
+	savedHost         string
 }
 
 // syncState is what the view shows, fetched from the gateway
@@ -85,14 +87,14 @@ var (
 func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 	v := &syncView{w: w}
 	toolbar := adw.NewToolbarView()
-	header := adw.NewHeaderBar()
 	stack := adw.NewViewStack()
 	switcher := adw.NewViewSwitcher()
 	switcher.SetStack(stack)
-	switcher.SetPolicy(adw.ViewSwitcherPolicyWide)
-	header.SetTitleWidget(switcher)
-	header.PackEnd(w.menuButton("Switch to Files…"))
-	toolbar.AddTopBar(header)
+	switcher.SetPolicy(adw.ViewSwitcherPolicyNarrow)
+	switcher.SetHAlign(gtk.AlignCenter)
+	switcher.SetMarginTop(4)
+	switcher.SetMarginBottom(4)
+	toolbar.AddTopBar(switcher)
 	v.banner = adw.NewBanner("Synctrain isn't running")
 	v.banner.SetButtonLabel("Start")
 	v.banner.ConnectButtonClicked(func() {
@@ -113,7 +115,7 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 		}
 	}))
 	this.Add(v.device)
-	v.webGUI = row("Web GUI", "Folders, devices and Syncthing's settings")
+	v.webGUI = row("Web GUI", "Optional browser access to the engine")
 	v.webGUI.SetActivatable(true)
 	v.webGUI.AddSuffix(gtk.NewImageFromIconName("adw-external-link-symbolic"))
 	v.webGUI.ConnectActivated(func() {
@@ -140,7 +142,7 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 			})
 	})
 	this.Add(v.linger)
-	v.folders = newListGroup("Folders", "Add and share folders in the web GUI.")
+	v.folders = newListGroup("Folders", "Add and share folders on the Folders page.")
 	v.devices = newListGroup("Devices", "")
 	syncPage := adw.NewPreferencesPage()
 	syncPage.Add(this)
@@ -190,9 +192,43 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 	v.host = adw.NewEntryRow()
 	v.host.SetTitle("Host Name for Clients (empty for this machine's name)")
 	v.host.SetShowApplyButton(true)
+	v.host.ConnectChanged(func() {
+		if v.showing || v.closed {
+			return
+		}
+		v.hostDirty = v.host.Text() != v.savedHost
+		if w.desk != nil {
+			w.desk.dirty = v.hostDirty
+		}
+	})
 	v.host.ConnectApply(func() {
 		host := strings.TrimSpace(v.host.Text())
-		v.setService(func(s *gatewayadmin.ServiceSettings) { s.PublicHost = host })
+		if w.desk == nil || w.desk.saving {
+			return
+		}
+		d := w.desk
+		d.saving = true
+		d.detail.SetSensitive(false)
+		background(func() (struct{}, error) {
+			var st gatewayadmin.ServiceStatus
+			if err := v.call("service.status", nil, &st); err != nil {
+				return struct{}{}, err
+			}
+			settings := st.ServiceSettings
+			settings.PublicHost = host
+			return struct{}{}, v.call("service.set", settings, nil)
+		}, func(_ struct{}, err error) {
+			d.saving = false
+			d.detail.SetSensitive(true)
+			if v.closed || d.closed {
+				return
+			}
+			if err == nil {
+				v.hostDirty, d.dirty = false, false
+				v.savedHost = host
+			}
+			v.changed(struct{}{}, err)
+		})
 	})
 	service.Add(v.host)
 	v.operations = row("Operations in progress", "")
@@ -207,6 +243,7 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 	remotePage.Add(v.exports.group)
 	remotePage.Add(v.clients.group)
 	stack.AddTitledWithIcon(remotePage, "remote", "Remote Files", "network-server-symbolic")
+	stack.SetVisibleChildName("remote")
 	toolbar.SetContent(stack)
 
 	background(describeHome, func(h gatewayadmin.Home, err error) {
@@ -224,7 +261,7 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 		v.refresh()
 		return true
 	})
-	return toolbar, func() { coreglib.SourceRemove(timer) }
+	return toolbar, func() { v.closed = true; coreglib.SourceRemove(timer) }
 }
 
 func (v *syncView) call(method string, params, result any) error {
@@ -318,7 +355,7 @@ func (v *syncView) show(st syncState) {
 			rows = append(rows, r)
 		}
 		if len(rows) == 0 {
-			rows = append(rows, row("No folders yet", "Add one in the web GUI."))
+			rows = append(rows, row("No folders yet", "Add one on the Folders page."))
 		}
 		return rows
 	})
@@ -339,7 +376,7 @@ func (v *syncView) show(st syncState) {
 			rows = append(rows, row(name, state))
 		}
 		if len(rows) == 0 {
-			rows = append(rows, row("No devices yet", "Add one in the web GUI with its device ID."))
+			rows = append(rows, row("No devices yet", "Add one on the Devices page with its device ID."))
 		}
 		return rows
 	})
@@ -365,8 +402,11 @@ func (v *syncView) show(st syncState) {
 		}
 	}
 	v.port.SetSensitive(!fixed(s, "listen"))
-	if !editing(v.host) && v.host.Text() != s.PublicHost {
+	if !v.hostDirty && !editing(v.host) && v.host.Text() != s.PublicHost {
 		v.host.SetText(s.PublicHost)
+	}
+	if !v.hostDirty {
+		v.savedHost = s.PublicHost
 	}
 	v.host.SetSensitive(!fixed(s, "publicHost"))
 	v.pairButton.SetSensitive(s.Running)
@@ -409,7 +449,7 @@ func (v *syncView) show(st syncState) {
 			}))
 		}
 		if len(rows) == 0 {
-			rows = append(rows, row("No folders yet", "Add one in the web GUI."))
+			rows = append(rows, row("No folders yet", "Add one on the Folders page."))
 		}
 		return rows
 	})
@@ -856,7 +896,7 @@ func (w *mainWindow) askSynchronize(fromFiles bool) {
 		case !h.Exists:
 			heading, action = "Run Syncthing on This Machine?", "Start"
 			body = "Synctrain starts Syncthing as a new device, now and at every login. Add folders and devices " +
-				"in its web GUI."
+				"in Synctrain."
 		case h.Taken:
 			heading, action = "Run Syncthing on This Machine?", "Start"
 			body = fmt.Sprintf("Synctrain runs Syncthing again as device %s, and its folders pick up where they "+

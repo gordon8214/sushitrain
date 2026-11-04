@@ -559,6 +559,8 @@ type Writer struct {
 // OpenWriter opens a file for writing. truncate starts it empty; otherwise its working copy is made from its content
 // at the first write, which needs that content here.
 func (s *Service) OpenWriter(e Entry, truncate bool) (*Writer, error) {
+	s.settleMutex.Lock()
+	defer s.settleMutex.Unlock()
 	if !e.Writable {
 		return nil, ErrReadOnly
 	}

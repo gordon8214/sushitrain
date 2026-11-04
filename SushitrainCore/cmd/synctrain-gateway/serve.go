@@ -202,16 +202,24 @@ func run(ctx context.Context, opts serveOptions) (restart bool, err error) {
 	// while the event logger still runs (the save logs an event)
 	cfgCtx, stopCfg := context.WithCancel(context.Background())
 	served := make(chan struct{})
-	go func() {
+	go func(servedConfig config.Wrapper) {
 		defer close(served)
-		_ = cfg.Serve(cfgCtx)
-	}()
+		_ = servedConfig.Serve(cfgCtx)
+	}(cfg)
 	defer func() {
+		stopNativeConfiguration(cfg)
 		stopCfg()
 		<-served
 		cancel()
 	}()
 
+	cfg, err = nativeConfiguration(runCtx, cfg)
+	if err != nil {
+		return false, err
+	}
+	if err := prepareNativeControl(cfg); err != nil {
+		return false, err
+	}
 	if err := syncthing.TryMigrateDatabase(ctx, opts.deleteRetention); err != nil {
 		if ctx.Err() != nil {
 			return false, nil
@@ -273,18 +281,26 @@ func startAdmin(ctx context.Context, opts serveOptions, app *syncthing.App, cfg 
 	backend := &gateway.EngineBackend{App: app, Config: cfg, Events: evLogger, ID: id, IsSelective: gateway.SelectiveFolders(app, cfg)}
 	admin := gateway.NewAdminServer()
 	registerHostAdmin(admin, cfg, app, id)
+	if err := registerNativeControl(ctx, admin, app, cfg, evLogger); err != nil {
+		admin.Close()
+		return nil, nil, err
+	}
 	svc, err := newServiceSwitch(opts, opts.defaults, backend, admin)
 	if err != nil {
+		admin.Close()
 		return nil, nil, err
 	}
 	if err := svc.start(); err != nil {
+		admin.Close()
 		return nil, nil, err
 	}
 	if err := os.MkdirAll(filepath.Dir(opts.socket), 0o700); err != nil {
+		admin.Close()
 		_ = svc.stop()
 		return nil, nil, err
 	}
 	if err := admin.Listen(ctx, opts.socket, opts.adminGroup); err != nil {
+		admin.Close()
 		_ = svc.stop()
 		return nil, nil, fmt.Errorf("listening on the admin socket: %w", err)
 	}

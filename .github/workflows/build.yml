@@ -94,9 +94,20 @@ jobs:
           retention-days: 3
 
   linux:
-    name: Synctrain for Linux
+    name: Synctrain for Linux (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            rpm: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            rpm: aarch64
     # The release Synctrain for Linux targets, so that the window links the same GTK and libadwaita
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     container: registry.fedoraproject.org/fedora:44
     permissions:
       contents: read
@@ -104,7 +115,8 @@ jobs:
       - name: Install build tools
         run: |
           dnf install -y --setopt=install_weak_deps=False git make gcc tar gzip pkgconf-pkg-config gtk4-devel \
-            libadwaita-devel gobject-introspection-devel rpm-build systemd-rpm-macros desktop-file-utils appstream
+            libadwaita-devel gobject-introspection-devel rpm-build systemd-rpm-macros desktop-file-utils appstream \
+            python3-pylint nautilus-python dbus-daemon
 
       - name: Check out repository
         uses: actions/checkout@v4
@@ -128,8 +140,13 @@ jobs:
       - name: Test
         working-directory: SushitrainCore
         run: |
-          go test -tags noassets ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin ./sthome \
+          timeout 360 go test -timeout 300s -tags noassets ./desktopapi ./enginecontrol ./linuxpolicy ./desktoptray ./history ./safecopy ./previewcache ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin ./sthome \
             ./cmd/synctrain-gateway ./cmd/synctrain-files
+
+      - name: Test Nautilus integration
+        run: |
+          timeout 60 python3 -m pylint Linux/nautilus/synctrain.py Linux/tests/test_nautilus.py
+          timeout 20 python3 -m unittest discover -s Linux/tests -v
 
       - name: Validate desktop files
         run: |
@@ -143,8 +160,8 @@ jobs:
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: linux-rpm
-          path: SushitrainCore/build/rpm/x86_64/*.rpm
+          name: linux-rpm-${{ matrix.arch }}
+          path: SushitrainCore/build/rpm/${{ matrix.rpm }}/*.rpm
           retention-days: 3
 
   mac-release:

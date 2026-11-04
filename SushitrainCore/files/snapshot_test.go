@@ -6,8 +6,10 @@ package files
 import (
 	"context"
 	"errors"
+	"github.com/syncthing/syncthing/lib/config"
 	"io"
 	"strings"
+	"t-shaped.nl/sushitrain/v2/gateway/gatewaytest"
 	"testing"
 	"time"
 )
@@ -209,5 +211,59 @@ func TestUnchangedRecoveryCaptureKeepsTheIndexedVersion(t *testing.T) {
 	}
 	if _, ok, err := ts.SnapshotReceipt("changed"); err != nil || ok {
 		t.Fatalf("changed capture receipt exists: %v %v", ok, err)
+	}
+}
+
+type pausedHistoryCopy struct {
+	entered, resume chan struct{}
+	reader          io.Reader
+	first           bool
+}
+
+func (r *pausedHistoryCopy) Read(data []byte) (int, error) {
+	if !r.first {
+		r.first = true
+		close(r.entered)
+		<-r.resume
+	}
+	return r.reader.Read(data)
+}
+func TestHistoryRestoreDoesNotReplaceEditDuringCopy(t *testing.T) {
+	e := gatewaytest.NewEngine(t, "docs", func(f *config.FolderConfiguration) {
+		f.Versioning = config.VersioningConfiguration{Type: "simple", Params: map[string]string{"keep": "5"}}
+	})
+	e.Write("report.txt", "original")
+	g := gatewaytest.NewGateway(t, e, "")
+	g.Export(true)
+	ts := newTestService(t, g, 0)
+	entry := ts.mustLookup("docs/report.txt")
+	capture, err := ts.CaptureHistoryRestore(t.Context(), entry.Item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Stop()
+	source := &pausedHistoryCopy{entered: make(chan struct{}), resume: make(chan struct{}), reader: strings.NewReader("archived")}
+	done := make(chan error, 1)
+	go func() {
+		_, err := ts.importSnapshot(t.Context(), entry, 0, "", false, source, 8, time.Now(), "", &capture)
+		done <- err
+	}()
+	select {
+	case <-source.entered:
+	case <-time.After(time.Second):
+		t.Fatal("history copy never began")
+	}
+	ts.write(entry, "intervening edit", true)
+	close(source.resume)
+	select {
+	case err = <-done:
+		if !errors.Is(err, ErrPendingChange) {
+			t.Fatal("restore accepted an intervening edit", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("restore deadlocked")
+	}
+	if bytes := string(ts.read(ts.mustLookup("docs/report.txt"))); bytes != "intervening edit" {
+		t.Fatal("restore lost local edit", bytes)
 	}
 }

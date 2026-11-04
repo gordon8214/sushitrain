@@ -9,8 +9,9 @@ Synctrain for Linux targets Fedora Workstation with GNOME. As on the Mac, a mach
 
 Three programs make it up: `synctrain` is the window, `synctrain-gateway` runs Syncthing in Synchronize mode
 ([gateway.md](gateway.md)), and `synctrain-files` is the daemon of Files mode. Each daemon is a systemd user service,
-and only the one of the machine's mode is enabled. They run without the window, which only manages them and keeps no
-state of its own; the mode is in `~/.config/synctrain/mode`.
+and only the service for the machine's mode is enabled. They run without the window. The window uses private Unix
+sockets to manage the existing engine and Files service. The mode is in `~/.config/synctrain/mode`; desktop preview,
+list/grid, hidden-file, and tray preferences are in `~/.config/synctrain/desktop.json`.
 
 ## Installing
 
@@ -18,12 +19,15 @@ On a Fedora host with Go (the release in `SushitrainCore/go.mod`, newer than Fed
 
 ```bash
 Linux/build/build-rpm.sh
-sudo dnf install SushitrainCore/build/rpm/x86_64/synctrain-*.rpm
+sudo dnf install SushitrainCore/build/rpm/$(rpm --eval '%{_arch}')/synctrain-*.rpm
 ```
 
-The window links GTK 4 and libadwaita. Without `gtk4-devel` and `libadwaita-devel` installed, the script builds it in a
+The package supports x86-64 and ARM64 (`LINUX_ARCH=amd64` or `arm64`, built on the target architecture).
+The window links GTK 4 and libadwaita 1.9 or newer. Without `gtk4-devel` and `libadwaita-devel` installed, the script builds it in a
 rootless podman container (`Linux/build/build-window.sh`, Fedora with those packages, using the host's Go and module
-cache). The package needs `fuse3`, and recommends `nautilus-python` (the Nautilus extension), `ffmpeg-free` and
+cache). Use `SYNCTRAIN_CONTAINER_BUILD=1` to target Fedora 44 from a newer Fedora host; the container has a separate
+Go build cache so native GTK libraries cannot leak into the baseline build. The package needs `fuse3`, Poppler, and
+GStreamer base plugins, and recommends `nautilus-python` (the Nautilus extension), `ffmpeg-free` and
 `poppler-utils` (video and PDF thumbnails for phones). The names Sushitrain and Synctrain and the logo aren't under the
 MPL (README, License), so the package is for your own machines.
 
@@ -55,8 +59,36 @@ Syncthing itself, or it competes for the home at the next login. A Syncthing run
 least as new as Synctrain's engine: stop Synctrain (switch to Files mode, or `systemctl --user disable --now
 synctrain-gateway`), unmask `syncthing.service` and start it.
 
-In Synchronize mode, the window shows the device ID, Syncthing's folders and devices, and opens the web GUI, where
-folders and devices are added and Syncthing is set up as usual. **Remote Files** manages the remote file service:
+In Synchronize mode, native GTK pages manage folders, devices, sharing, encryption passwords, ignores, failed and
+deleted files, scanning, pause/resume, and all supported engine settings. Common settings have dedicated controls;
+Advanced Settings exposes the complete engine schema, including defaults. Editors keep drafts until Save, show
+validation errors, and ask before discarding changes. The web GUI and REST API are optional and can stay disabled.
+
+The native file browser supports paged lists and grids, search, thumbnails, import, move, rename, creating folders,
+Save a Copy, and local Trash. Files mode also supports Keep on This Device, offline edits, and pending-change review.
+Images, audio, video, PDF pages, and UTF-8 text have native previews; other documents and HTML open in the default app.
+Image previews have a configurable size limit. Disposable preview copies have a 1 GiB budget and a 512 MiB per-file
+limit; recently opened copies are retained for external apps, and day-old copies expire. Pinned files and unsent edits
+are outside this disposable cache.
+
+**History Sources** pairs read-only history gateways without mounting their folders. Previous Versions combines local
+history and independent results from paired gateways by Syncthing folder ID and path. A source failure does not hide
+other results. Preview and Save a Copy bind the download to the selected archive. Restoring checks the destination
+again after downloading and preserves its current content. Files mode refuses replacement over pending local edits.
+Nautilus's Previous Versions command opens this same browser. History credentials use Secret Service when available,
+with a private credential-file fallback when no keyring service is available.
+
+**Automatic Pause** observes NetworkManager's metered/cellular status and the desktop's Power Saver profile. Each
+policy is optional. Pauses made with native controls or explicit REST Pause requests survive policy changes and restarts.
+Resume clears the manual pause while an active automatic policy keeps synchronization paused. Reading and saving the
+effective REST configuration does not create manual pause intent. An enabled policy pauses while its required signal is
+unknown. Resource Priority uses systemd CPU and I/O weights for the background service.
+
+The optional tray uses StatusNotifierItem/AppIndicator. GNOME requires an AppIndicator extension to display it. The
+window and background services remain usable without a tray host. Tray settings include login startup, Show,
+Pause All, Resume All, Settings, and Quit and Stop. Closing a window leaves the services running.
+
+**Remote Files** manages the remote file service:
 
 - It is off until you turn it on. Then it listens on port 20920; the host name in pairing codes is the machine's name
   unless you give another (the one phones reach it at).

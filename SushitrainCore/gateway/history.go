@@ -12,16 +12,12 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"t-shaped.nl/sushitrain/v2/remoteapi"
 	"time"
 )
 
 // PathVersionList identifies history independently of a gateway's private item IDs.
-type PathVersionList struct {
-	FolderID   string        `json:"folderID"`
-	Path       string        `json:"path"`
-	Versioning string        `json:"versioning"`
-	Versions   []ItemVersion `json:"versions"`
-}
+type PathVersionList = remoteapi.PathVersionList
 
 func (s *Service) historyPath(r *http.Request, p principal) (string, folderAccess, error) {
 	if err := requireCredential(p); err != nil {

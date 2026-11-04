@@ -131,8 +131,13 @@ func TestTrashFilesystemCaseChecksAndConcurrentRemoval(t *testing.T) {
 	root := t.TempDir()
 	ffs := fs.NewFilesystem(filesystemTypeTrash, root, new(fs.OptionDetectCaseConflicts))
 	writeTrashTestFile(t, root, "MixedCase")
-	if err := ffs.Remove("mixedcase"); !fs.IsErrCaseConflict(err) {
+	// A case-sensitive filesystem rejects this lookup before case-conflict
+	// detection is needed. Both paths must leave the correctly named file intact.
+	if err := ffs.Remove("mixedcase"); !fs.IsErrCaseConflict(err) && !fs.IsNotExist(err) {
 		t.Fatalf("case checking was bypassed: %v", err)
+	}
+	if len(h.paths) != 0 {
+		t.Fatal("wrong-case removal reached Trash")
 	}
 	if _, err := ffs.Lstat("MixedCase"); err != nil {
 		t.Fatal(err)

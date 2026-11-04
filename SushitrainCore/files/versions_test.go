@@ -90,3 +90,47 @@ func TestVersionCopyName(t *testing.T) {
 		t.Fatalf("a long name became %d bytes", len(got))
 	}
 }
+
+func TestReadOnlyHistoryExport(t *testing.T) {
+	e := gatewaytest.NewEngine(t, "docs", func(f *config.FolderConfiguration) {
+		f.Versioning = config.VersioningConfiguration{Type: "trashcan", Params: map[string]string{"cleanoutDays": "0"}}
+	})
+	e.Write("doc.txt", "first")
+	g := gatewaytest.NewGateway(t, e, "")
+	g.Export(true)
+	ts := newTestService(t, g, 0)
+	ts.write(ts.mustLookup("docs/doc.txt"), "second", true)
+	ts.settled()
+	g.Export(false)
+	ts.refresh()
+	client, err := ts.client(ts.folder.ServiceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = ts.refreshAccess(t.Context(), ts.folder.ServiceID, client); err != nil {
+		t.Fatal(err)
+	}
+	entry := ts.mustLookup("docs/doc.txt")
+	list, err := ts.HistoryVersions(t.Context(), entry.Item)
+	if err != nil || len(list.Versions) != 1 {
+		t.Fatal(list, err)
+	}
+	if list.Writable {
+		t.Fatal("read-only history offers writable actions")
+	}
+	v := list.Versions[0]
+	if v.EntityTag == "" {
+		t.Fatal("history did not bind the selected archive")
+	}
+	dest := filepath.Join(t.TempDir(), "copy.txt")
+	if err = ts.ExportHistoryVersion(t.Context(), entry.Item, v.ID, v.EntityTag, dest); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(dest)
+	if err != nil || string(data) != "first" {
+		t.Fatal(string(data), err)
+	}
+	if err = ts.ExportHistoryVersion(t.Context(), entry.Item, v.ID, v.EntityTag, dest); err == nil {
+		t.Fatal("history export replaced existing content")
+	}
+}

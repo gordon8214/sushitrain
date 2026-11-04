@@ -9,12 +9,15 @@ Release:        %{synctrain_release}%{?dist}
 Summary:        Synchronize folders with Syncthing, or open a gateway's folders on demand
 License:        MPL-2.0
 URL:            https://github.com/gordon8214/sushitrain
-ExclusiveArch:  x86_64
+ExclusiveArch:  x86_64 aarch64
 
 BuildRequires:  systemd-rpm-macros
 Requires:       fuse3
 Requires:       gtk4
-Requires:       libadwaita
+Requires:       libadwaita >= 1.9
+Requires:       poppler-utils
+Requires:       gstreamer1-plugins-base
+Recommends:     gstreamer1-plugins-good
 Recommends:     nautilus-python
 # Video and PDF thumbnails for clients of the remote file service
 Recommends:     ffmpeg-free

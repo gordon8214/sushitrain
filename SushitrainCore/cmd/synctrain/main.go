@@ -15,13 +15,17 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 )
 
 // Set with -ldflags "-X main.version=…"
 var version = ""
+
+var queuedPairingLink string
 
 const appID = "com.gordonbyrnes.Synctrain"
 
@@ -29,17 +33,54 @@ func main() {
 	if len(os.Args) == 3 && os.Args[1] == "versions" {
 		os.Exit(runVersions(os.Args[2]))
 	}
-	if len(os.Args) > 1 {
-		fmt.Fprintln(os.Stderr, "Usage: synctrain [versions <path>]")
+	if len(os.Args) > 1 && os.Args[1] != "--background" && os.Args[1] != "--help" && os.Args[1] != "-h" && !strings.HasPrefix(os.Args[1], "synctrain+pair://") {
+		fmt.Fprintln(os.Stderr, "Usage: synctrain [--background | versions <path> | pairing-link]")
 		os.Exit(2)
 	}
-	app := adw.NewApplication(appID, gio.ApplicationFlagsNone)
-	var w *mainWindow
-	app.ConnectActivate(func() {
-		if w == nil {
-			w = newMainWindow(app)
+	app := adw.NewApplication(appID, gio.ApplicationHandlesCommandLine)
+	app.AddMainOption("background", 0, glib.OptionFlagNone, glib.OptionArgNone, "Start the optional tray without opening a window", "")
+	activeApplication = app
+	installWindowActivation(app, nil)
+	app.ConnectCommandLine(func(command *gio.ApplicationCommandLine) (status int) {
+		// Complete forwarded launches explicitly rather than waiting for Go to
+		// collect the command-line object's retained GObject reference.
+		defer func() { command.SetExitStatus(status); command.Done() }()
+		args := command.Arguments()
+		backgroundOnly := command.OptionsDict().Contains("background")
+		if backgroundOnly && statusTray == nil {
+			if err := configureTray(true); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
 		}
-		w.win.Present()
+		if !backgroundOnly {
+			app.Activate()
+		}
+		w := activeWindow
+		if len(args) > 1 && strings.HasPrefix(args[1], "synctrain+pair://") && w != nil {
+			if w.desk != nil && !w.changing {
+				w.desk.guard(func() { w.desk.pairLink(args[1]) })
+			} else {
+				queuedPairingLink = args[1]
+				if !w.changing {
+					w.inform("Set Up Synctrain", "Choose a mode to continue with this pairing link.")
+				}
+			}
+		}
+		return 0
+	})
+	app.ConnectStartup(func() {
+		if readPreferences().Tray || len(os.Args) > 1 && os.Args[1] == "--background" {
+			if err := configureTray(true); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}
+	})
+	app.ConnectShutdown(func() {
+		if statusTray != nil {
+			statusTray.Close()
+			statusTray = nil
+		}
 	})
 	os.Exit(app.Run(os.Args))
 }

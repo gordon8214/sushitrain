@@ -2,7 +2,8 @@
 Type=Application
 Name=Synctrain
 Comment=Synchronize folders with Syncthing, or open the folders of a gateway on another system
-Exec=synctrain
+Exec=synctrain %u
+MimeType=x-scheme-handler/synctrain+pair;
 Icon=com.gordonbyrnes.Synctrain
 Terminal=false
 Categories=Network;FileTransfer;GTK;

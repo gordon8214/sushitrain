@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"t-shaped.nl/sushitrain/v2/previewcache"
 	"t-shaped.nl/sushitrain/v2/remoteapi"
 	"t-shaped.nl/sushitrain/v2/remoteclient"
 )
@@ -35,7 +36,8 @@ var (
 
 // Version is a previous version of a file
 type Version struct {
-	ID string `json:"id"`
+	ID        string `json:"id"`
+	EntityTag string `json:"etag,omitempty"`
 	// When it was archived, and its own modification time
 	Archived time.Time `json:"archived"`
 	ModTime  time.Time `json:"modTime"`
@@ -121,19 +123,6 @@ func (s *Service) Versions(ctx context.Context, item int64) (Versions, error) {
 	return result, nil
 }
 
-// removeOldPreviews removes previews made more than a day ago, which nothing shows any more
-func removeOldPreviews(dir string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	for _, entry := range entries {
-		if info, err := entry.Info(); err == nil && time.Since(info.ModTime()) > 24*time.Hour {
-			_ = os.RemoveAll(filepath.Join(dir, entry.Name()))
-		}
-	}
-}
-
 // validVersionID reports whether an ID has the documented form: it names directories of previews
 func validVersionID(id string) bool {
 	number, ok := strings.CutPrefix(id, remoteapi.PrefixVersion)
@@ -144,6 +133,8 @@ func validVersionID(id string) bool {
 // VersionToFile downloads a version for previewing into dir, under the file's name (so that a viewer recognizes its
 // type) in a directory of the version. Its content isn't verified, and is never kept as the file's.
 func (s *Service) VersionToFile(ctx context.Context, item int64, versionID, dir string) (string, error) {
+	s.previewMutex.Lock()
+	defer s.previewMutex.Unlock()
 	if !validVersionID(versionID) {
 		return "", errors.New("invalid version")
 	}
@@ -155,7 +146,9 @@ func (s *Service) VersionToFile(ctx context.Context, item int64, versionID, dir 
 	if !validName(t.localName) {
 		return "", ErrInvalidName
 	}
-	removeOldPreviews(dir)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
+	}
 	dest := filepath.Join(dir, fmt.Sprintf("%d-%s", item, versionID), t.localName)
 	if _, err := os.Stat(dest); err == nil {
 		return dest, nil
@@ -173,6 +166,11 @@ func (s *Service) VersionToFile(ctx context.Context, item int64, versionID, dir 
 	if size < 0 {
 		return "", errors.New("no such version")
 	}
+	releaseQuota, err := previewcache.Reserve(ctx, dir, size)
+	if err != nil {
+		return "", err
+	}
+	defer releaseQuota()
 	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 		return "", err
 	}

@@ -1,5 +1,5 @@
 # Builds Synctrain's window (gotk4, cgo) on a host without GTK's development packages: the result links against the
-# host's GTK 4 and libadwaita, so the image matches the host's Fedora release. See Linux/build/build-window.sh.
+# Fedora 44 GTK 4 and libadwaita baseline. See Linux/build/build-window.sh.
 FROM registry.fedoraproject.org/fedora:44
 RUN dnf install -y --setopt=install_weak_deps=False gcc gtk4-devel libadwaita-devel gobject-introspection-devel \
 		pkgconf-pkg-config && dnf clean all

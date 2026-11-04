@@ -37,6 +37,7 @@ func decode[T any](params json.RawMessage) (T, error) {
 
 // registerAdmin registers the daemon's methods. foldersChanged is called after a folder is added or removed.
 func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersChanged func()) {
+	registerBrowser(a, s, mount)
 	a.Register("status", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		gateways, err := s.Gateways()
 		if err != nil {

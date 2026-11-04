@@ -34,16 +34,65 @@ type mainWindow struct {
 	switchMode *gio.SimpleAction
 	// Set while the machine's mode is set up or changed, which nothing else may start meanwhile
 	changing bool
+	desk     *desktopUI
 	// Set once the window is closed; a mode change still running then reports with a notification
 	closed bool
+}
+
+// Use the application window list as well as close-request state: native window
+// destruction can remove a window while the tray keeps the application alive.
+func installWindowActivation(app *adw.Application, opened func(*mainWindow)) {
+	var window *mainWindow
+	presentWindow = func() *mainWindow {
+		// A mode change owns its window until it finishes. Closing temporarily
+		// hides that progress view so reopening cannot start another transition.
+		if window != nil && window.changing {
+			window.closed = false
+			window.win.Present()
+			return window
+		}
+		if window == nil || window.closed || len(app.Windows()) == 0 {
+			if window != nil && window.stop != nil {
+				window.stop()
+				window.stop = nil
+			}
+			window = newMainWindow(app)
+			activeWindow = window
+			if opened != nil {
+				opened(window)
+			}
+		}
+		window.win.Present()
+		return window
+	}
+	app.ConnectActivate(func() { presentWindow() })
+	app.ConnectWindowRemoved(func(_ *gtk.Window) {
+		if window != nil && len(app.Windows()) == 0 {
+			window.closed = true
+			if window.stop != nil {
+				window.stop()
+				window.stop = nil
+			}
+		}
+	})
 }
 
 func newMainWindow(app *adw.Application) *mainWindow {
 	w := &mainWindow{app: app, win: adw.NewApplicationWindow(&app.Application), toasts: adw.NewToastOverlay()}
 	w.win.SetTitle("Synctrain")
-	w.win.SetDefaultSize(760, 680)
+	w.win.SetDefaultSize(1040, 760)
 	w.win.SetContent(w.toasts)
 	w.win.ConnectCloseRequest(func() bool {
+		if w.changing {
+			w.closed = true
+			w.win.SetVisible(false)
+			return true
+		}
+		if w.desk != nil && (w.desk.dirty || w.desk.saving) {
+			w.desk.guard(func() { w.win.Close() })
+			return true
+		}
+
 		if w.stop != nil {
 			w.stop()
 			w.stop = nil
@@ -53,17 +102,43 @@ func newMainWindow(app *adw.Application) *mainWindow {
 	})
 	w.switchMode = gio.NewSimpleAction("switch-mode", nil)
 	w.switchMode.ConnectActivate(func(*glib.Variant) {
-		switch readMode() {
-		case modeFiles:
-			w.askSynchronize(true)
-		case modeSynchronize:
-			w.leaveSynchronize()
+		transition := func() {
+			switch readMode() {
+			case modeFiles:
+				w.askSynchronize(true)
+			case modeSynchronize:
+				w.leaveSynchronize()
+			}
+		}
+		if w.desk != nil {
+			w.desk.guard(transition)
+		} else {
+			transition()
 		}
 	})
 	w.win.AddAction(w.switchMode)
 	about := gio.NewSimpleAction("about", nil)
 	about.ConnectActivate(func(*glib.Variant) { w.about() })
 	w.win.AddAction(about)
+	for _, entry := range []struct {
+		name, key string
+		run       func()
+	}{{"settings", "<Control>comma", func() {
+		if w.desk != nil {
+			w.desk.guard(func() { w.desk.navigate("Settings") })
+		}
+	}}, {"refresh", "F5", func() {
+		if w.desk != nil {
+			w.desk.guard(w.desk.showRoute)
+		}
+	}}, {"close", "<Control>w", func() { w.win.Close() }}} {
+		entry := entry
+		a := gio.NewSimpleAction(entry.name, nil)
+		a.ConnectActivate(func(*glib.Variant) { entry.run() })
+		w.win.AddAction(a)
+		app.SetAccelsForAction("win."+entry.name, []string{entry.key})
+	}
+
 	w.show()
 	return w
 }
@@ -119,18 +194,19 @@ func (w *mainWindow) show() {
 		w.stop()
 		w.stop = nil
 	}
-	switch readMode() {
-	case modeFiles:
-		page, stop := newFilesView(w)
-		w.toasts.SetChild(page)
-		w.stop = stop
-	case modeSynchronize:
-		page, stop := newSyncView(w)
-		w.toasts.SetChild(page)
-		w.stop = stop
-	default:
+	if readMode() == "" {
 		w.toasts.SetChild(w.chooser())
+		return
 	}
+	w.desk = newDesktopUI(w)
+	w.toasts.SetChild(w.desk.root)
+	w.stop = w.desk.close
+	if queuedPairingLink != "" {
+		link := queuedPairingLink
+		queuedPairingLink = ""
+		w.desk.pairLink(link)
+	}
+
 }
 
 func (w *mainWindow) parent() *gtk.Window {
@@ -189,6 +265,8 @@ func (w *mainWindow) endChange() {
 	w.switchMode.SetEnabled(true)
 	if !w.closed {
 		w.show()
+	} else {
+		w.win.Destroy()
 	}
 	w.app.Release()
 }
@@ -250,8 +328,9 @@ func (w *mainWindow) chooser() gtk.Widgetter {
 func choiceRow(title, subtitle string, activate func()) *adw.ActionRow {
 	r := row(title, subtitle)
 	r.SetActivatable(true)
-	r.AddSuffix(gtk.NewImageFromIconName("go-next-symbolic"))
-	r.ConnectActivated(activate)
+	open := iconButton("go-next-symbolic", "Open "+title, activate)
+	r.AddSuffix(open)
+	r.SetActivatableWidget(open)
 	return r
 }
 

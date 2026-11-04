@@ -70,6 +70,7 @@ type Service struct {
 	cache      *cache
 	thumbnails *thumbnailer
 
+	previewMutex sync.Mutex
 	mutex        sync.Mutex
 	clients      map[string]*remoteclient.Client
 	loops        map[int64]*folderLoop

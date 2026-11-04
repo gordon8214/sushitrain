@@ -50,14 +50,14 @@ type filesState struct {
 func newFilesView(w *mainWindow) (gtk.Widgetter, func()) {
 	v := &filesView{w: w}
 	toolbar := adw.NewToolbarView()
-	header := adw.NewHeaderBar()
 	stack := adw.NewViewStack()
 	switcher := adw.NewViewSwitcher()
 	switcher.SetStack(stack)
-	switcher.SetPolicy(adw.ViewSwitcherPolicyWide)
-	header.SetTitleWidget(switcher)
-	header.PackEnd(w.menuButton("Switch to Synchronize…"))
-	toolbar.AddTopBar(header)
+	switcher.SetPolicy(adw.ViewSwitcherPolicyNarrow)
+	switcher.SetHAlign(gtk.AlignCenter)
+	switcher.SetMarginTop(4)
+	switcher.SetMarginBottom(4)
+	toolbar.AddTopBar(switcher)
 	v.banner = adw.NewBanner("Synctrain Files isn't running")
 	v.banner.SetButtonLabel("Start")
 	v.banner.ConnectButtonClicked(func() {
@@ -118,6 +118,16 @@ func newFilesView(w *mainWindow) (gtk.Widgetter, func()) {
 	})
 	storage.Add(open)
 	stack.AddTitledWithIcon(page(storage), "storage", "Storage", "drive-harddisk-symbolic")
+	if w.desk != nil {
+		switch w.desk.route {
+		case "Remote Files":
+			stack.SetVisibleChildName("gateways")
+		case "Pending Changes":
+			stack.SetVisibleChildName("changes")
+		case "Settings":
+			stack.SetVisibleChildName("storage")
+		}
+	}
 	toolbar.SetContent(stack)
 
 	v.refresh()

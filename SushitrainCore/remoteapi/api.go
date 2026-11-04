@@ -286,3 +286,11 @@ type ErrorDetail struct {
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
+
+// PathVersionList identifies history independently of a gateway's item IDs.
+type PathVersionList struct {
+	FolderID   string        `json:"folderID"`
+	Path       string        `json:"path"`
+	Versioning string        `json:"versioning"`
+	Versions   []ItemVersion `json:"versions"`
+}

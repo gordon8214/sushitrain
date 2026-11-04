@@ -5,8 +5,10 @@
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 core="$root/SushitrainCore"
+export LINUX_ARCH="${LINUX_ARCH:-$(go env GOARCH)}"
+case "$LINUX_ARCH" in amd64|arm64) ;; *) echo "Unsupported Linux architecture: $LINUX_ARCH" >&2; exit 2 ;; esac
 make -C "$core" linux
-if pkg-config --exists gtk4 libadwaita-1 2>/dev/null; then
+if [[ "${SYNCTRAIN_CONTAINER_BUILD:-0}" != 1 ]] && pkg-config --exists gtk4 libadwaita-1 2>/dev/null; then
 	make -C "$core" linux-window
 else
 	"$root/Linux/build/build-window.sh"
@@ -23,7 +25,7 @@ git -C "$root" diff --quiet HEAD 2>/dev/null || release="$release.dirty"
 
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-cp "$core"/build/linux-amd64/{synctrain,synctrain-files,synctrain-gateway} "$stage/"
+cp "$core"/build/linux-"$LINUX_ARCH"/{synctrain,synctrain-files,synctrain-gateway} "$stage/"
 cp "$root"/Linux/systemd/*.service "$root"/Linux/com.gordonbyrnes.Synctrain.{desktop,metainfo.xml} \
 	"$root/Linux/nautilus/synctrain.py" "$root/LICENSE" "$root/Docs/linux.md" "$stage/"
 cp "$root/Docs/logo.png" "$stage/com.gordonbyrnes.Synctrain.png"

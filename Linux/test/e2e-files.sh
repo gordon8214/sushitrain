@@ -4,7 +4,8 @@
 # with "make -C SushitrainCore linux". Everything lives in /tmp/st-e2e: the machine's own Syncthing and ~/Synctrain are
 # not touched. It prints what it sees; read it rather than trusting an exit status.
 set -u
-BIN=${BIN:-$(cd "$(dirname "$0")/../../SushitrainCore/build/linux-amd64" && pwd)}
+BUILD_ARCH=${LINUX_ARCH:-$(go env GOARCH)}
+BIN=${BIN:-$(cd "$(dirname "$0")/../../SushitrainCore/build/linux-$BUILD_ARCH" && pwd)}
 ROOT=/tmp/st-e2e
 cleanup() {
 	[ -n "${FILES_PID:-}" ] && kill "$FILES_PID" 2>/dev/null

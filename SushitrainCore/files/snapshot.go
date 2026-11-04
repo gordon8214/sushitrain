@@ -125,7 +125,7 @@ func (s *Service) CreateSnapshot(ctx context.Context, parent int64, name string,
 	return s.importSnapshot(ctx, Entry{}, parent, name, conflict, source, size, modified, firstCaptureID(captureIDs))
 }
 
-func (s *Service) importSnapshot(ctx context.Context, entry Entry, parent int64, targetName string, conflict bool, source io.Reader, size int64, modified time.Time, captureID string) (Entry, error) {
+func (s *Service) importSnapshot(ctx context.Context, entry Entry, parent int64, targetName string, conflict bool, source io.Reader, size int64, modified time.Time, captureID string, guards ...*HistoryRestoreCapture) (Entry, error) {
 	if captureID != "" {
 		if previous, ok, err := s.SnapshotReceipt(captureID); err != nil {
 			return Entry{}, err
@@ -192,8 +192,11 @@ func (s *Service) importSnapshot(ctx context.Context, entry Entry, parent int64,
 	if wc != nil {
 		wc.mutex.Lock()
 		defer wc.mutex.Unlock()
-		if wc.writers > 0 && !wc.detached {
+		if (wc.writers > 0 || len(guards) > 0 && (wc.version > 0 || wc.file != nil)) && !wc.detached {
 			s.settleMutex.Unlock()
+			if len(guards) > 0 {
+				return Entry{}, ErrPendingChange
+			}
 			return Entry{}, errors.New("the file is still being edited")
 		}
 	}
@@ -213,6 +216,22 @@ func (s *Service) importSnapshot(ctx context.Context, entry Entry, parent int64,
 				return nil
 			} else if !errors.Is(err, sql.ErrNoRows) {
 				return err
+			}
+		}
+		if len(guards) > 0 {
+			c := guards[0]
+			var revision, service, folder string
+			var pending bool
+			current, err := scanEntry(tx.QueryRow(entrySelect+" WHERE i.id = ? AND i.deleted = 0", c.Entry.Item))
+			if err != nil {
+				return err
+			}
+			err = tx.QueryRow(`SELECT r.revision,f.service_id,f.remote_id,i.local != 0 OR EXISTS (SELECT 1 FROM outbox WHERE item=i.id AND state IN `+unresolvedStates+`) FROM items i JOIN remote_items r ON r.item=i.id JOIN folders f ON f.id=i.folder WHERE i.id=?`, c.Entry.Item).Scan(&revision, &service, &folder, &pending)
+			if err != nil {
+				return err
+			}
+			if pending || revision != c.Revision || service != c.ServiceID || folder != c.RemoteFolder || current.Node != c.Entry.Node || !current.ModTime.Equal(c.Entry.ModTime) || current.Size != c.Entry.Size || current.ContentID != c.Entry.ContentID {
+				return ErrPendingChange
 			}
 		}
 		var r *localRow
