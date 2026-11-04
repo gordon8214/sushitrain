@@ -83,32 +83,36 @@ private actor FinderTestSignal {
 	}
 }
 
+@MainActor private final class FinderReadState {
+	var version = 1
+	var applied = 0
+	var reads = 0
+}
+
 @MainActor @Test func finderReloadRetainsNotificationsDuringARead() async {
 	let coordinator = FinderReloadCoordinator()
 	let entered = FinderTestSignal()
 	let release = FinderTestSignal()
 	let finished = FinderTestSignal()
-	var version = 1
-	var applied = 0
-	var reads = 0
+	let state = FinderReadState()
 	let read: @MainActor @Sendable () async -> Void = {
-		reads += 1
-		let snapshot = version
-		if reads == 1 {
+		state.reads += 1
+		let snapshot = state.version
+		if state.reads == 1 {
 			await entered.open()
 			await release.wait()
 		}
-		applied = snapshot
-		if reads == 2 { await finished.open() }
+		state.applied = snapshot
+		if state.reads == 2 { await finished.open() }
 	}
 	coordinator.request(read)
 	await entered.wait()
-	version = 2
+	state.version = 2
 	coordinator.request(read)
 	await release.open()
 	await finished.wait()
-	#expect(reads == 2)
-	#expect(applied == 2)
+	#expect(state.reads == 2)
+	#expect(state.applied == 2)
 }
 
 @Test func finderDemandCleanupFollowsADelayedWrite() async throws {
@@ -240,4 +244,19 @@ private actor FinderTestSignal {
 	#expect(Set(store.demands(now: now).map(\.instance)) == [first.instance, second.instance])
 	#expect(store.demands(now: now.addingTimeInterval(15)).isEmpty)
 	#expect(store.read(FinderSnapshot.self, name: FinderSyncStore.responseName(first.instance)) == nil)
+}
+
+@Test func remoteHistoryOffersVersionsWithoutLocalVersioning() throws {
+	let file = FinderItem(folderID: "docs", path: "note.txt")
+	var status = FinderItemStatus(item: file, indexed: true)
+	status.regularFile = true
+	let remote = status.includingRemoteHistory(folderIDs: ["docs"])
+	#expect(FinderMenu(selection: [file], statuses: [file: remote])?.kinds.contains(.versions) == true)
+	#expect(FinderMenu(selection: [file], statuses: [file: status])?.kinds.contains(.versions) == false)
+	#expect(status.includingRemoteHistory(folderIDs: ["different"]).versions == false)
+	status.regularFile = false
+	#expect(status.includingRemoteHistory(folderIDs: ["docs"]).versions == false)
+	status.regularFile = true
+	status.indexed = false
+	#expect(status.includingRemoteHistory(folderIDs: ["docs"]).versions == false)
 }

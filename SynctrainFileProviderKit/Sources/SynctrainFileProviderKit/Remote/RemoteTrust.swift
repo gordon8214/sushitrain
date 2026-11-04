@@ -108,12 +108,23 @@ public enum RemoteTrust {
 /// Only the task-level challenge method is implemented: when a delegate implements the session-level one, URLSession
 /// sends server trust challenges there, to the session's delegate, and the task's delegate (whose `rejectedTrust`
 /// tells a rejected certificate from a canceled request) never learns about them.
-final class RemoteTrustDelegate: NSObject, URLSessionTaskDelegate, Sendable {
+final class RemoteTrustDelegate: NSObject, URLSessionTaskDelegate, URLSessionDownloadDelegate, Sendable {
 	let endpoint: RemoteEndpoint
 	private let rejected = OSAllocatedFlag()
+	let progress: (@Sendable (Int64, Int64) -> Void)?
 
-	init(endpoint: RemoteEndpoint) {
+	init(endpoint: RemoteEndpoint, progress: (@Sendable (Int64, Int64) -> Void)? = nil) {
+		self.progress = progress
 		self.endpoint = endpoint
+	}
+
+	func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
+
+	func urlSession(
+		_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+		totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
+	) {
+		progress?(totalBytesWritten, totalBytesExpectedToWrite)
 	}
 
 	/// Whether the delegate rejected the server's certificate

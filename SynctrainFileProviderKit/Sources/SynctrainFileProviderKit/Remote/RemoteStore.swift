@@ -312,8 +312,12 @@ extension IndexStore {
 	}
 
 	/// Adds a paired gateway or updates its address, pins and name (its credential is kept in the Keychain)
-	public func saveRemoteEndpoint(_ endpoint: RemoteEndpoint) throws(IndexError) {
-		try withConnection { connection throws(IndexError) in
+	public func saveRemoteEndpoint(_ endpoint: RemoteEndpoint, usage: GatewayUsage? = nil) throws(IndexError) {
+		try transaction { connection throws(IndexError) in
+			let previousUsage =
+				try connection.queryOne(
+					"SELECT COALESCE(u.usage, 1) FROM remote_endpoints e LEFT JOIN gateway_usage u USING(service_id) WHERE e.service_id = ?",
+					[endpoint.serviceID], { Int($0.int64(0)) }) ?? 0
 			try connection.run(
 				"""
 				INSERT INTO remote_endpoints (service_id, host, port, spki_hash, next_spki_hash, display_name, updated_at)
@@ -326,6 +330,11 @@ extension IndexStore {
 					endpoint.serviceID, endpoint.host, endpoint.port, endpoint.pinnedSPKIHash,
 					endpoint.nextPinnedSPKIHash, endpoint.displayName, Date().timeIntervalSince1970,
 				])
+			if let usage {
+				try connection.run(
+					"INSERT INTO gateway_usage VALUES (?, ?) ON CONFLICT(service_id) DO UPDATE SET usage = usage | excluded.usage",
+					[endpoint.serviceID, usage.rawValue | previousUsage])
+			}
 		}
 	}
 
@@ -362,6 +371,8 @@ extension IndexStore {
 			{
 				throw .notAllowed("folders are still accessed through this gateway")
 			}
+			try connection.run("DELETE FROM history_folders WHERE service_id = ?", [serviceID])
+			try connection.run("DELETE FROM gateway_usage WHERE service_id = ?", [serviceID])
 			try connection.run("DELETE FROM remote_endpoints WHERE service_id = ?", [serviceID])
 		}
 	}

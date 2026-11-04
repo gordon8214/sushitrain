@@ -25,6 +25,7 @@ public struct FinderItemStatus: Codable, Equatable, Sendable {
 	public var indexed: Bool
 	public var directory: Bool
 	public var versions: Bool
+	public var regularFile: Bool?
 	public init(
 		item: FinderItem, badge: FinderBadge? = nil, indexed: Bool = false, directory: Bool = false, versions: Bool = false
 	) {
@@ -34,6 +35,13 @@ public struct FinderItemStatus: Codable, Equatable, Sendable {
 		self.directory = directory
 		self.versions = versions
 	}
+	/// Remote history eligibility is published by the app; Finder never connects to a gateway to build a menu.
+	public func includingRemoteHistory(folderIDs: Set<String>) -> Self {
+		var result = self
+		if indexed && regularFile == true && folderIDs.contains(item.folderID) { result.versions = true }
+		return result
+	}
+
 }
 
 public struct FinderRoot: Codable, Equatable, Sendable {

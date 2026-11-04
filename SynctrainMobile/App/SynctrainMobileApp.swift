@@ -5,7 +5,19 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
 
-@main struct SynctrainMobileApp: App {
+@main @MainActor enum MobileEntry {
+	static func main() {
+		#if DEBUG
+			if ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_HISTORY_FIXTURE"] == "1" {
+				HistoryFixtureApp.main()
+				return
+			}
+		#endif
+		SynctrainMobileApp.main()
+	}
+}
+
+struct SynctrainMobileApp: App {
 	@UIApplicationDelegateAdaptor(MobileAppDelegate.self) private var delegate
 	@Environment(\.scenePhase) private var scenePhase
 	@State private var model: AppModel

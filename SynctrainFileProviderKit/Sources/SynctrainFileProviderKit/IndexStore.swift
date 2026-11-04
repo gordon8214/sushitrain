@@ -10,7 +10,7 @@ import Foundation
 public struct IndexStore: Sendable {
 	public let url: URL
 
-	static let schemaVersion = 1
+	static let schemaVersion = 2
 
 	static let itemColumns = """
 		id, folder_id, path, parent_id, name, kind, size, mod_ns, blocks_hash, content_rev, meta_rev, changed_seq, \
@@ -43,7 +43,7 @@ public struct IndexStore: Sendable {
 		if version == schemaVersion {
 			return
 		}
-		if version != 0 {
+		if version != 0 && version != 1 {
 			throw .unsupportedSchema(version)
 		}
 		try connection.transaction { () throws(IndexError) in
@@ -53,6 +53,7 @@ public struct IndexStore: Sendable {
 			}
 			try createItemSchema(connection)
 			try createRemoteSchema(connection)
+			try createHistorySchema(connection)
 			try connection.setUserVersion(schemaVersion)
 		}
 	}

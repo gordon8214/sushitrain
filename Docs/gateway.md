@@ -78,12 +78,44 @@ keeps (simple, staggered or trash can; external versioning can't be listed). Tur
 folder whose history phones should see, and leave its versions path empty: versions in a custom path aren't shown,
 as that path may be shared with another folder (or point into one) that a phone has no access to. Read access to a
 folder includes its history: a phone that may only read a folder can still see and preview its previous versions.
-Restoring and copying happen on the gateway, through the same journal as other edits: the version is copied, the
+The gateway API can restore and copy its own archives through the same journal as other edits: the version is copied, the
 replaced contents are archived as usual (the trash can then keeps those instead of the restored version), and only
 the file's contents are written, not platform metadata kept with the version. Version reads are recorded in the audit
 log. An edit or restore that writes the contents a file already has (as when a phone saves a file it only opened)
 archives nothing, so the history doesn't fill up with copies of the same contents, unless the file has extended
 attributes, which only its archived copy would keep.
+
+### Additional history sources
+
+On macOS, iPhone and iPad, Settings > History Sources can include archives from other paired gateways. Enable a
+paired gateway or choose **Pair with a History Source…**. History-only pairing grants access without adding its
+folders to Finder or Files, downloading its index, or changing the file currently stored there. Existing gateways
+are not automatically enabled as additional sources; the current file's own gateway is always included.
+
+Files match by their Syncthing folder ID and current relative path, not by the folder label or a gateway's item ID.
+The source needs `versions.byPath` in its capabilities (update Synctrain or `synctrain-gateway` if the browser asks).
+Read permission is enough, and archives can be downloaded even when the current file has been deleted on the source.
+The default `.stversions` restriction also applies to additional sources. Renames are not traced to older names.
+
+Previous Versions combines sources by date and shows their names and independent connection errors. Open and Save a
+Copy download the archive directly. Restore replaces the file at its current destination, using the Mac engine or
+an upload to the folder's primary gateway. It checks the destination revision before replacing anything and refuses
+pending edits. The replaced contents are archived according to the destination's versioning; when it is off, they
+are not kept. An upload that cannot finish stays in Pending Edits and is never reported as a completed restore.
+Source settings are stored on each device, shared with its Files action extension; credentials remain in the Keychain.
+Path-based lists include a strong archive validator. Downloads use `If-Match`, so a replaced archive slot is rejected
+even if its length and original modification time are unchanged. Older primary gateways retain their existing
+server-side restore operation; additional history sources require the updated path-based API.
+
+On iOS, large restore uploads can move to a distinct background session for the app or the Files action extension;
+the containing app finishes the extension's events after it stops. The staged edit remains in the shared outbox until
+the destination confirms it. On a synchronizing Mac, archiving before publication is protected by a durable journal
+and a hard-linked recovery copy of the original (including its platform metadata). Recovery runs before the engine's
+scanners and pullers start. A pending marker in the engine configuration directory also blocks startup until a volume
+with an interrupted restore is available, even if the folder was reconfigured. Completed recovery removes its
+artifacts and journal durably before removing that marker. A filesystem unable to preserve that hard link refuses the restore before displacing
+the original; Open and Save a Copy remain available. Local archives retain native restoration, including saved
+platform metadata; cross-host downloads restore file contents.
 
 When the home has no `cert.pem` and `key.pem`, the gateway logs a warning and creates a new device identity (and a
 new `config.xml` when there is none); a certificate or key that exists but can't be read stops it instead. A restart

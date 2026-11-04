@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
+import SynctrainFileProviderKit
 #if os(iOS)
 	import VisionKit
 #else
@@ -14,6 +15,7 @@ import SwiftUI
 /// Pairs this device with a gateway: scan the code the gateway shows (or paste its link), approve the request on the
 /// gateway, then choose which of its folders to open in Files
 struct RemotePairingView: View {
+	var purpose: GatewayUsage = .files
 	@Environment(\.dismiss) private var dismiss
 	@State private var pairing = RemotePairing()
 	@State private var link = ""
@@ -51,9 +53,14 @@ struct RemotePairingView: View {
 						Label("Paired with \(name).", systemImage: "checkmark.circle.fill")
 							.foregroundStyle(.green)
 					} footer: {
-						Text("Choose the folders of the gateway to open on this device.")
+						if purpose.contains(.files) {
+							Text("Choose the folders of the gateway to open on this device.")
+						}
+						else {
+							Text("This gateway is now a history source. Its folders are not added to this device.")
+						}
 					}
-					RemoteGatewayFoldersSection(serviceID: serviceID)
+					if purpose.contains(.files) { RemoteGatewayFoldersSection(serviceID: serviceID) }
 				}
 			}
 			.navigationTitle("Pair with a Gateway")
@@ -90,7 +97,7 @@ struct RemotePairingView: View {
 				}
 				link = text
 				scannedText = ""
-				pairing.start(link: text)
+				pairing.start(link: text, purpose: purpose)
 			}
 			.task(id: pairing.phase) {
 				// The countdown updates itself; the view only has to know when the request expired
@@ -143,7 +150,7 @@ struct RemotePairingView: View {
 				}
 			#endif
 			Button("Pair") {
-				pairing.start(link: link)
+				pairing.start(link: link, purpose: purpose)
 			}
 			.disabled(!RemotePairing.isPairingLink(link))
 		} footer: {

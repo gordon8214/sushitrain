@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -236,6 +237,9 @@ func (clt *Client) prepareRun() (_ *engineRun, err error) {
 		} else if errors.Is(err, sthome.ErrNewerConfiguration) {
 			clt.startupProblem.Store(StartupProblemNewerConfiguration)
 		}
+		return nil, err
+	}
+	if err := recoverHistoryRestores(cfg.Folders(), filepath.Join(locations.GetBaseDir(locations.ConfigBaseDir), "history-restores")); err != nil {
 		return nil, err
 	}
 	// Before anything else that can crash, as it did last time; on its own, as this run may not get as far as starting

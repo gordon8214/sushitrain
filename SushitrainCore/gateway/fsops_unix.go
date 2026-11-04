@@ -37,6 +37,9 @@ func openRoot(path string) (*dir, error) {
 	return &dir{fd: fd, path: path}, nil
 }
 
+func openRootReadOnly(path string) (*dir, error)        { return openRoot(path) }
+func (d *dir) openDirReadOnly(rel string) (*dir, error) { return d.openDir(rel) }
+
 // openDir opens the directory at the folder-relative path rel below d, refusing symbolic links on the way
 func (d *dir) openDir(rel string) (*dir, error) {
 	current := &dir{fd: -1, path: d.path}

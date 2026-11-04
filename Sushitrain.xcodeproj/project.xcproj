@@ -185,6 +185,7 @@
         "SynctrainMobile/resources",
       ],
     },
+    { "kind": "folder", "path": "SynctrainVersions", "target-membership": [ "Synctrain", "SynctrainMobile", "SynctrainFileProviderUI" ] },
     { "kind": "folder", "path": "SynctrainClient", "target-membership": [ "Synctrain", "SynctrainMobile" ] },
     {
       "kind": "folder",

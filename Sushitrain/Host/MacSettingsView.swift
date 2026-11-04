@@ -99,6 +99,7 @@
 
 		var body: some View {
 			switch category {
+			case .historySources: HistorySourcesView()
 			case .general: GeneralSettingsView(userSettings: appState.userSettings, presence: $presence)
 			case .filesAndPreviews: FilesPreviewSettingsView(userSettings: appState.userSettings)
 			case .network: NetworkSettingsView(userSettings: appState.userSettings)

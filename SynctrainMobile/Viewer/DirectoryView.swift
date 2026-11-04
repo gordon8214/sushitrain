@@ -51,6 +51,8 @@ struct DirectoryView: View {
 	private var coordinator = RemoteCoordinator.shared
 	@AppStorage("viewerSort") private var sort = ViewerSort.name
 	@AppStorage("hideDotFiles") private var hideDotFiles = true
+	private struct HistorySelection: Identifiable { let id: Int64 }
+	@State private var historyItem: HistorySelection?
 	@State private var items: [IndexItem]? = nil
 	@State private var loadError: String? = nil
 	@State private var viewer = FileViewer()
@@ -102,6 +104,7 @@ struct DirectoryView: View {
 				}
 			}
 		}
+		.sheet(item: $historyItem) { item in GatewayHistoryView(itemID: item.id) { historyItem = nil } }
 		.modifier(FileViewerPresentation(viewer: viewer))
 		.alert("Could not show this in Files", isPresented: Binding.isNotNil($filesError)) {
 			Button("OK") {}
@@ -133,6 +136,9 @@ struct DirectoryView: View {
 			}
 		}
 		.contextMenu {
+			if item.kind == .file {
+				Button("Previous Versions…", systemImage: "clock.arrow.circlepath") { historyItem = HistorySelection(id: item.id) }
+			}
 			Button("Show in Files", systemImage: "folder") {
 				showInFiles(itemID: item.id)
 			}

@@ -366,11 +366,13 @@ only opens a window when none is open, so a window any earlier would hide onboar
 
 ## File versions
 
-Files in a folder with versioning have Previous Versions in their context menu and under Advanced in their info, with the
+Files in a folder with versioning or an enabled matching history source have Previous Versions in their context menu and under Advanced in their info, with the
 version's date and size, to open, save elsewhere or restore. Deleted Files in the folder's menu lists what is gone but has
-versions, to restore in one go (`versions.go`, `FileVersionsView`). External versioning has no such thing, as the engine
-doesn't know where its command puts files, and neither do paused folders, which have no versioner running, and
-receive-encrypted folders, which only have encrypted names.
+versions, to restore in one go (`versions.go`, `FileVersionsView`). Local history cannot be browsed with external
+versioning (the engine cannot locate its command's archives), while paused, or for receive-encrypted folders.
+Additional history sources are independent of local versioning and remain browsable when local versioning is off.
+Downloaded restores check both indexed state and the current bytes before replacing a file, reject symlinks and
+intervening edits, and recover interrupted archive/publication transactions before the engine starts.
 
 - Restoring works as in the web GUI: a file in the way becomes a version, and a link is removed. With platform history,
   its metadata comes back too, and a version from before it was turned on refuses to restore, for which Save As stays
@@ -1017,7 +1019,9 @@ In Synchronize mode, enable **Synctrain Finder Sync** through Settings › Gener
 **Manage Finder Extension…**. macOS controls whether the extension is enabled. Right-click a synchronized folder,
 file, Finder window background, or sidebar folder to see Synctrain's commands directly in the context menu, each
 with the app icon. The commands are **Show in Synctrain**, **Show Info…** for indexed entries, **Folder Settings…**,
-and **Previous Versions…** for regular files in folders with supported versioning. Multiple selected items in one
+and **Previous Versions…** for regular files in folders with supported versioning or enabled matching history sources.
+Settings › **History Sources** includes archives from other paired gateways without mounting their folders; see
+[additional history sources](gateway.md#additional-history-sources). Multiple selected items in one
 sync folder offer their common directory and folder settings.
 Selections spanning different sync folders have no Synctrain commands.
 

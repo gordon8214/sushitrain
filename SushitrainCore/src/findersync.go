@@ -30,11 +30,12 @@ type finderItem struct {
 }
 
 type finderStatus struct {
-	Item      finderItem `json:"item"`
-	Badge     string     `json:"badge,omitempty"`
-	Indexed   bool       `json:"indexed"`
-	Directory bool       `json:"directory"`
-	Versions  bool       `json:"versions"`
+	Item        finderItem `json:"item"`
+	Badge       string     `json:"badge,omitempty"`
+	Indexed     bool       `json:"indexed"`
+	Directory   bool       `json:"directory"`
+	Versions    bool       `json:"versions"`
+	RegularFile bool       `json:"regularFile"`
 }
 
 // FinderRootsJSON returns only native roots. Finder never opens the engine database itself.
@@ -120,6 +121,7 @@ func (clt *Client) FinderStatusJSON(request []byte) ([]byte, error) {
 			continue
 		}
 		status.Directory = info.IsDir()
+		status.RegularFile = info.Mode().IsRegular()
 		if item.Path != "" {
 			matcher, loaded := matchers[item.FolderID]
 			if !loaded {

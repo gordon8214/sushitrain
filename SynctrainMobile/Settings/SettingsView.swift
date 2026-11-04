@@ -23,6 +23,7 @@ struct SettingsView: View {
 					NavigationLink(destination: ChooseFoldersView()) {
 						Text("Folders").badge(coordinator.folders.count)
 					}
+					NavigationLink("History Sources", destination: HistorySourcesView())
 					LabeledContent("Device name") {
 						TextField(DeviceName.systemName, text: $deviceName)
 							.multilineTextAlignment(.trailing)

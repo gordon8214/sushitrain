@@ -63,9 +63,10 @@ import SynctrainFileProviderKit
 			}
 		}.value
 		switch result {
-		case .success(let endpoints):
+		case .success:
 			#if os(iOS)
 				ContentOpener.removeViewingCopies()
+				HistoryBrowserModel.removeLeftovers()
 			#endif
 			Task.detached(priority: .utility) { environment.storage.trimContent(toBytes: CacheSettings.limit) }
 			#if os(macOS)
@@ -78,7 +79,7 @@ import SynctrainFileProviderKit
 					}
 				}
 			#endif
-			if !endpoints.isEmpty {
+			if (try? environment.store.hasFilesGateways()) == true {
 				await FilesDomain.shared.register()
 			}
 			await RemoteCoordinator.shared.reloadState()

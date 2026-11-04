@@ -5,202 +5,122 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 #if os(macOS)
 	import AppKit
-	import SushitrainCore
+	@preconcurrency import SushitrainCore
+	import SynctrainFileProviderKit
 	import SwiftUI
 
-	/// The older versions of a file that its folder keeps, to open, save elsewhere or put back
 	struct FileVersionsView: View {
 		@Environment(\.dismiss) private var dismiss
 		let folder: SushitrainFolder
 		let path: String
+		@State private var model: HistoryBrowserModel?
+		@State private var problem: String?
 
-		@State private var versions: [SushitrainFileVersion] = []
-		@State private var isLoading = true
-		@State private var loadError: String? = nil
-		@State private var restoring: SushitrainFileVersion? = nil
-		@State private var isWorking = false
-		@State private var errorMessage: ErrorMessage? = nil
-
-		private var fileName: String { (path as NSString).lastPathComponent }
-
-		private static let openedVersionsDirectory = URL.temporaryDirectory.appending(
-			path: "Opened versions", directoryHint: .isDirectory)
-
-		/// To be called when the app starts, when nothing can have one of these open from this run
 		static func removeOpenedVersions() {
-			try? FileManager.default.removeItem(at: openedVersionsDirectory)
+			HistoryBrowserModel.removeLeftovers()
+			try? FileManager.default.removeItem(at: URL.temporaryDirectory.appending(path: "Opened versions"))
 		}
 
 		var body: some View {
-			NavigationStack {
-				Group {
-					if isLoading {
-						ProgressView()
-					}
-					else if let loadError {
-						ContentUnavailableView(
-							"Versions are not available", systemImage: "exclamationmark.triangle", description: Text(loadError))
-					}
-					else if versions.isEmpty {
-						ContentUnavailableView(
-							"No previous versions", systemImage: "clock.arrow.circlepath",
-							description: Text("This folder has kept no older version of this file.")
-						)
-					}
-					else {
-						Form {
-							Section {
-								ForEach(Array(versions.enumerated()), id: \.offset) { _, version in
-									self.row(version)
-								}
-							} header: {
-								Text(verbatim: fileName)
-							} footer: {
-								Text(
-									"Restoring puts a version back, and a file that is there now becomes a version in its place. Open and Save As copy only the contents."
-								)
-							}
+			Group {
+				if let model {
+					HistoryBrowserView(model: model) { dismiss() }
+				}
+				else if let problem {
+					ContentUnavailableView(
+						"Versions Are Not Available", systemImage: "exclamationmark.triangle", description: Text(problem))
+				}
+				else {
+					ProgressView()
+				}
+			}.task {
+				guard model == nil else { return }
+				do { model = try makeModel() }
+				catch { problem = error.localizedDescription }
+			}
+		}
+
+		private func makeModel() throws -> HistoryBrowserModel {
+			guard let environment = RemoteEnvironment.shared else { throw HistoryError.sourceChanged }
+			let folder = folder
+			let path = path
+			let histories = try environment.store.historyEndpoints().map { endpoint in
+				RemoteHistory(
+					store: environment.store, source: HistorySource(endpoint: endpoint, folderID: folder.folderID, path: path),
+					client: environment.client(for: endpoint))
+			}
+			let local = LocalHistoryProvider(
+				deviceID: folder.clientDeviceID(),
+				load: {
+					guard folder.canBrowseVersions() else { return [] }
+					return try await goBlocking(returning: {
+						let list = try folder.fileVersions(path)
+						return (0..<list.count()).compactMap { index -> RemoteVersion? in
+							guard let version = list.item(at: index), let archived = version.versionTime()?.date(),
+								let modified = version.modTime()?.date()
+							else { return nil }
+							return RemoteVersion(
+								id: "ver_\(Int64(archived.timeIntervalSince1970))", versionTime: archived,
+								modifiedNs: Int64(modified.timeIntervalSince1970 * 1_000_000_000), size: version.size)
 						}
-						.formStyle(.grouped)
-						.disabled(isWorking)
+					})
+				},
+				export: { selected, destination in
+					try await goBlocking {
+						let list = try folder.fileVersions(path)
+						guard
+							let version = (0..<list.count()).compactMap({ list.item(at: $0) }).first(where: {
+								Int64($0.versionTime()?.date()?.timeIntervalSince1970 ?? 0) == Int64(selected.versionTime.timeIntervalSince1970)
+							})
+						else { throw HistoryError.invalidDownload }
+						try folder.exportFileVersion(path, version: version, destination: destination.path(percentEncoded: false))
 					}
-				}
-				.frame(minWidth: 520, minHeight: 320)
-				.navigationTitle("Previous Versions")
-				.toolbar {
-					SheetButton(role: .done) {
-						dismiss()
-					}
-				}
-			}
-			.task {
-				await self.load()
-			}
-			.confirmationDialog(
-				"Restore this version?", isPresented: Binding(get: { restoring != nil }, set: { if !$0 { restoring = nil } }),
-				titleVisibility: .visible, presenting: restoring
-			) { version in
-				Button("Restore") {
-					self.restore(version)
-				}
-			} message: { _ in
-				Text(self.restoreExplanation)
-			}
-			.errorAlert($errorMessage)
-		}
-
-		private var restoreExplanation: String {
-			if folder.folderType() == SushitrainFolderTypeReceiveOnly {
-				return String(
-					localized:
-						"A file that is there now becomes a version. In this receive-only folder the restored file counts as a local change, which Revert Local Changes would remove."
-				)
-			}
-			return String(
-				localized: "A file that is there now becomes a version, and other devices get the restored file. A link is removed."
-			)
-		}
-
-		private func row(_ version: SushitrainFileVersion) -> some View {
-			VStack(alignment: .leading, spacing: 4) {
-				HStack {
-					if let modified = version.modTime()?.date() {
-						Text(modified.formatted(date: .abbreviated, time: .shortened))
-					}
-					Spacer()
-					Text(ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file))
-						.foregroundStyle(.secondary)
-				}
-				if let archived = version.versionTime()?.date() {
-					Text("Archived \(archived.formatted(date: .abbreviated, time: .shortened))")
-						.font(.caption)
-						.foregroundStyle(.secondary)
-				}
-				HStack {
-					Button("Open") {
-						self.open(version)
-					}
-					Button("Save As...") {
-						self.saveAs(version)
-					}
-					Button("Restore...") {
-						restoring = version
-					}
-				}
-				.buttonStyle(.link)
-			}
-		}
-
-		private func load() async {
-			do {
-				versions = try await goBlocking(returning: { [folder, path] in
-					let list = try folder.fileVersions(path)
-					return (0..<list.count()).compactMap { list.item(at: $0) }
 				})
-				loadError = nil
-			}
-			catch {
-				loadError = error.localizedDescription
-			}
-			isLoading = false
-		}
-
-		private func export(_ version: SushitrainFileVersion, to destination: URL) async throws {
-			let path = self.path
-			let destinationPath = destination.path(percentEncoded: false)
-			try await goBlocking { [folder] in
-				try folder.exportFileVersion(path, version: version, destination: destinationPath)
-			}
-		}
-
-		/// A copy in a directory of its own, so that it keeps the file's name and whichever app opens it can do so. They go
-		/// together, for the next start of the app to clean up.
-		private func open(_ version: SushitrainFileVersion) {
-			Task {
-				do {
-					let directory = FileVersionsView.openedVersionsDirectory.appending(
-						path: UUID().uuidString, directoryHint: .isDirectory)
-					try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-					let copy = directory.appending(path: fileName)
-					try await self.export(version, to: copy)
-					NSWorkspace.shared.open(copy)
-				}
-				catch {
-					errorMessage = ErrorMessage(error)
-				}
-			}
-		}
-
-		private func saveAs(_ version: SushitrainFileVersion) {
-			let panel = NSSavePanel()
-			panel.nameFieldStringValue = fileName
-			panel.canCreateDirectories = true
-			guard panel.runModal() == .OK, let destination = panel.url else {
-				return
-			}
-			Task {
-				do {
-					try await self.export(version, to: destination)
-				}
-				catch {
-					errorMessage = ErrorMessage(error)
-				}
-			}
-		}
-
-		private func restore(_ version: SushitrainFileVersion) {
-			let path = self.path
-			isWorking = true
-			Task {
-				do {
-					try await goBlocking { [folder] in try folder.restoreFileVersion(path, version: version) }
-				}
-				catch {
-					errorMessage = ErrorMessage(error)
-				}
-				isWorking = false
-				await self.load()
-			}
+			let explanation =
+				folder.versioningType().isEmpty
+				? String(
+					localized:
+						"Restore replaces this file and synchronizes normally. Destination versioning is off, so the current contents will not be archived."
+				)
+				: String(
+					localized:
+						"Restore replaces this file, archives its current contents using this folder's versioning, and synchronizes normally. In a receive-only folder it counts as a local change."
+				)
+			let destination = HistoryDestination(
+				name: String(localized: "This Mac"), canRestore: folder.canRestoreDownloadedVersion(), explanation: explanation,
+				validateExport: { url in try folder.validateVersionExportDestination(url.path(percentEncoded: false)) },
+				restoreInPlace: { row in
+					guard row.sourceID == "local" else { return false }
+					// Keep native restoration of platform metadata for archives on this Mac.
+					try await goBlocking {
+						let list = try folder.fileVersions(path)
+						guard
+							let version = (0..<list.count()).compactMap({ list.item(at: $0) }).first(where: {
+								Int64($0.versionTime()?.date()?.timeIntervalSince1970 ?? 0)
+									== Int64(row.version.versionTime.timeIntervalSince1970)
+							})
+						else { throw HistoryError.invalidDownload }
+						try folder.restoreFileVersion(path, version: version)
+					}
+					return true
+				},
+				prepare: {
+					let captured = try await goBlocking(returning: {
+						var error: NSError?
+						let token = folder.captureRestoreTarget(path, error: &error)
+						if let error { throw error }
+						return token
+					})
+					return { file, version in
+						try await goBlocking {
+							try folder.restoreDownloadedVersion(
+								path, source: file.path(percentEncoded: false), expected: captured, modifiedNs: version.modifiedNs)
+						}
+					}
+				})
+			return HistoryBrowserModel(
+				fileName: (path as NSString).lastPathComponent, store: environment.store, histories: histories, local: local,
+				destination: destination)
 		}
 	}
 

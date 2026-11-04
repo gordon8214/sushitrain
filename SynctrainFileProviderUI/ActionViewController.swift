@@ -6,6 +6,7 @@
 @preconcurrency import FileProvider
 @preconcurrency import FileProviderUI
 import SwiftUI
+import SynctrainFileProviderKit
 import os
 
 let log = Logger(subsystem: "nl.t-shaped.Sushitrain.FileProvider", category: "Versions")
@@ -13,7 +14,7 @@ let log = Logger(subsystem: "nl.t-shaped.Sushitrain.FileProvider", category: "Ve
 /// Presents the Files app's actions that need a user interface (Previous Versions, for files of gateway folders), and
 /// explains the authentication errors the File Provider reports
 final class ActionViewController: FPUIActionExtensionViewController {
-	private var model: VersionsModel?
+	private var isPrepared = false
 
 	#if os(macOS)
 		// An NSViewController has no view of its own without a nib
@@ -28,17 +29,17 @@ final class ActionViewController: FPUIActionExtensionViewController {
 			context.cancelRequest(withError: Self.error(.failed))
 			return
 		}
-		guard model == nil else {
-			return
+		guard !isPrepared else { return }
+		isPrepared = true
+		Task {
+			guard let identifier = itemIdentifiers.first, let domain = context.domainIdentifier,
+				let itemID = await Self.itemID(of: identifier, in: domain)
+			else {
+				context.cancelRequest(withError: Self.error(.failed))
+				return
+			}
+			host(GatewayHistoryView(itemID: itemID) { context.completeRequest() })
 		}
-		VersionsModel.removeLeftoverDownloads()
-		let model = VersionsModel(
-			itemIdentifier: itemIdentifiers.first, domainIdentifier: context.domainIdentifier
-		) {
-			context.completeRequest()
-		}
-		self.model = model
-		host(VersionsView(model: model))
 	}
 
 	override func prepare(forError error: any Error) {
@@ -46,6 +47,30 @@ final class ActionViewController: FPUIActionExtensionViewController {
 		// message says what to do
 		let context = extensionContext
 		host(ErrorView(message: error.localizedDescription) { context.cancelRequest(withError: Self.error(.userCancelled)) })
+	}
+
+	@concurrent private nonisolated static func itemID(
+		of identifier: NSFileProviderItemIdentifier, in domainIdentifier: NSFileProviderDomainIdentifier
+	) async -> Int64? {
+		if let itemID = ItemIdentifiers.itemID(from: identifier.rawValue) {
+			return itemID
+		}
+		do {
+			guard
+				let domain = try await NSFileProviderManager.domains().first(where: { $0.identifier == domainIdentifier }),
+				let manager = NSFileProviderManager(for: domain)
+			else {
+				return nil
+			}
+			let url = try await manager.getUserVisibleURL(for: identifier)
+			let (resolved, _) = try await NSFileProviderManager.identifierForUserVisibleFile(at: url)
+			return ItemIdentifiers.itemID(from: resolved.rawValue)
+		}
+		catch {
+			log.warning(
+				"Could not resolve \(identifier.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+			return nil
+		}
 	}
 
 	private static func error(_ code: FPUIExtensionErrorCode) -> NSError {

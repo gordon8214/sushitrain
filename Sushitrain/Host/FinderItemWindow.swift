@@ -127,7 +127,9 @@
 					FinderIntegration.configurationID(configDirectory, deviceID: client.deviceID(), roots: currentRoots)
 						== action.configuration
 				else { return nil }
-				return try? JSONDecoder().decode([FinderItemStatus].self, from: data).first
+				return (try? JSONDecoder().decode([FinderItemStatus].self, from: data).first).map {
+					HistoryAvailability.applying(to: $0)
+				}
 			}.value
 			guard !Task.isCancelled, generation == appState.finderConfigurationGeneration,
 				let result, action.kind == .settings || action.item.path.isEmpty || result.indexed,

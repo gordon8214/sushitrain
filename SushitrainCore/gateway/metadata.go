@@ -31,7 +31,7 @@ func (s *Service) handleCapabilities(w http.ResponseWriter, r *http.Request, p p
 	if err != nil {
 		return err
 	}
-	features := []string{featureLongPoll, featureDirectoryMoves, featureCrossFolderMoves, featureVersions}
+	features := []string{featureLongPoll, featureDirectoryMoves, featureCrossFolderMoves, featureVersions, "versions.byPath"}
 	if s.cfg.Thumbnails != nil {
 		features = append(features, s.cfg.Thumbnails.Features()...)
 	}

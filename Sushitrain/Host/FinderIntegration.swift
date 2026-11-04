@@ -100,6 +100,7 @@
 							?? FinderCapabilities(configuration: configuration)
 						if capabilities.configuration != configuration { capabilities = FinderCapabilities(configuration: configuration) }
 						let previousCapabilities = capabilities
+						let historyFolders = HistoryAvailability.folderIDs
 						for demand in demands {
 							guard demand.configuration == configuration else {
 								store.remove(name: FinderSyncStore.responseName(demand.instance))
@@ -110,7 +111,9 @@
 								.sorted { ($0.folderID, $0.path) < ($1.folderID, $1.path) }
 							let request = try JSONEncoder().encode(items)
 							let result = try client.finderStatusJSON(request)
-							let statuses = try JSONDecoder().decode([FinderItemStatus].self, from: result)
+							let statuses = try JSONDecoder().decode([FinderItemStatus].self, from: result).map {
+								HistoryAvailability.applying(to: $0, folderIDs: historyFolders)
+							}
 							capabilities.merge(statuses)
 							try publication.write(
 								FinderSnapshot(configuration: configuration, statuses: registry.running ? statuses : []),

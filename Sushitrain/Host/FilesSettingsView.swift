@@ -24,6 +24,7 @@
 
 		var body: some View {
 			switch category {
+			case .historySources: HistorySourcesView()
 			case .general: FilesGeneralSettingsView(presence: $presence)
 			case .gateways: FilesGatewaysSettingsView()
 			case .finder: FinderSettingsView()

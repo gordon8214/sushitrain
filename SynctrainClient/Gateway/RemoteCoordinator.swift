@@ -312,6 +312,7 @@ import SynctrainFileProviderKit
 		}
 		if let folders = result.folders {
 			status.folders = folders
+			try? environment?.store.saveHistoryFolders(serviceID: result.serviceID, folderIDs: folders.map(\.id))
 			status.folderProblems = result.folderProblems
 		}
 		if result.authorityChanged {
@@ -590,7 +591,17 @@ import SynctrainFileProviderKit
 			if identifier == environment.extensionSessionIdentifier, let extensionTransfers {
 				return extensionTransfers
 			}
-			guard identifier == environment.appSessionIdentifier || identifier == environment.extensionSessionIdentifier
+			if identifier == environment.historyAppSessionIdentifier
+				|| identifier == environment.historyExtensionSessionIdentifier
+			{
+				return HistoryUploadSessions.session(
+					identifier: identifier, store: environment.store, storage: environment.storage,
+					credentials: environment.credentials)
+			}
+			guard
+				identifier == environment.appSessionIdentifier || identifier == environment.extensionSessionIdentifier
+					|| identifier == environment.historyAppSessionIdentifier
+					|| identifier == environment.historyExtensionSessionIdentifier
 			else {
 				return nil
 			}
@@ -607,7 +618,7 @@ import SynctrainFileProviderKit
 			if identifier == environment.appSessionIdentifier {
 				appTransfers = transfers
 			}
-			else {
+			else if identifier == environment.extensionSessionIdentifier {
 				extensionTransfers = transfers
 			}
 			return transfers
@@ -623,10 +634,19 @@ import SynctrainFileProviderKit
 				return false
 			}
 			Log.info("Finishing the events of background session \(identifier)")
-			let isExtensionSession = identifier == environment.extensionSessionIdentifier
+			let isExtensionSession =
+				identifier == environment.extensionSessionIdentifier || identifier == environment.historyExtensionSessionIdentifier
+			HistoryUploadSessions.beginEvents(identifier: identifier)
 			transfers.handleEvents {
 				Task { @MainActor in
+					await HistoryUploadSessions.drainCompletions()
+					if identifier == environment.historyAppSessionIdentifier
+						|| identifier == environment.historyExtensionSessionIdentifier
+					{
+						await HistoryUploadSessions.reconcile(transfers, force: true)
+					}
 					await RemoteCoordinator.shared.finishBackgroundEvents(of: transfers)
+					HistoryUploadSessions.endEvents(identifier: identifier)
 					completion()
 					if isExtensionSession {
 						// Only the extension uses its session otherwise: let go of it once its tasks are done (never
@@ -635,6 +655,7 @@ import SynctrainFileProviderKit
 						if RemoteCoordinator.shared.extensionTransfers === transfers {
 							RemoteCoordinator.shared.extensionTransfers = nil
 						}
+						HistoryUploadSessions.release(identifier: identifier)
 					}
 				}
 			}
@@ -649,7 +670,7 @@ import SynctrainFileProviderKit
 			let operationIDs = Self.finishedUploads.withLock { finished in
 				defer { finished = [] }
 				return finished
-			}
+			}.union(HistoryUploadSessions.takeFinished())
 			let incompatible = Set(gateways.filter { $0.isCompatible == false }.map(\.id))
 			// In the background, the app has only the events' time: what a task did not send goes to a new one
 			let handoff = backgroundTransfers(for: environment.appSessionIdentifier).map { BackgroundHandoff(transfers: $0) }
@@ -711,6 +732,12 @@ import SynctrainFileProviderKit
 				Log.warn("Could not reconcile background transfers: \(error.userDescription)")
 			}
 		}
+		#if os(iOS)
+			// Ordinary app launch must not claim the action extension's independently owned session.
+			if let history = backgroundTransfers(for: environment.historyAppSessionIdentifier) {
+				await HistoryUploadSessions.reconcile(history)
+			}
+		#endif
 		await Task.detached(priority: .utility) {
 			let outbox = environment.outbox()
 			outbox.removeIdleTransfers()
@@ -748,6 +775,12 @@ import SynctrainFileProviderKit
 			throw .notEligible(String(localized: "The gateway does not let this device read the folder."))
 		}
 		let endpoint = status.endpoint
+		do {
+			let usage = try environment.store.gatewayUsage(serviceID: serviceID)
+			try environment.store.setGatewayUsage(usage.union(.files), serviceID: serviceID)
+		}
+		catch { throw .store(error) }
+		await FilesDomain.shared.register()
 		let activity = BackgroundActivity(name: "Adding a folder")
 		defer { activity.end() }
 		#if os(macOS)
@@ -958,8 +991,8 @@ import SynctrainFileProviderKit
 
 	/// After pairing: shows the gateway and lists its folders. Files may have been told that the gateway did not
 	/// accept this device (before pairing again), so it tries those items again.
-	func didPair(serviceID: String) async {
-		await FilesDomain.shared.register()
+	func didPair(serviceID: String, purpose: GatewayUsage = .files) async {
+		if purpose.contains(.files) { await FilesDomain.shared.register() }
 		await reloadState()
 		let signaled = lastResolvedSignal[serviceID]
 		await refresh(serviceID: serviceID)
@@ -997,7 +1030,7 @@ import SynctrainFileProviderKit
 		try result.get()
 		gateways.removeAll { $0.id == serviceID }
 		await reloadState()
-		if gateways.isEmpty {
+		if (try? environment.store.hasFilesGateways()) == false {
 			try? await removeLocation()
 		}
 	}

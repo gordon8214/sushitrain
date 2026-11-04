@@ -180,6 +180,38 @@ struct PartialUpload {
 		#expect(try upload.store.uploadTransfers(operationID: upload.operationID).isEmpty)
 	}
 
+	@Test(arguments: [
+		RemoteSessionIdentifier.historyApp(appBundleIdentifier: "test"),
+		RemoteSessionIdentifier.historyActionExtension(appBundleIdentifier: "test"),
+	]) func interruptedHistoryCompletionHandsRemainingBytesBackToBackground(session: String) async throws {
+		let upload = try PartialUpload()
+		let previous = try upload.runningTask(session: session)
+		upload.gateway.state.update { state in
+			state.uploads[PartialUpload.uploadID]?.data = upload.fixture.edit.prefix(150_000)
+		}
+		try upload.store.finishTask(transferID: previous.transferID, state: .interrupted, error: "network interrupted")
+		try upload.store.expediteMutation(operationID: upload.operationID)
+		let finished = Locked<[TransferRecord]>([])
+		let transfers = upload.transfers(identifier: session) { record in finished.update { $0.append(record) } }
+		let handoff = BackgroundHandoff(transfers: transfers, minimumRemainder: 1)
+		handoff.request()
+		guard case .waiting = try await upload.outbox(handoff: handoff).process(operationID: upload.operationID) else {
+			Issue.record("history completion did not hand off its remaining upload")
+			return
+		}
+		#expect(await eventually { !finished.value.isEmpty })
+		let patches = upload.gateway.patches
+		#expect(patches.count == 1)
+		#expect(patches.first?.header("Upload-Offset") == "150000")
+		#expect(patches.first?.header("Upload-Checksum") == nil, "sent by a background task")
+		#expect(upload.gateway.state.value.uploads[PartialUpload.uploadID]?.data == upload.fixture.edit)
+		guard case .resolved(let committed) = try await upload.outbox().process(operationID: upload.operationID) else {
+			Issue.record("completed background history upload was not committed")
+			return
+		}
+		#expect(committed.state == .committed)
+	}
+
 	/// A background task takes the worker's claim over in the update that records it; a foreground worker cannot claim a
 	/// transfer a task runs, and a worker that lost its claim starts nothing
 	@Test func aTransferHasOneTaskAtATime() async throws {
@@ -213,10 +245,14 @@ struct PartialUpload {
 
 	/// After a relaunch, a process reconnects to its session: transfers whose task the session no longer has are
 	/// interrupted, which lets their operations go on
-	@Test func reconnectingFindsTasksThatWereLost() async throws {
+	@Test(arguments: [
+		"test.remote.relaunched",
+		RemoteSessionIdentifier.historyApp(appBundleIdentifier: "test"),
+		RemoteSessionIdentifier.historyActionExtension(appBundleIdentifier: "test"),
+	]) func reconnectingFindsTasksThatWereLost(session: String) async throws {
 		let upload = try PartialUpload()
-		let transfer = try upload.runningTask(session: "test.remote.relaunched")
-		let relaunched = upload.transfers(identifier: "test.remote.relaunched")
+		let transfer = try upload.runningTask(session: session)
+		let relaunched = upload.transfers(identifier: session)
 		let lost = try await relaunched.reconcile()
 		#expect(lost.map(\.transferID) == [transfer.transferID])
 		let reconciled = try #require(try upload.store.transfer(id: transfer.transferID))

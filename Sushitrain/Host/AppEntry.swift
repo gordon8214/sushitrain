@@ -18,6 +18,10 @@
 			// Before anything reads them
 			TestRun.redirectPreferences()
 			#if DEBUG
+				if TestRun.isActive, ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_HISTORY_FIXTURE"] == "1" {
+					HistoryFixtureApp.main()
+					return
+				}
 				if TestRun.isActive, !TestRun.allowsFileProvider,
 					ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_SETTINGS_MODE"] == "files"
 				{

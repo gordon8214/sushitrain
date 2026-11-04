@@ -11,7 +11,7 @@
 	enum MacSettingsCategory: String, Hashable, Sendable, Identifiable {
 		case general, filesAndPreviews, network, bandwidth, engine, defaults
 		case remoteFileService, engineAccess, configuration, troubleshooting, advancedConfiguration
-		case gateways, finder, pendingEdits
+		case gateways, finder, pendingEdits, historySources
 
 		var id: String { rawValue }
 
@@ -28,6 +28,7 @@
 			case .configuration: "Configuration"
 			case .troubleshooting: "Troubleshooting"
 			case .advancedConfiguration: "Advanced Configuration"
+			case .historySources: "History Sources"
 			case .gateways: "Gateways"
 			case .finder: "Finder"
 			case .pendingEdits: "Pending Edits"
@@ -47,6 +48,7 @@
 			case .configuration: "folder.badge.gearshape"
 			case .troubleshooting: "stethoscope"
 			case .advancedConfiguration: "gearshape.2"
+			case .historySources: "clock.arrow.circlepath"
 			case .gateways: "externaldrive.badge.wifi"
 			case .finder: "folder"
 			case .pendingEdits: "arrow.up.doc"
@@ -62,10 +64,10 @@
 			case .synchronize:
 				[
 					.general, .filesAndPreviews, .network, .bandwidth, .engine, .defaults,
-					.remoteFileService, .engineAccess, .configuration, .troubleshooting, .advancedConfiguration,
+					.remoteFileService, .historySources, .engineAccess, .configuration, .troubleshooting, .advancedConfiguration,
 				]
 			case .filesInFinder:
-				[.general, .gateways, .finder, .pendingEdits]
+				[.general, .gateways, .historySources, .finder, .pendingEdits]
 			}
 		}
 

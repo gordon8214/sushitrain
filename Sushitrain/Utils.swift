@@ -427,7 +427,9 @@ extension SushitrainEntry {
 
 	/// Whether its folder can list the older versions of this file
 	var canShowVersions: Bool {
-		return !self.isDirectory() && !self.isSymlink() && (self.folder?.canBrowseVersions() ?? false)
+		return !self.isDirectory() && !self.isSymlink()
+			&& ((self.folder?.canBrowseVersions() ?? false)
+				|| (self.folder.map { $0.isRegularFolder && HistoryAvailability.folderIDs.contains($0.folderID) } ?? false))
 	}
 
 	@MainActor func showInFinder() throws {

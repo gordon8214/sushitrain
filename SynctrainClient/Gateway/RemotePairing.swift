@@ -56,7 +56,7 @@ enum RemotePairingError: LocalizedError, Sendable {
 		URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap(PairingInvitation.init(url:))
 	}
 
-	func start(link: String) {
+	func start(link: String, purpose: GatewayUsage = .files) {
 		guard let invitation = Self.invitation(from: link) else {
 			phase = .failed(RemotePairingError.invalidLink.localizedDescription)
 			return
@@ -74,8 +74,8 @@ enum RemotePairingError: LocalizedError, Sendable {
 					invitation, clientName: clientName, environment: environment)
 				phase = .waiting(gateway: invitation.host, expires: pending.expires)
 				let endpoint = try await Self.awaitApproval(
-					invitation, client: client, pending: pending, environment: environment)
-				await RemoteCoordinator.shared.didPair(serviceID: endpoint.serviceID)
+					invitation, client: client, pending: pending, environment: environment, purpose: purpose)
+				await RemoteCoordinator.shared.didPair(serviceID: endpoint.serviceID, purpose: purpose)
 				let name = RemoteCoordinator.shared.status(serviceID: endpoint.serviceID)?.displayName
 				phase = .paired(serviceID: endpoint.serviceID, name: name ?? endpoint.displayName)
 			}
@@ -145,7 +145,7 @@ enum RemotePairingError: LocalizedError, Sendable {
 	/// gateway saved (named after itself, once it tells its name).
 	nonisolated private static func awaitApproval(
 		_ invitation: PairingInvitation, client: RemoteFileClient, pending: PairingPending,
-		environment: RemoteEnvironment
+		environment: RemoteEnvironment, purpose: GatewayUsage
 	) async throws(RemotePairingError) -> RemoteEndpoint {
 		var credential: String?
 		while credential == nil {
@@ -193,7 +193,7 @@ enum RemotePairingError: LocalizedError, Sendable {
 				// Paired again: keep the name it had
 				endpoint.displayName = existing.displayName
 			}
-			try environment.store.saveRemoteEndpoint(endpoint)
+			try environment.store.saveRemoteEndpoint(endpoint, usage: purpose)
 		}
 		catch let error as IndexError {
 			throw .remote(.store(error))

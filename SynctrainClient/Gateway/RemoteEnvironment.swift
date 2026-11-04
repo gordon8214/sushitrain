@@ -14,7 +14,7 @@ final class RemoteEnvironment: Sendable {
 	let container: SharedContainer
 	let store: IndexStore
 	let storage: RemoteStorage
-	let credentials: KeychainCredentialStore
+	let credentials: any RemoteCredentialStore
 	let appGroupIdentifier: String?
 	/// Who claims operations, transfers and slots in the shared registry: this launch of the app
 	let owner: String
@@ -24,19 +24,29 @@ final class RemoteEnvironment: Sendable {
 	/// The session identifiers of the app and the extension
 	let appSessionIdentifier: String
 	let extensionSessionIdentifier: String
+	let historyAppSessionIdentifier: String
+	let historyExtensionSessionIdentifier: String
 
-	init(container: SharedContainer, bundle: Bundle = .main) {
+	private let configuration: @Sendable (RemoteEndpoint) -> URLSessionConfiguration?
+
+	init(
+		container: SharedContainer, bundle: Bundle = .main, credentials: (any RemoteCredentialStore)? = nil,
+		configuration: @escaping @Sendable (RemoteEndpoint) -> URLSessionConfiguration? = { _ in nil }
+	) {
+		self.configuration = configuration
 		self.container = container
 		store = IndexStore(container: container)
 		storage = RemoteStorage(container: container)
 		let group = bundle.object(forInfoDictionaryKey: SharedContainer.appGroupInfoKey) as? String
 		appGroupIdentifier = group?.isEmpty == false ? group : nil
-		credentials = KeychainCredentialStore(accessGroup: appGroupIdentifier)
+		self.credentials = credentials ?? KeychainCredentialStore(accessGroup: appGroupIdentifier)
 		owner = "app-\(UUID().uuidString.prefix(8).lowercased())"
 		scheduler = TransferScheduler(store: store, owner: owner)
 		let bundleID = RemoteSessionIdentifier.appBundleIdentifier(of: bundle) ?? "Synctrain"
 		appSessionIdentifier = RemoteSessionIdentifier.app(appBundleIdentifier: bundleID)
 		extensionSessionIdentifier = RemoteSessionIdentifier.fileProviderExtension(appBundleIdentifier: bundleID)
+		historyAppSessionIdentifier = RemoteSessionIdentifier.historyApp(appBundleIdentifier: bundleID)
+		historyExtensionSessionIdentifier = RemoteSessionIdentifier.historyActionExtension(appBundleIdentifier: bundleID)
 	}
 
 	/// The environment of the shared container, or nil when the app group is not available, or not to be used
@@ -57,7 +67,7 @@ final class RemoteEnvironment: Sendable {
 			if let existing = clients[endpoint.serviceID], existing.endpoint == endpoint {
 				return existing
 			}
-			let client = RemoteFileClient(endpoint: endpoint, credentials: credentials)
+			let client = RemoteFileClient(endpoint: endpoint, credentials: credentials, configuration: configuration(endpoint))
 			clients[endpoint.serviceID] = client
 			return client
 		}

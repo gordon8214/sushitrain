@@ -10,11 +10,14 @@ package gateway
 // path and identified by when they were archived (to the second), which is unique per path.
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/syncthing/syncthing/lib/fs"
 	"io"
 	iofs "io/fs"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -148,7 +151,7 @@ func (s *Service) handleVersions(w http.ResponseWriter, r *http.Request, p princ
 }
 
 // handleVersionContent serves a version's content from the gateway's disk. Unlike current content, it is not served
-// through leases and manifests: clients only preview versions, and never keep them as an item's content.
+// through leases and manifests: clients never install these downloads as verified current content; restoration stages them as new edits.
 func (s *Service) handleVersionContent(w http.ResponseWriter, r *http.Request, p principal) error {
 	row, _, err := s.versionedFile(r, p)
 	if err != nil {
@@ -158,7 +161,11 @@ func (s *Service) handleVersionContent(w http.ResponseWriter, r *http.Request, p
 	if !ok {
 		return errVersionNotFound
 	}
-	fd, err := s.backend.OpenFileVersion(row.folder, row.path, t)
+	return s.serveVersionContent(w, r, p, row.folder, row.path, row.id, t)
+}
+
+func (s *Service) serveVersionContent(w http.ResponseWriter, r *http.Request, p principal, folder, name, auditID string, t time.Time) error {
+	fd, err := s.backend.OpenFileVersion(folder, name, t)
 	if err != nil {
 		return versionsError(err)
 	}
@@ -170,13 +177,16 @@ func (s *Service) handleVersionContent(w http.ResponseWriter, r *http.Request, p
 	size := st.Size()
 
 	// Tied to the file's modification time too, as a newer version archived in the same second replaces it
-	etag := fmt.Sprintf(`"%s.%d.%d"`, versionID(t), size, st.ModTime().UnixNano())
+	etag := versionContentETag(t, st)
+	if expected := r.Header.Get("If-Match"); expected != "" && expected != etag {
+		return newAPIError(http.StatusPreconditionFailed, codeRevisionMismatch, "the archived version changed")
+	}
 	start, end, status, err := contentRange(w, r, etag, size)
 	if err != nil {
 		return err
 	}
 	if r.Method == http.MethodGet && start == 0 {
-		s.audit(p.clientID, "version", "", row.id, "ok")
+		s.audit(p.clientID, "version", folder, auditID, "ok")
 	}
 	w.WriteHeader(status)
 	if r.Method == http.MethodHead || end == start {
@@ -239,4 +249,24 @@ func (s *Service) openVersionSource(op *operationRecord) (io.ReadCloser, int64, 
 	}
 	op.data.SourceModNs = st.ModTime().UnixNano()
 	return fd, st.Size(), nil
+}
+
+// Includes stable filesystem identity and change time, excluding access time (which reads may update).
+// Sys differs across supported platforms; absent fields simply contribute nothing.
+func versionContentETag(t time.Time, info fs.FileInfo) string {
+	identity := ""
+	value := reflect.ValueOf(info.Sys())
+	if value.IsValid() && value.Kind() == reflect.Pointer && !value.IsNil() {
+		value = value.Elem()
+	}
+	if value.IsValid() && value.Kind() == reflect.Struct {
+		for _, name := range []string{"Dev", "Ino", "Ctim", "Ctimespec", "CreationTime", "LastWriteTime"} {
+			field := value.FieldByName(name)
+			if field.IsValid() && field.CanInterface() {
+				identity += fmt.Sprintf("%s=%v;", name, field.Interface())
+			}
+		}
+	}
+	digest := sha256.Sum256([]byte(identity))
+	return fmt.Sprintf(`"%s.%d.%d.%x"`, versionID(t), info.Size(), info.ModTime().UnixNano(), digest)
 }

@@ -76,7 +76,8 @@ func openAt(parent windows.Handle, name string, access, disposition, options uin
 	return h, nil
 }
 
-func openRoot(path string) (*dir, error) { return openRootAccess(path, true) }
+func openRootReadOnly(path string) (*dir, error) { return openRootAccess(path, false) }
+func openRoot(path string) (*dir, error)         { return openRootAccess(path, true) }
 func openRootAccess(path string, write bool) (*dir, error) {
 	name, err := windows.UTF16PtrFromString(path)
 	if err != nil {
@@ -109,7 +110,13 @@ func openRootAccess(path string, write bool) (*dir, error) {
 	}
 	return &dir{h, windows.UTF16ToString(physical[:n])}, nil
 }
-func (d *dir) openDir(rel string) (*dir, error) {
+func (d *dir) openDir(rel string) (*dir, error)         { return d.openDirAccess(rel, true) }
+func (d *dir) openDirReadOnly(rel string) (*dir, error) { return d.openDirAccess(rel, false) }
+func (d *dir) openDirAccess(rel string, write bool) (*dir, error) {
+	access := uint32(windows.FILE_GENERIC_READ)
+	if write {
+		access |= windows.FILE_GENERIC_WRITE
+	}
 	var h windows.Handle
 	err := windows.DuplicateHandle(windows.CurrentProcess(), d.handle, windows.CurrentProcess(), &h, 0, false, windows.DUPLICATE_SAME_ACCESS)
 	if err != nil {
@@ -124,7 +131,7 @@ func (d *dir) openDir(rel string) (*dir, error) {
 			current.close()
 			return nil, os.ErrInvalid
 		}
-		h, err = openAt(current.handle, part, windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
+		h, err = openAt(current.handle, part, access, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
 		path := filepath.Join(current.path, part)
 		current.close()
 		if err != nil {

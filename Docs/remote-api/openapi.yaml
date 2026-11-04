@@ -303,6 +303,87 @@ paths:
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /v1/folders/{folderID}/versions:
+    parameters:
+      - $ref: "#/components/parameters/FolderID"
+      - name: path
+        in: query
+        required: true
+        schema: { type: string, minLength: 1 }
+    get:
+      tags: [versions]
+      summary: Versions identified by shared folder ID and current relative path.
+      description: |
+        Requires `versions.byPath` and read access to the folder. Does not require an item ID or a live current
+        file on this gateway. Each version includes its strong `etag` validator for a conditional download.
+        Paths are decoded once and must be relative; traversal, reserved Syncthing paths,
+        directories and symlinks are refused. The normal restrictions on external versioning and custom versions
+        paths apply. Looking up history never subscribes the client to the folder's index.
+      operationId: listPathVersions
+      responses:
+        "200":
+          description: Versions of this exact folder and path, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PathVersionList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /v1/folders/{folderID}/versions/{versionID}/content:
+    parameters:
+      - $ref: "#/components/parameters/FolderID"
+      - name: path
+        in: query
+        required: true
+        schema: { type: string, minLength: 1 }
+      - name: versionID
+        in: path
+        required: true
+        schema: { type: string, pattern: "^ver_-?[0-9]+$" }
+    get:
+      tags: [versions]
+      summary: Download an archive by shared folder ID, path and version ID.
+      description: |
+        Requires `versions.byPath` and read access. Uses the same strong ETag, single byte ranges, If-Range,
+        bounded streaming and audit logging as item-based version downloads. Send the listed `etag` as `If-Match`;
+        a changed archive answers 412. The current source file is unchanged.
+        Clients validate the completed download before exporting it or uploading it as an edit at their destination.
+      operationId: getPathVersionContent
+      parameters:
+        - name: If-Match
+          in: header
+          schema: { type: string }
+        - name: Range
+          in: header
+          schema: { type: string }
+      responses:
+        "200":
+          description: The complete archived contents.
+          content:
+            application/octet-stream: {}
+        "206": { description: A byte range of the archived contents. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "416": { description: The range is outside the version. }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    head:
+      tags: [versions]
+      summary: Length and validator of an archive identified by folder and path.
+      operationId: headPathVersionContent
+      responses:
+        "200": { description: Content headers only. }
+        "206": { description: Range headers only. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "416": { description: The range is outside the version. }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /v1/items/{itemID}/versions:
     parameters:
       - $ref: "#/components/parameters/ItemID"
@@ -340,8 +421,8 @@ paths:
       summary: A version's content, with byte ranges.
       description: |
         Served from the gateway's disk with a strong `ETag`, `Content-Length`, `Accept-Ranges: bytes`, single byte
-        ranges (`206`) and `If-Range`. Not verified against a manifest (invariant 12): clients only preview it,
-        and never keep it as an item's content. A version that no longer exists answers `version_not_found`.
+        ranges (`206`) and `If-Range`. Not verified against a manifest (invariant 12): clients never keep the downloaded archive as verified current item content.
+        A restore stages and hashes it as a new edit, using the destination's revision guards. A version that no longer exists answers `version_not_found`.
       operationId: getVersionContent
       parameters:
         - name: Range
@@ -743,7 +824,8 @@ components:
           type: array
           description: |
             Known values: `longPoll`, `thumbnails.image`, `thumbnails.video`, `thumbnails.pdf`, `directoryMoves`,
-            `crossFolderMoves`, `versions` (listing and previewing versions, and `sourceVersion` in operations).
+            `crossFolderMoves`, `versions` (listing and previewing versions, and `sourceVersion` in operations),
+            `versions.byPath` (history lookups and downloads by shared folder ID and relative path).
             Unknown values are ignored.
           items: { type: string }
         limits:
@@ -917,6 +999,17 @@ components:
         length: { type: integer, format: int64 }
         expires: { type: string, format: date-time }
 
+    PathVersionList:
+      type: object
+      required: [folderID, path, versioning, versions]
+      properties:
+        folderID: { type: string }
+        path: { type: string }
+        versioning: { $ref: "#/components/schemas/ItemVersionList/properties/versioning" }
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/ItemVersion" }
+
     ItemVersionList:
       type: object
       required: [itemID, revision, versioning, versions]
@@ -943,6 +1036,9 @@ components:
           type: string
           pattern: "^ver_-?[0-9]+$"
           description: Opaque (`ver_` and the Unix time it was archived); unique among the versions of a path.
+        etag:
+          type: string
+          description: Strong archive validator, required in path-based lists; send it as If-Match when downloading.
         versionTime:
           type: string
           format: date-time

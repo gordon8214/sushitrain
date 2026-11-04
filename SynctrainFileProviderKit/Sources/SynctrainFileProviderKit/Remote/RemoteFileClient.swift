@@ -462,10 +462,13 @@ public final class RemoteFileClient: Sendable {
 	}
 
 	/// Runs a download task into the destination. Error bodies (bounded) are read from the file and mapped.
-	func download(_ request: URLRequest, to destination: URL, gone: RemoteError? = nil) async throws(RemoteError)
+	func download(
+		_ request: URLRequest, to destination: URL, gone: RemoteError? = nil,
+		progress: (@Sendable (Int64, Int64) -> Void)? = nil
+	) async throws(RemoteError)
 		-> ContentResponse
 	{
-		let delegate = RemoteTrustDelegate(endpoint: endpoint)
+		let delegate = RemoteTrustDelegate(endpoint: endpoint, progress: progress)
 		let location: URL
 		let response: URLResponse
 		do {

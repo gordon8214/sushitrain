@@ -19,6 +19,11 @@ public enum RemoteSessionIdentifier {
 		"\(appBundleIdentifier).remote.extension"
 	}
 
+	public static func historyApp(appBundleIdentifier: String) -> String { "\(appBundleIdentifier).remote.history.app" }
+	public static func historyActionExtension(appBundleIdentifier: String) -> String {
+		"\(appBundleIdentifier).remote.history.extension"
+	}
+
 	/// The app's bundle identifier, from the bundle of the app or of an extension embedded in it (whose identifier
 	/// extends the app's by one component)
 	public static func appBundleIdentifier(of bundle: Bundle = .main) -> String? {

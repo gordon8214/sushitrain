@@ -207,10 +207,20 @@ extension IndexStore {
 	/// otherwise a replace operation is queued, based on the revision the edit started from. `onConflict` says what
 	/// the gateway does when the file changed since that revision: keep the edit as a conflict copy, or reject it.
 	public func recordRemoteContentChange(
-		itemID: Int64, modifiedNanoseconds: Int64, stagedFile: StagedFile, onConflict: RemoteConflictPolicy = .keepBoth
+		itemID: Int64, modifiedNanoseconds: Int64, stagedFile: StagedFile, onConflict: RemoteConflictPolicy = .keepBoth,
+		expectedRevision: RemoteRevision? = nil
 	) throws(IndexError) -> RemoteMutationResult {
 		try transaction { connection throws(IndexError) in
 			let recorder = try RemoteMutationRecorder(connection: connection)
+			if let expectedRevision {
+				let current = try connection.queryOne(
+					"SELECT pending, deleted FROM items WHERE id = ?", [itemID], { ($0.int64(0), $0.bool(1)) })
+				let revision = try connection.queryOne(
+					"SELECT revision FROM remote_items WHERE item_id = ?", [itemID], { $0.text(0) })
+				guard let current, current.0 == 0, !current.1, revision == expectedRevision.rawValue else {
+					throw .notAllowed("the file changed or has pending edits; refresh before restoring")
+				}
+			}
 			let result = try recorder.recordContentChange(
 				itemID: itemID, modifiedNanoseconds: modifiedNanoseconds, stagedFile: stagedFile, onConflict: onConflict)
 			try recorder.finish()

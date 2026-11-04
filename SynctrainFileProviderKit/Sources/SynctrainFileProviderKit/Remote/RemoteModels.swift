@@ -345,6 +345,7 @@ public struct Capabilities: Codable, Hashable, Sendable {
 		case crossFolderMoves
 		/// Listing and previewing the versions of files, and writing them (`OperationRequest.sourceVersion`)
 		case versions
+		case versionsByPath = "versions.byPath"
 	}
 
 	public func supports(_ feature: Feature) -> Bool {
@@ -473,13 +474,15 @@ public enum RemoteVersioning: OpenEnumeration {
 public struct RemoteVersion: Codable, Hashable, Sendable, Identifiable {
 	/// Opaque (`ver_…`), unique among the versions of a path
 	public var id: String
+	public var entityTag: String?
 	/// When the version was archived
 	public var versionTime: Date
 	public var modifiedNs: Int64
 	public var size: Int64
 
-	public init(id: String, versionTime: Date, modifiedNs: Int64, size: Int64) {
+	public init(id: String, versionTime: Date, modifiedNs: Int64, size: Int64, entityTag: String? = nil) {
 		self.id = id
+		self.entityTag = entityTag
 		self.versionTime = versionTime
 		self.modifiedNs = modifiedNs
 		self.size = size
@@ -487,6 +490,10 @@ public struct RemoteVersion: Codable, Hashable, Sendable, Identifiable {
 
 	public var modificationDate: Date {
 		Date(timeIntervalSince1970: Double(modifiedNs) / 1_000_000_000)
+	}
+	enum CodingKeys: String, CodingKey {
+		case id, versionTime, modifiedNs, size
+		case entityTag = "etag"
 	}
 }
 
