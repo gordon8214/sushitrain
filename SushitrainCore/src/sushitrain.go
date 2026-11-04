@@ -891,6 +891,10 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 			protectGUI(&conf.GUI, configDir)
 		}
 		applyAppDefaults(conf, ios)
+		// Seed these only for a new configuration, so saved defaults survive every startup.
+		conf.Defaults.Folder.BlockIndexing = true
+		conf.Defaults.Folder.SendXattrs = true
+		conf.Defaults.Folder.SyncXattrs = true
 	})
 	if err != nil {
 		return nil, "", err
@@ -979,7 +983,6 @@ func applyAppDefaults(conf *config.Configuration, ios bool) {
 	conf.Defaults.Folder.RescanIntervalS = 3600  // Rescan every hour by default
 	conf.Options.RelayReconnectIntervalM = 1     // Set this to one minute (from the default 10) because on mobile networks this is more often necessary
 	conf.Defaults.Folder.FSWatcherEnabled = !ios // Enable watching by default but not on iOS
-	conf.Defaults.Folder.BlockIndexing = false   // Save space by default
 	if ios {
 		conf.Defaults.Folder.IgnorePerms = true // iOS doesn't expose permissions to users
 	} else {

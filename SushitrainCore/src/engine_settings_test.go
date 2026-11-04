@@ -7,8 +7,10 @@ package sushitrain
 
 import (
 	"crypto/tls"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/syncthing/syncthing/lib/config"
@@ -99,7 +101,7 @@ func TestIOSAppliesTheAppSettingsAtEveryStart(t *testing.T) {
 		opts.RelayReconnectIntervalM != 1 || opts.ReleasesURL != "" || opts.URURL != "" || opts.CRURL != "" {
 		t.Fatalf("options not applied: %+v", opts)
 	}
-	if !defaults.IgnorePerms || defaults.RescanIntervalS != 3600 || defaults.FSWatcherEnabled || defaults.BlockIndexing {
+	if !defaults.IgnorePerms || defaults.RescanIntervalS != 3600 || defaults.FSWatcherEnabled || !defaults.BlockIndexing {
 		t.Fatalf("folder defaults not applied: %+v", defaults)
 	}
 	folder := cfg.Folders[0]
@@ -123,13 +125,98 @@ func TestNewConfigurationsGetThePlatformDefaults(t *testing.T) {
 			opts.RelayReconnectIntervalM != 1 || opts.ReleasesURL != "" || opts.URURL != "" || opts.CRURL != "" {
 			t.Fatalf("iOS %v: options %+v", ios, opts)
 		}
-		if defaults.RescanIntervalS != 3600 || defaults.BlockIndexing {
+		if defaults.RescanIntervalS != 3600 || !defaults.BlockIndexing || !defaults.SendXattrs || !defaults.SyncXattrs {
 			t.Fatalf("iOS %v: folder defaults %+v", ios, defaults)
+		}
+		if defaults.SendOwnership || defaults.SyncOwnership {
+			t.Fatalf("iOS %v: ownership enabled by default", ios)
 		}
 		// Permissions sync on macOS, as in Syncthing; iOS doesn't expose them
 		if defaults.IgnorePerms != ios || defaults.FSWatcherEnabled == ios {
 			t.Fatalf("iOS %v: folder defaults %+v", ios, defaults)
 		}
+	}
+}
+
+func TestFolderMetadataDefaultsSurviveReload(t *testing.T) {
+	for _, ios := range []bool{false, true} {
+		for bits := range 8 {
+			t.Run(fmt.Sprintf("ios=%v/settings=%03b", ios, bits), func(t *testing.T) {
+				dir, filesPath := t.TempDir(), t.TempDir()
+				path := writeCustomConfig(t, dir, filesPath)
+				cert := testIdentity(t, dir)
+				before := savedConfig(t, path, cert)
+				defaults := &before.Defaults.Folder
+				defaults.BlockIndexing = bits&1 != 0
+				defaults.SendXattrs = bits&2 != 0
+				defaults.SyncXattrs = bits&4 != 0
+				// Existing folders have independent settings, even when the defaults change.
+				folder := &before.Folders[0]
+				folder.BlockIndexing = !defaults.BlockIndexing
+				folder.SendXattrs = !defaults.SendXattrs
+				folder.SyncXattrs = !defaults.SyncXattrs
+				writeConfiguration(t, path, before)
+				for range 2 {
+					loaded, _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, ios)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for name, cfg := range map[string]config.Configuration{"loaded": loaded.RawCopy(), "saved": savedConfig(t, path, cert)} {
+						got := cfg.Defaults.Folder
+						if got.BlockIndexing != defaults.BlockIndexing || got.SendXattrs != defaults.SendXattrs ||
+							got.SyncXattrs != defaults.SyncXattrs {
+							t.Fatalf("%s defaults changed: %+v", name, got)
+						}
+						got = cfg.Folders[0]
+						if got.BlockIndexing != folder.BlockIndexing || got.SendXattrs != folder.SendXattrs ||
+							got.SyncXattrs != folder.SyncXattrs {
+							t.Fatalf("%s folder settings changed: %+v", name, got)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestNewFolderMetadataDefaultsCanBeEdited(t *testing.T) {
+	for _, ios := range []bool{false, true} {
+		t.Run(fmt.Sprintf("ios=%v", ios), func(t *testing.T) {
+			dir, filesPath := t.TempDir(), t.TempDir()
+			cert := testIdentity(t, dir)
+			path := filepath.Join(dir, "config.xml")
+			wrapper, _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, ios)
+			if err != nil {
+				t.Fatal(err)
+			}
+			serveConfiguration(t, wrapper)
+			client := (&Client{}).withTestRun(wrapper, nil, events.NoopLogger)
+			settings := client.DefaultFolderSettings()
+			if !settings.BlockIndexing || !settings.SendXattrs || !settings.SyncXattrs {
+				t.Fatalf("the defaults editor disagrees with the new configuration: %+v", settings)
+			}
+			// Saving the unedited page must preserve all settings.
+			before := wrapper.DefaultFolder()
+			if err := client.SetDefaultFolderSettings(settings); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(before, wrapper.DefaultFolder()) {
+				t.Fatal("saving unchanged defaults changed the configuration")
+			}
+			settings = client.DefaultFolderSettings()
+			settings.BlockIndexing, settings.SendXattrs, settings.SyncXattrs = false, false, false
+			if err := client.SetDefaultFolderSettings(settings); err != nil {
+				t.Fatal(err)
+			}
+			reloaded, _, err := loadEngineConfig(path, cert, events.NoopLogger, filesPath, &remoteManagedSet{}, ios)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defaults := reloaded.DefaultFolder()
+			if defaults.BlockIndexing || defaults.SendXattrs || defaults.SyncXattrs {
+				t.Fatalf("edited defaults did not survive reload: %+v", defaults)
+			}
+		})
 	}
 }
 
