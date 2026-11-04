@@ -136,8 +136,9 @@ private struct ContentView: View {
 
 	private var finderRequest: FinderActionRequest? {
 		let service = QuickActionService.shared
-		guard let window = host.window, window === service.target else { return nil }
-		return service.finderRequest
+		// Keep observing the queue while an attached sheet makes this window ineligible to receive its next request.
+		guard let request = service.finderRequest, let window = host.window, window === service.target else { return nil }
+		return request
 	}
 
 	@ViewBuilder private func splitBody() -> some View {

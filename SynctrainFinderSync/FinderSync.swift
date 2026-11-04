@@ -38,6 +38,7 @@ final class FinderSync: FIFinderSync, @unchecked Sendable {
 
 @MainActor private final class FinderExtensionModel: NSObject {
 	private let instance = UUID()
+	private let menuIcon: NSImage?
 	private var store: FinderSyncStore?
 	private var demandWriter: FinderDemandWriter?
 	private var watcher: FinderDirectoryWatcher?
@@ -57,6 +58,10 @@ final class FinderSync: FIFinderSync, @unchecked Sendable {
 
 	init(owner: FinderSync) {
 		self.owner = owner
+		let app = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+		menuIcon = NSWorkspace.shared.icon(forFile: app.path).copy() as? NSImage
+		menuIcon?.size = NSSize(width: 16, height: 16)
+		menuIcon?.isTemplate = false
 		super.init()
 		let controller = FIFinderSyncController.default()
 		controller.directoryURLs = []
@@ -224,7 +229,6 @@ final class FinderSync: FIFinderSync, @unchecked Sendable {
 		{ menuRequested.removeValue(forKey: oldest) }
 		startTimer()
 		let menu = NSMenu()
-		let submenu = NSMenu(title: "Synctrain")
 		for kind in descriptor.kinds {
 			let title: String
 			switch kind {
@@ -233,15 +237,14 @@ final class FinderSync: FIFinderSync, @unchecked Sendable {
 			case .settings: title = String(localized: "Folder Settings…")
 			case .versions: title = String(localized: "Previous Versions…")
 			}
-			let entry = submenu.addItem(withTitle: title, action: #selector(FinderSync.performAction(_:)), keyEquivalent: "")
+			let entry = menu.addItem(withTitle: title, action: #selector(FinderSync.performAction(_:)), keyEquivalent: "")
+			entry.image = menuIcon
 			entry.target = owner
 			nextAction += 1
 			entry.tag = nextAction
 			actions[nextAction] = FinderAction(configuration: registry.configuration, item: descriptor.item, kind: kind)
 			if actions.count > 256 { actions.removeValue(forKey: nextAction - 256) }
 		}
-		let entry = menu.addItem(withTitle: "Synctrain", action: nil, keyEquivalent: "")
-		entry.submenu = submenu
 		return menu
 	}
 	func performAction(tag: Int) {
@@ -250,8 +253,8 @@ final class FinderSync: FIFinderSync, @unchecked Sendable {
 		let configuration = NSWorkspace.OpenConfiguration()
 		if action.kind == .info {
 			configuration.environment = [FinderAction.infoLaunchEnvironmentKey: "1"]
-			// The app brings just the requested info window forward after validating the item.
-			configuration.activates = false
+			// Finder transfers foreground activation; the launch flag suppresses unrelated app windows.
+			configuration.activates = true
 		}
 		Task {
 			do {

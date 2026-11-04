@@ -1015,14 +1015,15 @@ measured niceness/UI impact relevant to issue #22. Normal app builds still need
 
 In Synchronize mode, enable **Synctrain Finder Sync** through Settings › General › Finder integration ›
 **Manage Finder Extension…**. macOS controls whether the extension is enabled. Right-click a synchronized folder,
-file, Finder window background, or sidebar folder to open the **Synctrain** submenu. It offers **Show in Synctrain**,
-**Show Info…** for indexed entries, **Folder Settings…**, and **Previous Versions…** for regular files in folders
-with supported versioning. Multiple selected items in one sync folder offer their common directory and folder settings.
-Selections spanning different sync folders have no Synctrain submenu.
+file, Finder window background, or sidebar folder to see Synctrain's commands directly in the context menu, each
+with the app icon. The commands are **Show in Synctrain**, **Show Info…** for indexed entries, **Folder Settings…**,
+and **Previous Versions…** for regular files in folders with supported versioning. Multiple selected items in one
+sync folder offer their common directory and folder settings.
+Selections spanning different sync folders have no Synctrain commands.
 
-**Show Info…** opens an independent info window for the selected item, without opening the file browser or restoring
-other app windows when it starts Synctrain. Repeating it for the same item brings its info window forward; different
-items can have separate info windows.
+**Show Info…** opens an independent info window in the foreground for the selected item, without opening the file
+browser or restoring other app windows when it starts Synctrain. Repeating it for the same item brings its info window
+forward; different items can have separate info windows.
 
 Badges show **Up to Date** (green check), **Syncing** (blue arrows), **Waiting to Sync** (blue clock), **Paused**
 (gray pause), or **Needs Attention** (orange exclamation point). Green means this Mac matches the latest version
@@ -1049,3 +1050,13 @@ folder removal, and mode switching were checked. A folder with 5,002 indexed fil
 requests; closing its Finder tab left no requests while the engine remained running. A live peer transfer's
 **Syncing** badge remains to be checked in Finder. Focused Swift and Go tests cover status and request behavior,
 including separate extension instances.
+
+A subsequent native check verified the direct commands and full-color app icons using a signed Release build with
+the existing debug fixture isolation enabled. File, folder, background, sidebar, same-root selection, mixed-root
+selection, and unrelated-folder menus were checked, and all four actions worked individually. The browser keeps
+observing the Finder request queue while an attached sheet makes its window ineligible for another request; otherwise
+closing the sheet could leave later actions unobserved. A native regression check completed settings → Done →
+subfolder navigation → version history → Done → settings in one app session without restarting.
+The history sheet's Close button also allowed the next Finder navigation request after dismissal.
+Foreground activation was checked for a cold Info launch and an existing Info window in menu-bar mode, including
+macOS reporting Finder as foreground before the repeated request and Synctrain as foreground afterward.
