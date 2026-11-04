@@ -104,6 +104,7 @@ struct SushitrainApp: App {
 		self.userSettings = appState.userSettings
 		#if os(macOS)
 			self.appDelegate.appState = appState
+			FinderIntegration.shared.start(appState)
 		#endif
 
 		AppDependencyManager.shared.add(dependency: appState)
@@ -277,6 +278,12 @@ struct SushitrainApp: App {
 			// An action with no window to take it. While the engine starts, one may be on its way.
 			.onChange(of: appState.startupState == .started ? qaService.action : nil, initial: true) { _, action in
 				if action != nil && qaService.target == nil {
+					openWindow(id: "main")
+					NSApp.activate()
+				}
+			}
+			.onChange(of: appState.startupState == .started ? qaService.finderRequest?.id : nil, initial: true) { _, request in
+				if request != nil && qaService.target == nil {
 					openWindow(id: "main")
 					NSApp.activate()
 				}

@@ -35,6 +35,7 @@
 				SushitrainApp.main()
 			}
 			else {
+				FinderIntegration.clearRegistration()
 				Log.usesSystemLog = true
 				FilesApp.main()
 			}

@@ -222,6 +222,8 @@ struct EngineMenuState: Equatable {
 	private(set) var appPersistentStatistics = AppPersistentStatistics()
 	private(set) var localDeviceID: String = ""
 	private(set) var eventCounter: Int = 0
+	/// Invalidate Finder deliveries even before the throttled UI refresh processes a configuration change.
+	fileprivate(set) var finderConfigurationGeneration = 0
 	fileprivate(set) var folderScanRevisions: [String: Int] = [:]
 	private(set) var startupState: AppStartupState = .notStarted {
 		didSet { self.updateEngineMenuState() }
@@ -900,6 +902,9 @@ struct EngineMenuState: Equatable {
 	}
 
 	func update() {
+		#if os(macOS)
+			FinderIntegration.shared.refresh()
+		#endif
 		guard self.hasLoadedClient else { return }
 		self.localDeviceID = self.client.deviceID()
 		let nextState = SyncState(
@@ -1422,6 +1427,7 @@ extension SushitrainDelegate: SushitrainClientDelegateProtocol {
 	func onEvent(_ event: String?) {
 		let appState = self.appState
 		DispatchQueue.main.async {
+			if event == "ConfigSaved" { appState.finderConfigurationGeneration += 1 }
 			// Status, badges and views share the existing refresh throttle. A file burst must not query the engine
 			// and redraw the Dock once per event before that throttle has a chance to coalesce it.
 			appState.changePublisher.send()

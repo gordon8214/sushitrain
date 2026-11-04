@@ -21,6 +21,11 @@ import SynctrainHostKit
 class QuickActionService {
 	static let shared = QuickActionService()
 	var action: Route?
+	private var finderActions = FinderActionQueue()
+	var finderRequest: FinderActionRequest? { finderActions.next }
+	func enqueueFinderActions(_ actions: [FinderAction]) { finderActions.enqueue(actions) }
+	func claimFinderRequest(_ id: UUID) -> Bool { finderActions.claim(id) }
+	func finishFinderRequest(_ id: UUID) { finderActions.finish(id) }
 
 	#if os(macOS)
 		/// The windows that can show a route, also while the engine starts and they can't do so yet
@@ -61,7 +66,17 @@ class QuickActionService {
 
 		func application(_ application: NSApplication, open urls: [URL]) {
 			Log.info("Received \(urls.count) URLs for import")
-			for url in urls { incomingFiles.receive(url) }
+			for url in urls {
+				if let action = FinderAction(url: url) {
+					QuickActionService.shared.enqueueFinderActions([action])
+				}
+				else if url.scheme == Route.urlScheme {
+					QuickActionService.shared.action = Route(url: url)
+				}
+				else {
+					incomingFiles.receive(url)
+				}
+			}
 			presentIncomingFiles()
 		}
 
@@ -88,6 +103,7 @@ class QuickActionService {
 			// could not finish is recovered at the next start.
 			let client = appState?.client
 			Task {
+				await FinderIntegration.shared.stop()
 				await GatewayController.shared.stopBeforeQuitting()
 				if let client {
 					if !(await Self.stop(client, within: Self.engineStopTimeout)) {

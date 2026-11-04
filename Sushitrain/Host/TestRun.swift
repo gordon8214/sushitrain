@@ -42,7 +42,7 @@
 			#endif
 		}
 
-		/// Keeps this run's preferences in the scratch directory, as `Library/Preferences/<bundle identifier>.plist` there.
+		/// Keeps this run's preferences in the scratch directory, as `Library/Preferences/test-<bundle identifier>.plist`.
 		/// To be called before anything reads them. It changes what `UserDefaults.standard` returns, rather than each of
 		/// the many places that use it, so that it also covers `@AppStorage`, AppKit and what comes later. A preference left
 		/// behind in the real ones can change what the real app does: `lastRunBuild` hides the offer to take over Syncthing.
@@ -55,11 +55,20 @@
 				let method = class_getClassMethod(UserDefaults.self, NSSelectorFromString("standardUserDefaults"))
 				guard (try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)) != nil,
 					let scratch = UserDefaults(
-						suiteName: directory.appending(path: bundleIdentifier).path(percentEncoded: false)),
+						suiteName: directory.appending(path: "test-" + bundleIdentifier).path(percentEncoded: false)),
 					let method
 				else {
 					// Going on would use the real ones
 					fatalError("A test run could not keep its preferences in \(directory.path(percentEncoded: false))")
+				}
+				// CFPreferences can alias a file domain named exactly after an installed app to its live preferences.
+				// Keep a distinct basename. Read older fixture seeds directly, bypassing that alias and its cache.
+				let domain = directory.appending(path: "test-" + bundleIdentifier).path(percentEncoded: false)
+				if scratch.persistentDomain(forName: domain) == nil,
+					let data = try? Data(contentsOf: directory.appending(path: bundleIdentifier + ".plist")),
+					let seed = (try? PropertyListSerialization.propertyList(from: data, format: nil)) as? [String: Any]
+				{
+					scratch.setPersistentDomain(seed, forName: domain)
 				}
 				let standard: @convention(block) (AnyClass) -> UserDefaults = { _ in scratch }
 				method_setImplementation(method, imp_implementationWithBlock(standard))

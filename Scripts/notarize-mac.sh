@@ -103,6 +103,8 @@ check_profile() {
 
 check_app() {
 	local code extensions=0
+	local expected=(gordonbyrnes.Sushitrain.Share gordonbyrnes.Sushitrain.FileProvider gordonbyrnes.Sushitrain.FileProviderUI gordonbyrnes.Sushitrain.FinderSync)
+	local actual=()
 	codesign --verify --deep --strict --verbose=2 "$app"
 
 	team=$(codesign --display --verbose=2 "$app" 2>&1 | sed -n 's/^TeamIdentifier=//p')
@@ -120,6 +122,7 @@ check_app() {
 		check_signature "$code"
 		if [[ "$code" == *.appex ]]; then
 			extensions=$((extensions + 1))
+			actual+=("$(plist_value "$code/Contents/Info.plist" CFBundleIdentifier)")
 			check_app_group "$code"
 			check_profile "$code"
 			if ! entitlements "$code" | grep -q "<key>com.apple.security.app-sandbox</key>"; then
@@ -128,7 +131,10 @@ check_app() {
 		fi
 	done < <(find "$app/Contents" \( -name '*.app' -o -name '*.appex' -o -name '*.xpc' -o -name '*.framework' -o -name '*.dylib' \) -print0)
 
-	[[ $extensions -eq 3 ]] || fail "$app has $extensions extensions, not the share extension and the two of the File Provider"
+	[[ $extensions -eq 4 ]] || fail "$app has $extensions extensions; expected Share, FileProvider, FileProviderUI and FinderSync"
+	for code in "${expected[@]}"; do
+		[[ " ${actual[*]} " == *" $code "* ]] || fail "$app is missing extension $code"
+	done
 }
 
 # Waits for the notary service's verdict. notarytool returns on any verdict and doesn't document its exit codes, so this

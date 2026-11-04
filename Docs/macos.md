@@ -885,7 +885,7 @@ The Release configuration signs the app and its extensions with Developer ID App
 and without the `get-task-allow` entitlement. The app and the two File Provider extensions take a provisioning profile
 each: they share gateway credentials in the Keychain through an access group (the app group's name), and macOS won't start
 code that claims one without a profile that allows it. **An app signed without them doesn't start at all**, not even for
-those who never use Files in Finder. The share extension needs none, as macOS accepts an app group that starts with the
+those who never use Files in Finder. The share and Finder Sync extensions need none, as macOS accepts an app group that starts with the
 team's ID without one, and without asking the user. Debug and iOS builds sign automatically, which creates the Debug
 profiles. Both schemes run the Release configuration, so running the app on a Mac from Xcode takes
 the certificate and the profiles too, or a scheme set to Debug; a Release run has no debugger, as it lacks `get-task-allow`. `make mac` and
@@ -895,7 +895,7 @@ the certificate and the profiles too, or a scheme set to Debug; a Release run ha
 which leaves the stapled app and `Synctrain-<version>.<build>.dmg` in `Build/release`:
 
 1. It checks that all code in the app is signed by one team with Developer ID, with a secure timestamp and the hardened
-   runtime and without `get-task-allow`; that the app is not sandboxed and its three extensions are; that they all use one
+   runtime and without `get-task-allow`; that the app is not sandboxed and its four extensions are; that they all use one
    app group with the team's prefix, which neither notarization nor Gatekeeper looks at; and that whatever claims a
    Keychain access group has a profile.
 2. It has the app notarized and staples the ticket to it.
@@ -1010,3 +1010,38 @@ sibling tools README's issue #47 section for the qualified counts, unchanged-cod
 send evidence, scope and explicit acceptance reasons; this also records the
 measured niceness/UI impact relevant to issue #22. Normal app builds still need
 `make core` before building or archiving, as described above.
+
+## Finder menus and sync badges
+
+In Synchronize mode, enable **Synctrain Finder Sync** through Settings › General › Finder integration ›
+**Manage Finder Extension…**. macOS controls whether the extension is enabled. Right-click a synchronized folder,
+file, Finder window background, or sidebar folder to open the **Synctrain** submenu. It offers **Show in Synctrain**,
+**Show Info…** for indexed entries, **Folder Settings…**, and **Previous Versions…** for regular files in folders
+with supported versioning. Multiple selected items in one sync folder offer their common directory and folder settings.
+Selections spanning different sync folders have no Synctrain submenu.
+
+Badges show **Up to Date** (green check), **Syncing** (blue arrows), **Waiting to Sync** (blue clock), **Paused**
+(gray pause), or **Needs Attention** (orange exclamation point). Green means this Mac matches the latest version
+Syncthing knows about; it does not mean every peer has received it. Files have individual status. Directories reflect
+the overall status of the containing synchronized folder, so an unaffected subdirectory can show that its folder is busy.
+Ignored items and Syncthing's internal files have no badge. As with the app's status, synchronization is based on the
+engine's index; the extension also checks inexpensive filesystem metadata to catch edits awaiting a scan.
+
+Synctrain must be running for live status. Quitting clears badges, and a crash or stale response clears them within
+ten seconds. Browsing alone never starts the app; choosing a menu action does. File Provider mode removes these
+registrations and uses its existing Finder integration instead.
+
+The sandboxed extension shares only a root registry, visible-item requests, and expiring status responses with the app
+through the app group. The app queries its existing engine in bounded batches off the main thread. No database,
+credentials, extra engine, or network listener is shared or started. Root parents are observed for visibility notifications; menu and status requests are still restricted to synchronized roots.
+Separate extension processes for Open and Save
+dialogs keep separate requests; stale requests expire. Only requested items are refreshed, at most once per second,
+and the status worker becomes idle when no requests remain.
+
+Native validation on November 3, 2026 used an installed, signed Release and disposable sync data. Root-folder,
+item, background, sidebar, same-root selection, and mixed-root selection menus were checked, including cold launch,
+information, settings, and version history. Current, waiting, paused, and attention badges, quit/crash clearing,
+folder removal, and mode switching were checked. A folder with 5,002 indexed files produced four visible-item
+requests; closing its Finder tab left no requests while the engine remained running. A live peer transfer's
+**Syncing** badge remains to be checked in Finder. Focused Swift and Go tests cover status and request behavior,
+including separate extension instances.

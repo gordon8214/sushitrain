@@ -6,6 +6,7 @@
 import SushitrainCore
 import SwiftUI
 import UniformTypeIdentifiers
+import SynctrainHostKit
 
 struct MainView: View {
 	@Environment(AppState.self) private var appState
@@ -133,6 +134,12 @@ private struct ContentView: View {
 		return action
 	}
 
+	private var finderRequest: FinderActionRequest? {
+		let service = QuickActionService.shared
+		guard let window = host.window, window === service.target else { return nil }
+		return service.finderRequest
+	}
+
 	@ViewBuilder private func splitBody() -> some View {
 		NavigationSplitView(
 			columnVisibility: $columnVisibility,
@@ -204,6 +211,18 @@ private struct ContentView: View {
 		Group {
 			self.splitBody()
 		}
+		.modifier(
+			FinderActionModifier(
+				request: finderRequest,
+				claim: { id in
+					guard QuickActionService.shared.claimFinderRequest(id) else { return false }
+					NSApplication.shared.unhideWithoutActivation()
+					host.window?.makeKeyAndOrderFront(nil)
+					NSApplication.shared.activate()
+					return true
+				},
+				finish: { QuickActionService.shared.finishFinderRequest($0) })
+		)
 		// Initially too: an action that started the app waited for the engine, which this view comes after
 		.onChange(of: quickAction, initial: true) { _, route in
 			guard let route else { return }

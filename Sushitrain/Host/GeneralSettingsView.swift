@@ -40,6 +40,8 @@ struct GeneralSettingsView: View {
 				}.disabled(!presence.inMenuBar)
 			}
 
+			FinderIntegrationSection()
+
 			Section {
 				AutoStartToggleView()
 			} footer: {
