@@ -22,16 +22,16 @@ class QuickActionService {
 	static let shared = QuickActionService()
 	var action: Route?
 	private var finderActions = FinderActionQueue()
-	private var finderInfoActions = FinderActionQueue()
+	private var finderWindowActions = FinderActionQueue()
 	var finderRequest: FinderActionRequest? { finderActions.next }
-	var finderInfoRequest: FinderActionRequest? { finderInfoActions.next }
-	var presentedFinderInfoRequest: FinderActionRequest?
+	var finderWindowRequest: FinderActionRequest? { finderWindowActions.next }
+	var presentedFinderWindowRequest: FinderActionRequest?
 	func enqueueFinderActions(_ actions: [FinderAction]) {
-		finderActions.enqueue(actions.filter { $0.kind != .info })
-		finderInfoActions.enqueue(actions.filter { $0.kind == .info })
+		finderActions.enqueue(actions.filter { $0.windowAction == nil })
+		finderWindowActions.enqueue(actions.compactMap(\.windowAction))
 	}
-	func claimFinderInfoRequest(_ id: UUID) -> Bool { finderInfoActions.claim(id) }
-	func finishFinderInfoRequest(_ id: UUID) { finderInfoActions.finish(id) }
+	func claimFinderWindowRequest(_ id: UUID) -> Bool { finderWindowActions.claim(id) }
+	func finishFinderWindowRequest(_ id: UUID) { finderWindowActions.finish(id) }
 	func claimFinderRequest(_ id: UUID) -> Bool { finderActions.claim(id) }
 	func finishFinderRequest(_ id: UUID) { finderActions.finish(id) }
 
@@ -55,7 +55,7 @@ class QuickActionService {
 
 		/// A notification was clicked. The connection requests have a window of their own, so this is no route.
 		var wantsConnectionRequests = false
-		var hasPresentedFinderInfo = false
+		var hasPresentedFinderWindow = false
 	#endif
 }
 
@@ -159,9 +159,9 @@ class QuickActionService {
 		}
 
 		func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-			// An info-only launch suppresses the normal scene, including SwiftUI's later Dock reopen behavior.
-			if FinderInfoWindow.isLaunch {
-				if QuickActionService.shared.hasPresentedFinderInfo && !hasVisibleWindows,
+			// A Finder window launch suppresses the browser, including SwiftUI's later Dock reopen behavior.
+			if FinderItemWindow.isLaunch {
+				if QuickActionService.shared.hasPresentedFinderWindow && !hasVisibleWindows,
 					!NSApp.windows.contains(where: \.isMiniaturized)
 				{
 					openWindow?(id: "main")

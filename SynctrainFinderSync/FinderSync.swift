@@ -251,8 +251,8 @@ final class FinderSync: FIFinderSync, @unchecked Sendable {
 		guard let action = actions[tag], let url = action.url else { return }
 		let app = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 		let configuration = NSWorkspace.OpenConfiguration()
-		if action.kind == .info {
-			configuration.environment = [FinderAction.infoLaunchEnvironmentKey: "1"]
+		if action.windowAction != nil {
+			configuration.environment = [FinderAction.windowLaunchEnvironmentKey: "1"]
 			// Finder transfers foreground activation; the launch flag suppresses unrelated app windows.
 			configuration.activates = true
 		}

@@ -172,6 +172,29 @@ private actor FinderTestSignal {
 	#expect(FinderMenu(selection: [first, FinderItem(folderID: "other", path: "a")], statuses: [:]) == nil)
 }
 
+@Test func finderSettingsWindowsReuseTheFolderWhileInfoWindowsKeepTheirItem() throws {
+	let file = FinderItem(folderID: "root", path: "dir/a.txt")
+	let settings = FinderAction(configuration: "config", item: file, kind: .settings)
+	let window = try #require(settings.windowAction)
+	#expect(window.item == FinderItem(folderID: "root", path: ""))
+	#expect(window.kind == .settings)
+	#expect(window.windowAction == window)
+	#expect(settings.item == file)
+	let otherEntry = FinderAction(
+		configuration: "config", item: FinderItem(folderID: "root", path: "other/b.txt"), kind: .settings)
+	#expect(otherEntry.windowAction == window)
+	#expect(FinderAction(configuration: "other", item: file, kind: .settings).windowAction != window)
+	#expect(
+		FinderAction(configuration: "config", item: FinderItem(folderID: "other", path: ""), kind: .settings).windowAction
+			!= window)
+	#expect(FinderAction(url: try #require(window.url)) == window)
+	let info = FinderAction(configuration: "config", item: file, kind: .info)
+	#expect(info.windowAction == info)
+	for kind in [FinderAction.Kind.browse, .versions] {
+		#expect(FinderAction(configuration: "config", item: file, kind: kind).windowAction == nil)
+	}
+}
+
 @Test func finderSnapshotsExpireAndRejectOtherConfigurations() {
 	let now = Date()
 	let snapshot = FinderSnapshot(configuration: "config", statuses: [], now: now)

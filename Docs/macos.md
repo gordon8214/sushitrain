@@ -1025,6 +1025,12 @@ Selections spanning different sync folders have no Synctrain commands.
 browser or restoring other app windows when it starts Synctrain. Repeating it for the same item brings its info window
 forward; different items can have separate info windows.
 
+**Folder Settings…** also opens in its own foreground window, without opening the browser when it starts the app.
+Each synchronized folder has one settings window, shared by requests from its files, subfolders, background, and
+sidebar entry. Repeating the command brings that window forward and preserves its current settings page. Different
+synchronized folders can have separate settings windows, alongside info windows and the browser.
+These Finder utility windows remain separate even when macOS prefers tabs for document windows.
+
 Badges show **Up to Date** (green check), **Syncing** (blue arrows), **Waiting to Sync** (blue clock), **Paused**
 (gray pause), or **Needs Attention** (orange exclamation point). Green means this Mac matches the latest version
 Syncthing knows about; it does not mean every peer has received it. Files have individual status. Directories reflect
@@ -1060,3 +1066,9 @@ subfolder navigation → version history → Done → settings in one app sessio
 The history sheet's Close button also allowed the next Finder navigation request after dismissal.
 Foreground activation was checked for a cold Info launch and an existing Info window in menu-bar mode, including
 macOS reporting Finder as foreground before the repeated request and Synctrain as foreground afterward.
+
+Standalone Folder Settings validation used two disposable synchronized folders. Requests from a root, file, and
+subfolder reused the folder's window and preserved its selected page; different folders and Info opened separate
+windows. A display-name edit was saved, survived an app restart, and was restored. Folder Settings also opened while
+a history sheet remained active, and Done closed only the settings window. A cold launch of the normal signed Release
+opened only the requested folder's settings in the foreground. Production folder and device configuration was preserved.

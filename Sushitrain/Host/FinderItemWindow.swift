@@ -8,10 +8,12 @@
 	@preconcurrency import SushitrainCore
 	import SynctrainHostKit
 
-	/// Finder info requests never need a browser window, including when they start the app.
-	struct FinderInfoWindow: View {
-		static let id = "finderInfo"
-		static let isLaunch = ProcessInfo.processInfo.environment[FinderAction.infoLaunchEnvironmentKey] == "1"
+	/// Finder info and folder settings requests never need a browser window, including when they start the app.
+	struct FinderItemWindow: View {
+		static let id = "finderItem"
+		static let isLaunch =
+			ProcessInfo.processInfo.environment[FinderAction.windowLaunchEnvironmentKey] == "1"
+			|| ProcessInfo.processInfo.environment[FinderAction.infoLaunchEnvironmentKey] == "1"
 
 		private struct LoadRequest: Equatable {
 			let configurationGeneration: Int
@@ -20,14 +22,20 @@
 
 		let action: FinderAction
 		@Environment(AppState.self) private var appState
+		@Environment(\.dismiss) private var dismiss
 		@State private var entry: SushitrainEntry?
+		@State private var folder: SushitrainFolder?
 		@State private var unavailable = false
 		@State private var deliveryID = UUID()
 		@State private var loadedDeliveryID: UUID?
 
 		var body: some View {
 			NavigationStack {
-				if let entry {
+				if action.kind == .settings, let folder {
+					FolderView(folder: folder)
+						.toolbar { Button("Done") { dismiss() } }
+				}
+				else if let entry {
 					EntryInfoView(entry: entry, showPath: true, siblings: nil)
 						.id(loadedDeliveryID)
 				}
@@ -43,9 +51,10 @@
 				}
 			}
 			.frame(minWidth: 600, minHeight: 500)
+			.background(WindowConfiguration())
 			.showsToast()
-			.onAppear { QuickActionService.shared.hasPresentedFinderInfo = true }
-			.onChange(of: QuickActionService.shared.presentedFinderInfoRequest, initial: true) { _, request in
+			.onAppear { QuickActionService.shared.hasPresentedFinderWindow = true }
+			.onChange(of: QuickActionService.shared.presentedFinderWindowRequest, initial: true) { _, request in
 				guard let request, request.action == action else { return }
 				deliveryID = request.id
 			}
@@ -56,22 +65,45 @@
 
 		private func load(deliveryID: UUID) async {
 			// Preserve open sheets and navigation while a configuration save is revalidated.
-			guard action.kind == .info,
+			guard action.windowAction != nil,
 				await FinderActionValidator.status(for: action, appState: appState) != nil,
-				let folder = appState.client.folder(withID: action.item.folderID),
-				let item = try? folder.getFileInformation(action.item.path.precomposedStringWithCanonicalMapping)
+				let folder = appState.client.folder(withID: action.item.folderID)
 			else {
 				if !Task.isCancelled {
 					entry = nil
+					self.folder = nil
 					unavailable = true
 				}
 				return
 			}
 			guard !Task.isCancelled else { return }
-			entry = item
+			if action.kind == .settings {
+				self.folder = folder
+			}
+			else if let item = try? folder.getFileInformation(action.item.path.precomposedStringWithCanonicalMapping) {
+				entry = item
+			}
+			else {
+				entry = nil
+				unavailable = true
+				return
+			}
 			// Each new delivery replaces EntryInfoView's stored metadata snapshot in the same window.
 			loadedDeliveryID = deliveryID
 			unavailable = false
+		}
+
+		/// These utility windows stay independent even when macOS prefers tabs for document windows.
+		private struct WindowConfiguration: NSViewRepresentable {
+			final class ContentView: NSView {
+				override func viewDidMoveToWindow() {
+					super.viewDidMoveToWindow()
+					window?.tabbingMode = .disallowed
+				}
+			}
+
+			func makeNSView(context: Context) -> ContentView { ContentView() }
+			func updateNSView(_ nsView: ContentView, context: Context) {}
 		}
 	}
 

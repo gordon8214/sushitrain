@@ -115,6 +115,7 @@ public enum FinderVisibility {
 
 public struct FinderAction: Codable, Hashable, Identifiable, Sendable {
 	public static let infoLaunchEnvironmentKey = "SYNCTRAIN_FINDER_INFO"
+	public static let windowLaunchEnvironmentKey = "SYNCTRAIN_FINDER_WINDOW"
 	public enum Kind: String, Codable, Sendable { case browse, info, settings, versions }
 	public var version = 1
 	public var configuration: String
@@ -125,6 +126,17 @@ public struct FinderAction: Codable, Hashable, Identifiable, Sendable {
 		self.configuration = configuration
 		self.item = item
 		self.kind = kind
+	}
+	/// Settings belong to the synchronized folder, so every entry in it reuses the same window.
+	public var windowAction: Self? {
+		switch kind {
+		case .info: return self
+		case .settings:
+			var action = self
+			action.item.path = ""
+			return action
+		case .browse, .versions: return nil
+		}
 	}
 	public var url: URL? {
 		var components = URLComponents()

@@ -202,16 +202,10 @@
 				complete()
 			}
 			.sheet(item: $presented, onDismiss: complete) { action in
-				if let folder = appState.client.folder(withID: action.item.folderID) {
+				if action.kind == .versions, let folder = appState.client.folder(withID: action.item.folderID) {
 					NavigationStack {
-						Group {
-							switch action.kind {
-							case .settings: FolderView(folder: folder)
-							case .versions: FileVersionsView(folder: folder, path: action.item.path)
-							case .info, .browse: EmptyView()
-							}
-						}
-						.toolbar { Button("Done") { presented = nil } }
+						FileVersionsView(folder: folder, path: action.item.path)
+							.toolbar { Button("Done") { presented = nil } }
 					}.frame(minWidth: 700, minHeight: 600)
 				}
 			}
