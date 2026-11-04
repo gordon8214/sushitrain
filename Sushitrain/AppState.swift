@@ -638,6 +638,7 @@ struct EngineMenuState: Equatable {
 			RemoteCoordinator.shared.start(client: client)
 		#elseif os(macOS)
 			GatewayController.shared.start(client: client)
+			HistoryIntegration.shared.start(self)
 			Task {
 				await ModeSwitch.removeLeftoverLocation { self.alert(message: $0, type: .informational) }
 			}

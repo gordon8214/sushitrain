@@ -85,7 +85,8 @@ func (s *Service) handlePathVersions(w http.ResponseWriter, r *http.Request, p p
 		if statErr != nil {
 			return versionsError(statErr)
 		}
-		list.Versions = append(list.Versions, ItemVersion{ID: versionID(version.VersionTime), EntityTag: versionContentETag(version.VersionTime, info),
+		snapshotTag, metadataStatus := s.versionSnapshotStatus(access.info.ID, name, version.VersionTime)
+		list.Versions = append(list.Versions, ItemVersion{SnapshotETag: snapshotTag, MetadataStatus: metadataStatus, ID: versionID(version.VersionTime), EntityTag: versionContentETag(version.VersionTime, info),
 			VersionTime: version.VersionTime.UTC().Format(time.RFC3339), ModifiedNs: info.ModTime().UnixNano(), Size: info.Size()})
 	}
 	return writeJSON(w, http.StatusOK, list)

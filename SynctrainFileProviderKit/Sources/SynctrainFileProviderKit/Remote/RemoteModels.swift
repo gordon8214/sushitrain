@@ -472,6 +472,8 @@ public enum RemoteVersioning: OpenEnumeration {
 
 /// A previous version of a file, as the folder's versioning keeps it on the gateway
 public struct RemoteVersion: Codable, Hashable, Sendable, Identifiable {
+	public var snapshotETag: String?
+	public var metadataStatus: String?
 	/// Opaque (`ver_…`), unique among the versions of a path
 	public var id: String
 	public var entityTag: String?
@@ -492,7 +494,7 @@ public struct RemoteVersion: Codable, Hashable, Sendable, Identifiable {
 		Date(timeIntervalSince1970: Double(modifiedNs) / 1_000_000_000)
 	}
 	enum CodingKeys: String, CodingKey {
-		case id, versionTime, modifiedNs, size
+		case id, versionTime, modifiedNs, size, snapshotETag, metadataStatus
 		case entityTag = "etag"
 	}
 }

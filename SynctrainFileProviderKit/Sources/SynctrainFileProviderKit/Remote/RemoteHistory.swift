@@ -218,3 +218,23 @@ public struct RemoteHistory: Sendable {
 		}
 	}
 }
+
+extension RemoteFileClient {
+	public func downloadVersionSnapshot(folderID: String, path: String, version: RemoteVersion, to destination: URL)
+		async throws(RemoteError)
+	{
+		guard version.metadataStatus == "complete", let tag = version.snapshotETag, RemoteHistory.isEntityTag(tag) else {
+			throw .protocolViolation("this archive has no complete saved Mac metadata")
+		}
+		var message = try request(
+			"GET",
+			url(
+				["v1", "folders", folderID, "versions", version.id, "snapshot"], query: [URLQueryItem(name: "path", value: path)]))
+		message.setValue(tag, forHTTPHeaderField: "If-Match")
+		let response = try await download(message, to: destination)
+		guard response.status == 200, response.entityTag == tag else {
+			try? FileManager.default.removeItem(at: destination)
+			throw .protocolViolation("the archived snapshot changed")
+		}
+	}
+}

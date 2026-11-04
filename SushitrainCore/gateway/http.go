@@ -89,6 +89,7 @@ func (s *Service) routes() http.Handler {
 	handle("GET /v1/folders/{folderID}/snapshot", s.handleSnapshot)
 	handle("GET /v1/folders/{folderID}/changes", s.handleChanges)
 	handle("GET /v1/folders/{folderID}/versions", s.handlePathVersions)
+	handle("GET /v1/folders/{folderID}/versions/{versionID}/snapshot", s.handleVersionSnapshot)
 	handle("GET /v1/folders/{folderID}/versions/{versionID}/content", s.handlePathVersionContent)
 	handle("HEAD /v1/folders/{folderID}/versions/{versionID}/content", s.handlePathVersionContent)
 	handle("GET /v1/items/{itemID}", s.handleItem)

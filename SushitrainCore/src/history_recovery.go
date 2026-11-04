@@ -26,11 +26,14 @@ import (
 const historyJournalPrefix = ".syncthing.history-journal-"
 
 type historyJournal struct {
-	Target  string
-	Backup  string
-	Staged  string
-	OldHash string
-	NewHash string
+	Target             string
+	Backup             string
+	Staged             string
+	OldHash            string
+	NewHash            string
+	MetadataHashFormat int    `json:",omitempty"`
+	OldMetadataHash    string `json:",omitempty"`
+	NewMetadataHash    string `json:",omitempty"`
 }
 
 func syncHistoryDirectory(root *os.Root) error {
@@ -44,15 +47,27 @@ func syncHistoryDirectory(root *os.Root) error {
 
 // A hard link preserves the complete original, including resource forks, before the versioner removes its name.
 // Filesystems without hard links refuse the restore before anything is displaced.
-func beginHistoryJournal(ctx context.Context, root *os.Root, name, staged, oldHash, newHash, pendingDirectory string) (string, historyJournal, error) {
+func beginHistoryJournal(ctx context.Context, root *os.Root, name, staged, oldHash, newHash, pendingDirectory string, metadata ...string) (string, historyJournal, error) {
 	backup := filepath.Join(filepath.Dir(name), ".syncthing.history-old-"+rand.Text()+".tmp")
 	record := historyJournal{Target: name, Backup: backup, Staged: staged, OldHash: oldHash, NewHash: newHash}
+	if len(metadata) == 2 {
+		record.MetadataHashFormat = 1
+		record.OldMetadataHash = metadata[0]
+		record.NewMetadataHash = metadata[1]
+	}
 	if err := root.Link(name, backup); err != nil {
 		return "", record, fmt.Errorf("could not preserve the original before restoring: %w", err)
 	}
 	if hash, err := historyFileHashContext(ctx, root, backup); err != nil || hash != oldHash {
 		_ = root.Remove(backup)
 		return "", record, errors.Join(errRestoreTargetChanged, err)
+	}
+	if record.OldMetadataHash != "" {
+		actual, err := historyMetadataHash(filepath.Join(root.Name(), backup))
+		if err != nil || actual != record.OldMetadataHash {
+			root.Remove(backup)
+			return "", record, errors.Join(errRestoreTargetChanged, err)
+		}
 	}
 	parent, err := root.OpenRoot(filepath.Dir(name))
 	if err != nil {
@@ -188,13 +203,26 @@ func recoverHistoryJournal(root *os.Root, journal string, record historyJournal,
 		if err != nil || backupHash != record.OldHash {
 			return errors.New("the original of an interrupted history restore needs recovery")
 		}
+		if record.OldMetadataHash != "" {
+			actual, err := historyRecoveryMetadataHash(filepath.Join(root.Name(), record.Backup), record.MetadataHashFormat)
+			if err != nil || actual != record.OldMetadataHash {
+				return errors.New("original metadata needs recovery")
+			}
+		}
 		if err := root.Rename(record.Backup, record.Target); err != nil {
 			return err
 		}
+		hash = record.OldHash
 	} else if err != nil {
 		return err
 	} else if hash != record.OldHash && hash != record.NewHash {
 		return errors.New("a file changed after an interrupted history restore; its recovery copies were kept")
+	}
+	if record.OldMetadataHash != "" {
+		actual, err := historyRecoveryMetadataHash(filepath.Join(root.Name(), record.Target), record.MetadataHashFormat)
+		if err != nil || !(hash == record.OldHash && actual == record.OldMetadataHash || hash == record.NewHash && actual == record.NewMetadataHash) {
+			return errors.New("restored metadata changed; recovery copies were kept")
+		}
 	}
 	parent, err := root.OpenRoot(filepath.Dir(record.Target))
 	if err != nil {

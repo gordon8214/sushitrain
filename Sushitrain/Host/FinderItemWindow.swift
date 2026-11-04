@@ -12,7 +12,8 @@
 	struct FinderItemWindow: View {
 		static let id = "finderItem"
 		static let isLaunch =
-			ProcessInfo.processInfo.environment[FinderAction.windowLaunchEnvironmentKey] == "1"
+			ProcessInfo.processInfo.environment["SYNCTRAIN_HISTORY_BRIDGE"] == "1"
+			|| ProcessInfo.processInfo.environment[FinderAction.windowLaunchEnvironmentKey] == "1"
 			|| ProcessInfo.processInfo.environment[FinderAction.infoLaunchEnvironmentKey] == "1"
 
 		private struct LoadRequest: Equatable {

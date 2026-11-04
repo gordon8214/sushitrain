@@ -227,8 +227,10 @@ type ItemVersionList struct {
 }
 
 type ItemVersion struct {
-	ID        string `json:"id"`
-	EntityTag string `json:"etag,omitempty"`
+	SnapshotETag   string `json:"snapshotETag,omitempty"`
+	MetadataStatus string `json:"metadataStatus,omitempty"`
+	ID             string `json:"id"`
+	EntityTag      string `json:"etag,omitempty"`
 	// When the version was archived (RFC 3339, UTC)
 	VersionTime string `json:"versionTime"`
 	ModifiedNs  int64  `json:"modifiedNs"`

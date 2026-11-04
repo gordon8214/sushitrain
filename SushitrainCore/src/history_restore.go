@@ -32,14 +32,15 @@ func (fld *Folder) ClientDeviceID() string { return fld.client.DeviceID() }
 var errRestoreTargetChanged = errors.New("the destination changed; refresh before restoring")
 
 type historyTarget struct {
-	Root     string
-	Exists   bool
-	Hash     string
-	Modified int64
-	Size     int64
-	Version  string
-	Mode     uint32
-	Identity string
+	Root         string
+	Exists       bool
+	Hash         string
+	Modified     int64
+	Size         int64
+	Version      string
+	Mode         uint32
+	MetadataHash string
+	Identity     string
 }
 
 func (fld *Folder) CanRestoreDownloadedVersion() bool {
@@ -138,11 +139,16 @@ func captureHistoryTarget(ctx context.Context, h syncthing.FolderHandle, root, n
 	if _, err := io.Copy(hash, historyContextReader{ctx, file}); err != nil {
 		return target, err
 	}
+	metadataHash, err := historyMetadataHash(filepath.Join(root, name))
+	if err != nil {
+		return target, err
+	}
 	after, err := os.Lstat(filepath.Join(root, name))
 	if err != nil || !os.SameFile(before, after) || historyFileIdentity(before) != historyFileIdentity(after) ||
 		before.Size() != after.Size() || before.ModTime() != after.ModTime() || before.Mode() != after.Mode() {
 		return target, errRestoreTargetChanged
 	}
+	target.MetadataHash = metadataHash
 	target.Identity = historyFileIdentity(after)
 	target.Mode = uint32(after.Mode()) & 0o777
 	target.Exists, target.Hash, target.Modified, target.Size = true, hex.EncodeToString(hash.Sum(nil)), after.ModTime().UnixNano(), after.Size()
@@ -165,6 +171,9 @@ func (fld *Folder) CaptureRestoreTarget(name string) (string, error) {
 
 // RestoreDownloadedVersion publishes a completed download while the folder's scanner and puller are held.
 func (fld *Folder) RestoreDownloadedVersion(name, source, expected string, modifiedNs int64) error {
+	return fld.restoreDownloadedVersion(name, source, expected, modifiedNs, false)
+}
+func (fld *Folder) restoreDownloadedVersion(name, source, expected string, modifiedNs int64, complete bool) error {
 	var captured historyTarget
 	if err := json.Unmarshal([]byte(expected), &captured); err != nil {
 		return err
@@ -204,10 +213,34 @@ func (fld *Folder) RestoreDownloadedVersion(name, source, expected string, modif
 		if captured.Exists {
 			mode = os.FileMode(captured.Mode)
 		}
+		if complete {
+			if err := copyHistoryMetadata(source, filepath.Join(rootPath, temp)); err != nil {
+				return err
+			}
+			sourceInfo, err := input.Stat()
+			if err != nil {
+				return err
+			}
+			mode = sourceInfo.Mode().Perm()
+		}
 		if err := root.Chmod(temp, mode); err != nil {
 			return err
 		}
 		if err := root.Chtimes(temp, time.Unix(0, modifiedNs), time.Unix(0, modifiedNs)); err != nil {
+			return err
+		}
+
+		staged, err := root.Open(temp)
+		if err != nil {
+			return err
+		}
+		syncStagedErr := staged.Sync()
+		staged.Close()
+		if syncStagedErr != nil {
+			return syncStagedErr
+		}
+		stagedMetadata, err := historyMetadataHash(filepath.Join(rootPath, temp))
+		if err != nil {
 			return err
 		}
 		// Check again after staging, in case another application edited the file while it was copied.
@@ -218,7 +251,7 @@ func (fld *Folder) RestoreDownloadedVersion(name, source, expected string, modif
 		if latest != captured {
 			return errRestoreTargetChanged
 		}
-		if captured.Exists && captured.Hash == hex.EncodeToString(hash.Sum(nil)) {
+		if captured.Exists && captured.Hash == hex.EncodeToString(hash.Sum(nil)) && (!complete || captured.MetadataHash == stagedMetadata && captured.Mode == uint32(mode) && captured.Modified == modifiedNs) {
 			return nil
 		}
 		journal := ""
@@ -251,16 +284,18 @@ func (fld *Folder) RestoreDownloadedVersion(name, source, expected string, modif
 			return err
 		}
 		pendingDirectory := filepath.Join(fld.client.CurrentConfigDirectory(), "history-restores")
-		if current.Exists && hasVersioner {
-			journal, record, err = beginHistoryJournal(ctx, root, name, temp, captured.Hash, hex.EncodeToString(hash.Sum(nil)), pendingDirectory)
+		if current.Exists && (hasVersioner || complete) {
+			journal, record, err = beginHistoryJournal(ctx, root, name, temp, captured.Hash, hex.EncodeToString(hash.Sum(nil)), pendingDirectory, captured.MetadataHash, stagedMetadata)
 			if err != nil {
 				return err
 			}
 			if err := ctx.Err(); err != nil {
 				return errors.Join(err, recoverHistoryJournal(root, journal, record, pendingDirectory))
 			}
-			if err := archive(name); err != nil {
-				return errors.Join(err, recoverHistoryJournal(root, journal, record, pendingDirectory))
+			if hasVersioner {
+				if err := archive(name); err != nil {
+					return errors.Join(err, recoverHistoryJournal(root, journal, record, pendingDirectory))
+				}
 			}
 		}
 		if err := ctx.Err(); err != nil {

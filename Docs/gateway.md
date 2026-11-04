@@ -228,3 +228,24 @@ attributes remain archived, but Mac receivers apply only attributes permitted by
 their current policy. Excluded source attributes do not enter future NAS history.
 Use All attributes when archival completeness is required. Folders with extended
 attribute synchronization disabled remain disabled.
+
+### Complete Mac snapshots for BetterFinder
+
+The `versions.snapshot` capability adds `GET /v1/folders/{folderID}/versions/{versionID}/snapshot?path=…`.
+Path-based listings include `metadataStatus` and, for complete archives, `snapshotETag`.
+The snapshot request requires that validator in `If-Match`; ordinary read access is sufficient.
+The tar stream contains a versioned manifest, the data fork, and numbered binary extended-attribute entries,
+including the resource fork. Identities, lengths, and SHA-256 digests are checked before any file is published.
+Missing platform-history records, absent Darwin capture, and corrupt records never authorize partial recovery.
+An explicitly captured empty attribute set is complete. Existing content endpoints remain compatible.
+
+On macOS, the app provides a private, authenticated history bridge to BetterFinder. It owns pairings and credentials;
+BetterFinder links only SynctrainHostKit, lists the enabled history sources, and materializes verified copies.
+Restore targets the synchronized file on this Mac through the engine's guarded restore transaction. It restores
+all archived Darwin attributes, without applying the current sync filter to the recovered copy. Normal subsequent
+synchronization still follows the folder's existing policies. Attributes excluded before archiving cannot be recovered.
+
+The bridge admits only this user's Apple-signed BetterFinder from team UF6P8KZZN4, and BetterFinder verifies the
+host's signature in return. Its versioned requests are bounded; version handles expire with the host/configuration
+or after one hour. Temporary materializations are released after copying and swept after interrupted sessions.
+The app's existing history windows and other-platform clients keep their existing content-only export behavior.
