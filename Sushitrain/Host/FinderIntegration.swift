@@ -208,11 +208,7 @@
 							switch action.kind {
 							case .settings: FolderView(folder: folder)
 							case .versions: FileVersionsView(folder: folder, path: action.item.path)
-							case .info:
-								if let entry = try? folder.getFileInformation(action.item.path) {
-									EntryInfoView(entry: entry, showPath: true, siblings: nil)
-								}
-							case .browse: EmptyView()
+							case .info, .browse: EmptyView()
 							}
 						}
 						.toolbar { Button("Done") { presented = nil } }
@@ -247,31 +243,9 @@
 
 		private func receive(_ request: FinderActionRequest) async {
 			let action = request.action
-			let client = appState.client
-			let configDirectory = appState.configDirectory
-			let generation = appState.finderConfigurationGeneration
-			let result: FinderItemStatus? = await Task.detached(priority: .userInitiated) {
-				guard let rootsData = try? client.finderRootsJSON(),
-					let roots = try? JSONDecoder().decode([FinderRoot].self, from: rootsData),
-					action.isValid(
-						in: FinderRegistry(
-							configuration: FinderIntegration.configurationID(configDirectory, deviceID: client.deviceID(), roots: roots),
-							running: true, roots: roots)),
-					let request = try? JSONEncoder().encode([action.item]), let data = try? client.finderStatusJSON(request)
-				else { return nil }
-				// A folder can be repointed while a slow filesystem query is in flight.
-				guard let currentData = try? client.finderRootsJSON(),
-					let currentRoots = try? JSONDecoder().decode([FinderRoot].self, from: currentData),
-					FinderIntegration.configurationID(configDirectory, deviceID: client.deviceID(), roots: currentRoots)
-						== action.configuration
-				else { return nil }
-				return try? JSONDecoder().decode([FinderItemStatus].self, from: data).first
-			}.value
+			let result = await FinderActionValidator.status(for: action, appState: appState)
 			guard !Task.isCancelled, activeRequest == request.id else { return }
-			guard generation == appState.finderConfigurationGeneration,
-				let result, action.kind == .settings || action.item.path.isEmpty || result.indexed,
-				action.kind != .versions || result.versions
-			else {
+			guard let result else {
 				error = String(localized: "The requested item is unavailable or belongs to a different configuration.")
 				return
 			}

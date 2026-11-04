@@ -1020,6 +1020,10 @@ file, Finder window background, or sidebar folder to open the **Synctrain** subm
 with supported versioning. Multiple selected items in one sync folder offer their common directory and folder settings.
 Selections spanning different sync folders have no Synctrain submenu.
 
+**Show Info…** opens an independent info window for the selected item, without opening the file browser or restoring
+other app windows when it starts Synctrain. Repeating it for the same item brings its info window forward; different
+items can have separate info windows.
+
 Badges show **Up to Date** (green check), **Syncing** (blue arrows), **Waiting to Sync** (blue clock), **Paused**
 (gray pause), or **Needs Attention** (orange exclamation point). Green means this Mac matches the latest version
 Syncthing knows about; it does not mean every peer has received it. Files have individual status. Directories reflect

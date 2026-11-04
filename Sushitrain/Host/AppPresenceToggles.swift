@@ -36,7 +36,7 @@
 	extension Scene {
 		/// From the menu bar alone the app starts without a window
 		func restoredOnlyWithDockIcon(in presence: AppPresence) -> some Scene {
-			restorationBehavior(presence.inDock ? .automatic : .disabled)
+			restorationBehavior(presence.inDock && !FinderInfoWindow.isLaunch ? .automatic : .disabled)
 		}
 	}
 

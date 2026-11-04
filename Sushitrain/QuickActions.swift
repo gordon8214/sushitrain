@@ -22,8 +22,16 @@ class QuickActionService {
 	static let shared = QuickActionService()
 	var action: Route?
 	private var finderActions = FinderActionQueue()
+	private var finderInfoActions = FinderActionQueue()
 	var finderRequest: FinderActionRequest? { finderActions.next }
-	func enqueueFinderActions(_ actions: [FinderAction]) { finderActions.enqueue(actions) }
+	var finderInfoRequest: FinderActionRequest? { finderInfoActions.next }
+	var presentedFinderInfoRequest: FinderActionRequest?
+	func enqueueFinderActions(_ actions: [FinderAction]) {
+		finderActions.enqueue(actions.filter { $0.kind != .info })
+		finderInfoActions.enqueue(actions.filter { $0.kind == .info })
+	}
+	func claimFinderInfoRequest(_ id: UUID) -> Bool { finderInfoActions.claim(id) }
+	func finishFinderInfoRequest(_ id: UUID) { finderInfoActions.finish(id) }
 	func claimFinderRequest(_ id: UUID) -> Bool { finderActions.claim(id) }
 	func finishFinderRequest(_ id: UUID) { finderActions.finish(id) }
 
@@ -47,6 +55,7 @@ class QuickActionService {
 
 		/// A notification was clicked. The connection requests have a window of their own, so this is no route.
 		var wantsConnectionRequests = false
+		var hasPresentedFinderInfo = false
 	#endif
 }
 
@@ -62,6 +71,17 @@ class QuickActionService {
 		func applicationWillFinishLaunching(_ notification: Notification) {
 			// Any later and the click that started the app is lost
 			UNUserNotificationCenter.current().delegate = self
+			// Handle URL events directly: SwiftUI otherwise also opens a browser scene for every Finder action.
+			NSAppleEventManager.shared().setEventHandler(
+				self, andSelector: #selector(receiveURL(_:withReplyEvent:)),
+				forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
+		}
+
+		@objc private func receiveURL(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+			guard let value = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+				let url = URL(string: value)
+			else { return }
+			application(NSApplication.shared, open: [url])
 		}
 
 		func application(_ application: NSApplication, open urls: [URL]) {
@@ -139,8 +159,18 @@ class QuickActionService {
 		}
 
 		func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+			// An info-only launch suppresses the normal scene, including SwiftUI's later Dock reopen behavior.
+			if FinderInfoWindow.isLaunch {
+				if QuickActionService.shared.hasPresentedFinderInfo && !hasVisibleWindows,
+					!NSApp.windows.contains(where: \.isMiniaturized)
+				{
+					openWindow?(id: "main")
+					NSApp.activate()
+				}
+				return false
+			}
 			// This window shows why the engine didn't start, where the menu bar's own doesn't
-			AppPresence.reopen(hasVisibleWindows: hasVisibleWindows) { openWindow?(id: "main") }
+			return AppPresence.reopen(hasVisibleWindows: hasVisibleWindows) { openWindow?(id: "main") }
 		}
 
 		func applicationDidResignActive(_ notification: Notification) {

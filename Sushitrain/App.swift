@@ -209,8 +209,17 @@ struct SushitrainApp: App {
 				).environment(appState)
 			}
 			// As the first scene, this is the one that opens at launch and when reopening the app from the Dock
-			.defaultLaunchBehavior(presence.inDock ? .automatic : .suppressed)
+			.defaultLaunchBehavior(presence.inDock && !FinderInfoWindow.isLaunch ? .automatic : .suppressed)
 			.restoredOnlyWithDockIcon(in: presence)
+
+			WindowGroup("Info", id: FinderInfoWindow.id, for: FinderAction.self) { [appState] action in
+				if let action = action.wrappedValue {
+					FinderInfoWindow(action: action).environment(appState)
+				}
+			}
+			.defaultSize(width: 700, height: 650)
+			.defaultLaunchBehavior(.suppressed)
+			.restorationBehavior(.disabled)
 
 			WindowGroup(id: "bookmark", for: URL.self) { [appState] bookmarkURL in
 				MainView(
@@ -287,6 +296,16 @@ struct SushitrainApp: App {
 					openWindow(id: "main")
 					NSApp.activate()
 				}
+			}
+			.onChange(of: appState.startupState == .started ? qaService.finderInfoRequest?.id : nil, initial: true) { _, id in
+				guard let id, let request = qaService.finderInfoRequest, request.id == id,
+					qaService.claimFinderInfoRequest(id)
+				else { return }
+				qaService.presentedFinderInfoRequest = request
+				openWindow(id: FinderInfoWindow.id, value: request.action)
+				NSApplication.shared.unhideWithoutActivation()
+				NSApplication.shared.activate()
+				qaService.finishFinderInfoRequest(id)
 			}
 
 			// A click on a notification can also be what starts the app. The window waits for the engine, as any open window
@@ -540,7 +559,7 @@ struct SushitrainApp: App {
 			}
 			.onChange(of: appState.startupState, initial: true) { _, state in
 				// Nothing else opens a window here, and without one the engine would wait for good
-				if !presence.inDock && state.needsWindow {
+				if (!presence.inDock || FinderInfoWindow.isLaunch) && state.needsWindow {
 					openStartWindow()
 				}
 			}

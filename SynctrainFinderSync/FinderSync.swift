@@ -247,9 +247,15 @@ final class FinderSync: FIFinderSync, @unchecked Sendable {
 	func performAction(tag: Int) {
 		guard let action = actions[tag], let url = action.url else { return }
 		let app = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+		let configuration = NSWorkspace.OpenConfiguration()
+		if action.kind == .info {
+			configuration.environment = [FinderAction.infoLaunchEnvironmentKey: "1"]
+			// The app brings just the requested info window forward after validating the item.
+			configuration.activates = false
+		}
 		Task {
 			do {
-				_ = try await NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+				_ = try await NSWorkspace.shared.open([url], withApplicationAt: app, configuration: configuration)
 			}
 			catch { Self.logger.error("Could not open Synctrain: \(error.localizedDescription)") }
 		}

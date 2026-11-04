@@ -114,6 +114,7 @@ public enum FinderVisibility {
 }
 
 public struct FinderAction: Codable, Hashable, Identifiable, Sendable {
+	public static let infoLaunchEnvironmentKey = "SYNCTRAIN_FINDER_INFO"
 	public enum Kind: String, Codable, Sendable { case browse, info, settings, versions }
 	public var version = 1
 	public var configuration: String
