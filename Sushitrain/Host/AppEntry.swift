@@ -17,6 +17,14 @@
 			}
 			// Before anything reads them
 			TestRun.redirectPreferences()
+			#if DEBUG
+				if TestRun.isActive, !TestRun.allowsFileProvider,
+					ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_SETTINGS_MODE"] == "files"
+				{
+					SettingsFixtureApp.main()
+					return
+				}
+			#endif
 			#if SYNCTRAIN_BENCHMARK
 				EngineBenchmark.prepare()
 			#endif

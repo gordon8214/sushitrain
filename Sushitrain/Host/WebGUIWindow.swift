@@ -126,7 +126,7 @@
 			else {
 				ContentUnavailableView(
 					"The web GUI is not available", systemImage: "globe",
-					description: Text("It is turned off, or listens on a Unix socket. Its settings are under Engine access.")
+					description: Text("It is turned off, or listens on a Unix socket. Its settings are under Engine Access.")
 				)
 			}
 		}

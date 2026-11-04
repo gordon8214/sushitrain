@@ -25,6 +25,7 @@
 				if let draft = Binding($draft) {
 					Form {
 						AdvancedRestartSection()
+						ScanningPrioritySection()
 						self.diskSection(draft)
 						self.performanceSection(draft)
 						self.indexSection(draft)
@@ -42,6 +43,7 @@
 			}
 			.formStyle(.grouped)
 			.navigationTitle("Engine options")
+			.settingsEditor(hasChanges: self.hasChanges, isSaving: isSaving)
 			.toolbar {
 				// Says what it does, where the system would call a button of this role Done
 				ToolbarItem(placement: .confirmationAction) {
@@ -161,6 +163,11 @@
 					"Both are off unless you turn them on, and go to the Syncthing project. A usage report goes out when you turn it on, about 30 minutes after each start of the engine, and then once a day, under a random ID: anonymous statistics such as the platform, the number of folders and devices, the amount of data, and the features in use. While it is on, failures inside the engine are also sent as they happen, to the crash report address. A crash report goes out at the first start after a crash, with where in the code the engine stopped; its error message can include a file path. The addresses are UR URL and CR URL under Options in the advanced configuration."
 				)
 			}
+		}
+
+		private var hasChanges: Bool {
+			guard let draft, let saved else { return false }
+			return !draft.settings.equal(saved)
 		}
 
 		private var canSave: Bool {

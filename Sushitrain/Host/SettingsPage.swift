@@ -45,6 +45,7 @@
 			}
 			.formStyle(.grouped)
 			.navigationTitle(title)
+			.settingsEditor(hasChanges: self.hasChanges, isSaving: isSaving)
 			.toolbar {
 				if isSheet {
 					// A save can take as long as the folder takes to restart, and its error has to have a view to show on
@@ -79,11 +80,16 @@
 			.errorAlert($errorMessage)
 		}
 
+		private var hasChanges: Bool {
+			guard let draft, let saved else { return false }
+			return !isEqual(draft.settings, saved)
+		}
+
 		private var canSave: Bool {
-			guard let draft, let saved, !isSaving, !appState.isEngineRestarting else {
+			guard !isSaving, !appState.isEngineRestarting else {
 				return false
 			}
-			return !isEqual(draft.settings, saved)
+			return self.hasChanges
 		}
 
 		private func requestSave() {

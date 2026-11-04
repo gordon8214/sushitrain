@@ -20,6 +20,7 @@
 		@State private var saved: SushitrainGUISettings? = nil
 		// As text, as a number field only commits its value when it loses focus, which clicking Save doesn't do
 		@State private var sessionCookieDuration = ""
+		@State private var savedSessionCookieDuration = ""
 		@State private var isOverridden = false
 		@State private var isSaving = false
 		@State private var errorMessage: ErrorMessage? = nil
@@ -43,6 +44,7 @@
 			}
 			.formStyle(.grouped)
 			.navigationTitle("Web GUI and REST API")
+			.settingsEditor(hasChanges: self.hasChanges, isSaving: isSaving)
 			.toolbar {
 				// Says what it does, where the system would call a button of this role Done
 				ToolbarItem(placement: .confirmationAction) {
@@ -182,6 +184,11 @@
 				.foregroundStyle(.orange)
 		}
 
+		private var hasChanges: Bool {
+			guard let draft, let saved else { return false }
+			return !draft.settings.equal(saved) || sessionCookieDuration != savedSessionCookieDuration
+		}
+
 		private var canSave: Bool {
 			guard let draft, let saved, !isSaving, !appState.isEngineRestarting, Int(sessionCookieDuration) != nil else {
 				return false
@@ -210,8 +217,8 @@
 
 		/// Follows the configuration, unless that would throw away what is being edited
 		private func refresh() {
-			if let draft, let saved {
-				guard draft.settings.equal(saved), appState.client.guiSettings()?.equal(saved) == false else {
+			if draft != nil, let saved {
+				guard !self.hasChanges, appState.client.guiSettings()?.equal(saved) == false else {
 					return
 				}
 			}
@@ -225,6 +232,7 @@
 			saved = client.guiSettings()
 			draft = settings.map(Draft.init)
 			sessionCookieDuration = settings.map { String($0.sessionCookieDurationS) } ?? ""
+			savedSessionCookieDuration = sessionCookieDuration
 		}
 	}
 #endif

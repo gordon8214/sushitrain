@@ -149,11 +149,11 @@ struct RemotePairingView: View {
 		} footer: {
 			#if os(iOS)
 				Text(
-					"Start pairing on the gateway: in Synctrain on a Mac, under Settings › Remote file service; on a server, with synctrain-gateway pair. Then scan the code it shows, or paste its link here."
+					"Start pairing on the gateway: in Synctrain on a Mac, under Settings › Remote File Service; on a server, with synctrain-gateway pair. Then scan the code it shows, or paste its link here."
 				)
 			#else
 				Text(
-					"Start pairing on the gateway: in Synctrain on a Mac, under Settings › Remote file service; on a server, with synctrain-gateway pair. Then paste its link here, or choose an image of the code it shows."
+					"Start pairing on the gateway: in Synctrain on a Mac, under Settings › Remote File Service; on a server, with synctrain-gateway pair. Then paste its link here, or choose an image of the code it shows."
 				)
 			#endif
 		}

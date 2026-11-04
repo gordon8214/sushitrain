@@ -94,7 +94,7 @@
 				Text("Port mapping and STUN")
 			} footer: {
 				Text(
-					"How long a port mapping on the router lasts, when it is renewed, and how long the router gets to answer. How often to start refreshing what STUN learned. STUN itself is turned on and off in the advanced settings."
+					"How long a port mapping on the router lasts, when it is renewed, and how long the router gets to answer. How often to start refreshing what STUN learned. STUN itself is turned on and off in Settings › Network."
 				)
 			}
 		}

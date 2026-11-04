@@ -11,7 +11,6 @@ import SynctrainFileProviderKit
 struct RemoteFoldersSettingsView<Extra: View>: View {
 	private let extra: Extra
 	private var coordinator = RemoteCoordinator.shared
-	@State private var showPairing = false
 
 	init(@ViewBuilder extra: () -> Extra) {
 		self.extra = extra()
@@ -19,28 +18,7 @@ struct RemoteFoldersSettingsView<Extra: View>: View {
 
 	var body: some View {
 		Form {
-			Section {
-				ForEach(coordinator.gateways) { status in
-					NavigationLink(destination: RemoteGatewayView(serviceID: status.id)) {
-						RemoteGatewayRow(status: status)
-					}
-				}
-				Button("Pair with a Gateway…", systemImage: "plus") {
-					showPairing = true
-				}
-			} header: {
-				Text("Gateways")
-			} footer: {
-				#if os(macOS)
-					Text(
-						"A gateway is a server running synctrain-gateway, or another Mac running Synctrain in Synchronize mode, that keeps all the files of its folders. Add a gateway's folders to see them in Finder without keeping copies of them on this Mac. The gateway has to be reachable, on the same network or through a VPN, to open files that are not on this Mac and to save edits."
-					)
-				#else
-					Text(
-						"A gateway is a Mac running Synctrain, or a server running synctrain-gateway, that synchronizes folders with Syncthing. Its folders can be browsed here and edited in the Files app without keeping copies of them on this device. The gateway has to be reachable, on the same network or through a VPN, to open files that are not on this device and to save edits."
-					)
-				#endif
-			}
+			RemoteGatewaysSection()
 
 			if !coordinator.gateways.isEmpty {
 				FilesLocationSettingsView()
@@ -58,9 +36,6 @@ struct RemoteFoldersSettingsView<Extra: View>: View {
 		.task {
 			await coordinator.refresh()
 		}
-		.sheet(isPresented: $showPairing) {
-			RemotePairingView()
-		}
 	}
 }
 
@@ -69,6 +44,38 @@ extension RemoteFoldersSettingsView where Extra == EmptyView {
 		self.init {
 			EmptyView()
 		}
+	}
+}
+
+/// Shared gateway list and pairing presentation, used by iOS and the Mac sidebar's Gateways page.
+struct RemoteGatewaysSection: View {
+	private var coordinator = RemoteCoordinator.shared
+	@State private var showPairing = false
+
+	var body: some View {
+		Section {
+			ForEach(coordinator.gateways) { status in
+				NavigationLink(destination: RemoteGatewayView(serviceID: status.id)) {
+					RemoteGatewayRow(status: status)
+				}
+			}
+			Button("Pair with a Gateway…", systemImage: "plus") {
+				showPairing = true
+			}
+		} header: {
+			Text("Gateways")
+		} footer: {
+			#if os(macOS)
+				Text(
+					"A gateway is a server running synctrain-gateway, or another Mac running Synctrain in Synchronize mode, that keeps all the files of its folders. Add a gateway's folders to see them in Finder without keeping copies of them on this Mac. The gateway has to be reachable, on the same network or through a VPN, to open files that are not on this Mac and to save edits."
+				)
+			#else
+				Text(
+					"A gateway is a Mac running Synctrain, or a server running synctrain-gateway, that synchronizes folders with Syncthing. Its folders can be browsed here and edited in the Files app without keeping copies of them on this device. The gateway has to be reachable, on the same network or through a VPN, to open files that are not on this device and to save edits."
+				)
+			#endif
+		}
+		.sheet(isPresented: $showPairing) { RemotePairingView() }
 	}
 }
 

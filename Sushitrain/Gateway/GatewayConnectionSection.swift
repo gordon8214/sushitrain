@@ -10,6 +10,7 @@
 	struct GatewayConnectionSection: View {
 		private var controller = GatewayController.shared
 		@State private var draft = GatewayController.shared.settings
+		@State private var portText = String(GatewayController.shared.settings.port)
 		@State private var hasCertificateFiles = GatewayCertificateStore.hasFiles
 		@State private var showCertificateImporter = false
 		@State private var errorMessage: String? = nil
@@ -17,15 +18,18 @@
 		private static let cacheSizesMiB = [1024, 2048, 4096, 8192, 16384, 32768, 65536]
 
 		private var canApply: Bool {
-			draft != controller.settings && draft.isValid
+			draft != controller.settings && draft.isValid && Int(portText) == draft.port
 				&& (draft.certificateMode == .selfSigned || hasCertificateFiles)
 		}
 
 		var body: some View {
 			Group {
 				Section {
-					TextField("Port", value: $draft.port, format: .number.grouping(.never))
-					if !draft.isValid {
+					TextField("Port", text: $portText)
+						.onChange(of: portText) { _, value in
+							if let port = Int(value) { draft.port = port }
+						}
+					if !draft.isValid || Int(portText) == nil {
 						Text("Choose a port between 1 and 65535.")
 							.foregroundStyle(.red)
 					}
@@ -96,16 +100,23 @@
 						Spacer()
 						Button("Revert") {
 							draft = controller.settings
+							portText = String(draft.port)
 						}
-						.disabled(draft == controller.settings)
+						.disabled(!self.hasChanges)
 						Button(controller.isEnabled ? "Save and Restart" : "Save") {
 							controller.apply(draft)
+							portText = String(draft.port)
 						}
 						.keyboardShortcut(.defaultAction)
 						.disabled(!canApply)
 					}
 				}
 			}
+			.settingsEditor(hasChanges: self.hasChanges)
+		}
+
+		private var hasChanges: Bool {
+			draft != controller.settings || portText != String(controller.settings.port)
 		}
 
 		/// The sizes to choose from, including the current one

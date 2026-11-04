@@ -15,6 +15,39 @@ reaches the Desktop, Documents and Downloads folders, external disks and network
 is synchronized; places that only Full Disk Access opens (such as other apps' data) are allowed in System Settings,
 under Privacy & Security. Earlier versions were sandboxed; the app tells whether it is by its own entitlement.
 
+## Settings window
+
+Both Mac modes use a sidebar and detail settings window. It opens at 1000 × 720 points, can be resized down to
+800 × 560, and remembers its last category separately for each mode. A category change returns its detail to the
+root page. An editor with unsaved changes asks **Discard Changes** or **Keep Editing** before changing categories,
+even when its input is invalid and Save is unavailable. Categories cannot change during a save. Existing Back and
+window-close behavior stays the same.
+
+Both sidebars are flat category lists without section headers. The Synchronize settings use a single normal
+window, opened by the app menu, Command-comma or the menu-bar command. Its unified toolbar keeps the sidebar button
+beside the divider and the page title at the leading edge of the detail column, as in BetterLight.
+
+In **Synchronize** mode, the categories are **General**, **Files & Previews**, **Network**, **Bandwidth**, **Engine**,
+**Defaults**, **Remote File Service**, **Engine Access**, **Configuration**, **Troubleshooting** and **Advanced
+Configuration**. General is the initial category. Network leads to Connection options, Proxy and Ignored devices.
+Engine includes scanning priority. Files & Previews contains browsing behavior, image and video previews, and thumbnail
+caching. Engine Access contains the Web GUI and REST API controls and their detailed settings. Settings are still immediate where they were before; expert pages
+retain their explicit Save buttons, validation and restart confirmations.
+
+In **Files in Finder** mode, **General** contains launch, app presence and mode switching; **Gateways** contains pairing
+and gateway details, with crash notices; **Finder** contains the location controls; and **Pending Edits** contains edits
+being sent or needing review. Gateways is the initial category. Finder and Pending Edits explain their empty states.
+The iOS settings layout stays the same.
+
+For an isolated native check of the Files-mode settings shell, a Debug build accepts
+`SYNCTRAIN_TEST_SETTINGS_MODE=files` together with `SYNCTRAIN_TEST_ROOT` (and the same scratch path in `HOME`).
+Leave `SYNCTRAIN_TEST_FILE_PROVIDER` unset. This opens the settings fixture directly, without starting the engine,
+remote shared storage, credentials, or a File Provider domain. It exercises the real category views and their empty
+states. Add `SYNCTRAIN_TEST_SETTINGS_FIXTURE=populated` for a sample offline gateway and a rejected edit; these only
+populate presentation state. Live pairing, edits and File Provider actions still use the normal Files-mode lifecycle.
+With an isolated test root, `SYNCTRAIN_TEST_SETTINGS_APPEARANCE=light` or `dark` overrides the settings window's
+appearance in either mode without changing the system's appearance.
+
 ## Engine settings
 
 The app relies on some engine options and folder defaults: frequent progress updates, quick relay reconnects, a
@@ -76,7 +109,7 @@ configuration don't matter. The gateway's Linux build uses the same tag.
 
 ## Advanced configuration
 
-Advanced settings link to an editor of the engine's whole configuration, the counterpart of the web GUI's Advanced
+Settings › Advanced Configuration opens an editor of the engine's whole configuration, the counterpart of the web GUI's Advanced
 dialog, on both platforms: the options, the GUI and LDAP settings (macOS only), each folder and device, and the defaults
 for new ones. It is there for settings without a screen of their own, and warns that these are expert settings.
 
@@ -103,7 +136,7 @@ for new ones. It is there for settings without a screen of their own, and warns 
 
 ## Engine options
 
-On macOS, Advanced settings also link to a page with the options that had no native setting of their own (`options.go`,
+On macOS, Settings › Engine contains the options that had no native setting of their own (`options.go`,
 `EngineOptionsView`): the minimum free disk space, how long temporary files are kept, how many folders work at once,
 the limit on data for incoming requests, low priority, the temporary index threshold, sending the full index after an
 upgrade, the audit log, feature flags, and usage and crash reporting. They are saved together. The core checks them
@@ -147,7 +180,7 @@ changes it, and what the web GUI or the REST API changed meanwhile stays too. Mo
 
 ## Scanning priority
 
-General settings has a Scanning priority of Normal, Utility or Background, per Mac, in the `enginePriority` preference.
+Settings › Engine has a Scanning priority of Normal, Utility or Background, per Mac, in the `enginePriority` preference.
 It defaults to Background, as in Syncthing.app, and a change reaches a scan in progress, within 256 KiB of each file.
 
 Syncthing.app sets the QoS of a separate process. The engine runs inside this app, so the options were measured on
@@ -256,9 +289,9 @@ accepting folders from an untrusted device.
 - **Devices.** The Connection tab links to compression, limits, allowed networks and the rest. Limits are in Mbit/s, like
   the app's own, and a limit that wasn't edited keeps its exact value in KiB/s. The engine skips a network it can't read,
   which could lock a device out, so they are checked.
-- **Connection options.** Advanced settings link to this page. Everything on it applies at once, including the local
+- **Connection options.** Settings › Network links to this page. Everything on it applies at once, including the local
   discovery port and address, so it only offers a restart for changes made elsewhere.
-- **Proxy.** Advanced settings link to this page. Syncthing reads `ALL_PROXY` when the framework loads, too early for the
+- **Proxy.** Settings › Network links to this page. Syncthing reads `ALL_PROXY` when the framework loads, too early for the
   app to set it, so the fork's `dialer.SetProxy` takes a proxy from code instead. The engine sets it each time it starts,
   before anything connects, so the proxy changes with an engine restart and not an app relaunch (`proxy.go`). Saving the
   page does that restart, after asking: a saved proxy that waits for one would leave the page saying "on" while the
@@ -281,7 +314,7 @@ accepting folders from an untrusted device.
     the exception of a device with allowed networks, whose check has to resolve them here.
   - **Relays.** A relay addressed by name that leaves the session's address to the client can't be used through a proxy,
     as the client only knows that address from its connection. Relays from the pool are addressed by IP.
-- **Defaults.** Advanced settings link to the defaults for new folders and devices, and the default ignore patterns, with
+- **Defaults.** Settings › Defaults contains the defaults for new folders and devices, and the default ignore patterns, with
   the same sections. The engine checks a folder's settings only when it starts one, so the page refuses what would break
   every new folder: a relative location, patterns it can't read, and receive-encrypted as the type, which can't be changed
   afterwards. An empty location is stored as `~/Sync`, as the engine takes no path to mean its working directory for a
@@ -315,7 +348,7 @@ A device that tries to connect without being known here is turned away, and the 
 as connection requests, with what the device said about itself, in the start screen, the devices table and the menus, and
 offers Add, Dismiss and Ignore (`pending.go`, `ConnectionRequestsView`). Dismissing forgets a request until the device
 tries again, which is soon if it keeps trying. Ignoring has the engine turn it away from now on, and can be undone under
-Advanced settings. A device's ignored folders are on its Connection tab.
+Settings › Network. A device's ignored folders are on its Connection tab.
 
 A request adds to the Dock badge, and gets a notification once, even across restarts, until it ends. More than three at
 once come as one, as a host can make up as many devices as it likes, and each shows the short ID, as a device can call
@@ -355,6 +388,32 @@ receive-encrypted folders, which only have encrypted names.
 
 ## Manual settings verification
 
+A follow-up comparison with BetterLight on November 3 replaced the dedicated Settings scene with a normal window
+and a unified toolbar. The app menu, Command-comma and menu-bar command now target the same `appSettings` window.
+Native previews verified flat sidebars in both Mac modes, a leading detail title, the sidebar toggle beside the divider,
+discard protection, and closing/reopening that window. The notarized Release was installed and its corrected layout
+verified in `/Applications/Synctrain.app`, with the original synchronization identity and folders connected.
+
+The sidebar refactor was checked on November 3, 2026 with a separate Debug app identity and scratch configuration.
+All 73 SynctrainHostKit tests passed, including the six navigation-policy tests. The macOS Debug app and extensions and
+the iOS Simulator app compiled; changed Swift files passed `swift format lint`.
+
+Native clicks and typing covered every Synchronize category, the empty and populated Files-mode categories, nested
+Connection Options and gateway details, pairing-sheet presentation, arrow-key category navigation, sidebar hiding and
+showing, window resizing, light/dark appearance, and remembered categories after relaunch. Engine, Connection Options,
+Web GUI, advanced configuration and remote-service drafts all asked before changing categories. Invalid session-cookie
+and port text was protected even with Save unavailable. Keep Editing retained text and selection; Discard Changes
+opened the requested category. Back retained its existing discard behavior without leaving a stale editor guard.
+A harmless engine setting was saved and checked through REST and the scratch `config.xml`. Thumbnail-cache changes
+were checked on leaving Files & Previews, and streaming-limit changes while staying on Bandwidth; the scratch logs
+confirmed both reached the running app.
+
+Files-mode populated checks used presentation fixtures, without live pairing, credentials, or File Provider registration.
+The accessibility tree exposed category labels, selection, controls and actions. Full spoken VoiceOver navigation remains
+unverified: the automation's Command-F5 did not activate it. Opening Settings through the app menu shortcut worked;
+opening it through the system menu-bar item remains unverified because the native automation timed out when targeting
+SystemUIServer. These checks do not claim acceptance of those two paths.
+
 The settings pages were exercised with native Mac clicks and typing on November 1, 2026, using a Debug build,
 `SYNCTRAIN_TEST_ROOT` and `HOME` pointing to the same disposable home, four scratch folders and loopback-only peers.
 The normal engine configuration was not used. REST calls prepared fixtures and checked saved values; the interactions
@@ -362,7 +421,7 @@ below used the native app.
 
 | Area | Result |
 | --- | --- |
-| Advanced > Connection options | Refused a reconnection interval below 5 seconds, saved a valid value and discarded an unsaved edit on Back. |
+| Network > Connection options | Refused a reconnection interval below 5 seconds, saved a valid value and discarded an unsaved edit on Back. |
 | Defaults, all five pages | Typed values, checked validation errors, saved and reopened, and discarded unsaved edits on Back. Invalid cases included a relative path, malformed attribute and ignore patterns, an invalid version count and a negative upload limit. |
 | Folder > Advanced | Synchronization options, Metadata and File versioning each saved valid changes, reported refused values and discarded changes on Cancel. |
 | Attribute rules | Reproduced focus moving to the wrong rule after reordering, and a crash when removing a focused row. Stable row IDs and guarded commits fix both. Retested moves in both directions, duplicate patterns and removal down to an empty list. |
@@ -400,7 +459,7 @@ the same way:
   instead of stopping the engine, and move back once it is free again (unless their address was changed meanwhile);
   the marker records where they belong. If they can't listen on their address at all, they are turned off. Either
   way the app's settings say so. An address set with `STGUIADDRESS` is left alone.
-- Advanced settings show whether they are on, their address and the API key (shown on request, copied so that
+- Settings › Engine Access shows whether they are on, their address and the API key (shown on request, copied so that
   clipboard managers that honor it don't keep it, and regenerated after a warning). Turning them on or off restarts
   the engine: they start with it, and one that runs keeps listening until then. Turning them on gives them a password
   if they have none, also after clearing the user name on purpose.
@@ -429,7 +488,7 @@ the same way:
 The Syncthing Web GUI window shows the GUI inside the app, at the address and with the TLS of the configuration. Its
 self-signed certificate is trusted by its fingerprint, from `https-cert.pem`. The window opens with **Open Web GUI**
 (⌥⌘O), and **Open Web GUI in Browser** (⌥⇧⌘O) and the window's Open in Browser use the default browser. Both are in the
-app menu, the menu bar menu and the settings, under Engine access, and are unavailable while the web GUI is off or on a
+app menu, the menu bar menu and the settings, under Engine Access, and are unavailable while the web GUI is off or on a
 Unix socket. iOS doesn't get them: it has no engine, and a gateway's web GUI belongs to the system that runs it.
 
 - What the window shows follows the engine and the configuration, so it never keeps a page of a service that went away.

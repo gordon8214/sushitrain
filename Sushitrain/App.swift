@@ -326,13 +326,6 @@ struct SushitrainApp: App {
 			// for some reason...
 			MenuBarExtraView(appState: appState, presence: $presence)
 
-			Settings {
-				NavigationStack {
-					TabbedSettingsView(presence: $presence)
-				}.environment(appState)
-			}
-			.windowResizability(.contentSize)
-
 			Window("Connection requests", id: "connectionRequests") {
 				NavigationStack {
 					ConnectionRequestsView()
@@ -378,6 +371,14 @@ struct SushitrainApp: App {
 
 		#if os(macOS)
 			BrowserRefreshCommands()
+
+			CommandGroup(replacing: .appSettings) {
+				Button("Settings…") {
+					openWindow(id: "appSettings")
+					NSApp.activate()
+				}
+				.keyboardShortcut(",", modifiers: .command)
+			}
 
 			CommandGroup(replacing: CommandGroupPlacement.help) {
 				Button("Questions, support & feedback...") {
@@ -446,11 +447,13 @@ struct SushitrainApp: App {
 		@State private var folders: [SushitrainFolder] = []
 
 		var body: some Scene {
-			Window("Settings...", id: "appSettings") {
-				NavigationStack {
-					TabbedSettingsView(presence: $presence)
-				}
+			Window("Settings", id: "appSettings") {
+				SynchronizeSettingsView(presence: $presence)
 			}
+			.windowToolbarStyle(.unified)
+			.defaultLaunchBehavior(.suppressed)
+			.defaultSize(width: 1000, height: 720)
+			.windowResizability(.contentMinSize)
 			.environment(appState)
 			.restoredOnlyWithDockIcon(in: presence)
 
@@ -502,7 +505,6 @@ struct SushitrainApp: App {
 
 				if appState.startupState == .started {
 					Button("Settings", systemImage: "gear") {
-						// Open the "about" window
 						openWindow(id: "appSettings")
 						NSApplication.shared.activate()
 					}

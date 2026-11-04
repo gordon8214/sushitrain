@@ -52,6 +52,9 @@
 			} defaultValue: {
 				Self.window
 			}
+			.windowToolbarStyle(.unified)
+			.defaultSize(width: 1000, height: 720)
+			.windowResizability(.contentMinSize)
 			.commandsRemoved()
 			.commands {
 				CommandGroup(replacing: .appInfo) {
@@ -174,26 +177,7 @@
 							SwitchToSynchronizeButton(keepsLocation: true)
 						}
 					case .needsGateway, .needsFolders, .ready:
-						NavigationStack {
-							RemoteFoldersSettingsView {
-								CrashNoticeSection()
-								Section {
-									Button("Show in Finder", systemImage: "folder") {
-										showLocation()
-									}
-									.disabled(RemoteCoordinator.shared.gateways.isEmpty)
-									AutoStartToggleView()
-									AppPresenceToggles(presence: $presence)
-								}
-								Section {
-									SwitchToSynchronizeButton()
-								} footer: {
-									Text(
-										"Folders then leave Finder and stay on their gateways, and this Mac runs an engine again. Pairings stay."
-									)
-								}
-							}
-						}
+						FilesSettingsView(presence: $presence)
 					}
 				}
 			}
@@ -212,18 +196,11 @@
 			}
 		}
 
-		private func showLocation() {
-			Task {
-				if let url = await FilesDomain.shared.locationURL() {
-					ClientLifecycle.show(url)
-				}
-			}
-		}
 	}
 
 	/// Leaves Files in Finder mode (`ModeSwitch`), having said what happens to changes that didn't reach Synctrain. With
 	/// `keepsLocation` nothing is taken apart, as nothing can be read to do that by.
-	private struct SwitchToSynchronizeButton: View {
+	struct SwitchToSynchronizeButton: View {
 		let keepsLocation: Bool
 		private var coordinator = RemoteCoordinator.shared
 		@State private var isConfirming = false

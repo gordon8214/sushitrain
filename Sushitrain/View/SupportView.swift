@@ -624,6 +624,7 @@ struct TroubleshootingView: View {
 
 	@Environment(AppState.self) private var appState
 	@Environment(\.dismiss) private var dismiss
+	@Environment(\.settingsNavigation) private var settingsNavigation
 	@State private var hasMigratedLegacyDatabase = false
 	@State private var hasLegacyDatabase = false
 	@State private var performingDatabaseMaintenance = false
@@ -899,11 +900,13 @@ struct TroubleshootingView: View {
 		.formStyle(.grouped)
 		.navigationBarBackButtonHidden(true)
 		.toolbar {
-			ToolbarItem(placement: .navigation) {
-				Button(action: {
-					dismiss()
-				}) {
-					Label("Back", systemImage: "arrow.left.circle")
+			if settingsNavigation == nil {
+				ToolbarItem(placement: .navigation) {
+					Button(action: {
+						dismiss()
+					}) {
+						Label("Back", systemImage: "arrow.left.circle")
+					}
 				}
 			}
 		}

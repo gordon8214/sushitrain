@@ -77,6 +77,26 @@ import SynctrainFileProviderKit
 
 	var environment: RemoteEnvironment? { RemoteEnvironment.shared }
 
+	#if DEBUG && os(macOS)
+		/// Read-only presentation fixtures: no shared environment, credential, connection, or domain is started.
+		func loadSettingsFixture() {
+			guard TestRun.isActive, !TestRun.allowsFileProvider else { return }
+			gateways = [
+				RemoteGatewayStatus(
+					endpoint: RemoteEndpoint(
+						serviceID: "settings-fixture", host: "127.0.0.1", port: 9, displayName: "Fixture Gateway"),
+					connection: .unreachable("The fixture gateway is offline."))
+			]
+			operations = [
+				RemoteOperationSummary(
+					id: "settings-fixture-edit", folderID: "settings-fixture-folder", folderLabel: "Documents",
+					kind: .replace, state: .failed, name: "Notes.txt", lastError: "The fixture gateway is offline.",
+					updatedAt: Date(), stagedPath: nil)
+			]
+			hasUnresolvedOperations = true
+		}
+	#endif
+
 	// MARK: - Starting
 
 	/// Starts the work with gateways

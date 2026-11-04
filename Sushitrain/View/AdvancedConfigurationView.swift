@@ -106,6 +106,7 @@ private struct AdvancedSectionView: View {
 	var body: some View {
 		self.content
 			.navigationTitle(title)
+			.settingsEditor(hasChanges: self.hasChanges, isSaving: isSaving)
 			.toolbar {
 				// Says what it does, where the system would call a button of this role Done
 				ToolbarItem(placement: .confirmationAction) {
