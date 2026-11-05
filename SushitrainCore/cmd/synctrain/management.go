@@ -32,7 +32,14 @@ func (d *desktopUI) folders() {
 			r.SetUseMarkup(false)
 			r.SetTitle(f.Label)
 			r.SetSubtitle(strings.Join(nonEmpty(f.Path, f.Type, f.State, f.Error), " · "))
-			r.AddSuffix(textButton("Browse", func() { d.folder = f.ID; d.directory = ""; d.navigate("Files") }))
+			r.AddSuffix(textButton("Browse", func() {
+				if d.route == "Files" {
+					d.subpage(func() { d.folder = f.ID; d.directory = ""; d.browse() })
+				} else {
+					d.folder, d.directory = f.ID, ""
+					d.navigate("Files")
+				}
+			}))
 			actions := []struct {
 				name string
 				run  func()
@@ -172,7 +179,6 @@ func (d *desktopUI) pickSave(name string, done func(string)) {
 func (d *desktopUI) share(f desktopapi.Folder) { d.subpage(func() { d.sharePage(f) }) }
 func (d *desktopUI) sharePage(f desktopapi.Folder) {
 	d.reset("Sharing — " + f.Label)
-	d.button("Back", func() { d.guard(d.showRoute) })
 	d.load("engine.devices", nil, func(b json.RawMessage) {
 		var devices []desktopapi.Device
 		json.Unmarshal(b, &devices)
@@ -190,10 +196,10 @@ func (d *desktopUI) sharePage(f desktopapi.Folder) {
 			}
 			r.AddSuffix(textButton(label, func() {
 				if shared {
-					d.run("engine.share", desktopapi.Request{Folder: f.ID, Device: v.ID, Enabled: false}, nil)
+					d.run("engine.share", desktopapi.Request{Folder: f.ID, Device: v.ID, Enabled: false}, func(json.RawMessage) { d.finishPage() })
 				} else {
 					d.passwordInput("Share with “"+v.Name+"”", "Encryption password for an untrusted device (leave empty for trusted devices)", func(password string) {
-						d.run("engine.share", desktopapi.Request{Folder: f.ID, Device: v.ID, Enabled: true, Password: password}, nil)
+						d.run("engine.share", desktopapi.Request{Folder: f.ID, Device: v.ID, Enabled: true, Password: password}, func(json.RawMessage) { d.finishPage() })
 					})
 				}
 			}))
@@ -203,11 +209,12 @@ func (d *desktopUI) sharePage(f desktopapi.Folder) {
 }
 func (d *desktopUI) ignores(folder string) { d.subpage(func() { d.ignoresPage(folder) }) }
 func (d *desktopUI) ignoresPage(folder string) {
+	d.reset("Ignore Patterns")
 	d.load("engine.action", desktopapi.Request{Action: "ignores", Folder: folder}, func(b json.RawMessage) {
 		var lines []string
 		json.Unmarshal(b, &lines)
 		d.textEditor("Ignore Patterns", strings.Join(lines, "\n"), func(value string) {
-			d.run("engine.action", desktopapi.Request{Action: "saveIgnores", Folder: folder, Path: value}, func(json.RawMessage) { d.dirty = false; d.showRoute() })
+			d.run("engine.action", desktopapi.Request{Action: "saveIgnores", Folder: folder, Path: value}, func(json.RawMessage) { d.setDirty(false); d.finishPage() })
 		})
 	})
 }
@@ -220,15 +227,15 @@ func (d *desktopUI) textEditor(title, value string, save func(string)) {
 	view.SetVExpand(true)
 	view.SetSizeRequest(-1, 260)
 	d.body.Append(view)
-	buffer.ConnectChanged(func() { d.dirty = true })
+	buffer.ConnectChanged(func() { d.setDirty(true) })
+	view.GrabFocus()
 	d.button("Save", func() { save(buffer.Text(buffer.StartIter(), buffer.EndIter(), true)) })
-	d.button("Cancel", func() { d.guard(func() { d.dirty = false; d.showRoute() }) })
 }
 func (d *desktopUI) failedItems(folder string) { d.subpage(func() { d.failedItemsPage(folder) }) }
 func (d *desktopUI) failedItemsPage(folder string) {
+	d.reset("Failed Items")
 	d.load("engine.action", desktopapi.Request{Action: "failed", Folder: folder}, func(b json.RawMessage) {
 		d.reset("Failed Items")
-		d.button("Back", func() { d.guard(d.showRoute) })
 		var list []struct{ Path, Error string }
 		json.Unmarshal(b, &list)
 		g := d.group("Needs Attention")
@@ -242,9 +249,9 @@ func (d *desktopUI) failedItemsPage(folder string) {
 }
 func (d *desktopUI) deletedFiles(folder string) { d.subpage(func() { d.deletedFilesPage(folder) }) }
 func (d *desktopUI) deletedFilesPage(folder string) {
+	d.reset("Deleted Files")
 	d.load("engine.action", desktopapi.Request{Action: "deleted", Folder: folder}, func(b json.RawMessage) {
 		d.reset("Deleted Files")
-		d.button("Back", func() { d.guard(d.showRoute) })
 		var list []struct {
 			Path     string
 			Versions int
@@ -305,10 +312,10 @@ func (d *desktopUI) addFolder(offeredID, device string, encrypted bool) {
 			kind.SetSelected(3)
 		}
 		g.Add(kind)
-		id.ConnectChanged(func() { d.dirty = true })
-		label.ConnectChanged(func() { d.dirty = true })
-		location.ConnectChanged(func() { d.dirty = true })
-		kind.NotifyProperty("selected", func() { d.dirty = true })
+		id.ConnectChanged(func() { d.setDirty(true) })
+		label.ConnectChanged(func() { d.setDirty(true) })
+		location.ConnectChanged(func() { d.setDirty(true) })
+		kind.NotifyProperty("selected", func() { d.setDirty(true) })
 		d.button("Add Folder", func() {
 			if location.Text() == "" {
 				d.w.inform("Choose a Folder", "Select where this folder should synchronize.")
@@ -318,15 +325,14 @@ func (d *desktopUI) addFolder(offeredID, device string, encrypted bool) {
 			if int(index) >= len(values) {
 				return
 			}
-			d.run("engine.addFolder", desktopapi.Request{ID: id.Text(), Name: label.Text(), Path: location.Text(), Action: values[index], Device: device}, func(json.RawMessage) { d.dirty = false; d.showRoute() })
+			d.run("engine.addFolder", desktopapi.Request{ID: id.Text(), Name: label.Text(), Path: location.Text(), Action: values[index], Device: device}, func(json.RawMessage) { d.setDirty(false); d.finishPage() })
 		})
-		d.button("Cancel", func() { d.guard(d.showRoute) })
+		id.GrabFocus()
 	})
 }
 func (d *desktopUI) offeredFolders(device string) {
 	d.subpage(func() {
 		d.reset("Offered Folders")
-		d.button("Back", func() { d.showRoute() })
 		d.load("engine.pendingFolders", desktopapi.Request{Device: device}, func(b json.RawMessage) {
 			var list []struct {
 				ID        string

@@ -95,14 +95,23 @@ func (r browserRow) key() string {
 
 func (d *desktopUI) showBrowser(rows []browserRow) {
 	gridMode := d.preferences.Grid
-	d.reset("Files")
+	title := "Files"
+	if d.directory != "" {
+		title = path.Base(d.directory)
+	}
+	if d.mode == modeFiles && d.parent != 0 {
+		title = d.pages[len(d.pages)-1].page.Title()
+	}
+	if d.browserSearch {
+		title = "Search Results"
+	}
+	d.reset(title)
 	d.button("Up", func() {
-		if d.mode == modeFiles {
-			if len(d.parents) > 0 {
-				d.parent = d.parents[len(d.parents)-1]
-				d.parents = d.parents[:len(d.parents)-1]
-			}
-		} else {
+		if len(d.pages) > 1 {
+			d.goBack()
+			return
+		}
+		if d.mode == modeSynchronize {
 			if d.directory == "" {
 				d.folder = ""
 			} else {
@@ -114,7 +123,7 @@ func (d *desktopUI) showBrowser(rows []browserRow) {
 		}
 		d.browse()
 	})
-	d.button("Refresh", d.browse)
+	d.button("Refresh", d.refreshView)
 	d.button("Search…", func() { d.input("Search Files", "File name contains", "", func(query string) { d.searchFiles(query) }) })
 	if d.mode == modeFiles && d.parent != 0 {
 		d.button("Import File…", func() {
@@ -324,13 +333,15 @@ func (d *desktopUI) showBrowser(rows []browserRow) {
 }
 func (d *desktopUI) openBrowserRow(r browserRow) {
 	if r.directory {
-		if d.mode == modeFiles {
-			d.parents = append(d.parents, d.parent)
-			d.parent = r.item
-		} else {
-			d.directory = r.path
-		}
-		d.browse()
+		d.subpage(func() {
+			d.pages[len(d.pages)-1].page.SetTitle(r.name)
+			if d.mode == modeFiles {
+				d.parent = r.item
+			} else {
+				d.directory = r.path
+			}
+			d.browse()
+		})
 		return
 	}
 	if d.mode == modeFiles {
@@ -366,15 +377,19 @@ func (d *desktopUI) fileActionsPage(r browserRow) {
 	d.generation++
 	d.reset(r.name)
 	d.text(r.detail)
-	d.button("Back", d.browse)
-	d.button("Open", func() { d.openBrowserRow(r) })
+	d.button("Open", func() {
+		if r.directory {
+			d.goBack()
+		}
+		d.openBrowserRow(r)
+	})
 	if d.mode == modeFiles {
 		keep := "Keep on This Device"
 		if r.keep {
 			keep = "Stop Keeping"
 		}
 		d.button(keep, func() {
-			d.run("files.keep", map[string]any{"Item": r.item, "Node": r.node, "Keep": !r.keep}, func(json.RawMessage) { d.browse() })
+			d.run("files.keep", map[string]any{"Item": r.item, "Node": r.node, "Keep": !r.keep}, func(json.RawMessage) { d.finishPage() })
 		})
 		d.button("Previous Versions", func() {
 			d.filesVersions(r)
@@ -389,17 +404,17 @@ func (d *desktopUI) fileActionsPage(r browserRow) {
 		if r.writable {
 			d.button("Move…", func() {
 				d.input("Move File or Folder", "Destination path relative to Synctrain's mounted folders", "", func(target string) {
-					d.run("files.move", map[string]any{"Item": r.item, "Node": r.node, "Path": target}, func(json.RawMessage) { d.browse() })
+					d.run("files.move", map[string]any{"Item": r.item, "Node": r.node, "Path": target}, func(json.RawMessage) { d.finishPage() })
 				})
 			})
 			d.button("Rename…", func() {
 				d.input("Rename", "New name", r.name, func(name string) {
-					d.run("files.rename", map[string]any{"Parent": d.parent, "NewParent": d.parent, "Item": r.item, "Node": r.node, "NewName": name}, func(json.RawMessage) { d.browse() })
+					d.run("files.rename", map[string]any{"Parent": d.parent, "NewParent": d.parent, "Item": r.item, "Node": r.node, "NewName": name}, func(json.RawMessage) { d.finishPage() })
 				})
 			})
 			d.button("Delete…", func() {
 				d.w.confirm("Delete “"+r.name+"”?", "This also removes it on its gateway.", "Delete", true, func() {
-					d.run("files.delete", map[string]any{"Parent": d.parent, "Item": r.item, "Node": r.node}, func(json.RawMessage) { d.browse() })
+					d.run("files.delete", map[string]any{"Parent": d.parent, "Item": r.item, "Node": r.node}, func(json.RawMessage) { d.finishPage() })
 				})
 			})
 		}
@@ -419,17 +434,17 @@ func (d *desktopUI) fileActionsPage(r browserRow) {
 						d.w.inform("Invalid Name", "Enter a single file or folder name.")
 						return
 					}
-					d.run("engine.action", desktopapi.Request{Action: "rename", Folder: d.folder, Path: r.path, Name: path.Join(path.Dir(r.path), name), Token: r.identity}, func(json.RawMessage) { d.browse() })
+					d.run("engine.action", desktopapi.Request{Action: "rename", Folder: d.folder, Path: r.path, Name: path.Join(path.Dir(r.path), name), Token: r.identity}, func(json.RawMessage) { d.finishPage() })
 				})
 			})
 			d.button("Move…", func() {
 				d.input("Move within This Folder", "New path relative to this synchronized folder", r.path, func(target string) {
-					d.run("engine.action", desktopapi.Request{Action: "move", Folder: d.folder, Path: r.path, Name: target, Token: r.identity}, func(json.RawMessage) { d.browse() })
+					d.run("engine.action", desktopapi.Request{Action: "move", Folder: d.folder, Path: r.path, Name: target, Token: r.identity}, func(json.RawMessage) { d.finishPage() })
 				})
 			})
 			d.button("Move to Trash…", func() {
 				d.w.confirm("Move “"+r.name+"” to Trash?", "This deletion also synchronizes to other devices. The local file remains recoverable from Trash.", "Move to Trash", true, func() {
-					d.run("engine.action", desktopapi.Request{Action: "trashFile", Folder: d.folder, Path: r.path, Token: r.identity}, func(json.RawMessage) { d.browse() })
+					d.run("engine.action", desktopapi.Request{Action: "trashFile", Folder: d.folder, Path: r.path, Token: r.identity}, func(json.RawMessage) { d.finishPage() })
 				})
 			})
 		}
@@ -440,7 +455,10 @@ func (d *desktopUI) fileActionsPage(r browserRow) {
 	}
 }
 func (d *desktopUI) searchFiles(query string) {
-	d.startView()
+	d.subpage(func() { d.searchFilesPage(query) })
+}
+func (d *desktopUI) searchFilesPage(query string) {
+	d.reset("Search Results")
 	d.browserNext = 0
 	d.browserSearch = true
 	d.browserRows = nil
@@ -481,7 +499,6 @@ func (d *desktopUI) localVersions(file, name string) {
 }
 func (d *desktopUI) localVersionsPage(file, name string) {
 	d.reset("Previous Versions — " + name)
-	d.button("Back", d.browse)
 	g := d.group("This Device")
 	d.appendRemoteVersions(d.folder, file, name, 0, d.deviceID, "")
 	d.fetch("engine.versions", desktopapi.Request{Folder: d.folder, Path: file}, func(b json.RawMessage, err error) {
@@ -510,7 +527,7 @@ func (d *desktopUI) localVersionsPage(file, name string) {
 			}))
 			r.AddSuffix(textButton("Restore…", func() {
 				d.w.confirm("Restore This Version?", "The current file is archived before it is replaced.", "Restore", true, func() {
-					d.run("engine.restoreVersion", desktopapi.Request{Folder: d.folder, Path: file, ID: v.ID}, func(json.RawMessage) { d.w.toast("Restored the selected version."); d.localVersions(file, name) })
+					d.run("engine.restoreVersion", desktopapi.Request{Folder: d.folder, Path: file, ID: v.ID}, func(json.RawMessage) { d.w.toast("Restored the selected version."); d.refreshView() })
 				})
 			}))
 			g.Add(r)

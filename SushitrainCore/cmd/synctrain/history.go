@@ -174,7 +174,7 @@ func (d *desktopUI) appendRemoteVersions(folder, file, name string, item int64, 
 										})
 									} else {
 										d.w.toast("Restored the selected version.")
-										d.localVersions(file, name)
+										d.refreshView()
 									}
 								})
 							})
@@ -189,7 +189,6 @@ func (d *desktopUI) appendRemoteVersions(folder, file, name string, item int64, 
 func (d *desktopUI) filesVersions(r browserRow) {
 	d.subpage(func() {
 		d.reset("Previous Versions — " + r.name)
-		d.button("Back", d.browse)
 		g := d.group("Folder Gateway")
 		d.fetch("files.historyTarget", map[string]any{"Item": r.item}, func(b json.RawMessage, err error) {
 			if err != nil {
@@ -231,7 +230,7 @@ func (d *desktopUI) filesVersions(r browserRow) {
 					}))
 					row.AddSuffix(textButton("Restore…", func() {
 						d.w.confirm("Restore This Version?", "Its gateway preserves the current version before replacement.", "Restore", true, func() {
-							d.run("files.versionRestore", map[string]any{"Item": r.item, "Version": version.ID, "Token": version.EntityTag}, func(json.RawMessage) { d.w.toast("Restored the selected version."); d.filesVersions(r) })
+							d.run("files.versionRestore", map[string]any{"Item": r.item, "Version": version.ID, "Token": version.EntityTag}, func(json.RawMessage) { d.w.toast("Restored the selected version."); d.refreshView() })
 						})
 					}))
 				}

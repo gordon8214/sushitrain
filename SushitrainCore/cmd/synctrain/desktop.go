@@ -29,12 +29,11 @@ type desktopUI struct {
 	browserNext                            int
 	browserSelected                        string
 	parent                                 int64
-	parents                                []int64
 	preferences                            Preferences
 	w                                      *mainWindow
 	root                                   *adw.NavigationSplitView
 	navigation                             *adw.NavigationView
-	pages                                  []*settingsPage
+	pages                                  []*navigationPage
 	detail                                 *adw.ToolbarView
 	body                                   *gtk.Box
 	commands                               *gtk.FlowBox
@@ -80,7 +79,7 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 	side.SetContent(d.sidebar)
 	d.root.SetSidebar(adw.NewNavigationPage(side, "Synctrain"))
 	d.navigation = adw.NewNavigationView()
-	d.navigation.ConnectPopped(func(*adw.NavigationPage) { d.settingsPopped() })
+	d.navigation.ConnectPopped(func(*adw.NavigationPage) { d.pagePopped() })
 	d.root.SetContent(adw.NewNavigationPage(d.navigation, "Synctrain"))
 	d.sidebar.ConnectRowActivated(func(r *gtk.ListBoxRow) {
 		if r != nil {
@@ -147,7 +146,10 @@ func (d *desktopUI) guard(next func()) {
 		next()
 		return
 	}
-	d.w.confirm("Discard Changes?", "Your edits have not been saved.", "Discard Changes", true, func() { d.dirty = false; d.closeEditor(); next() })
+	if d.w.win.VisibleDialog() != nil {
+		return
+	}
+	d.w.confirm("Discard Changes?", "Your edits have not been saved.", "Discard Changes", true, func() { d.setDirty(false); d.closeEditor(); next() })
 }
 func (d *desktopUI) closeEditor() {
 	token := d.editor
@@ -197,6 +199,7 @@ func (d *desktopUI) request(ctx context.Context, method string, p, result any) e
 	return adminsock.CallContext(ctx, socket, method, p, result)
 }
 func (d *desktopUI) load(method string, p any, done func(json.RawMessage)) {
+	loaded := d.trackPageLoad()
 	generation := d.generation
 	ctx := d.ctx
 	background(func() (json.RawMessage, error) {
@@ -204,6 +207,7 @@ func (d *desktopUI) load(method string, p any, done func(json.RawMessage)) {
 		err := d.request(ctx, method, p, &out)
 		return out, err
 	}, func(out json.RawMessage, err error) {
+		defer loaded()
 		if d.closed || generation != d.generation {
 			if method == "settings.get" && err == nil {
 				var stale desktopapi.Editor
@@ -219,6 +223,7 @@ func (d *desktopUI) load(method string, p any, done func(json.RawMessage)) {
 		}
 		d.banner.SetRevealed(false)
 		done(out)
+		d.focusPage()
 	})
 }
 func (d *desktopUI) run(method string, p any, done func(json.RawMessage)) {
@@ -226,7 +231,7 @@ func (d *desktopUI) run(method string, p any, done func(json.RawMessage)) {
 		return
 	}
 	d.saving = true
-	d.updateSettingsNavigation()
+	d.updateNavigation()
 	d.detail.SetSensitive(false)
 	background(func() (json.RawMessage, error) {
 		var out json.RawMessage
@@ -234,7 +239,7 @@ func (d *desktopUI) run(method string, p any, done func(json.RawMessage)) {
 		return out, err
 	}, func(out json.RawMessage, err error) {
 		d.saving = false
-		d.updateSettingsNavigation()
+		d.updateNavigation()
 		d.detail.SetSensitive(true)
 		if d.closed {
 			return
@@ -243,9 +248,11 @@ func (d *desktopUI) run(method string, p any, done func(json.RawMessage)) {
 			d.error(err)
 			return
 		}
+
 		if done != nil {
 			done(out)
 		} else {
+			d.invalidateParents()
 			d.refreshView()
 		}
 	})
@@ -297,9 +304,13 @@ func (d *desktopUI) showRoute() {
 		d.stopPage = nil
 	}
 	d.pages = nil
-	p := d.newSettingsPage(d.route, nil)
-	d.pages = []*settingsPage{p}
+	p := d.newNavigationPage(d.route, d.renderRoute)
+	d.pages = []*navigationPage{p}
 	d.navigation.Replace([]*adw.NavigationPage{p.page})
+	d.renderRoute()
+}
+
+func (d *desktopUI) renderRoute() {
 	d.reset(d.route)
 	switch d.route {
 	case "Overview":
@@ -546,14 +557,7 @@ func (d *desktopUI) startView() {
 	}
 }
 func (d *desktopUI) subpage(show func()) {
-	d.guard(func() {
-		if d.route == "Settings" {
-			d.pushSettingsPage(show)
-		} else {
-			d.startView()
-			show()
-		}
-	})
+	d.guard(func() { d.pushPage(show) })
 }
 func (d *desktopUI) passwordInput(title, caption string, done func(string)) {
 	dialog := adw.NewAlertDialog(title, caption)
@@ -573,6 +577,7 @@ func (d *desktopUI) passwordInput(title, caption string, done func(string)) {
 }
 
 func (d *desktopUI) fetch(method string, p any, done func(json.RawMessage, error)) {
+	loaded := d.trackPageLoad()
 	generation := d.generation
 	ctx := d.ctx
 	background(func() (json.RawMessage, error) {
@@ -580,6 +585,7 @@ func (d *desktopUI) fetch(method string, p any, done func(json.RawMessage, error
 		err := d.request(ctx, method, p, &result)
 		return result, err
 	}, func(b json.RawMessage, err error) {
+		defer loaded()
 		if d.closed || generation != d.generation {
 			return
 		}

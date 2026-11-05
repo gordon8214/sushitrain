@@ -70,6 +70,7 @@ func (d *desktopUI) settings() {
 }
 func (d *desktopUI) edit(section, title string) { d.subpage(func() { d.editPage(section, title) }) }
 func (d *desktopUI) editPage(section, title string) {
+	d.reset(title)
 	d.load("settings.get", desktopapi.Request{Section: section}, func(b json.RawMessage) {
 		var editor desktopapi.Editor
 		if err := json.Unmarshal(b, &editor); err != nil {
@@ -99,7 +100,7 @@ func (d *desktopUI) editPage(section, title string) {
 							d.setDirty(false)
 							d.closeEditor()
 							d.w.confirm("Restart Required", "Restart to apply the engine access change?", "Restart", false, func() { d.action("restart", "", "") })
-							d.finishSettings()
+							d.finishPage()
 						})
 					})
 				})
@@ -185,17 +186,18 @@ func (d *desktopUI) editPage(section, title string) {
 				d.setDirty(false)
 				var result struct{ RestartRequired bool }
 				json.Unmarshal(b, &result)
-				d.finishSettings()
+				d.finishPage()
 				if result.RestartRequired {
 					d.w.confirm("Restart Required", "Restart the engine to apply the saved settings?", "Restart", false, func() { d.action("restart", "", "") })
 				}
 			})
 		})
-		d.button("Cancel", func() { d.guard(func() { d.closeEditor(); d.finishSettings() }) })
+		g.ChildFocus(gtk.DirTabForward)
 	})
 }
 func (d *desktopUI) policySettings() { d.subpage(func() { d.policySettingsPage() }) }
 func (d *desktopUI) policySettingsPage() {
+	d.reset("Automatic Pausing")
 	d.load("policy.get", nil, func(b json.RawMessage) {
 		var p struct {
 			Metered, Cellular, PowerSaver, NetworkKnown, CellularKnown, PowerKnown bool
@@ -225,11 +227,12 @@ func (d *desktopUI) policySettingsPage() {
 		if p.Reason != "" {
 			d.text(p.Reason)
 		}
-		d.button("Save", func() { d.run("policy.save", p, func(json.RawMessage) { d.setDirty(false); d.finishSettings() }) })
+		d.button("Save", func() { d.run("policy.save", p, func(json.RawMessage) { d.setDirty(false); d.finishPage() }) })
 	})
 }
 func (d *desktopUI) logs() { d.subpage(func() { d.logsPage() }) }
 func (d *desktopUI) logsPage() {
+	d.reset("Activity Log")
 	d.load("engine.logs", nil, func(b json.RawMessage) {
 		d.reset("Activity Log")
 		d.button("Refresh", func() { d.startView(); d.logsPage() })
