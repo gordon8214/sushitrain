@@ -14,8 +14,9 @@ replace google.golang.org/genproto v0.0.0-20220815135757-37a418bb8959 => google.
 // devices that ignore a file, the lookup of what another device announced for a file, a web GUI that refuses paths
 // outside its assets before looking at the disk, a proxy set from code, native Windows metadata history, and platform history in the web GUI's folder
 // editor, with versioning parameters that stay out of other folders when set in the defaults and attribute rules that
-// copied folders don't share, and the explicit REST device pause-intent hook (branch synctrain/v2.1.7).
-replace github.com/syncthing/syncthing => github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261104172245-7bcc057c873a
+// copied folders don't share, the explicit REST device pause-intent hook, read-only Mac archive snapshots, and
+// restore-specific retention of displaced live contents (branch synctrain/v2.1.7).
+replace github.com/syncthing/syncthing => github.com/gordon8214/syncthing v1.30.0-rc.1.0.20261104235920-6a8b2777c64a
 
 require (
 	github.com/Microsoft/go-winio v0.6.4

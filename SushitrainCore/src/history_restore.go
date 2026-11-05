@@ -299,9 +299,12 @@ func (fld *Folder) restoreHistoryInput(ctx context.Context, h syncthing.FolderHa
 	hasVersioner := h.HasVersioner()
 	if cfg := fld.folderConfiguration(); cfg == nil || cfg.Filesystem().URI() != rootPath {
 		return errRestoreTargetChanged
-	} else if !hasVersioner && cfg.Versioning.Type != "" {
-		// Send Only runners have no versioner handle, even when destination versioning is configured.
-		configured, err := versioner.New(*cfg)
+	} else if cfg.Versioning.Type == VersioningTypeStaggered || !hasVersioner && cfg.Versioning.Type != "" {
+		// A private restore archiver defers staggered pruning of the displaced
+		// live file. Send Only runners also need a configured archiver because
+		// they have no versioner handle. The folder loop serializes this with
+		// the engine's normal archives and scheduled cleanup.
+		configured, err := versioner.NewForRestore(*cfg)
 		if err != nil {
 			return err
 		}

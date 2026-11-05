@@ -20,66 +20,71 @@ func (fld *Folder) RestoreFileVersionChecked(ctx context.Context, name string, v
 		return errVersionNotListed
 	}
 	return fld.withHistoryTargetContext(ctx, name, func(ctx context.Context, h syncthing.FolderHandle, root string) error {
-		captured, err := captureHistoryTarget(ctx, h, root, name)
-		if err != nil {
-			return err
-		}
-		cfg := fld.folderConfiguration()
-		if cfg == nil {
-			return errFolderConfigNotFound
-		}
-		complete := cfg.Versioning.Type == VersioningTypeStaggered && cfg.Versioning.Params[versioningParamPlatformData] == "true"
-		var input fs.File
-		var applyMetadata func(string) error
-		if complete {
-			file, metadata, err := fld.client.internals().OpenFileVersionSnapshot(fld.FolderID, name, version.versionTime)
-			if err != nil {
-				return err
-			}
-			input = file
-			if metadata.Darwin == nil {
-				input.Close()
-				return versionsnapshot.ErrIncomplete
-			}
-			if err := versionsnapshot.ValidAttributes(metadata.Darwin.Xattrs); err != nil {
-				input.Close()
-				return err
-			}
-			applyMetadata = func(destination string) error {
-				return versionsnapshot.ApplyAttributes(destination, metadata.Darwin.Xattrs)
-			}
-		} else {
-			input, err = fld.client.internals().OpenFileVersion(fld.FolderID, name, version.versionTime)
-			if err != nil {
-				return err
-			}
-			applyMetadata, err = fld.archiveAttributes(input)
-			if err != nil {
-				input.Close()
-				return err
-			}
-		}
-		defer input.Close()
-		info, err := input.Stat()
-		if err != nil {
-			return err
-		}
-		if !info.IsRegular() || archiveRevision(info) != expected {
-			return errVersionNotListed
-		}
-		mode := os.FileMode(info.Mode()).Perm()
-		finish := func() error {
-			current, err := input.Stat()
-			if err != nil {
-				return err
-			}
-			if archiveRevision(current) != expected {
-				return errors.New("the selected archive changed while staging")
-			}
-			return input.Close()
-		}
-		return fld.restoreHistoryInput(ctx, h, root, name, input, captured, version.modTime.UnixNano(), complete, &mode, applyMetadata, finish)
+		return fld.restoreFileVersionChecked(ctx, h, root, name, version, expected)
 	})
+}
+
+// The caller holds the folder loop for the entire checked restore.
+func (fld *Folder) restoreFileVersionChecked(ctx context.Context, h syncthing.FolderHandle, root, name string, version *FileVersion, expected string) error {
+	captured, err := captureHistoryTarget(ctx, h, root, name)
+	if err != nil {
+		return err
+	}
+	cfg := fld.folderConfiguration()
+	if cfg == nil {
+		return errFolderConfigNotFound
+	}
+	complete := cfg.Versioning.Type == VersioningTypeStaggered && cfg.Versioning.Params[versioningParamPlatformData] == "true"
+	var input fs.File
+	var applyMetadata func(string) error
+	if complete {
+		file, metadata, err := fld.client.internals().OpenFileVersionSnapshot(fld.FolderID, name, version.versionTime)
+		if err != nil {
+			return err
+		}
+		input = file
+		if metadata.Darwin == nil {
+			input.Close()
+			return versionsnapshot.ErrIncomplete
+		}
+		if err := versionsnapshot.ValidAttributes(metadata.Darwin.Xattrs); err != nil {
+			input.Close()
+			return err
+		}
+		applyMetadata = func(destination string) error {
+			return versionsnapshot.ApplyAttributes(destination, metadata.Darwin.Xattrs)
+		}
+	} else {
+		input, err = fld.client.internals().OpenFileVersion(fld.FolderID, name, version.versionTime)
+		if err != nil {
+			return err
+		}
+		applyMetadata, err = fld.archiveAttributes(input)
+		if err != nil {
+			input.Close()
+			return err
+		}
+	}
+	defer input.Close()
+	info, err := input.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.IsRegular() || archiveRevision(info) != expected {
+		return errVersionNotListed
+	}
+	mode := os.FileMode(info.Mode()).Perm()
+	finish := func() error {
+		current, err := input.Stat()
+		if err != nil {
+			return err
+		}
+		if archiveRevision(current) != expected {
+			return errors.New("the selected archive changed while staging")
+		}
+		return input.Close()
+	}
+	return fld.restoreHistoryInput(ctx, h, root, name, input, captured, version.modTime.UnixNano(), complete, &mode, applyMetadata, finish)
 }
 
 // DesktopExportVersionChecked validates the retained input, never a separately
