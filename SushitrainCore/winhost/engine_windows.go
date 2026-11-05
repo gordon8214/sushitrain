@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"t-shaped.nl/sushitrain/v2/desktopapi"
 	core "t-shaped.nl/sushitrain/v2/src"
 )
 
@@ -39,11 +40,7 @@ type browserEntry struct {
 	Size                  int64
 	Directory, Local      bool
 }
-type editorField struct {
-	Path, Label, Group, Kind, Value string
-	IsSecret, IsReadOnly            bool
-	Options                         []string
-}
+type editorField = desktopapi.Field
 
 func (h *Host) engineCall(ctx context.Context, method string, p request) (any, error) {
 	c := h.client
@@ -182,7 +179,15 @@ func (h *Host) engineCall(ctx context.Context, method string, p request) (any, e
 		delete(h.editors, p.Token)
 		return nil, nil
 	case "settings.get":
-		section, err := c.AdvancedSection(p.Section)
+		sectionID := p.Section
+		if strings.HasPrefix(sectionID, "basic/folder/") {
+			sectionID = strings.TrimPrefix(sectionID, "basic/")
+		} else if strings.HasPrefix(sectionID, "versioning/") {
+			sectionID = "folder/" + strings.TrimPrefix(sectionID, "versioning/")
+		} else if sectionID == "defaults/versioning" {
+			sectionID = "defaults/folder"
+		}
+		section, err := c.AdvancedSection(sectionID)
 		if err != nil {
 			return nil, err
 		}
@@ -197,7 +202,17 @@ func (h *Host) engineCall(ctx context.Context, method string, p request) (any, e
 		fields := []editorField{}
 		for i := 0; i < section.FieldCount(); i++ {
 			f := section.FieldAt(i)
-			fields = append(fields, editorField{f.Path, f.Label, f.Group, f.Kind, f.Value, f.IsSecret, f.IsReadOnly, stringsFrom(f.Options())})
+			if !visibleFolderEditorField(p.Section, f.Path) {
+				continue
+			}
+			label := f.Label
+			if (strings.HasPrefix(p.Section, "folder/") || p.Section == "defaults/folder") && f.Path == "minDiskFree.value" {
+				label = "Minimum free disk space"
+			} else if (strings.HasPrefix(p.Section, "folder/") || p.Section == "defaults/folder") && f.Path == "minDiskFree.unit" {
+				label = "Free space unit"
+			}
+			fields = append(fields, editorField{Path: f.Path, Label: label, Group: f.Group, Kind: f.Kind, Value: f.Value,
+				IsSecret: f.IsSecret, IsReadOnly: f.IsReadOnly, Options: stringsFrom(f.Options()), IsAdvanced: desktopapi.FolderFieldAdvanced(p.Section, f.Path)})
 		}
 		return map[string]any{"token": token, "fields": fields}, nil
 	case "settings.save":
@@ -306,4 +321,21 @@ func (h *Host) importHome(source string) error {
 		return err
 	}
 	return nil
+}
+
+// General and versioning reuse the raw folder draft without dropping any fields
+// from the full synchronization editor.
+func visibleFolderEditorField(section, field string) bool {
+	if strings.HasPrefix(section, "basic/folder/") {
+		switch field {
+		case "id", "label", "path", "type", "rescanIntervalS", "fsWatcherEnabled", "fsWatcherDelayS", "maxConflicts", "blockIndexing":
+			return true
+		default:
+			return false
+		}
+	}
+	if strings.HasPrefix(section, "versioning/") || section == "defaults/versioning" {
+		return strings.HasPrefix(field, "versioning.")
+	}
+	return true
 }

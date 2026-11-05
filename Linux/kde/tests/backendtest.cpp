@@ -202,6 +202,109 @@ private slots:
     b.cancelDialog();
     QTRY_VERIFY_WITH_TIMEOUT(b.dialog().isEmpty(), 1000);
   }
+  void qmlAdvancedPreservesDraft() {
+    Fixture f;
+    bool rejectSave = true;
+    f.handler = [&rejectSave](QString m, auto) {
+      if (m == "settings.get")
+        return result(QJsonObject{{"Token", "editor"}, {"Fields", QJsonArray{
+            QJsonObject{{"Path", "MinDiskFree"}, {"Kind", "string"},
+                {"Label", "Minimum free disk space"}, {"Value", "1"}},
+            QJsonObject{{"Path", "Copiers"}, {"Kind", "string"},
+                {"Label", "Copiers"}, {"Value", "7"}, {"IsAdvanced", true}}}}});
+      if (m == "settings.save" && rejectSave)
+        return QJsonObject{{"error", "Copiers: enter a whole number"}};
+      return result(QJsonObject{});
+    };
+    Backend b;
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty("backend", &b);
+    QQmlComponent component(&engine, QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> window(component.create());
+    QVERIFY2(window, qPrintable(component.errorString()));
+    auto *quickWindow = qobject_cast<QQuickWindow *>(window.data());
+    QVERIFY(quickWindow);
+    quickWindow->show();
+    QVERIFY(QTest::qWaitForWindowExposed(quickWindow, 1000));
+    QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
+    b.navigate("Settings");
+    auto open = [&] { b.activate(rowAction(b, "Network", "Edit")); };
+    open();
+    auto *editor = window->findChild<QObject *>("settingsEditor");
+    auto *disclosure = window->findChild<QQuickItem *>("editorAdvanced");
+    auto *advancedForm = window->findChild<QQuickItem *>("editorAdvancedForm");
+    QVERIFY(editor && disclosure && advancedForm);
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    QVERIFY(!disclosure->property("checked").toBool());
+    QVERIFY(!advancedForm->isVisible());
+    auto toggle = [&] {
+      disclosure->forceActiveFocus();
+      QTest::keyClick(quickWindow, Qt::Key_Space);
+    };
+    toggle();
+    QTRY_VERIFY_WITH_TIMEOUT(advancedForm->isVisible(), 1000);
+    // Expansion alone must not trigger the discard-changes prompt.
+    b.cancelDialog();
+    QTRY_VERIFY_WITH_TIMEOUT(b.dialog().isEmpty(), 1000);
+    open();
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    QVERIFY(!disclosure->property("checked").toBool());
+    toggle();
+    QTRY_VERIFY_WITH_TIMEOUT(advancedForm->isVisible(), 1000);
+    auto *loader = visualItem(advancedForm, "editorField_Copiers");
+    QVERIFY(loader);
+    auto *input = qvariant_cast<QQuickItem *>(loader->property("item"));
+    QVERIFY(input);
+    input->forceActiveFocus();
+    QTest::keyClick(quickWindow, Qt::Key_A, Qt::ControlModifier);
+    for (const auto c : QString("invalid"))
+      QTest::keyClick(quickWindow, c.toLatin1());
+    QCOMPARE(editor->property("draft").toMap()["Copiers"].toString(), QString("invalid"));
+    toggle();
+    QVERIFY(!advancedForm->isVisible());
+    toggle();
+    QVERIFY(advancedForm->isVisible());
+    QCOMPARE(input->property("text").toString(), QString("invalid"));
+    toggle();
+    const auto reads = f.calls.count("settings.get");
+    auto *save = window->findChild<QObject *>("editorSave");
+    QVERIFY(save);
+    QVERIFY(QMetaObject::invokeMethod(save, "clicked"));
+    QTRY_COMPARE_WITH_TIMEOUT(b.error(), QString("Copiers: enter a whole number"), 1000);
+    QTRY_VERIFY_WITH_TIMEOUT(advancedForm->isVisible(), 1000);
+    QCOMPARE(input->property("text").toString(), QString("invalid"));
+    QCOMPARE(f.calls.count("settings.get"), reads);
+    // A retained error must not override the user's later collapse choice.
+    toggle();
+    QVERIFY(!advancedForm->isVisible());
+    auto *basicForm = window->findChild<QQuickItem *>("editorForm");
+    QVERIFY(basicForm);
+    auto *basicLoader = visualItem(basicForm, "editorField_MinDiskFree");
+    QVERIFY(basicLoader);
+    auto *basicInput = qvariant_cast<QQuickItem *>(basicLoader->property("item"));
+    QVERIFY(basicInput);
+    basicInput->forceActiveFocus();
+    QTest::keyClick(quickWindow, Qt::Key_A, Qt::ControlModifier);
+    QTest::keyClick(quickWindow, '2');
+    QCOMPARE(editor->property("draft").toMap()["MinDiskFree"].toString(), QString("2"));
+    QVERIFY(!advancedForm->isVisible());
+    // Another failed submission with the same error must reveal Advanced again.
+    QVERIFY(QMetaObject::invokeMethod(save, "clicked"));
+    QTRY_COMPARE_WITH_TIMEOUT(f.calls.count("settings.save"), 2, 1000);
+    QTRY_VERIFY_WITH_TIMEOUT(!b.busy(), 1000);
+    QTRY_VERIFY_WITH_TIMEOUT(advancedForm->isVisible(), 1000);
+    QCOMPARE(input->property("text").toString(), QString("invalid"));
+    input->forceActiveFocus();
+    QTest::keyClick(quickWindow, Qt::Key_A, Qt::ControlModifier);
+    QTest::keyClick(quickWindow, '9');
+    toggle();
+    rejectSave = false;
+    QVERIFY(QMetaObject::invokeMethod(save, "clicked"));
+    QTRY_VERIFY_WITH_TIMEOUT(b.dialog().isEmpty(), 1000);
+    const auto values = f.parameters.at(f.calls.lastIndexOf("settings.save"))["Values"].toObject();
+    QCOMPARE(values["Copiers"].toString(), QString("9"));
+    QCOMPARE(values["MinDiskFree"].toString(), QString("2"));
+  }
   void qmlSidebarTracksNavigation() {
     Fixture f;
     f.handler = [](QString m, auto) {

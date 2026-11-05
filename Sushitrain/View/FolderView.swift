@@ -1105,8 +1105,11 @@ private struct AdvancedFolderSettingsView: View {
 		self.systemSettingsSection()
 		self.trashSection()
 		self.watchSection()
-		self.conflictsSection()
-		self.blockIndexSection()
+		FolderAdvancedSection {
+			FolderWatcherDelaySection(folder: folder)
+			self.conflictsSection()
+			self.blockIndexSection()
+		}
 	}
 
 	@ViewBuilder private func subSettingsSection() -> some View {
@@ -1286,27 +1289,6 @@ private struct AdvancedFolderSettingsView: View {
 					"Watch for changes",
 					isOn: Binding(get: { folder.isWatcherEnabled() }, set: { try? folder.setWatcherEnabled($0) }))
 
-				if folder.isWatcherEnabled() {
-					LabeledContent {
-						TextField(
-							"",
-							text: Binding(
-								get: {
-									let interval: Int = folder.watcherDelaySeconds()
-									return "\(interval)"
-								},
-								set: { (lbl: String) in
-									if !lbl.isEmpty {
-										let interval = Int(lbl) ?? 0
-										try? folder.setWatcherDelaySeconds(interval)
-									}
-								}), prompt: Text("")
-						)
-						.multilineTextAlignment(.trailing)
-					} label: {
-						Text("Delay for processing changes (seconds)")
-					}
-				}
 			}
 		}
 	}
@@ -1330,6 +1312,36 @@ private struct AdvancedFolderSettingsView: View {
 			Text(
 				"Hidden folders will not be visible by default in Finder, and will be hidden by default in the folders list in this app."
 			)
+		}
+	}
+}
+
+private struct FolderWatcherDelaySection: View {
+	let folder: SushitrainFolder
+
+	var body: some View {
+		if !folder.isReceiveOnlyFolder && !folder.isReceiveEncryptedFolder && folder.isWatcherEnabled() {
+			Section {
+				LabeledContent {
+					TextField(
+						"",
+						text: Binding(
+							get: {
+								let interval: Int = folder.watcherDelaySeconds()
+								return "\(interval)"
+							},
+							set: { (lbl: String) in
+								if !lbl.isEmpty {
+									let interval = Int(lbl) ?? 0
+									try? folder.setWatcherDelaySeconds(interval)
+								}
+							}), prompt: Text("")
+					)
+					.multilineTextAlignment(.trailing)
+				} label: {
+					Text("Delay for processing changes (seconds)")
+				}
+			}
 		}
 	}
 }

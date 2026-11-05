@@ -141,7 +141,8 @@ func (c *Control) getSettings(section string) (Editor, error) {
 			if !visibleBasic(section, f.Path) {
 				continue
 			}
-			d.fields = append(d.fields, Field{f.Path, f.Label, f.Group, f.Kind, f.Value, f.IsSecret, f.IsReadOnly, Strings(f.Options())})
+			d.fields = append(d.fields, Field{Path: f.Path, Label: f.Label, Group: f.Group, Kind: f.Kind, Value: f.Value,
+				IsSecret: f.IsSecret, IsReadOnly: f.IsReadOnly, Options: Strings(f.Options()), IsAdvanced: desktopapi.FolderFieldAdvanced(section, f.Path)})
 		}
 	} else {
 		v := reflect.ValueOf(d.value)
@@ -155,7 +156,7 @@ func (c *Control) getSettings(section string) (Editor, error) {
 			if !sf.IsExported() {
 				continue
 			}
-			f := Field{Path: sf.Name, Label: label(sf.Name), Kind: "string", Value: fmt.Sprint(v.Field(i).Interface())}
+			f := Field{Path: sf.Name, Label: label(sf.Name), Kind: "string", Value: fmt.Sprint(v.Field(i).Interface()), IsAdvanced: desktopapi.FolderFieldAdvanced(section, sf.Name)}
 			if v.Field(i).Kind() == reflect.Bool {
 				f.Kind = "bool"
 			}

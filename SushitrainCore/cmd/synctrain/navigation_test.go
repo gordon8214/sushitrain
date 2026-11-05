@@ -34,12 +34,28 @@ func TestNavigation(t *testing.T) {
 	server := adminsock.NewServer()
 	defer server.Close()
 	server.Register("mcp.settings", func(context.Context, json.RawMessage) (any, error) { return map[string]bool{"Enabled": false}, nil })
-	server.Register("settings.get", func(context.Context, json.RawMessage) (any, error) {
+	var savedValues atomic.Value
+	server.Register("settings.get", func(_ context.Context, raw json.RawMessage) (any, error) {
+		var request desktopapi.Request
+		if err := json.Unmarshal(raw, &request); err != nil {
+			return nil, err
+		}
+		if request.Section == "folder/advanced-fixture" {
+			return desktopapi.Editor{Token: "fixture", Fields: []desktopapi.Field{
+				{Path: "test", Label: "Test setting", Kind: "bool"},
+				{Path: "Copiers", Label: "Copiers", Kind: "string", Value: "7", IsAdvanced: true},
+			}}, nil
+		}
 		return desktopapi.Editor{Token: "fixture", Fields: []desktopapi.Field{{Path: "test", Label: "Test setting", Kind: "bool"}}}, nil
 	})
 	server.Register("settings.close", func(context.Context, json.RawMessage) (any, error) { return nil, nil })
 	var rejectSave atomic.Bool
-	server.Register("settings.save", func(context.Context, json.RawMessage) (any, error) {
+	server.Register("settings.save", func(_ context.Context, raw json.RawMessage) (any, error) {
+		var request desktopapi.Request
+		if err := json.Unmarshal(raw, &request); err != nil {
+			return nil, err
+		}
+		savedValues.Store(request.Values)
 		if rejectSave.Load() {
 			return nil, errors.New("invalid test setting")
 		}
@@ -186,6 +202,7 @@ func TestNavigation(t *testing.T) {
 		t.Fatal("returning to an interrupted parent did not reload it")
 	}
 	d.goBack()
+	testFolderAdvanced(t, d, &rejectSave, &savedValues)
 	testManagementNavigation(t, d)
 	testBrowserNavigation(t, d)
 
@@ -400,5 +417,72 @@ func navigationKey(t *testing.T, d *desktopUI, key uint, modifiers gdk.ModifierT
 	t.Helper()
 	if !d.handleBackKey(key, 0, modifiers) {
 		t.Fatal("guarded Back key was not handled")
+	}
+}
+
+func testFolderAdvanced(t *testing.T, d *desktopUI, rejectSave *atomic.Bool, savedValues *atomic.Value) {
+	t.Helper()
+	open := func() (*adw.ExpanderRow, *adw.EntryRow) {
+		d.edit("folder/advanced-fixture", "Folder settings")
+		waitNavigationUI(t, func() bool { return d.editor != "" })
+		var advanced *adw.ExpanderRow
+		var input *adw.EntryRow
+		var visit func(gtk.Widgetter)
+		visit = func(widget gtk.Widgetter) {
+			w := gtk.BaseWidget(widget)
+			if row, ok := w.Cast().(*adw.ExpanderRow); ok && row.Title() == "Advanced" {
+				advanced = row
+			}
+			if row, ok := w.Cast().(*adw.EntryRow); ok && row.Title() == "Copiers" {
+				input = row
+			}
+			for child := w.FirstChild(); child != nil; child = gtk.BaseWidget(child).NextSibling() {
+				visit(child)
+			}
+		}
+		visit(d.body)
+		if advanced == nil || input == nil {
+			t.Fatal("missing advanced controls")
+		}
+		if advanced.Expanded() {
+			t.Fatal("advanced settings start expanded")
+		}
+		return advanced, input
+	}
+	advanced, _ := open()
+	advanced.SetExpanded(true)
+	advanced.SetExpanded(false)
+	if d.dirty {
+		t.Fatal("expansion dirtied the draft")
+	}
+	d.goBack()
+	waitNavigationUI(t, func() bool { return d.editor == "" })
+	advanced, input := open()
+	advanced.SetExpanded(true)
+	input.SetText("invalid")
+	advanced.SetExpanded(false)
+	advanced.SetExpanded(true)
+	if input.Text() != "invalid" || !d.dirty {
+		t.Fatal("collapse lost the pending edit")
+	}
+	advanced.SetExpanded(false)
+	rejectSave.Store(true)
+	save := navigationButton(d.commands, "Save")
+	if save == nil {
+		t.Fatal("missing Save")
+	}
+	save.Emit("clicked")
+	waitNavigationUI(t, func() bool { return !d.saving })
+	if !advanced.Expanded() || input.Text() != "invalid" {
+		t.Fatal("failed save did not reveal and preserve advanced edits")
+	}
+	input.SetText("9")
+	advanced.SetExpanded(false)
+	rejectSave.Store(false)
+	save.Emit("clicked")
+	waitNavigationUI(t, func() bool { return !d.saving })
+	values := savedValues.Load().(map[string]string)
+	if values["Copiers"] != "9" || values["test"] != "false" {
+		t.Fatalf("saved values: %v", values)
 	}
 }

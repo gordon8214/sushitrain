@@ -79,6 +79,7 @@ Kirigami.ApplicationWindow {
   showCloseButton: false
   property var draft: ({})
   property var fields: []
+  property bool hasAdvanced: fields.some(f => f.IsAdvanced === true)
   ColumnLayout {
    spacing: Kirigami.Units.largeSpacing
    Kirigami.InlineMessage { Layout.fillWidth: true; visible: backend.error.length > 0; text: backend.error; type: Kirigami.MessageType.Error }
@@ -86,17 +87,26 @@ Kirigami.ApplicationWindow {
     objectName: "editorForm"
     Layout.fillWidth: true
     Repeater {
-     model: editor.fields
-     Loader {
-      required property var modelData
-      property var field: modelData
-      objectName: "editorField_" + field.Path
-      Layout.fillWidth: true; Layout.minimumWidth: 0
-      Kirigami.FormData.label: field.Kind === "bool" || field.Kind === "notice" ? "" : field.Label + ":"
-      Kirigami.FormData.buddyFor: item
-      Kirigami.FormData.isSection: field.Kind === "notice"
-      sourceComponent: field.Kind === "notice" ? notice : field.Kind === "bool" ? check : field.Kind === "enum" ? combo : field.Kind === "list" || field.Kind === "json" ? multiline : singleline
-     }
+     model: editor.fields.filter(f => !f.IsAdvanced)
+     delegate: settingsField
+    }
+   }
+   QQC2.ToolButton {
+    id: advancedDisclosure
+    objectName: "editorAdvanced"
+    visible: editor.hasAdvanced
+    text: "Advanced"
+    checkable: true
+    icon.name: checked ? "arrow-down" : "arrow-right"
+    Accessible.description: checked ? "Advanced settings expanded" : "Advanced settings collapsed"
+   }
+   Kirigami.FormLayout {
+    objectName: "editorAdvancedForm"
+    Layout.fillWidth: true
+    visible: advancedDisclosure.checked && editor.hasAdvanced
+    Repeater {
+     model: editor.fields.filter(f => f.IsAdvanced === true)
+     delegate: settingsField
     }
    }
   }
@@ -104,6 +114,19 @@ Kirigami.ApplicationWindow {
    padding: Kirigami.Units.largeSpacing
    QQC2.Button { objectName: "editorCancel"; text: backend.dialog.discard ? "Discard Changes" : "Cancel"; QQC2.DialogButtonBox.buttonRole: QQC2.DialogButtonBox.ActionRole; enabled: !backend.busy || backend.cancelable; onClicked: backend.cancelDialog() }
    QQC2.Button { objectName: "editorSave"; text: backend.dialog.accept || "Save"; QQC2.DialogButtonBox.buttonRole: QQC2.DialogButtonBox.ActionRole; enabled: !backend.busy; onClicked: backend.submit(editor.draft) }
+  }
+ }
+ Component {
+  id: settingsField
+  Loader {
+   required property var modelData
+   property var field: modelData
+   objectName: "editorField_" + field.Path
+   Layout.fillWidth: true; Layout.minimumWidth: 0
+   Kirigami.FormData.label: field.Kind === "bool" || field.Kind === "notice" ? "" : field.Label + ":"
+   Kirigami.FormData.buddyFor: item
+   Kirigami.FormData.isSection: field.Kind === "notice"
+   sourceComponent: field.Kind === "notice" ? notice : field.Kind === "bool" ? check : field.Kind === "enum" ? combo : field.Kind === "list" || field.Kind === "json" ? multiline : singleline
   }
  }
  function update(field, value) { editor.draft[field.Path] = value; backend.fieldChanged() }
@@ -114,9 +137,13 @@ Kirigami.ApplicationWindow {
  Component { id: multiline; QQC2.TextArea { text: field.Value || ""; enabled: !field.IsReadOnly && !backend.busy; implicitHeight: 130; wrapMode: TextEdit.Wrap; onTextChanged: if (activeFocus) root.update(field, text); Accessible.name: field.Label; selectByMouse: true } }
  Connections {
   target: backend
+  function onSettingsSaveFailed() {
+   if (editor.opened && editor.hasAdvanced) advancedDisclosure.checked = true
+  }
   function onDialogChanged() {
    if (!backend.dialog.title) { editor.close(); return }
    if (!editor.opened) {
+    advancedDisclosure.checked = false
     editor.draft = {}; editor.fields = backend.dialog.fields
     for (let f of editor.fields) if (f.Kind !== "notice") editor.draft[f.Path] = f.IsSecret ? "" : f.Value
     editor.open()

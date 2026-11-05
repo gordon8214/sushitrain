@@ -58,14 +58,11 @@
 						}
 						SettingsNumberField(title: "Rescan interval", unit: "seconds", text: draft.rescanIntervalS)
 						Toggle("Watch for changes", isOn: draft.fsWatcherEnabled)
-						SettingsNumberField(title: "Watcher delay", unit: "seconds", text: draft.fsWatcherDelayS)
-						TextField("Maximum conflict copies", text: draft.maxConflicts)
-						Toggle("Block indexing", isOn: draft.blockIndexing)
 					} header: {
 						Text("New folders")
 					} footer: {
 						Text(
-							"New folders go in a directory of their own in this location. The location has to be a full path, and can start with ~; empty means ~/Sync. A rescan interval of 0 turns rescanning off. -1 keeps every conflict copy, and 0 none."
+							"New folders go in a directory of their own in this location. The location has to be a full path, and can start with ~; empty means ~/Sync. A rescan interval of 0 turns rescanning off."
 						)
 					}
 					FolderSyncSections(draft: draft, isDefaults: true)

@@ -37,6 +37,7 @@ type Field struct {
 	Path, Label, Group, Kind, Value string
 	IsSecret, IsReadOnly            bool
 	Options                         []string
+	IsAdvanced                      bool
 }
 type Editor struct {
 	Token, Section string

@@ -7,20 +7,61 @@
 	import SushitrainCore
 	import SwiftUI
 
-	/// How a folder synchronizes. The sections are shared with the defaults for new folders.
+	/// Expansion belongs to the editor, while every value stays in its shared draft.
+	struct FolderAdvancedSection<Content: View>: View {
+		@Environment(\.settingsSaveFailure) private var saveFailure
+		@State private var isExpanded = false
+		@ViewBuilder let content: () -> Content
+
+		var body: some View {
+			Section {
+				DisclosureGroup("Advanced", isExpanded: $isExpanded) {
+					self.content()
+				}
+			}
+			.onChange(of: saveFailure) {
+				isExpanded = true
+			}
+		}
+	}
+
+	/// How a folder synchronizes. The same sections serve new-folder defaults.
 	struct FolderSyncSections: View {
 		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
 		var isDefaults = false
 
 		var body: some View {
-			self.filesSection()
-			self.diskSection()
-			self.fileSystemSection()
-			self.scanSection()
-			self.transferSection()
+			FolderDiskSection(draft: $draft)
+			FolderAdvancedSection {
+				if isDefaults {
+					FolderDefaultTuningSection(draft: $draft)
+				}
+				FolderFilesSection(draft: $draft)
+				FolderFileSystemSection(draft: $draft, isDefaults: isDefaults)
+				FolderScanSection(draft: $draft)
+				FolderTransferSection(draft: $draft)
+			}
 		}
+	}
 
-		private func filesSection() -> some View {
+	private struct FolderDefaultTuningSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		var body: some View {
+			Section {
+				SettingsNumberField(title: "Watcher delay", unit: "seconds", text: $draft.fsWatcherDelayS)
+				TextField("Maximum conflict copies", text: $draft.maxConflicts)
+				Toggle("Block indexing", isOn: $draft.blockIndexing)
+			} footer: {
+				Text("For conflict copies, -1 keeps every copy and 0 keeps none.")
+			}
+		}
+	}
+
+	private struct FolderFilesSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		var body: some View {
 			Section {
 				Picker("File pull order", selection: $draft.order) {
 					Text("Random").tag("random")
@@ -43,7 +84,12 @@
 			}
 		}
 
-		private func diskSection() -> some View {
+	}
+
+	private struct FolderDiskSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		var body: some View {
 			Section {
 				SettingsDiskSpaceField(
 					title: "Minimum free disk space", value: $draft.minDiskFree, unit: $draft.minDiskFreeUnit,
@@ -57,7 +103,13 @@
 			}
 		}
 
-		private func fileSystemSection() -> some View {
+	}
+
+	private struct FolderFileSystemSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+		var isDefaults = false
+
+		var body: some View {
 			Section {
 				Toggle("Case-sensitive file names", isOn: $draft.caseSensitiveFS)
 				if draft.settings.caseSensitiveFS {
@@ -93,7 +145,12 @@
 			}
 		}
 
-		private func scanSection() -> some View {
+	}
+
+	private struct FolderScanSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		var body: some View {
 			Section {
 				SettingsNumberField(title: "Watcher timeout", unit: "seconds", text: $draft.fsWatcherTimeoutS)
 				SettingsNumberField(title: "Scan progress interval", unit: "seconds", text: $draft.scanProgressIntervalS)
@@ -106,7 +163,12 @@
 			}
 		}
 
-		private func transferSection() -> some View {
+	}
+
+	private struct FolderTransferSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		var body: some View {
 			Section {
 				SettingsNumberField(title: "Copiers", unit: "per file", text: $draft.copiers)
 				SettingsNumberField(title: "Hashers", unit: "at once", text: $draft.hashers)
@@ -141,9 +203,21 @@
 			}
 		}
 	}
-
-	/// What goes along with a file besides its contents. The sections are shared with the defaults for new folders.
+	/// Metadata controls shared with the defaults for new folders.
 	struct FolderMetadataSections: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		var body: some View {
+			FolderXattrSection(draft: $draft)
+			FolderOwnershipSection(draft: $draft)
+			FolderPermissionsSection(draft: $draft)
+			FolderAdvancedSection {
+				FolderXattrFilterSection(draft: $draft)
+			}
+		}
+	}
+
+	private struct FolderXattrSection: View {
 		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
 
 		private var type: String { draft.settings.type }
@@ -151,33 +225,41 @@
 		private var cantSend: Bool { type == "receiveonly" || type == "receiveencrypted" }
 
 		var body: some View {
-			self.xattrSection()
-			self.xattrFilterSection()
-			self.ownershipSection()
-			self.permissionsSection()
-		}
-
-		private func xattrSection() -> some View {
 			Section {
 				Toggle("Synchronize extended attributes", isOn: $draft.syncXattrs)
 					.disabled(cantApply)
 				Toggle("Send extended attributes", isOn: self.sendBinding(\.sendXattrs, syncing: draft.settings.syncXattrs))
 					.disabled(cantSend || draft.settings.syncXattrs)
-				Picker("Attributes on macOS", selection: $draft.xattrMode) {
-					Text("Those that belong to the file").tag("syncable")
-					Text("All").tag("all")
-				}
+
 			} header: {
 				Text("Extended attributes")
 			} footer: {
 				Text(
-					"Extended attributes are metadata such as Finder tags and resource forks. Synchronizing sends them to other devices and applies theirs here; sending does only the first, and is always on while synchronizing. Sending costs performance, as every file has to be looked at. macOS marks the attributes that belong to the file and not to this Mac, such as quarantine and caches, which stay here unless All is chosen. Rules below take the place of this choice."
+					"Extended attributes are metadata such as Finder tags and resource forks. Synchronizing sends them to other devices and applies theirs here; sending does only the first, and is always on while synchronizing. Sending costs performance, as every file has to be looked at."
 				)
 			}
 		}
 
-		private func xattrFilterSection() -> some View {
+		/// Sending shows as on while synchronizing, which includes it
+		private func sendBinding(
+			_ keyPath: ReferenceWritableKeyPath<SushitrainFolderSettings, Bool>, syncing: Bool
+		) -> Binding<Bool> {
+			Binding(
+				get: { syncing || draft.settings[keyPath: keyPath] },
+				set: { draft[dynamicMember: keyPath] = $0 }
+			)
+		}
+	}
+
+	private struct FolderXattrFilterSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		var body: some View {
 			Section {
+				Picker("Attributes on macOS", selection: $draft.xattrMode) {
+					Text("Those that belong to the file").tag("syncable")
+					Text("All").tag("all")
+				}
 				XattrFilterEditor(text: $draft.xattrFilterEntries)
 				SettingsNumberField(title: "Largest attribute", unit: "bytes", text: $draft.xattrMaxSingleEntrySize)
 				SettingsNumberField(title: "Attributes per file", unit: "bytes", text: $draft.xattrMaxTotalSize)
@@ -185,12 +267,21 @@
 				Text("Attribute filter")
 			} footer: {
 				Text(
-					"Rules are tried in order, and the first whose pattern matches an attribute's name decides, with * for any text. With any rule here, whatever none of them matches is left out, and the choice for macOS above doesn't apply: end with Allow * to change that. Attributes over the size limits are left out too; 0 means no limit."
+					"The macOS attribute mode selects file metadata or all attributes, including quarantine and caches. Custom rules override that mode. Rules are tried in order, and the first whose pattern matches an attribute's name decides, with * for any text. With any rule here, whatever none of them matches is left out, and the choice for macOS above doesn't apply: end with Allow * to change that. Attributes over the size limits are left out too; 0 means no limit."
 				)
 			}
 		}
 
-		private func ownershipSection() -> some View {
+	}
+
+	private struct FolderOwnershipSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		private var type: String { draft.settings.type }
+		private var cantApply: Bool { type == "sendonly" || type == "receiveencrypted" }
+		private var cantSend: Bool { type == "receiveonly" || type == "receiveencrypted" }
+
+		var body: some View {
 			Section {
 				Toggle("Synchronize ownership", isOn: $draft.syncOwnership)
 					.disabled(cantApply)
@@ -208,7 +299,23 @@
 			}
 		}
 
-		private func permissionsSection() -> some View {
+		/// Sending shows as on while synchronizing, which includes it
+		private func sendBinding(
+			_ keyPath: ReferenceWritableKeyPath<SushitrainFolderSettings, Bool>, syncing: Bool
+		) -> Binding<Bool> {
+			Binding(
+				get: { syncing || draft.settings[keyPath: keyPath] },
+				set: { draft[dynamicMember: keyPath] = $0 }
+			)
+		}
+	}
+
+	private struct FolderPermissionsSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		private var type: String { draft.settings.type }
+
+		var body: some View {
 			Section {
 				Toggle("Ignore permissions", isOn: $draft.ignorePerms)
 					.disabled(type == "receiveencrypted")
@@ -221,17 +328,7 @@
 			}
 		}
 
-		/// Sending shows as on while synchronizing, which includes it
-		private func sendBinding(
-			_ keyPath: ReferenceWritableKeyPath<SushitrainFolderSettings, Bool>, syncing: Bool
-		) -> Binding<Bool> {
-			Binding(
-				get: { syncing || draft.settings[keyPath: keyPath] },
-				set: { draft[dynamicMember: keyPath] = $0 }
-			)
-		}
 	}
-
 	/// The rules of an extended attribute filter, which the engine takes as lines of + or - and a pattern
 	private struct XattrFilterEditor: View {
 		private struct Rule: Identifiable {

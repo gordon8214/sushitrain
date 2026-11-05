@@ -6,6 +6,10 @@
 #if os(macOS)
 	import SwiftUI
 
+	extension EnvironmentValues {
+		@Entry var settingsSaveFailure = 0
+	}
+
 	/// A page of engine settings that are saved together, as EngineOptionsView is. The engine checks them on saving: numbers
 	/// stay text until then, as a number field only commits its value when it loses focus, which clicking Save doesn't do.
 	struct SettingsPage<Settings: AnyObject & Sendable, Content: View>: View {
@@ -28,12 +32,14 @@
 		@State private var isSaving = false
 		@State private var errorMessage: ErrorMessage? = nil
 		@State private var question: String? = nil
+		@State private var saveFailure = 0
 
 		var body: some View {
 			Group {
 				if let draft = Binding($draft) {
 					Form {
 						self.content(draft)
+							.environment(\.settingsSaveFailure, saveFailure)
 					}
 					.autocorrectionDisabled()
 					// The engine reads the settings while it saves them
@@ -121,6 +127,7 @@
 					}
 				}
 				catch {
+					saveFailure += 1
 					errorMessage = ErrorMessage(error)
 				}
 				isSaving = false

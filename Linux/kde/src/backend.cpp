@@ -100,6 +100,8 @@ void Backend::call(const QString &method, const QJsonObject &p, Reply reply,
         }
         if (!error.isEmpty()) {
           fail(error);
+          if (method == "settings.save" || method == "mcp.preferences.save")
+            emit settingsSaveFailed();
           if (mutation)
             drainArguments();
           return;

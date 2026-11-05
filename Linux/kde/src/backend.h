@@ -46,6 +46,7 @@ public:
 signals:
   void changed();
   void dialogChanged();
+  void settingsSaveFailed();
   void preview(const QString &file, const QString &kind, const QString &text,
                const QString &location, const QString &name);
   void present();

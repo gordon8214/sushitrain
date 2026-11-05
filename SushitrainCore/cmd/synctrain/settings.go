@@ -109,8 +109,16 @@ func (d *desktopUI) editPage(section, title string) {
 		}
 		getters := map[string]func() string{}
 		g := d.group(title)
+		advanced := adw.NewExpanderRow()
+		advanced.SetTitle("Advanced")
+		hasAdvanced := false
 		for _, field := range editor.Fields {
 			f := field
+			add := func(row gtk.Widgetter) { g.Add(row) }
+			if f.IsAdvanced {
+				hasAdvanced = true
+				add = func(row gtk.Widgetter) { advanced.AddRow(row) }
+			}
 			switch {
 			case f.Kind == "bool":
 				r := adw.NewSwitchRow()
@@ -124,7 +132,7 @@ func (d *desktopUI) editPage(section, title string) {
 					}
 					return "false"
 				}
-				g.Add(r)
+				add(r)
 			case f.Kind == "enum":
 				r := adw.NewComboRow()
 				r.SetTitle(f.Label)
@@ -145,14 +153,14 @@ func (d *desktopUI) editPage(section, title string) {
 					}
 					return f.Value
 				}
-				g.Add(r)
+				add(r)
 			case f.IsSecret:
 				r := adw.NewPasswordEntryRow()
 				r.SetTitle(f.Label + " (leave empty to keep)")
 				r.SetSensitive(!f.IsReadOnly)
 				r.ConnectChanged(func() { d.setDirty(true) })
 				getters[f.Path] = func() string { return r.Text() }
-				g.Add(r)
+				add(r)
 			case f.Kind == "list" || f.Kind == "json":
 				r := adw.NewExpanderRow()
 				r.SetTitle(f.Label)
@@ -165,7 +173,7 @@ func (d *desktopUI) editPage(section, title string) {
 				buffer.ConnectChanged(func() { d.setDirty(true) })
 				r.AddRow(view)
 				getters[f.Path] = func() string { return buffer.Text(buffer.StartIter(), buffer.EndIter(), true) }
-				g.Add(r)
+				add(r)
 			default:
 				r := adw.NewEntryRow()
 				r.SetTitle(f.Label)
@@ -173,15 +181,18 @@ func (d *desktopUI) editPage(section, title string) {
 				r.SetSensitive(!f.IsReadOnly)
 				r.ConnectChanged(func() { d.setDirty(true) })
 				getters[f.Path] = func() string { return r.Text() }
-				g.Add(r)
+				add(r)
 			}
+		}
+		if hasAdvanced {
+			g.Add(advanced)
 		}
 		d.button("Save", func() {
 			values := map[string]string{}
 			for key, get := range getters {
 				values[key] = get()
 			}
-			d.run("settings.save", desktopapi.Request{Token: editor.Token, Values: values}, func(b json.RawMessage) {
+			d.runWithFailure("settings.save", desktopapi.Request{Token: editor.Token, Values: values}, func(b json.RawMessage) {
 				d.editor = ""
 				d.setDirty(false)
 				var result struct{ RestartRequired bool }
@@ -189,6 +200,10 @@ func (d *desktopUI) editPage(section, title string) {
 				d.finishPage()
 				if result.RestartRequired {
 					d.w.confirm("Restart Required", "Restart the engine to apply the saved settings?", "Restart", false, func() { d.action("restart", "", "") })
+				}
+			}, func() {
+				if hasAdvanced {
+					advanced.SetExpanded(true)
 				}
 			})
 		})

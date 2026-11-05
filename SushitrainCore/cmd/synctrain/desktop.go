@@ -227,6 +227,9 @@ func (d *desktopUI) load(method string, p any, done func(json.RawMessage)) {
 	})
 }
 func (d *desktopUI) run(method string, p any, done func(json.RawMessage)) {
+	d.runWithFailure(method, p, done, nil)
+}
+func (d *desktopUI) runWithFailure(method string, p any, done func(json.RawMessage), failed func()) {
 	if d.saving {
 		return
 	}
@@ -245,6 +248,9 @@ func (d *desktopUI) run(method string, p any, done func(json.RawMessage)) {
 			return
 		}
 		if err != nil {
+			if failed != nil {
+				failed()
+			}
 			d.error(err)
 			return
 		}
