@@ -812,6 +812,12 @@ The exception is a start that can't go on by itself. Only `MainView` shows onboa
 start, and the engine waits for the first two, so the main window then opens by itself (`AppStartupState.needsWindow`),
 and the menu has **Open Synctrain** until the engine runs.
 
+Menu commands that open Synctrain windows use `AppWindowPresentation` in both modes. It unhides the app and explicitly
+activates it even when another app is in front, then opens or raises the requested window after menu tracking ends.
+Plain `activate()` can leave these windows inactive. `make test-window-presentation` checks native SwiftUI window focus,
+hidden-app reopening, folder-window reuse, and menu-tracking order with and without a Dock icon. It requires an unlocked
+Mac desktop, briefly changes focus, and has a 20-second runtime budget (normally under 2 seconds).
+
 macOS can still leave the item out, as in a full menu bar. Opening the app from Finder then opens a window
 (`AppPresence.reopen`). macOS also makes a running app a regular one when it is opened, with a Dock icon and an app menu.
 That lasts until another app comes forward (`AppPresence.restoreActivationPolicy`), as setting the policy right away makes

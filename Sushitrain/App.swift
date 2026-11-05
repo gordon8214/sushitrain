@@ -497,8 +497,9 @@ struct SushitrainApp: App {
 						}
 
 					Button("Open file browser...", systemImage: "macwindow") {
-						openWindow(id: "singleMain")
-						NSApplication.shared.activate()
+						AppWindowPresentation.open {
+							openWindow(id: "singleMain")
+						}
 					}
 
 					// List of folders
@@ -531,20 +532,23 @@ struct SushitrainApp: App {
 
 				if appState.startupState == .started {
 					Button("Settings", systemImage: "gear") {
-						openWindow(id: "appSettings")
-						NSApplication.shared.activate()
+						AppWindowPresentation.open {
+							openWindow(id: "appSettings")
+						}
 					}
 
 					Button("Statistics", systemImage: "chart.pie") {
-						openWindow(id: "stats")
-						NSApplication.shared.activate()
+						AppWindowPresentation.open {
+							openWindow(id: "stats")
+						}
 					}
 				}
 
 				Button("About...", systemImage: "info.circle") {
 					// Open the "about" window
-					openWindow(id: "about")
-					NSApplication.shared.activate()
+					AppWindowPresentation.open {
+						openWindow(id: "about")
+					}
 				}
 
 				Divider()
@@ -567,10 +571,11 @@ struct SushitrainApp: App {
 
 		/// Shows how the start is going, which only the main window does. A group adds a window each time it is opened.
 		private func openStartWindow() {
-			if !NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeMain }) {
-				openWindow(id: "main")
+			AppWindowPresentation.open {
+				if !NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeMain }) {
+					openWindow(id: "main")
+				}
 			}
-			NSApplication.shared.activate()
 		}
 
 		private func openFolder(_ fld: SushitrainFolder) {
@@ -583,15 +588,15 @@ struct SushitrainApp: App {
 					openURLInSystemFilesApp(url: lnu)
 				}
 				else {
-					openWindow(
-						id: "folder",
-						value: fld.folderID)
-					NSApplication.shared.activate()
+					AppWindowPresentation.open {
+						openWindow(id: "folder", value: fld.folderID)
+					}
 				}
 
 			case .browser:
-				openWindow(id: "folder", value: fld.folderID)
-				NSApplication.shared.activate()
+				AppWindowPresentation.open {
+					openWindow(id: "folder", value: fld.folderID)
+				}
 			}
 		}
 

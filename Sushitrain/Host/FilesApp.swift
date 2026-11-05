@@ -87,15 +87,17 @@
 			MenuBarExtra("Synctrain", systemImage: "folder", isInserted: $presence.inMenuBar) {
 				CrashNoticeMenuItems()
 				Button("Open Synctrain", systemImage: "macwindow") {
-					openWindow(id: Self.window, value: Self.window)
-					NSApp.activate()
+					AppWindowPresentation.open {
+						openWindow(id: Self.window, value: Self.window)
+					}
 				}
 				Button("Show in Finder", systemImage: "folder") {
 					showLocation()
 				}
 				Button("About...", systemImage: "info.circle") {
-					openWindow(id: "about")
-					NSApp.activate()
+					AppWindowPresentation.open {
+						openWindow(id: "about")
+					}
 				}
 				Divider()
 				Toggle(isOn: $presence.inDock) {

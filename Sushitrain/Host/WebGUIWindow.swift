@@ -17,8 +17,9 @@
 			}
 			if self.engineMenuState.webGUINeedsPassword {
 				self.webGUIBrowserIsWaiting = true
-				openWindow(id: WebGUIWindow.id)
-				NSApplication.shared.activate()
+				AppWindowPresentation.open {
+					openWindow(id: WebGUIWindow.id)
+				}
 			}
 			else {
 				NSWorkspace.shared.open(url)
@@ -38,8 +39,9 @@
 			let isAvailable = state.isRunning && state.webGUIURL != nil
 
 			Button("Open Web GUI", systemImage: "globe") {
-				openWindow(id: WebGUIWindow.id)
-				NSApplication.shared.activate()
+				AppWindowPresentation.open {
+					openWindow(id: WebGUIWindow.id)
+				}
 			}
 			.keyboardShortcut(hasShortcuts ? KeyboardShortcut("o", modifiers: [.command, .option]) : nil)
 			.disabled(!isAvailable)

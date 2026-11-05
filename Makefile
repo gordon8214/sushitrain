@@ -3,7 +3,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
-.PHONY: lint format test test-photo-preferences core mac mac-release ios clean build
+.PHONY: lint format test test-photo-preferences test-window-presentation core mac mac-release ios clean build
 # Both platforms archive into the same derived data, which Xcode can't do concurrently
 .NOTPARALLEL:
 
@@ -25,6 +25,13 @@ test-photo-preferences:
 	swiftc SynctrainClient/LegacyPhotoBackupPreferences.swift Scripts/test-legacy-photo-backup-preferences.swift \
 		-o "$(BUILD_DIR)/tests/test-legacy-photo-backup-preferences"
 	"$(BUILD_DIR)/tests/test-legacy-photo-backup-preferences"
+
+# Opt-in native macOS check: briefly changes desktop focus, normally under 2 seconds, bounded to 20 seconds.
+test-window-presentation:
+	mkdir -p "$(BUILD_DIR)/tests"
+	swiftc -swift-version 6 -parse-as-library Sushitrain/Host/AppWindowPresentation.swift \
+		Scripts/test-app-window-presentation.swift -o "$(BUILD_DIR)/tests/test-app-window-presentation"
+	"$(BUILD_DIR)/tests/test-app-window-presentation"
 
 BUILD_DIR=$(shell pwd)/Build
 

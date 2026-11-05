@@ -71,8 +71,9 @@
 
 			if !appState.pendingDevices.isEmpty {
 				Button("Connection Requests: \(appState.pendingDevices.count)", systemImage: "person.crop.circle.badge.plus") {
-					openWindow(id: "connectionRequests")
-					NSApplication.shared.activate()
+					AppWindowPresentation.open {
+						openWindow(id: "connectionRequests")
+					}
 				}
 			}
 
