@@ -6,7 +6,6 @@
 import SwiftUI
 import QuickLook
 import UniformTypeIdentifiers
-import PhotosUI
 @preconcurrency import SushitrainCore
 import SynctrainHostKit
 
@@ -76,33 +75,6 @@ private struct FolderPopoverView: View {
 }
 
 struct BrowserView: View {
-	private enum ConfirmableAction {
-		case unlinkFolder
-		case removeFolder
-
-		var message: String {
-			switch self {
-			case .removeFolder:
-				return String(
-					localized:
-						"Are you sure you want to remove this folder? Please consider carefully. All files in this folder will be removed from this device. Files that have not been synchronized to other devices yet cannot be recovered."
-				)
-			case .unlinkFolder:
-				return String(
-					localized:
-						"Are you sure you want to unlink this folder? The folder will not be synchronized any longer. Files currently on this device will not be deleted."
-				)
-			}
-		}
-
-		var buttonTitle: String {
-			switch self {
-			case .removeFolder: return String(localized: "Remove the folder and all files")
-			case .unlinkFolder: return String(localized: "Unlink the folder")
-			}
-		}
-	}
-
 	private enum ShowAlert: Identifiable {
 		case error(String)
 
@@ -120,26 +92,16 @@ struct BrowserView: View {
 	var prefix: String
 	@ObservedObject var userSettings: AppUserSettings
 
-	@State private var showSettings = false
 	@State private var searchText = ""
 	@State private var localNativeURL: URL? = nil
 	@State private var folderExists = false
-	@State private var showAddFilePicker = false
-	@State private var showPhotoPicker = false
-	@State private var selectedMedia: [PhotosPickerItem] = []
-	@State private var isImportingMedia = false
 	@State private var webViewAvailable = false
 	@State private var viewStyle: BrowserViewStyle? = nil
 	@State private var entriesSort: BrowserViewSort? = nil
 	@State private var showAlert: ShowAlert? = nil
-	@State private var showConfirmable: ConfirmableAction? = nil
-	@State private var isBookmarked = false
-	@State private var showNewBookmarkInfo = false
 	@State private var recursive = false
 
-	@State private var showIgnores = false
 	@State private var showStatusPopover = false
-	@State private var showDeletedFiles = false
 	@State private var isSearching = false
 
 	private func currentViewStyle() -> Binding<BrowserViewStyle> {
@@ -168,148 +130,88 @@ struct BrowserView: View {
 	}
 
 	var body: some View {
-		BrowserItemsView(
-			folder: folder,
-			prefix: prefix,
-			// Note: this binding does *not* set appState.defaultBrowserViewStyle, because this one is primarily set programmatically
-			viewStyle: $viewStyle,
-			sortOrder: currentSort,
-			recursive: recursive,
-			searchText: $searchText,
-			showSettings: $showSettings
-		)
+		FolderActionsView(
+			folder: folder, prefix: prefix, userSettings: userSettings,
+			enablesRescanShortcut: true, onChange: update
+		) { folderMenu, showSettings in
+			BrowserItemsView(
+				folder: folder,
+				prefix: prefix,
+				// Note: this binding does *not* set appState.defaultBrowserViewStyle, because this one is primarily set programmatically
+				viewStyle: $viewStyle,
+				sortOrder: currentSort,
+				recursive: recursive,
+				searchText: $searchText,
+				showSettings: showSettings
+			)
 
-		.searchable(
-			text: $searchText,
-			isPresented: $isSearching,
-			placement: SearchFieldPlacement.toolbar,
-			prompt: "Search files in this folder..."
-		)
+			.searchable(
+				text: $searchText,
+				isPresented: $isSearching,
+				placement: SearchFieldPlacement.toolbar,
+				prompt: "Search files in this folder..."
+			)
 
-		.navigationTitle("")
+			.navigationTitle("")
 
-		.toolbar {
-			self.toolbarContent()
-		}
-		.sheet(isPresented: $showSettings) {
-			NavigationStack {
-				FolderView(folder: self.folder)
-					.presentationSizing(.fitted.sticky(horizontal: false, vertical: true))
-					.frame(minWidth: 700, minHeight: 600)
-					.toolbar {
-						SheetButton(role: .save) {
-							showSettings = false
-						}
-					}
+			.toolbar {
+				self.toolbarContent(folderMenu: folderMenu)
 			}
-		}
-		.sheet(isPresented: $showDeletedFiles) {
-			DeletedFilesView(folder: folder)
-		}
-		.sheet(isPresented: $showIgnores) {
-			NavigationStack {
-				self.ignoreSheetView()
-			}
-		}
 
-		.alert(
-			"This location has been added to your bookmarks. Bookmarked locations can be accessed quickly from the start page.",
-			isPresented: $showNewBookmarkInfo
-		) {
-			Button("OK") {}
-		}
-
-		.task {
-			self.update()
-		}
-
-		.onChange(of: showSettings) { _, nv in
-			// Needed to update the screen after removing a folder
-			if !nv {
-				Log.info("Update because of showSettings = \(nv)")
-				self.folderExists = folder.exists()
+			.task {
 				self.update()
 			}
-		}
 
-		.fileImporter(
-			isPresented: $showAddFilePicker,
-			allowedContentTypes: [UTType.data],
-			allowsMultipleSelection: true,
-			onCompletion: self.addFilesFromImporter
-		)
-		.photosPicker(
-			isPresented: $showPhotoPicker, selection: $selectedMedia,
-			matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
-		)
-		.onChange(of: selectedMedia) { _, items in
-			guard !items.isEmpty else { return }
-			selectedMedia = []
-			importMedia(items)
-		}
-		.overlay {
-			if isImportingMedia {
-				ProgressView("Importing media…")
-					.padding()
-					.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-			}
-		}
-
-		.contextMenu {
-			if let entry = try? self.folder.getFileInformation(self.prefix.withoutEndingSlash) {
-				NavigationLink(destination: EntryInfoView(entry: entry, showPath: false, siblings: nil)) {
-					Label("Subdirectory properties...", systemImage: entry.systemImage)
-				}
-
-			}
-		}
-		.onDrop(
-			of: ["public.file-url"], isTargeted: nil,
-			perform: { providers, _ in
-				Task {
-					self.showAlert = nil
-					do {
-						try await self.onDrop(providers)
+			.contextMenu {
+				if let entry = try? self.folder.getFileInformation(self.prefix.withoutEndingSlash) {
+					NavigationLink(destination: EntryInfoView(entry: entry, showPath: false, siblings: nil)) {
+						Label("Subdirectory properties...", systemImage: entry.systemImage)
 					}
-					catch {
-						Log.warn("Failed to drop: \(error.localizedDescription)")
-						self.showAlert = .error(error.localizedDescription)
-					}
+
 				}
-				return true
 			}
-		)
-		.alert(item: $showAlert) { alert in
-			switch alert {
-			case .error(let err):
-				Alert(
-					title: Text("An error occurred"),
-					message: Text(err),
-					dismissButton: .default(Text("OK"))
-				)
+			.onDrop(
+				of: ["public.file-url"], isTargeted: nil,
+				perform: { providers, _ in
+					Task {
+						self.showAlert = nil
+						do {
+							try await self.onDrop(providers)
+						}
+						catch {
+							Log.warn("Failed to drop: \(error.localizedDescription)")
+							self.showAlert = .error(error.localizedDescription)
+						}
+					}
+					return true
+				}
+			)
+			.alert(item: $showAlert) { alert in
+				switch alert {
+				case .error(let err):
+					Alert(
+						title: Text("An error occurred"),
+						message: Text(err),
+						dismissButton: .default(Text("OK"))
+					)
+				}
 			}
-		}
-		.confirmationDialog(
-			showConfirmable?.message ?? "", isPresented: Binding.isNotNil($showConfirmable), titleVisibility: .visible
-		) {
-			if let sc = showConfirmable {
-				Button(sc.buttonTitle, role: .destructive, action: self.confirmedAction)
+
+			.userActivity(SushitrainApp.viewRouteActivityID) { ua in
+				let routeURL = self.route.url
+				ua.title = self.folderName
+				ua.isEligibleForHandoff = true
+				ua.targetContentIdentifier = routeURL.absoluteString
+				ua.userInfo = [
+					"version": 1,
+					"url": routeURL.absoluteString,
+				]
+				ua.needsSave = true
 			}
-		}
-		.userActivity(SushitrainApp.viewRouteActivityID) { ua in
-			let routeURL = self.route.url
-			ua.title = self.folderName
-			ua.isEligibleForHandoff = true
-			ua.targetContentIdentifier = routeURL.absoluteString
-			ua.userInfo = [
-				"version": 1,
-				"url": routeURL.absoluteString,
-			]
-			ua.needsSave = true
 		}
 	}
 
-	@ToolbarContentBuilder private func toolbarContent() -> some ToolbarContent {
+	@ToolbarContentBuilder private func toolbarContent(folderMenu: FolderMenuContents) -> some ToolbarContent {
 		ToolbarItem(placement: .navigation) {
 			let fsd = FolderStatusDescription(folder)
 			HStack(alignment: .center) {
@@ -359,15 +261,12 @@ struct BrowserView: View {
 			.disabled(localNativeURL == nil || isSearching)
 			.keyboardShortcut("G", modifiers: .command)
 
-			self.folderMenu()
+			Menu {
+				folderMenu
+			} label: {
+				Label("Folder settings", systemImage: "folder.badge.gearshape")
+			}.disabled(!folderExists)
 		}
-	}
-
-	@ViewBuilder private func ignoreSheetView() -> some View {
-		IgnoresView(folder: folder)
-			.navigationTitle("Files to ignore")
-			.presentationSizing(.form)
-			.frame(minWidth: 640, minHeight: 480)
 	}
 
 	@ViewBuilder private func filterMenu() -> some View {
@@ -415,41 +314,6 @@ struct BrowserView: View {
 		.disabled(self.currentViewStyle().wrappedValue == .web)
 	}
 
-	private func addFilesFromImporter(result: Result<[URL], any Error>) {
-		switch result {
-		case .success(let fu):
-			var accessing: [URL] = []
-			for url in fu {
-				if FolderAccess.startAccessing(url) {
-					accessing.append(url)
-				}
-				else if FolderAccess.usesSecurityScope {
-					Log.warn("failed to access security scoped URL from file importer: \(url)")
-				}
-			}
-
-			Task { [accessing] in
-				defer {
-					for url in accessing {
-						url.stopAccessingSecurityScopedResource()
-					}
-				}
-
-				do {
-					let numFilesAdded = try await self.dropFilesInBackground(fu)
-					self.showToast(Toast(title: "\(numFilesAdded) files added", image: "document.badge.plus.fill"))
-				}
-				catch {
-					Log.warn("failed to drop file: \(error)")
-					self.showAlert = .error(error.localizedDescription)
-				}
-			}
-
-		case .failure(_):
-			break
-		}
-	}
-
 	private func showInFinder() {
 		// Open in Finder/Files
 		if let localNativeURL = self.localNativeURL {
@@ -457,46 +321,9 @@ struct BrowserView: View {
 		}
 	}
 
-	private func importMedia(_ items: [PhotosPickerItem]) {
-		let folder = self.folder
-		let prefix = self.prefix
-		isImportingMedia = true
-		Task {
-			defer { isImportingMedia = false }
-			var count = 0
-			var errors: [String] = []
-			for item in items {
-				do {
-					guard let media = try await item.loadTransferable(type: ImportedMedia.self) else {
-						throw CocoaError(.fileReadCorruptFile)
-					}
-					defer { try? FileManager.default.removeItem(at: media.directory) }
-					count += try await Task.detached(priority: .utility) {
-						try FileImport.copy([media.url], folder: folder, prefix: prefix)
-					}.value
-				}
-				catch let failure as FileImport.Failure {
-					count += failure.copiedURLs.count
-					errors.append(failure.localizedDescription)
-				}
-				catch { errors.append(error.localizedDescription) }
-			}
-			if count > 0 {
-				showToast(Toast(title: "\(count) files added", image: "document.badge.plus.fill"))
-			}
-			if !errors.isEmpty { showAlert = .error(errors.joined(separator: "\n")) }
-		}
-	}
-
 	private func update() {
 		self.folderExists = folder.exists()
 		self.updateLocalURL()
-
-		// Determine whether this view is bookmarked
-		let route = self.route
-		self.isBookmarked = userSettings.bookmarkedRoutes.contains(where: {
-			Route(url: $0) == route
-		})
 
 		// Check for presence of index.html to enable web view
 		if folderExists, !recursive, let entry = try? folder.getFileInformation(self.prefix + "index.html"),
@@ -509,151 +336,8 @@ struct BrowserView: View {
 		}
 	}
 
-	@ViewBuilder private func addMenuContents() -> some View {
-		Button("Add from photo library...", systemImage: "photo.on.rectangle") {
-			showPhotoPicker = true
-		}.disabled(
-			isImportingMedia || !folderExists || !self.folder.isRegularFolder || self.folder.isReceiveOnlyFolder)
-
-		Button("Add files...", systemImage: "plus") {
-			showAddFilePicker = true
-		}.disabled(
-			!folderExists || !self.folder.isRegularFolder || self.folder.isReceiveOnlyFolder)
-	}
-
-	@ViewBuilder private func folderOperationsMenu() -> some View {
-		Menu {
-			Button("Re-scan folder", systemImage: "sparkle.magnifyingglass", action: rescanFolder)
-				.buttonStyle(.link)
-				.keyboardShortcut("R", modifiers: [.command, .shift])
-
-			Divider()
-
-			Button("Unlink folder", systemImage: "folder.badge.minus", role: .destructive) {
-				showConfirmable = .unlinkFolder
-			}
-			.buttonStyle(.link)
-			.foregroundColor(.red)
-
-			// Only allow removing a full folder when we are sure it is in the area managed by us
-			if folder.isRegularFolder && folder.canRemoveFiles() {
-				Button("Remove folder", systemImage: "trash", role: .destructive) {
-					showConfirmable = .removeFolder
-				}
-				.buttonStyle(.link)
-				.foregroundColor(.red)
-			}
-		} label: {
-			Label("Folder actions", systemImage: "ellipsis")
-		}.labelStyle(.titleAndIcon)
-	}
-
-	@ViewBuilder private func folderMenu() -> some View {
-		let isReceiveEncrypted = folder.isReceiveEncryptedFolder
-		Menu {
-			if folderExists {
-				self.addMenuContents()
-
-				if folderExists && !self.prefix.isEmpty && !isReceiveEncrypted {
-					if let entry = try? self.folder.getFileInformation(self.prefix.withoutEndingSlash) {
-						NavigationLink(destination: EntryInfoView(entry: entry, showPath: false, siblings: nil)) {
-							Label("Subdirectory properties...", systemImage: "folder.badge.gearshape")
-						}
-					}
-				}
-
-				if !isReceiveEncrypted {
-					Toggle(isOn: Binding(get: { self.isBookmarked }, set: { self.setBookmarked($0) })) {
-						Label("Bookmark", systemImage: self.isBookmarked ? "bookmark.fill" : "bookmark")
-					}.labelStyle(.titleAndIcon)
-				}
-
-				Divider()
-
-				if let versioningArchiveURL = folder.versioningArchiveURL {
-					Button("File versions...", systemImage: "clock.arrow.circlepath") {
-						openURLInSystemFilesApp(url: versioningArchiveURL)
-					}
-					.disabled(!folder.versioningArchiveExists)
-				}
-
-				if folder.canBrowseVersions() {
-					Button("Deleted Files...", systemImage: "trash.circle") {
-						showDeletedFiles = true
-					}
-				}
-			}
-
-			Button("Folder settings...", systemImage: "folder.badge.gearshape") {
-				showSettings = true
-			}
-
-			if folder.isRegularFolder {
-				Button("Files to ignore...", systemImage: "rectangle.dashed") {
-					showIgnores = true
-				}
-			}
-
-			self.folderOperationsMenu()
-		} label: {
-			Label("Folder settings", systemImage: "folder.badge.gearshape")
-		}.disabled(!folderExists)
-	}
-
 	private var route: Route {
 		return Route.folder(folderID: self.folder.folderID, prefix: self.prefix)
-	}
-
-	private func setBookmarked(_ fav: Bool) {
-		let newRoute = self.route
-
-		userSettings.bookmarkedRoutes.removeAll(where: { bookmarkedURL in
-			guard let bookmarkedRoute = Route(url: bookmarkedURL) else {
-				return true
-			}
-
-			return bookmarkedRoute == newRoute
-		})
-
-		if fav {
-			userSettings.bookmarkedRoutes.append(newRoute.url)
-		}
-		Log.info("New bookmarks: \(userSettings.bookmarkedRoutes)")
-		self.update()
-
-		if fav {
-			self.showNewBookmarkInfo = true
-		}
-	}
-
-	private func confirmedAction() {
-		do {
-			switch self.showConfirmable {
-			case .none:
-				return
-			case .unlinkFolder:
-				try folder.unlinkFolderAndRemoveSettings()
-				self.update()
-			case .removeFolder:
-				try folder.removeFolderAndSettings()
-				self.update()
-			}
-		}
-		catch let error {
-			self.showAlert = .error(error.localizedDescription)
-		}
-		self.showConfirmable = .none
-	}
-
-	private func rescanFolder() {
-		showToast(Toast(title: "Folder re-scan started", image: "sparkle.magnifyingglass"))
-
-		do {
-			try folder.rescan()
-		}
-		catch let error {
-			self.showAlert = .error(error.localizedDescription)
-		}
 	}
 
 	private func onDrop(_ providers: [NSItemProvider]) async throws {
@@ -716,26 +400,6 @@ struct BrowserView: View {
 }
 
 /// Stage the picker-owned file before its transfer callback returns, without loading videos into memory.
-private struct ImportedMedia: Transferable {
-	let url: URL
-	var directory: URL { url.deletingLastPathComponent() }
-
-	static var transferRepresentation: some TransferRepresentation {
-		FileRepresentation(importedContentType: .data) { received in
-			let directory = try AppLocations.current.makeTemporaryDirectory(prefix: "Import-")
-			do {
-				let url = directory.appendingPathComponent(received.file.lastPathComponent)
-				try FileManager.default.copyItem(at: received.file, to: url)
-				return ImportedMedia(url: url)
-			}
-			catch {
-				try? FileManager.default.removeItem(at: directory)
-				throw error
-			}
-		}
-	}
-}
-
 private struct BrowserItemsView: View {
 	private struct ReloadIdentity: Hashable {
 		let folderID: String

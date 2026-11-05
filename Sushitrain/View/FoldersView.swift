@@ -113,32 +113,36 @@ private struct FoldersSection: View {
 		Section(isExpanded: $isExpanded) {
 			ForEach(folders, id: \.self.folderID) { (folder: SushitrainFolder) in
 				if !userSettings.hideHiddenFolders || folder.isHidden == false {
-					NavigationLink(value: Route.folder(folderID: folder.folderID, prefix: nil)) {
-						if folder.isPaused() {
-							Label(folder.displayName, systemImage: folder.systemImage)
-								.foregroundStyle(.gray)
-						}
-						else {
-							HStack {
+					FolderActionsView(folder: folder, userSettings: userSettings) { menu, _ in
+						NavigationLink(value: Route.folder(folderID: folder.folderID, prefix: nil)) {
+							if folder.isPaused() {
 								Label(folder.displayName, systemImage: folder.systemImage)
-								Spacer()
-								FolderMetricView(
-									metric: self.userSettings.viewMetric, folder: folder
-								)
+									.foregroundStyle(.gray)
+							}
+							else {
+								HStack {
+									Label(folder.displayName, systemImage: folder.systemImage)
+									Spacer()
+									FolderMetricView(
+										metric: self.userSettings.viewMetric, folder: folder
+									)
+								}
 							}
 						}
-					}
-					.contextMenu {
-						if folder.isRegularFolder {
-							Button(
-								openInFilesAppLabel, systemImage: "arrow.up.forward.app",
-								action: {
-									if let url = folder.localNativeURL {
-										openURLInSystemFilesApp(url: url)
+						.contextMenu {
+							menu
+							Divider()
+							if folder.isRegularFolder {
+								Button(
+									openInFilesAppLabel, systemImage: "arrow.up.forward.app",
+									action: {
+										if let url = folder.localNativeURL {
+											openURLInSystemFilesApp(url: url)
+										}
 									}
-								}
-							)
-							.labelStyle(.titleAndIcon)
+								)
+								.labelStyle(.titleAndIcon)
+							}
 						}
 					}
 				}

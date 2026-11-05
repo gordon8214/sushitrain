@@ -103,6 +103,7 @@
             { "path": "EntryInfoView.swift", "target-membership": [ "Synctrain/compile-sources" ] },
             { "path": "ExternalSharingView.swift", "target-membership": [ "Synctrain/compile-sources" ] },
             { "path": "FileViewerView.swift", "target-membership": [ "Synctrain/compile-sources" ] },
+            { "path": "FolderActionsView.swift", "target-membership": [ "Synctrain/compile-sources" ] },
             { "path": "FolderStatisticsView.swift", "target-membership": [ "Synctrain/compile-sources" ] },
             { "path": "FoldersView.swift", "target-membership": [ "Synctrain/compile-sources" ] },
             { "path": "FolderView.swift", "target-membership": [ "Synctrain/compile-sources" ] },
