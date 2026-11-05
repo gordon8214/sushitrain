@@ -31,7 +31,6 @@ func (d *desktopUI) folders() {
 			r := adw.NewExpanderRow()
 			r.SetUseMarkup(false)
 			r.SetTitle(f.Label)
-			r.AddSuffix(iconButton("pan-down-symbolic", "Folder Actions", func() { r.SetExpanded(!r.Expanded()) }))
 			r.SetSubtitle(strings.Join(nonEmpty(f.Path, f.Type, f.State, f.Error), " · "))
 			r.AddSuffix(textButton("Browse", func() { d.folder = f.ID; d.directory = ""; d.navigate("Files") }))
 			actions := []struct {
@@ -127,7 +126,6 @@ func (d *desktopUI) devices() {
 			r := adw.NewExpanderRow()
 			r.SetUseMarkup(false)
 			r.SetTitle(v.Name)
-			r.AddSuffix(iconButton("pan-down-symbolic", "Device Actions", func() { r.SetExpanded(!r.Expanded()) }))
 			state := "Disconnected"
 			if v.Connected {
 				state = "Connected"
