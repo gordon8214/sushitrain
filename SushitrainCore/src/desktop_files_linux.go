@@ -121,9 +121,9 @@ func (f *Folder) DesktopFileAction(ctx context.Context, action, name, target, so
 				return e
 			}
 			err = publishDesktopImport(parent, output, filepath.Base(name))
-		case "rename", "move", "trashFile":
-			if expected == "" || action != "trashFile" && (!finderPathAllowed(target) || h.IsIgnored(target)) {
-				return errors.New("refresh this file before moving it")
+		case "rename", "move", "trashFile", "deleteFile":
+			if expected == "" || action != "trashFile" && action != "deleteFile" && (!finderPathAllowed(target) || h.IsIgnored(target)) {
+				return errors.New("refresh this item before changing it")
 			}
 			if action == "rename" && filepath.Dir(target) != filepath.Dir(name) {
 				return errors.New("enter a file name without a directory")
@@ -137,9 +137,11 @@ func (f *Folder) DesktopFileAction(ctx context.Context, action, name, target, so
 			}
 			actual := fmt.Sprintf("%s:%d:%d", historyFileIdentity(info), info.Size(), info.ModTime().UnixNano())
 			if actual != expected {
-				return errors.New("this file changed; refresh before moving it")
+				return errors.New("this file changed; refresh before changing it")
 			}
-			if action == "trashFile" {
+			if action == "deleteFile" {
+				err = h.Filesystem().Remove(name)
+			} else if action == "trashFile" {
 				err = trashFromRoot(ctx, root, name)
 			} else {
 				err = renameRootExclusive(root, name, target)

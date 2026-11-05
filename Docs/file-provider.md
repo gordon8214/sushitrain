@@ -117,7 +117,10 @@ and the extension share the app group container, and don't depend on each other 
 
 ### Index
 
-Gateway metadata is projected into `items`, with a stable row ID as each item's identifier. Each row has a change
+Gateway metadata is projected into `items`, with a persistent identifier for each item. Upgrades from the earlier
+mixed local/gateway client import its identifiers from `index.sqlite`, matching gateway identities to the new index
+without changing files or pending edits. New items on these devices use a separate identifier namespace, so a number
+from the old index never points to an unrelated new row. The old index stays untouched. Each row has a change
 sequence, and the system's sync anchor is the index generation plus that sequence. Items that are gone stay as tombstones
 for 30 days, for what the system hasn't asked about yet.
 

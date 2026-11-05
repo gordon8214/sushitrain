@@ -8,12 +8,12 @@ import SynctrainFileProviderKit
 import UniformTypeIdentifiers
 
 extension NSFileProviderItemIdentifier {
-	init(itemID: Int64) {
-		self.init(ItemIdentifiers.string(for: itemID))
+	init(item: IndexItem) {
+		self.init(item.fileProviderIdentifier ?? ItemIdentifiers.string(for: item.id))
 	}
 
-	var itemID: Int64? {
-		ItemIdentifiers.itemID(from: rawValue)
+	func itemID(in store: IndexStore) throws(IndexError) -> Int64? {
+		try store.fileProviderItemID(for: rawValue)
 	}
 }
 
@@ -57,11 +57,12 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	}
 
 	var itemIdentifier: NSFileProviderItemIdentifier {
-		NSFileProviderItemIdentifier(itemID: item.id)
+		NSFileProviderItemIdentifier(item: item)
 	}
 
 	var parentItemIdentifier: NSFileProviderItemIdentifier {
-		item.parentID.map { NSFileProviderItemIdentifier(itemID: $0) } ?? .rootContainer
+		item.parentFileProviderIdentifier.map { NSFileProviderItemIdentifier($0) }
+			?? item.parentID.map { NSFileProviderItemIdentifier(ItemIdentifiers.string(for: $0)) } ?? .rootContainer
 	}
 
 	var filename: String {

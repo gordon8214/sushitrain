@@ -477,17 +477,19 @@ func (h *Host) call(ctx context.Context, method string, p request) (any, error) 
 		problem := ""
 		device := ""
 		gui := ""
+		configuration := ""
 		if h.client != nil {
 			state = h.client.EngineState()
 			problem = h.client.EngineError()
 			device = h.client.DeviceID()
 			gui = h.client.GUIURL()
+			configuration = h.client.ConfigurationFilePath()
 		}
 		clientID := ""
 		if h.files != nil {
 			clientID, _ = h.files.ClientIdentity()
 		}
-		return map[string]any{"clientID": clientID, "protocol": 1, "mode": h.settings.Mode, "state": state, "error": problem, "deviceID": device, "guiURL": gui, "root": h.Root, "captureDir": filepath.Join(h.State, "Captured"), "revision": h.revision.Load(), "gatewayEnabled": h.settings.Gateway, "gatewayRunning": h.gateway != nil, "gatewayError": h.gatewayError, "projectionIssues": h.projectionIssues()}, nil
+		return map[string]any{"clientID": clientID, "protocol": 1, "mode": h.settings.Mode, "state": state, "error": problem, "deviceID": device, "guiURL": gui, "root": h.Root, "configuration": configuration, "captureDir": filepath.Join(h.State, "Captured"), "revision": h.revision.Load(), "gatewayEnabled": h.settings.Gateway, "gatewayRunning": h.gateway != nil, "gatewayError": h.gatewayError, "projectionIssues": h.projectionIssues()}, nil
 	}
 	if method == "recovery.captures" {
 		return h.recoveredCaptures()

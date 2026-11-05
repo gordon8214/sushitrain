@@ -2,6 +2,7 @@
 #include "backend.h"
 #include "modelutil.h"
 #include <QDateTime>
+#include <algorithm>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
@@ -11,6 +12,7 @@
 #include <QUrl>
 
 void Backend::browse(int offset, bool append, const QString &search) {
+  browserSearch = search;
   if (append && activeReads > 0)
     return;
   if (append && !moreKey.isEmpty()) {
@@ -32,6 +34,7 @@ void Backend::browse(int offset, bool append, const QString &search) {
     return;
   }
   if (!append) {
+    command("Refresh", [this] { browse(0,false,browserSearch); });
     command("Up", [this] {
       if (m_mode == "files") {
         if (parents.isEmpty())
@@ -287,6 +290,23 @@ void Backend::browse(int offset, bool append, const QString &search) {
                    });
              }});
       }
+      if (!directory && !buttons.isEmpty()) buttons.append({"Preview",buttons.first().second});
+      buttons.append({"Information",[this,e,name] {
+        form("Information", {field("notice",name + "\n" + str(e,"Path") + "\n" + display(e["Size"]) + " bytes",{},"notice")}, [this](auto) { cancelDialog(); }, "Done");
+      }});
+      const auto descriptors = catalog["detailDescriptors"].toObject()["fileActions"].toArray();
+      auto rank = [descriptors](const QString &label) -> int {
+        QString id="information";
+        if(label.startsWith("Open"))id="open";
+        else if(label=="Preview")id="preview";
+        else if(label.startsWith("Keep") || label.startsWith("Stop Keeping"))id="offline";
+        else if(label.startsWith("Delete") || label.startsWith("Move to Trash"))id="delete";
+        else if(label.startsWith("Rename") || label.startsWith("Move"))id="renameMove";
+        else if(label=="Previous Versions")id="previousVersions";
+        for(int i=0;i<descriptors.size();++i)if(descriptors[i].toObject()["id"].toString()==id)return i;
+        return descriptors.size();
+      };
+      std::stable_sort(buttons.begin(),buttons.end(),[rank](const auto &a,const auto &b){return rank(a.first)<rank(b.first);});
       row(name, directory ? "Folder" : display(e["Size"]) + " bytes", buttons);
       if (!directory) {
         const auto index = m_rows.size() - 1;
@@ -312,7 +332,7 @@ void Backend::browse(int offset, bool append, const QString &search) {
     }
     if (nextOffset > 0) {
       moreKey = action(
-          "Load More", [this, offset = nextOffset] { browse(offset, true); },
+          "Load More", [this, offset = nextOffset, search] { browse(offset, true, search); },
           &m_commands);
       emit changed();
     }

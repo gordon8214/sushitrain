@@ -9,29 +9,67 @@ Kirigami.ApplicationWindow {
  width: 1100; height: 780; minimumWidth: 640; minimumHeight: 480
  title: backend.title + " — Synctrain"
  onClosing: function(close) {
-  if (backend.busy || Object.keys(backend.dialog).length > 0) { close.accepted = false; return }
+  if (!backend.requestClose()) close.accepted = false
  }
  globalDrawer: Kirigami.GlobalDrawer {
   objectName: "navigationSidebar"
-  isMenu: false; modal: false; drawerOpen: true
+  isMenu: false; modal: root.width < Kirigami.Units.gridUnit * 45; drawerOpen: !modal
   collapsible: false; collapseButtonVisible: false
   preferredSize: Kirigami.Units.gridUnit * 14
-  actions: [
-   NavigationAction { text: "Overview"; icon.name: "view-statistics" },
-   NavigationAction { text: "Folders"; icon.name: "folder-sync" },
-   NavigationAction { text: "Devices"; icon.name: "network-workgroup" },
-   NavigationAction { text: "Files"; icon.name: "folder" },
-   NavigationAction { text: "Remote Files"; icon.name: "folder-remote" },
-   NavigationAction { text: "History Sources"; icon.name: "document-open-recent" },
-   NavigationAction { text: "Pending Changes"; icon.name: "document-send" },
-   NavigationAction { text: "Settings"; icon.name: "configure" }
-  ]
+  id: drawer
+  footer: QQC2.ToolButton {
+   objectName: "settingsNavigation"
+   visible: !backend.page.startsWith("settings:")
+   text: "Settings"; icon.name: "configure"
+   enabled: !backend.busy && Object.keys(backend.dialog).length === 0
+   onClicked: backend.navigate("Settings")
+  }
  }
- component NavigationAction: Kirigami.Action {
-  checked: backend.page === text
-  enabled: !backend.busy && Object.keys(backend.dialog).length === 0
-  onTriggered: backend.navigate(text)
+ property var pageScrollPositions: ({})
+ property string previousPage: "Overview"
+ property var navigationObjects: ({})
+ function actionFor(item) {
+  let action = navigationObjects[item.route]
+  if (!action) {
+   action = navigationAction.createObject(drawer, { route: item.route })
+   navigationObjects[item.route] = action
+  }
+  action.text = item.title
+  action.iconName = item.icon
+  action.children = (item.children || []).map(child => actionFor(child))
+  return action
  }
+ function updateNavigation() {
+  let next = backend.navigation.map(item => actionFor(item))
+  let wanted = new Set()
+  function visit(action) { wanted.add(action.route); for (let child of action.children) visit(child) }
+  for (let action of next) visit(action)
+  drawer.actions = next
+  for (let route of Object.keys(navigationObjects)) {
+   if (route.startsWith("folder:") && !wanted.has(route)) {
+    navigationObjects[route].destroy()
+    delete navigationObjects[route]
+   }
+  }
+ }
+ Component.onCompleted: updateNavigation()
+ Component {
+  id: navigationAction
+  Kirigami.Action {
+   property string route
+   property string iconName
+   icon.name: iconName
+   checked: backend.page === route
+   enabled: !backend.busy && Object.keys(backend.dialog).length === 0
+   onTriggered: backend.navigate(route)
+  }
+ }
+ Connections { target: backend; function onNavigationChanged() {
+  if (root.pageStack.currentItem && root.pageStack.currentItem.flickable) root.pageScrollPositions[root.previousPage] = root.pageStack.currentItem.flickable.contentY
+  root.previousPage = backend.page
+  root.updateNavigation()
+  Qt.callLater(() => { if (root.pageStack.currentItem && root.pageStack.currentItem.flickable) root.pageStack.currentItem.flickable.contentY = root.pageScrollPositions[backend.page] || 0 })
+ } function onCloseReady() { root.close() } }
  pageStack.initialPage: Kirigami.ScrollablePage {
   title: backend.title
   ColumnLayout {
@@ -57,9 +95,32 @@ Kirigami.ApplicationWindow {
        QQC2.Label { Layout.fillWidth: true; text: modelData.subtitle; wrapMode: Text.Wrap; textFormat: Text.PlainText }
        Image { visible: !!modelData.qr; source: visible ? "image://qr/" + encodeURIComponent(modelData.qr) : ""; Layout.preferredWidth: 300; Layout.preferredHeight: visible ? 300 : 0; Accessible.name: "Pairing QR code" }
        QQC2.ProgressBar { Layout.fillWidth: true; visible: modelData.progress !== undefined; value: modelData.progress || 0; Accessible.name: modelData.title }
-       Flow {
-        Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
-        Repeater { model: modelData.actions; QQC2.Button { required property var modelData; text: modelData.label; enabled: !backend.busy; onClicked: backend.activate(modelData.key) } }
+       QQC2.Switch {
+        objectName: "immediatePreferenceToggle"
+        visible: !!modelData.toggleKey
+        text: modelData.title
+        checked: modelData.checked === true
+        enabled: !backend.busy
+        onToggled: {
+         if (checked === modelData.checked) return
+         const action = modelData.toggleKey
+         checked = Qt.binding(() => modelData.checked === true)
+         backend.activate(action)
+        }
+        Accessible.name: modelData.title
+       }
+       RowLayout {
+        Layout.fillWidth: true
+        Repeater { model: modelData.actions.slice(0, 2); QQC2.Button { required property var modelData; text: modelData.label; enabled: !backend.busy; onClicked: backend.activate(modelData.key) } }
+        QQC2.ToolButton {
+         visible: modelData.actions.length > 2
+         text: "More"; icon.name: "overflow-menu"
+         onClicked: overflow.open()
+         QQC2.Menu {
+          id: overflow
+          Repeater { model: modelData.actions.slice(2); QQC2.MenuItem { required property var modelData; text: modelData.label; enabled: !backend.busy; onTriggered: backend.activate(modelData.key) } }
+         }
+        }
        }
       }
      }
@@ -113,7 +174,7 @@ Kirigami.ApplicationWindow {
   footer: QQC2.DialogButtonBox {
    padding: Kirigami.Units.largeSpacing
    QQC2.Button { objectName: "editorCancel"; text: backend.dialog.discard ? "Discard Changes" : "Cancel"; QQC2.DialogButtonBox.buttonRole: QQC2.DialogButtonBox.ActionRole; enabled: !backend.busy || backend.cancelable; onClicked: backend.cancelDialog() }
-   QQC2.Button { objectName: "editorSave"; text: backend.dialog.accept || "Save"; QQC2.DialogButtonBox.buttonRole: QQC2.DialogButtonBox.ActionRole; enabled: !backend.busy; onClicked: backend.submit(editor.draft) }
+   QQC2.Button { objectName: "editorSave"; text: backend.dialog.discard ? "Keep Editing" : backend.dialog.accept || "Save"; QQC2.DialogButtonBox.buttonRole: QQC2.DialogButtonBox.ActionRole; enabled: !backend.busy; onClicked: backend.dialog.discard ? backend.keepEditing() : backend.submit(editor.draft) }
   }
  }
  Component {

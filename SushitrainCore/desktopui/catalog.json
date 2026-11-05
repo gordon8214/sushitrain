@@ -1,0 +1,543 @@
+{
+  "version": 1,
+  "destinations": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "symbol": "house",
+      "icon": "view-statistics",
+      "sections": [
+        "status",
+        "attention",
+        "summary",
+        "storage"
+      ],
+      "labelKey": "desktop.destinations.overview"
+    },
+    {
+      "id": "folders",
+      "title": "Folders",
+      "symbol": "folder",
+      "icon": "folder-sync",
+      "sections": [
+        "folders"
+      ],
+      "labelKey": "desktop.destinations.folders"
+    },
+    {
+      "id": "devices",
+      "title": "Devices",
+      "symbol": "externaldrive",
+      "icon": "network-workgroup",
+      "sections": [
+        "requests",
+        "devices"
+      ],
+      "labelKey": "desktop.destinations.devices"
+    },
+    {
+      "id": "files",
+      "title": "Files",
+      "symbol": "doc",
+      "icon": "folder",
+      "sections": [
+        "browser"
+      ],
+      "labelKey": "desktop.destinations.files"
+    },
+    {
+      "id": "remoteAccess",
+      "title": "Remote Access",
+      "symbol": "network",
+      "icon": "folder-remote",
+      "sections": [
+        "service",
+        "gateways"
+      ],
+      "labelKey": "desktop.destinations.remoteAccess"
+    },
+    {
+      "id": "history",
+      "title": "History",
+      "symbol": "clock.arrow.circlepath",
+      "icon": "document-open-recent",
+      "sections": [
+        "versions",
+        "deletedFiles",
+        "historySources"
+      ],
+      "labelKey": "desktop.destinations.history"
+    },
+    {
+      "id": "activity",
+      "title": "Activity",
+      "symbol": "arrow.triangle.2.circlepath",
+      "icon": "view-task",
+      "sections": [
+        "transfers",
+        "pendingChanges",
+        "errors",
+        "recovery",
+        "activityLog"
+      ],
+      "labelKey": "desktop.destinations.activity"
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "symbol": "gearshape",
+      "icon": "configure",
+      "sections": [],
+      "labelKey": "desktop.destinations.settings"
+    }
+  ],
+  "settings": [
+    {
+      "id": "general",
+      "title": "General",
+      "symbol": "gearshape",
+      "icon": "configure",
+      "sections": [
+        {
+          "id": "identity",
+          "title": "Device Identity",
+          "capability": "synchronize",
+          "action": "name",
+          "labelKey": "desktop.settings.general.identity"
+        },
+        {
+          "id": "mode",
+          "title": "Operating Mode",
+          "capability": "always",
+          "action": "mode",
+          "labelKey": "desktop.settings.general.mode"
+        },
+        {
+          "id": "startup",
+          "title": "Startup",
+          "capability": "always",
+          "action": "startup",
+          "labelKey": "desktop.settings.general.startup"
+        },
+        {
+          "id": "presence",
+          "title": "Background and Window Presence",
+          "capability": "always",
+          "action": "presence",
+          "labelKey": "desktop.settings.general.presence"
+        }
+      ],
+      "labelKey": "desktop.settings.general"
+    },
+    {
+      "id": "filesAndStorage",
+      "title": "Files & Storage",
+      "symbol": "doc.richtext",
+      "icon": "folder",
+      "sections": [
+        {
+          "id": "browsing",
+          "title": "Browsing",
+          "capability": "always",
+          "action": "previews",
+          "labelKey": "desktop.settings.filesAndStorage.browsing"
+        },
+        {
+          "id": "previews",
+          "title": "Previews and Thumbnails",
+          "capability": "always",
+          "action": "previews",
+          "labelKey": "desktop.settings.filesAndStorage.previews"
+        },
+        {
+          "id": "storage",
+          "title": "Download Cache and Offline Storage",
+          "capability": "files",
+          "action": "storage",
+          "labelKey": "desktop.settings.filesAndStorage.storage"
+        },
+        {
+          "id": "locations",
+          "title": "Folder Locations",
+          "capability": "always",
+          "action": "locations",
+          "labelKey": "desktop.settings.filesAndStorage.locations"
+        }
+      ],
+      "labelKey": "desktop.settings.filesAndStorage"
+    },
+    {
+      "id": "network",
+      "title": "Network",
+      "symbol": "network",
+      "icon": "network-wired",
+      "sections": [
+        {
+          "id": "connectivity",
+          "title": "Connectivity, Discovery, and Relays",
+          "capability": "synchronize",
+          "action": "basic/options",
+          "labelKey": "desktop.settings.network.connectivity"
+        },
+        {
+          "id": "connections",
+          "title": "Connection Options",
+          "capability": "synchronize",
+          "action": "connections",
+          "labelKey": "desktop.settings.network.connections"
+        },
+        {
+          "id": "proxy",
+          "title": "Proxy",
+          "capability": "synchronize",
+          "action": "proxy",
+          "labelKey": "desktop.settings.network.proxy"
+        },
+        {
+          "id": "bandwidth",
+          "title": "Bandwidth and Streaming",
+          "capability": "synchronize",
+          "action": "bandwidth",
+          "labelKey": "desktop.settings.network.bandwidth"
+        }
+      ],
+      "labelKey": "desktop.settings.network"
+    },
+    {
+      "id": "synchronization",
+      "title": "Synchronization",
+      "symbol": "arrow.triangle.2.circlepath",
+      "icon": "folder-sync",
+      "sections": [
+        {
+          "id": "pausing",
+          "title": "Automatic Pausing",
+          "capability": "synchronize",
+          "action": "policy",
+          "labelKey": "desktop.settings.synchronization.pausing"
+        },
+        {
+          "id": "resources",
+          "title": "Resource Priority",
+          "capability": "synchronize",
+          "action": "resources",
+          "labelKey": "desktop.settings.synchronization.resources"
+        },
+        {
+          "id": "engine",
+          "title": "Scanning, Database, and Performance",
+          "capability": "synchronize",
+          "action": "engine",
+          "labelKey": "desktop.settings.synchronization.engine"
+        },
+        {
+          "id": "reporting",
+          "title": "Reporting",
+          "capability": "synchronize",
+          "action": "engine",
+          "labelKey": "desktop.settings.synchronization.reporting"
+        }
+      ],
+      "labelKey": "desktop.settings.synchronization"
+    },
+    {
+      "id": "integrations",
+      "title": "Integrations",
+      "symbol": "puzzlepiece.extension",
+      "icon": "preferences-plugin",
+      "sections": [
+        {
+          "id": "fileManager",
+          "title": "File Manager Integration",
+          "capability": "always",
+          "action": "fileManager",
+          "labelKey": "desktop.settings.integrations.fileManager"
+        },
+        {
+          "id": "menuAccess",
+          "title": "Menu and Tray Folder Access",
+          "capability": "always",
+          "action": "menuAccess",
+          "labelKey": "desktop.settings.integrations.menuAccess"
+        },
+        {
+          "id": "mcp",
+          "title": "MCP",
+          "capability": "always",
+          "action": "mcp",
+          "labelKey": "desktop.settings.integrations.mcp"
+        }
+      ],
+      "labelKey": "desktop.settings.integrations"
+    },
+    {
+      "id": "defaults",
+      "title": "Defaults",
+      "symbol": "slider.horizontal.3",
+      "icon": "preferences-other",
+      "sections": [
+        {
+          "id": "newFolders",
+          "title": "New Folders",
+          "capability": "synchronize",
+          "action": "defaults/folder",
+          "labelKey": "desktop.settings.defaults.newFolders"
+        },
+        {
+          "id": "resetDefaults",
+          "title": "Reset Synchronization Defaults\u2026",
+          "capability": "synchronize",
+          "action": "reset/defaults/folder",
+          "labelKey": "desktop.settings.defaults.resetDefaults"
+        },
+        {
+          "id": "versioning",
+          "title": "Versioning",
+          "capability": "synchronize",
+          "action": "defaults/versioning",
+          "labelKey": "desktop.settings.defaults.versioning"
+        },
+        {
+          "id": "newDevices",
+          "title": "New Devices",
+          "capability": "synchronize",
+          "action": "defaults/device",
+          "labelKey": "desktop.settings.defaults.newDevices"
+        },
+        {
+          "id": "ignores",
+          "title": "Ignore Patterns",
+          "capability": "synchronize",
+          "action": "defaults/ignores",
+          "labelKey": "desktop.settings.defaults.ignores"
+        }
+      ],
+      "labelKey": "desktop.settings.defaults"
+    },
+    {
+      "id": "advanced",
+      "title": "Advanced",
+      "symbol": "gearshape.2",
+      "icon": "preferences-system",
+      "sections": [
+        {
+          "id": "engineAccess",
+          "title": "Web GUI and REST API",
+          "capability": "synchronize",
+          "action": "gui",
+          "labelKey": "desktop.settings.advanced.engineAccess"
+        },
+        {
+          "id": "configuration",
+          "title": "Configuration",
+          "capability": "synchronize",
+          "action": "configuration",
+          "labelKey": "desktop.settings.advanced.configuration"
+        },
+        {
+          "id": "expert",
+          "title": "Expert Configuration",
+          "capability": "synchronize",
+          "action": "advanced",
+          "labelKey": "desktop.settings.advanced.expert"
+        },
+        {
+          "id": "diagnostics",
+          "title": "Diagnostic Logging and Maintenance",
+          "capability": "synchronize",
+          "action": "logs",
+          "labelKey": "desktop.settings.advanced.diagnostics"
+        }
+      ],
+      "labelKey": "desktop.settings.advanced"
+    },
+    {
+      "id": "about",
+      "title": "About",
+      "symbol": "info.circle",
+      "icon": "help-about",
+      "sections": [
+        {
+          "id": "versions",
+          "title": "App and Engine Versions",
+          "capability": "always",
+          "action": "versions",
+          "labelKey": "desktop.settings.about.versions"
+        },
+        {
+          "id": "support",
+          "title": "Support",
+          "capability": "always",
+          "action": "support",
+          "labelKey": "desktop.settings.about.support"
+        },
+        {
+          "id": "licenses",
+          "title": "Licenses and Notices",
+          "capability": "always",
+          "action": "licenses",
+          "labelKey": "desktop.settings.about.licenses"
+        }
+      ],
+      "labelKey": "desktop.settings.about"
+    }
+  ],
+  "details": {
+    "folder": [
+      "Overview",
+      "Synchronization",
+      "Sharing",
+      "Versioning",
+      "Ignore Patterns",
+      "Advanced"
+    ],
+    "device": [
+      "Overview",
+      "Shared Folders",
+      "Connection Settings",
+      "Advanced"
+    ],
+    "fileActions": [
+      "Open",
+      "Preview",
+      "Offline Availability",
+      "Rename or Move",
+      "Previous Versions",
+      "Information",
+      "Delete"
+    ]
+  },
+  "aliases": {
+    "Start": "overview",
+    "Remote Files": "remoteAccess",
+    "gateway": "remoteAccess",
+    "History Sources": "history",
+    "Pending Changes": "activity",
+    "pending": "activity",
+    "recovery": "activity",
+    "filesAndPreviews": "filesAndStorage",
+    "finder": "filesAndStorage",
+    "bandwidth": "network",
+    "engine": "synchronization",
+    "mcp": "integrations",
+    "engineAccess": "advanced",
+    "configuration": "advanced",
+    "troubleshooting": "advanced",
+    "advancedConfiguration": "advanced",
+    "gateways": "remoteAccess",
+    "historySources": "history",
+    "pendingEdits": "activity",
+    "general": "general",
+    "remoteFileService": "remoteAccess"
+  },
+  "detailDescriptors": {
+    "folder": [
+      {
+        "id": "overview",
+        "title": "Overview",
+        "labelKey": "desktop.folder.overview",
+        "capability": "always"
+      },
+      {
+        "id": "synchronization",
+        "title": "Synchronization",
+        "labelKey": "desktop.folder.synchronization",
+        "capability": "always"
+      },
+      {
+        "id": "sharing",
+        "title": "Sharing",
+        "labelKey": "desktop.folder.sharing",
+        "capability": "always"
+      },
+      {
+        "id": "versioning",
+        "title": "Versioning",
+        "labelKey": "desktop.folder.versioning",
+        "capability": "always"
+      },
+      {
+        "id": "ignorePatterns",
+        "title": "Ignore Patterns",
+        "labelKey": "desktop.folder.ignorePatterns",
+        "capability": "always"
+      },
+      {
+        "id": "advanced",
+        "title": "Advanced",
+        "labelKey": "desktop.folder.advanced",
+        "capability": "always"
+      }
+    ],
+    "device": [
+      {
+        "id": "overview",
+        "title": "Overview",
+        "labelKey": "desktop.device.overview",
+        "capability": "always"
+      },
+      {
+        "id": "sharedFolders",
+        "title": "Shared Folders",
+        "labelKey": "desktop.device.sharedFolders",
+        "capability": "always"
+      },
+      {
+        "id": "connections",
+        "title": "Connection Settings",
+        "labelKey": "desktop.device.connections",
+        "capability": "always"
+      },
+      {
+        "id": "advanced",
+        "title": "Advanced",
+        "labelKey": "desktop.device.advanced",
+        "capability": "always"
+      }
+    ],
+    "fileActions": [
+      {
+        "id": "open",
+        "title": "Open",
+        "labelKey": "desktop.fileActions.open",
+        "capability": "always"
+      },
+      {
+        "id": "preview",
+        "title": "Preview",
+        "labelKey": "desktop.fileActions.preview",
+        "capability": "always"
+      },
+      {
+        "id": "offline",
+        "title": "Offline Availability",
+        "labelKey": "desktop.fileActions.offline",
+        "capability": "always"
+      },
+      {
+        "id": "renameMove",
+        "title": "Rename or Move",
+        "labelKey": "desktop.fileActions.renameMove",
+        "capability": "always"
+      },
+      {
+        "id": "previousVersions",
+        "title": "Previous Versions",
+        "labelKey": "desktop.fileActions.previousVersions",
+        "capability": "always"
+      },
+      {
+        "id": "information",
+        "title": "Information",
+        "labelKey": "desktop.fileActions.information",
+        "capability": "always"
+      },
+      {
+        "id": "delete",
+        "title": "Delete",
+        "labelKey": "desktop.fileActions.delete",
+        "capability": "always"
+      }
+    ]
+  }
+}

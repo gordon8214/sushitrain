@@ -58,12 +58,16 @@ struct AdvancedConfigurationView: View {
 		}
 	}
 
-	private func link(_ section: String, title: Text) -> some View {
-		NavigationLink {
-			AdvancedSectionView(section: section, title: title)
-		} label: {
-			title
-		}
+	@ViewBuilder private func link(_ section: String, title: Text) -> some View {
+		#if os(macOS)
+			GuardedSettingsLink(title: title) { AdvancedSectionView(section: section, title: title) }
+		#else
+			NavigationLink {
+				AdvancedSectionView(section: section, title: title)
+			} label: {
+				title
+			}
+		#endif
 	}
 }
 

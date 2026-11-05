@@ -786,7 +786,7 @@ extension RemoteProvider {
 		guard item.kind != .folderRoot else {
 			throw RemoteFailure.cannotSynchronize(String(localized: "Folders cannot be renamed here."))
 		}
-		guard let parentID = parentIdentifier.itemID, let parent = try store.item(id: parentID) else {
+		guard let parentID = try parentIdentifier.itemID(in: context.store), let parent = try store.item(id: parentID) else {
 			// The system creates the parent first
 			throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: parentIdentifier)
 		}
@@ -921,7 +921,7 @@ extension RemoteProvider {
 		_ identifier: NSFileProviderItemIdentifier, baseContentVersion: Data, options: NSFileProviderDeleteItemOptions,
 		binding: RemoteFolderBinding, progress: Progress
 	) async throws -> Bool {
-		guard let id = identifier.itemID else {
+		guard let id = try identifier.itemID(in: context.store) else {
 			return false
 		}
 		let store = context.store

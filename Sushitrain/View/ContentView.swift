@@ -100,6 +100,9 @@ private struct ContentView: View {
 	@Environment(\.scenePhase) var scenePhase
 	@Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
+	@State private var desktopEditors = MacSettingsNavigation(mode: .synchronize)
+	@State private var pendingDesktopRoute: Route?
+	@State private var confirmDesktopDiscard = false
 	@State private var showCustomConfigWarning = false
 	@State private var showContainerFolders = false
 	@State var topLevelRoute: Route? = .start
@@ -145,21 +148,16 @@ private struct ContentView: View {
 		NavigationSplitView(
 			columnVisibility: $columnVisibility,
 			sidebar: {
-				FoldersList(
-					selection: $topLevelRoute,
-					showStart: horizontalSizeClass != .compact,
-					userSettings: appState.userSettings,
-					onAdd: { addFolder in
-						self.addingFolder = addFolder
-						showAddingFolder = true
+				DesktopEngineSidebar(selection: Binding(get: { topLevelRoute }, set: { requestDesktopRoute($0) }))
+					.disabled(desktopEditors.isSaving)
+					.contextMenu {
+						FolderMetricPickerView(userSettings: appState.userSettings)
 					}
-				)
-				.contextMenu {
-					FolderMetricPickerView(userSettings: appState.userSettings)
-				}
 			},
 			detail: {
 				switch self.topLevelRoute {
+				case .desktop(let id):
+					NavigationStack { DesktopSynchronizePage(destination: id) }.showsToast()
 				case .start:
 					NavigationStack {
 						StartOrSearchView(topLevelRoute: $topLevelRoute, initialSearchTerm: $initialSearchTerm)
@@ -210,7 +208,7 @@ private struct ContentView: View {
 
 	var body: some View {
 		Group {
-			self.splitBody()
+			self.splitBody().id(desktopEditors.editorRevision)
 		}
 		.modifier(
 			FinderActionModifier(
@@ -294,12 +292,41 @@ private struct ContentView: View {
 				}
 			}
 		}
+		.environment(\.settingsNavigation, desktopEditors)
+		.background(SettingsWindowCloseGuard(navigation: desktopEditors))
+		.alert("Discard unsaved changes?", isPresented: $confirmDesktopDiscard) {
+			Button("Keep Editing", role: .cancel) { pendingDesktopRoute = nil }
+			Button("Discard Changes", role: .destructive) {
+				desktopEditors.discardForClosing()
+				let route = pendingDesktopRoute
+				pendingDesktopRoute = nil
+				if let route {
+					navigate(to: route)
+				}
+				else {
+					topLevelRoute = nil
+				}
+			}
+		} message: {
+			Text("The changes on this page have not been saved.")
+		}
 		.environment(\.navigateTo, NavigateToAction(action: { route in self.navigate(to: route) }))
+	}
+
+	private func requestDesktopRoute(_ route: Route?) {
+		guard !desktopEditors.isSaving else { return }
+		if desktopEditors.hasChanges {
+			pendingDesktopRoute = route
+			confirmDesktopDiscard = true
+		}
+		else {
+			topLevelRoute = route
+		}
 	}
 
 	private func exists(route: Route) -> Bool {
 		switch route {
-		case .devices, .start, .search(for: _), .folders:
+		case .desktop, .devices, .start, .search(for: _), .folders:
 			return true
 		case .folder(let folderID, let prefix):
 			guard appState.client.folder(withID: folderID) != nil else {
@@ -327,6 +354,12 @@ private struct ContentView: View {
 	}
 
 	private func navigate(to route: Route) {
+		guard !desktopEditors.isSaving else { return }
+		if desktopEditors.hasChanges {
+			pendingDesktopRoute = route
+			confirmDesktopDiscard = true
+			return
+		}
 		Log.info("Navigate to route=\(route) splitted=\(route.splitted)")
 
 		if !self.exists(route: route) {
@@ -423,7 +456,7 @@ struct RouteView: View {
 				ContentUnavailableView("Select a folder", systemImage: "folder")
 			}
 
-		case .folders, .start, .devices, .search:
+		case .desktop, .folders, .start, .devices, .search:
 			EmptyView()
 		}
 	}

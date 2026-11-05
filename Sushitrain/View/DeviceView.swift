@@ -5,14 +5,16 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
 import SushitrainCore
+import SynctrainHostKit
 
 struct DeviceView: View {
 	var device: SushitrainPeer
 
 	private enum DeviceViewTab: String, CaseIterable, Identifiable {
-		case general = "general"
-		case sharing = "sharing"
-		case connection = "connection"
+		case general = "overview"
+		case sharing = "sharedFolders"
+		case connection = "connections"
+		case advanced = "advanced"
 		var id: Self { self }
 	}
 
@@ -43,6 +45,8 @@ struct DeviceView: View {
 						self.sharingTab()
 					case .connection:
 						self.connectionTab()
+					case .advanced:
+						Button("Connection and Advanced Settings…") { showSettings = true }
 					}
 				}
 				.formStyle(.grouped)
@@ -51,6 +55,7 @@ struct DeviceView: View {
 				ContentUnavailableView("Unknown device", systemImage: "externaldrive.badge.questionmark")
 			}
 		}
+		.sheet(isPresented: $showSettings) { NavigationStack { DeviceSettingsView(device: device) } }
 		.sheet(item: $editSharingWith) { withFolder in
 			NavigationStack {
 				ShareFolderWithDeviceDetailsView(
@@ -285,11 +290,7 @@ struct DeviceView: View {
 			Button("Connection options...", systemImage: "slider.horizontal.3") {
 				showSettings = true
 			}
-			.sheet(isPresented: $showSettings) {
-				NavigationStack {
-					DeviceSettingsView(device: device)
-				}
-			}
+
 			.buttonStyle(.link)
 			.task(id: "\(device.deviceID()) \(appState.eventCounter)") {
 				let list = device.ignoredFolders()
@@ -304,9 +305,9 @@ struct DeviceView: View {
 
 	@ViewBuilder private func tabSwitcher() -> some View {
 		Picker("Page", selection: $selectedTab) {
-			Text("General").tag(DeviceViewTab.general)
-			Text("Sharing").tag(DeviceViewTab.sharing)
-			Text("Connection").tag(DeviceViewTab.connection)
+			ForEach(DesktopUICatalog.desktop.detailDescriptors["device"] ?? []) { section in
+				if let tab = DeviceViewTab(rawValue: section.id) { Text(section.title).tag(tab) }
+			}
 		}
 		.pickerStyle(.segmented)
 		.controlSize(.large)

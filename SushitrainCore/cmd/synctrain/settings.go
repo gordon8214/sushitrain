@@ -13,64 +13,12 @@ import (
 	"t-shaped.nl/sushitrain/v2/desktopapi"
 )
 
-func (d *desktopUI) settings() {
-	if d.mode == modeFiles {
-		g := d.group("Settings")
-		g.Add(choiceRow("MCP", "Local assistant access", d.mcpSettings))
-		g.Add(choiceRow("Files & Previews", "Browsing and native previews", d.previewSettings))
-		g.Add(choiceRow("Cache and Offline Storage", "Manage fetched and pinned files", func() { d.subpage(func() { d.reset("Cache and Offline Storage"); d.legacyFiles() }) }))
-		d.serviceButtons()
-		d.desktopSettings()
-		return
-	}
-	categories := []struct{ title, description, section string }{
-		{"General", "Device name and background services", ""},
-		{"Files & Previews", "Browsing, media previews and thumbnails", "previews"},
-		{"Network", "Connectivity, discovery, relays and NAT", "basic/options"},
-		{"Connection Options", "Priorities, discovery and reconnecting", "connections"},
-		{"Proxy", "SOCKS5 or HTTP proxy for outgoing engine connections", "proxy"},
-		{"Automatic Pausing", "Metered networks, cellular networks and Power Saver", "policy"},
-		{"Bandwidth", "Sending, receiving and LAN limits", "bandwidth"},
-		{"Engine", "Resource use, database and reporting", "engine"},
-		{"New Folder Defaults", "Defaults used when adding folders", "defaults/folder"},
-		{"Reset New Folder Defaults…", "Review built-in synchronization defaults before saving", "reset/defaults/folder"},
-		{"New Device Defaults", "Defaults used when adding devices", "defaults/device"},
-		{"Default Versioning", "Versioning for new folders", "defaults/versioning"},
-		{"Default Ignore Patterns", "One pattern per line", "defaults/ignores"},
-		{"Engine Access", "Web GUI, authentication and REST API", "gui"},
-		{"Configuration", "Export the current configuration", "configuration"},
-		{"Troubleshooting", "Activity log, logging levels and maintenance", "logs"},
-		{"Advanced Configuration", "Expert controls for every engine setting", "advanced/options"},
-	}
-	g := d.group("Settings")
-	g.Add(choiceRow("MCP", "Local assistant access", d.mcpSettings))
-	g.Add(choiceRow("Background Resource Use", "CPU and I/O priority for the whole synchronization service", func() { d.resourceSettings() }))
-	for _, c := range categories {
-		c := c
-		g.Add(choiceRow(c.title, c.description, func() {
-			switch c.section {
-			case "":
-				d.input("Device Name", "Name shown to other devices", "", func(name string) { d.run("engine.action", desktopapi.Request{Action: "name", Name: name}, nil) })
-			case "previews":
-				d.previewSettings()
-			case "policy":
-				d.policySettings()
-			case "logs":
-				d.logs()
-			case "advanced/options":
-				d.advancedConfiguration()
-			case "configuration":
-				d.exportConfiguration()
-			default:
-				d.edit(c.section, c.title)
-			}
-		}))
-	}
-	d.serviceButtons()
-	d.desktopSettings()
-}
+func (d *desktopUI) settings()                  { d.settingsCategory("general") }
 func (d *desktopUI) edit(section, title string) { d.subpage(func() { d.editPage(section, title) }) }
 func (d *desktopUI) editPage(section, title string) {
+	if len(d.pages) > 0 {
+		d.pages[len(d.pages)-1].editor = true
+	}
 	d.reset(title)
 	d.load("settings.get", desktopapi.Request{Section: section}, func(b json.RawMessage) {
 		var editor desktopapi.Editor

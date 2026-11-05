@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"t-shaped.nl/sushitrain/v2/adminsock"
 	"t-shaped.nl/sushitrain/v2/enginecontrol"
@@ -118,6 +119,27 @@ func (s *Server) SetEnabled(enabled bool) error {
 func (s *Server) IsEnabled() bool { return s.control.Settings().Enabled }
 func (s *Server) Socket() string  { return s.socket }
 func (s *Server) Close()          { s.admin.Close() }
+
+// NativeCall exposes existing engine operations to the owning UI without enabling assistants.
+// It stays in process; the socket's signed-helper authorization is unchanged.
+func (s *Server) NativeCall(method string, data []byte) ([]byte, error) {
+	if !strings.HasPrefix(method, "engine.") && method != "configuration.export" {
+		return nil, errors.New("this method is not a native engine operation")
+	}
+	if len(data) > mcpapi.MaxResult {
+		return nil, errors.New("native request exceeds 1 MiB")
+	}
+	if len(data) == 0 {
+		data = []byte("{}")
+	}
+	ctx, cancel := context.WithTimeout(s.admin.Context(), 2*time.Minute)
+	defer cancel()
+	value, err := s.admin.Invoke(ctx, method, json.RawMessage(data))
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(value)
+}
 
 // CatalogJSON lets the native UI and documentation inspect the same definitions.
 func CatalogJSON() ([]byte, error) { return json.Marshal(mcpapi.Catalog()) }

@@ -231,7 +231,7 @@ final class WorkingSetEnumerator: NSObject, NSFileProviderEnumerator {
 				observer.didUpdate(try context.makeItems(updated))
 			}
 			if !deleted.isEmpty {
-				observer.didDeleteItems(withIdentifiers: deleted.map { NSFileProviderItemIdentifier(itemID: $0.id) })
+				observer.didDeleteItems(withIdentifiers: deleted.map { NSFileProviderItemIdentifier(item: $0) })
 			}
 			observer.finishEnumeratingChanges(
 				upTo: NSFileProviderSyncAnchor(changes.anchor.data), moreComing: changes.hasMore)

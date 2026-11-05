@@ -230,11 +230,13 @@ extension IndexStore {
 
 	/// Records a rename or move within the gateway (to another folder of the same gateway too). The item keeps its
 	/// identifier. Throws `.nameCollision` when the destination has an item whose name cannot coexist with it.
-	public func recordRemoteMove(itemID: Int64, toParentItemID parentItemID: Int64, name: String)
-		throws(IndexError) -> RemoteMutationResult
-	{
+	/// An expected metadata revision rejects stale UI actions within the same write transaction.
+	public func recordRemoteMove(
+		itemID: Int64, toParentItemID parentItemID: Int64, name: String, expectedMetadataRevision: Int64? = nil
+	) throws(IndexError) -> RemoteMutationResult {
 		try transaction { connection throws(IndexError) in
 			let recorder = try RemoteMutationRecorder(connection: connection)
+			try recorder.checkMetadataRevision(itemID: itemID, expected: expectedMetadataRevision)
 			let result = try recorder.recordMove(itemID: itemID, toParentItemID: parentItemID, name: name)
 			try recorder.finish()
 			return result
@@ -242,10 +244,13 @@ extension IndexStore {
 	}
 
 	/// Records the deletion of an item (and everything below it). Deleting an item whose creation was not sent yet
-	/// cancels the creation.
-	public func recordRemoteDeletion(itemID: Int64) throws(IndexError) -> RemoteMutationResult {
+	/// cancels the creation. An expected metadata revision rejects stale UI actions in the write transaction.
+	public func recordRemoteDeletion(itemID: Int64, expectedMetadataRevision: Int64? = nil)
+		throws(IndexError) -> RemoteMutationResult
+	{
 		try transaction { connection throws(IndexError) in
 			let recorder = try RemoteMutationRecorder(connection: connection)
+			try recorder.checkMetadataRevision(itemID: itemID, expected: expectedMetadataRevision)
 			let result = try recorder.recordDeletion(itemID: itemID)
 			try recorder.finish()
 			return result
@@ -840,6 +845,15 @@ final class RemoteMutationRecorder {
 	}
 
 	// MARK: - Helpers
+
+	/// Called inside the write transaction before an action adopts the current remote revision.
+	func checkMetadataRevision(itemID: Int64, expected: Int64?) throws(IndexError) {
+		guard let expected else { return }
+		let current = try liveItem(itemID)
+		guard current.metadataRevision == expected else {
+			throw .notAllowed("the item changed; refresh before changing it")
+		}
+	}
 
 	private func liveItem(_ id: Int64) throws(IndexError) -> IndexItem {
 		guard

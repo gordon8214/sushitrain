@@ -68,8 +68,11 @@ func (d *desktopUI) previewSettingsPage() {
 		r.SetTitle(s.title)
 		r.SetActive(*s.value)
 		r.NotifyProperty("active", func() {
+			old := *s.value
 			*s.value = r.Active()
 			if err := writePreferences(&d.preferences); err != nil {
+				*s.value = old
+				r.SetActive(old)
 				d.error(err)
 			}
 		})
@@ -79,8 +82,11 @@ func (d *desktopUI) previewSettingsPage() {
 	limit.SetTitle("Maximum image preview size (MiB)")
 	limit.SetValue(float64(d.preferences.ImageLimitMiB))
 	limit.NotifyProperty("value", func() {
+		old := d.preferences.ImageLimitMiB
 		d.preferences.ImageLimitMiB = int(limit.Value())
 		if err := writePreferences(&d.preferences); err != nil {
+			d.preferences.ImageLimitMiB = old
+			limit.SetValue(float64(old))
 			d.error(err)
 		}
 	})

@@ -262,7 +262,7 @@ final class RemoteProvider: Sendable {
 	/// The binding of the folder of an item the system deletes: the item's folder, or (once its row is removed, while
 	/// the deletion is not confirmed) that of its overlay. Nil for items this device no longer has.
 	func binding(ofDeleted identifier: NSFileProviderItemIdentifier) throws(IndexError) -> RemoteFolderBinding? {
-		guard let id = identifier.itemID else {
+		guard let id = try identifier.itemID(in: context.store) else {
 			return nil
 		}
 		if let item = try context.store.item(id: id) {
@@ -820,7 +820,7 @@ final class RemoteProvider: Sendable {
 			// The gateway says the item is gone; the index learns it from the next refresh
 			refreshSoon(folderIDs: [item.folderID])
 			return NSError.fileProviderErrorForNonExistentItem(
-				withIdentifier: NSFileProviderItemIdentifier(itemID: item.id))
+				withIdentifier: NSFileProviderItemIdentifier(item: item))
 		case .revisionMismatch(let current):
 			// A newer version: store it, so that the system learns about it and asks again
 			if let current,
@@ -903,7 +903,7 @@ final class RemoteProvider: Sendable {
 			throw NSFileProviderError(.serverUnreachable)
 		}
 		for item in items where item.kind == .file {
-			let identifier = NSFileProviderItemIdentifier(itemID: item.id)
+			let identifier = NSFileProviderItemIdentifier(item: item)
 			if keep {
 				try await manager.requestDownloadForItem(withIdentifier: identifier)
 				continue

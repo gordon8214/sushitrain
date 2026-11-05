@@ -6,7 +6,7 @@
 import SwiftUI
 import SushitrainCore
 
-private struct FolderMetricView: View {
+struct FolderMetricView: View {
 	@Environment(AppState.self) private var appState
 	let metric: FolderMetric
 	let folder: SushitrainFolder

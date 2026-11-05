@@ -9,6 +9,7 @@ import (
 	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
+	"strings"
 )
 
 // Each destination owns a page and header bar. Parent views stay
@@ -25,6 +26,8 @@ type navigationPage struct {
 	focus    gtk.Widgetter
 	pending  int
 	reload   bool
+	editor   bool
+	browser  bool
 }
 
 func (d *desktopUI) newNavigationPage(title string, show func()) *navigationPage {
@@ -180,15 +183,17 @@ func (d *desktopUI) trackPageLoad() func() {
 func (d *desktopUI) browserState() func() {
 	folder, directory, parent := d.folder, d.directory, d.parent
 	rows, next, selected, search := d.browserRows, d.browserNext, d.browserSelected, d.browserSearch
+	filter, scope := d.browserFilter, d.browserScope
 	return func() {
 		d.folder, d.directory, d.parent = folder, directory, parent
 		d.browserRows, d.browserNext, d.browserSelected, d.browserSearch = rows, next, selected, search
+		d.browserFilter, d.browserScope = filter, scope
 	}
 }
 
 func (d *desktopUI) invalidateParents() {
 	for i, p := range d.pages {
-		if i < len(d.pages)-1 && (i != 0 || d.route != "Settings") {
+		if i < len(d.pages)-1 && (i != 0 || !strings.HasPrefix(d.route, "settings:")) {
 			p.reload = true
 		}
 	}

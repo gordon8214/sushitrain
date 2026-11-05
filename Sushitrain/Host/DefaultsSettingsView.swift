@@ -47,7 +47,7 @@
 		}
 	}
 
-	private struct DefaultFolderSettingsView: View {
+	struct DefaultFolderSettingsView: View {
 		@Environment(AppState.self) private var appState
 
 		var body: some View {
@@ -73,12 +73,13 @@
 						)
 					}
 					FolderSyncSections(draft: draft, isDefaults: true)
+					FolderMetadataSections(draft: draft)
 				}
 			)
 		}
 	}
 
-	private struct DefaultFolderMetadataView: View {
+	struct DefaultFolderMetadataView: View {
 		@Environment(AppState.self) private var appState
 
 		var body: some View {
@@ -93,7 +94,7 @@
 		}
 	}
 
-	private struct DefaultVersioningSettingsView: View {
+	struct DefaultVersioningSettingsView: View {
 		@Environment(AppState.self) private var appState
 
 		var body: some View {
@@ -108,7 +109,7 @@
 		}
 	}
 
-	private struct DefaultDeviceSettingsView: View {
+	struct DefaultDeviceSettingsView: View {
 		@Environment(AppState.self) private var appState
 
 		var body: some View {
@@ -123,7 +124,7 @@
 		}
 	}
 
-	private struct DefaultIgnoresView: View {
+	struct DefaultIgnoresView: View {
 		@Environment(AppState.self) private var appState
 		@State private var text = ""
 		@State private var saved = ""

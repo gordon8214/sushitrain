@@ -9,72 +9,21 @@
 	import SynctrainHostKit
 
 	enum MacSettingsCategory: String, Hashable, Sendable, Identifiable {
-		case general, filesAndPreviews, network, bandwidth, engine, defaults
-		case remoteFileService, engineAccess, configuration, troubleshooting, advancedConfiguration
-		case gateways, finder, pendingEdits, historySources, mcp
-
+		case general, filesAndStorage, network, synchronization, integrations, defaults, advanced, about
 		var id: String { rawValue }
-
-		var title: LocalizedStringResource {
-			switch self {
-			case .mcp: "MCP"
-			case .general: "General"
-			case .filesAndPreviews: "Files & Previews"
-			case .network: "Network"
-			case .bandwidth: "Bandwidth"
-			case .engine: "Engine"
-			case .defaults: "Defaults"
-			case .remoteFileService: "Remote File Service"
-			case .engineAccess: "Engine Access"
-			case .configuration: "Configuration"
-			case .troubleshooting: "Troubleshooting"
-			case .advancedConfiguration: "Advanced Configuration"
-			case .historySources: "History Sources"
-			case .gateways: "Gateways"
-			case .finder: "Finder"
-			case .pendingEdits: "Pending Edits"
-			}
-		}
-
-		var symbol: String {
-			switch self {
-			case .mcp: "terminal"
-			case .general: "gearshape"
-			case .filesAndPreviews: "doc.richtext"
-			case .network: "network"
-			case .bandwidth: "speedometer"
-			case .engine: "cpu"
-			case .defaults: "slider.horizontal.3"
-			case .remoteFileService: "externaldrive.connected.to.line.below"
-			case .engineAccess: "server.rack"
-			case .configuration: "folder.badge.gearshape"
-			case .troubleshooting: "stethoscope"
-			case .advancedConfiguration: "gearshape.2"
-			case .historySources: "clock.arrow.circlepath"
-			case .gateways: "externaldrive.badge.wifi"
-			case .finder: "folder"
-			case .pendingEdits: "arrow.up.doc"
-			}
-		}
+		var descriptor: DesktopUICatalog.Category { DesktopUICatalog.desktop.settings.first { $0.id == rawValue }! }
+		var title: LocalizedStringResource { LocalizedStringResource(stringLiteral: descriptor.title) }
+		var symbol: String { descriptor.symbol }
 	}
 
 	enum MacSettingsMode: String {
 		case synchronize, filesInFinder
-
 		var categories: [MacSettingsCategory] {
-			switch self {
-			case .synchronize:
-				[
-					.general, .filesAndPreviews, .network, .bandwidth, .engine, .defaults,
-					.remoteFileService, .mcp, .historySources, .engineAccess, .configuration, .troubleshooting, .advancedConfiguration,
-				]
-			case .filesInFinder:
-				[.general, .gateways, .historySources, .finder, .pendingEdits, .mcp]
-			}
+			DesktopUICatalog.desktop.settings.compactMap { MacSettingsCategory(rawValue: $0.id) }
 		}
-
-		var defaultCategory: MacSettingsCategory { self == .synchronize ? .general : .gateways }
+		var defaultCategory: MacSettingsCategory { .general }
 		var selectionKey: String { "macSettingsSelectedCategory.\(rawValue)" }
+		var capabilityMode: String { self == .synchronize ? "synchronize" : "files" }
 	}
 
 	struct SettingsEditorState: Equatable {
@@ -87,17 +36,25 @@
 		private var policy: SettingsNavigationPolicy<MacSettingsCategory>
 		private var editors: [UUID: SettingsEditorState] = [:]
 		var isConfirmingDiscard = false
+		var editorRevision = 0
 		@ObservationIgnored private let selectionKey: String
 
 		init(mode: MacSettingsMode) {
 			selectionKey = mode.selectionKey
 			policy = SettingsNavigationPolicy(
-				savedSelection: UserDefaults.standard.string(forKey: mode.selectionKey).flatMap(MacSettingsCategory.init),
+				savedSelection: UserDefaults.standard.string(forKey: mode.selectionKey).flatMap { value in
+					MacSettingsCategory(rawValue: DesktopUICatalog.desktop.aliases[value] ?? value)
+				},
 				categories: Set(mode.categories), defaultSelection: mode.defaultCategory)
 		}
 
 		var selection: MacSettingsCategory { policy.selection }
 		var isSaving: Bool { editors.values.contains(where: \.isSaving) }
+		var hasChanges: Bool { editors.values.contains(where: \.hasChanges) }
+		func discardForClosing() {
+			editors.removeAll()
+			editorRevision += 1
+		}
 
 		func request(_ category: MacSettingsCategory) {
 			if policy.request(category, hasUnsavedChanges: editors.values.contains(where: \.hasChanges), isSaving: isSaving) {

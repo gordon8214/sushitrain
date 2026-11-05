@@ -21,6 +21,8 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"t-shaped.nl/sushitrain/v2/adminsock"
 	"t-shaped.nl/sushitrain/v2/desktopapi"
+	"t-shaped.nl/sushitrain/v2/desktopui"
+	"t-shaped.nl/sushitrain/v2/files"
 )
 
 // Run under xvfb-run and dbus-run-session. All GTK calls stay on one OS thread;
@@ -61,7 +63,7 @@ func TestNavigation(t *testing.T) {
 		}
 		return nil, nil
 	})
-	for _, method := range []string{"engine.folders", "engine.devices", "engine.pending", "engine.ignored", "engine.pendingFolders", "engine.versions", "history.list"} {
+	for _, method := range []string{"files.children", "engine.folders", "engine.devices", "engine.pending", "engine.ignored", "engine.pendingFolders", "engine.versions", "engine.search", "files.search", "history.list"} {
 		server.Register(method, func(context.Context, json.RawMessage) (any, error) { return []any{}, nil })
 	}
 	for _, method := range []string{"engine.browsePage", "files.childrenPage"} {
@@ -94,10 +96,13 @@ func TestNavigation(t *testing.T) {
 	w.win.SetTitle("Synctrain Navigation Test")
 	w.win.SetDefaultSize(900, 600)
 	w.win.Present()
-	d := &desktopUI{w: w, route: "Settings", mode: modeFiles, socket: socket, navigation: adw.NewNavigationView()}
+	d := &desktopUI{w: w, route: "settings:general", mode: modeFiles, socket: socket, navigation: adw.NewNavigationView()}
 	d.resolveOnce.Do(func() {})
 	d.ctx, d.cancel = context.WithCancel(context.Background())
 	defer d.close()
+	d.sidebar = gtk.NewListBox()
+	d.sidebarBack, d.sidebarSettings = gtk.NewButton(), gtk.NewButton()
+	d.root = adw.NewNavigationSplitView()
 	d.navigation.SetAnimateTransitions(false)
 	d.navigation.ConnectPopped(func(*adw.NavigationPage) { d.pagePopped() })
 	w.toasts.SetChild(d.navigation)
@@ -118,7 +123,7 @@ func TestNavigation(t *testing.T) {
 				t.Fatalf("%s in %s mode has no native header Back button", d.navigation.VisiblePage().Title(), mode)
 			}
 			button.Emit("clicked")
-			if len(d.pages) != 1 || d.body != rootBody || d.navigation.VisiblePage().Title() != "Settings" {
+			if len(d.pages) != 1 || d.body != rootBody || d.navigation.VisiblePage().Title() != "General" {
 				t.Fatal("Back did not restore the original settings list")
 			}
 		}
@@ -229,16 +234,41 @@ func TestNavigation(t *testing.T) {
 	testFolderAdvanced(t, d, &rejectSave, &savedValues)
 	testManagementNavigation(t, d)
 	testBrowserNavigation(t, d)
+	testFilesManagementInvalidation(t, d, server)
 
 	d.sidebar = gtk.NewListBox()
 	for range desktopRoutes {
 		d.sidebar.Append(gtk.NewListBoxRow())
 	}
 	d.root = adw.NewNavigationSplitView()
+	d.sidebarBack = gtk.NewButton()
+	d.sidebarSettings = gtk.NewButton()
+	for _, mode := range []string{modeFiles, modeSynchronize} {
+		d.mode = mode
+		for _, category := range desktopui.Read().Settings {
+			d.navigate("settings:" + category.ID)
+			if len(d.sidebarRoutes) != 8 {
+				t.Fatal("category count differs by mode")
+			}
+			i := 0
+			for child := d.body.FirstChild(); child != nil; child = gtk.BaseWidget(child).NextSibling() {
+				if group, ok := gtk.BaseWidget(child).Cast().(*adw.PreferencesGroup); ok {
+					if i >= len(category.Sections) || group.Title() != category.Sections[i].Title {
+						t.Fatalf("%s section order differs", category.ID)
+					}
+					i++
+				}
+			}
+			if i != len(category.Sections) {
+				t.Fatalf("%s missing sections", category.ID)
+			}
+		}
+	}
+
 	d.route = "Overview"
 	d.navigate("Settings")
-	if d.sidebar.SelectedRow().Index() != len(desktopRoutes)-1 {
-		t.Fatal("opening Settings with a shortcut did not select its sidebar row")
+	if d.route != "settings:general" || d.sidebar.SelectedRow().Index() != 0 || len(d.sidebarRoutes) != 8 {
+		t.Fatal("opening Settings with a shortcut did not show its category sidebar")
 	}
 }
 
@@ -388,6 +418,13 @@ func testBrowserNavigation(t *testing.T, d *desktopUI) {
 		if d.body != parentBody || filter.Text() != "Example" || d.browserSelected != selected || len(d.browserRows) != 1 {
 			t.Fatal("Back lost browser filters, selection, or data")
 		}
+		// Switching destinations retains the native browser widgets and state too.
+		d.navigate("History")
+		waitNavigationUI(t, func() bool { return d.pages[0].pending == 0 })
+		d.navigate("Files")
+		if d.body != parentBody || filter.Text() != "Example" || d.browserSelected != selected {
+			t.Fatal("destination navigation lost browser state")
+		}
 		// Directories use native Back and restore their containing location.
 		directory := browserRow{name: "Subfolder", path: "Subfolder", item: 9, directory: true}
 		parent := d.parent
@@ -402,12 +439,88 @@ func testBrowserNavigation(t *testing.T, d *desktopUI) {
 		if d.body != parentBody || d.parent != parent || d.directory != "" {
 			t.Fatal("directory Back lost its parent location")
 		}
+		// A search owns its filter and survives a metadata requery independently.
+		d.searchFiles("Different")
+		waitNavigationUI(t, func() bool { return d.pages[len(d.pages)-1].pending == 0 })
+		if d.browserFilter != "" || !d.pages[len(d.pages)-1].browser {
+			t.Fatal("search inherited its containing folder filter")
+		}
+		d.navigate("History")
+		waitNavigationUI(t, func() bool { return d.pages[0].pending == 0 })
+		d.filesCacheInvalid = true
+		d.navigate("Files")
+		waitNavigationUI(t, func() bool { return d.pages[len(d.pages)-1].pending == 0 })
+		if d.pages[len(d.pages)-1].page.Title() != "Search Results" || !d.browserSearch {
+			t.Fatal("invalidated search did not requery its results")
+		}
+		d.goBack()
+		// The latest containing filter must win over a previous child snapshot.
+		filter.SetText("Updated")
+		d.navigate("History")
+		waitNavigationUI(t, func() bool { return d.pages[0].pending == 0 })
+		d.filesCacheInvalid = true // A completed mutation on another destination invalidates metadata.
+		d.navigate("Files")
+		waitNavigationUI(t, func() bool { return d.pages[len(d.pages)-1].pending == 0 })
+		if d.body == parentBody || d.browserFilter != "Updated" || d.parent != parent {
+			t.Fatal("invalidated browsing did not reload while retaining its location/filter")
+		}
+	}
+}
+
+func testFilesManagementInvalidation(t *testing.T, d *desktopUI, server *adminsock.Server) {
+	t.Helper()
+	var removed atomic.Bool
+	server.Register("status", func(context.Context, json.RawMessage) (any, error) {
+		status := files.Status{Mount: "/tmp/desktop-ui-fixture"}
+		if !removed.Load() {
+			status.Folders = []files.Folder{{ID: 1, DirName: "Mounted Folder", Listed: true}}
+		}
+		return status, nil
+	})
+	server.Register("pending.list", func(context.Context, json.RawMessage) (any, error) { return []files.Edit{}, nil })
+	server.Register("storage", func(context.Context, json.RawMessage) (any, error) { return files.Storage{}, nil })
+	server.Register("folders.remove", func(context.Context, json.RawMessage) (any, error) {
+		removed.Store(true)
+		return files.Removal{}, nil
+	})
+	server.Register("files.childrenPage", func(context.Context, json.RawMessage) (any, error) {
+		entries := []map[string]any{}
+		if !removed.Load() {
+			entries = append(entries, map[string]any{"Item": 42, "Name": "Mounted Folder", "Kind": 3})
+		}
+		return map[string]any{"Entries": entries, "Next": 0}, nil
+	})
+	d.w.desk = d
+	d.mode = modeFiles
+	d.openFilesAt("", "", 0)
+	waitNavigationUI(t, func() bool { return d.pages[len(d.pages)-1].pending == 0 })
+	browser := d.body
+	if len(d.browserRows) != 1 {
+		t.Fatal("missing mounted folder fixture")
+	}
+	d.navigate("Folders")
+	waitNavigationUI(t, func() bool { return navigationButton(d.detail, "Remove from This Device") != nil })
+	navigationButton(d.detail, "Remove from This Device").Emit("clicked")
+	waitNavigationUI(t, func() bool { return d.w.win.VisibleDialog() != nil })
+	dialog := d.w.win.VisibleDialog()
+	dialog.Emit("response", "go")
+	dialog.ForceClose()
+	waitNavigationUI(t, func() bool { return removed.Load() && d.filesCacheInvalid })
+	d.navigate("Files")
+	waitNavigationUI(t, func() bool { return d.pages[len(d.pages)-1].pending == 0 })
+	if d.body == browser || len(d.browserRows) != 0 {
+		t.Fatal("removed folder survived in retained browser")
 	}
 }
 
 func navigationButton(widget gtk.Widgetter, label string) *gtk.Button {
 	w := gtk.BaseWidget(widget)
-	if b, ok := w.Cast().(*gtk.Button); ok && b.Label() == label {
+	if menu, ok := w.Cast().(*gtk.MenuButton); ok && menu.Popover() != nil {
+		if button := navigationButton(menu.Popover(), label); button != nil {
+			return button
+		}
+	}
+	if b, ok := w.Cast().(*gtk.Button); ok && (b.Label() == label || b.TooltipText() == label) {
 		return b
 	}
 	for child := w.FirstChild(); child != nil; child = gtk.BaseWidget(child).NextSibling() {

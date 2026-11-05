@@ -71,7 +71,7 @@ final class SQLiteConnection {
 
 	init(url: URL) throws(IndexError) {
 		var db: OpaquePointer?
-		let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX
+		let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_URI
 		let result = sqlite3_open_v2(url.path(percentEncoded: false), &db, flags, nil)
 		guard result == SQLITE_OK, let db else {
 			let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "could not open database"

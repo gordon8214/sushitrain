@@ -11,11 +11,19 @@
 	/// AppEntry admits this only with an isolated test root, before either production app lifecycle starts.
 	struct SettingsFixtureApp: App {
 		@State private var presence = AppPresence.menuBarAndDock
+		private let environment: RemoteEnvironment?
 
 		init() {
+			if ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_DESKTOP_FIXTURE"] == "1" {
+				do { environment = try DesktopFilesFixture.make() }
+				catch { preconditionFailure("Could not create the isolated desktop fixture: \(error)") }
+			}
+			else {
+				environment = nil
+			}
 			MCPIntegration.shared.start()
 			if ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_SETTINGS_FIXTURE"] == "populated" {
-				RemoteCoordinator.shared.loadSettingsFixture()
+				RemoteCoordinator.shared.loadSettingsFixture(environment: environment)
 			}
 		}
 
@@ -30,11 +38,21 @@
 
 		var body: some Scene {
 			Window("Synctrain Settings Fixture", id: "settingsFixture") {
-				FilesSettingsView(presence: $presence)
+				if ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_DESKTOP_FIXTURE"] == "1" {
+					DesktopFilesWindow(environment: environment).preferredColorScheme(Self.colorScheme)
+				}
+				else {
+					FilesSettingsView(presence: $presence)
+				}
 			}
 			.defaultSize(width: 1000, height: 720)
 			.windowResizability(.contentMinSize)
 			.restorationBehavior(.disabled)
+			Window("Settings", id: "appSettings") { FilesSettingsView(presence: $presence) }
+				.defaultSize(width: 1000, height: 720)
+				.defaultLaunchBehavior(.suppressed)
+				.restorationBehavior(.disabled)
+
 		}
 	}
 #endif

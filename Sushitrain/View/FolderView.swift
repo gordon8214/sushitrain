@@ -6,6 +6,7 @@
 import Foundation
 import SwiftUI
 import SushitrainCore
+import SynctrainHostKit
 
 struct ShareFolderWithDeviceDetailsView: View {
 	@Environment(AppState.self) private var appState
@@ -506,8 +507,11 @@ struct FolderView: View {
 	@Environment(\.dismiss) private var dismiss
 
 	private enum FolderViewTab: String, CaseIterable, Identifiable {
-		case general = "general"
+		case general = "overview"
+		case synchronization = "synchronization"
 		case sharing = "sharing"
+		case versioning = "versioning"
+		case ignores = "ignorePatterns"
 		case advanced = "advanced"
 		var id: Self { self }
 	}
@@ -544,6 +548,12 @@ struct FolderView: View {
 					switch selectedTab {
 					case .general:
 						self.generalSection()
+					case .synchronization:
+						FolderDetailEditorLink(folder: folder, editor: .synchronization)
+					case .versioning:
+						FolderDetailEditorLink(folder: folder, editor: .versioning)
+					case .ignores:
+						FolderDetailEditorLink(folder: folder, editor: .ignores)
 					case .sharing:
 						self.sharingSection()
 					case .advanced:
@@ -576,13 +586,11 @@ struct FolderView: View {
 
 	@ViewBuilder private func tabSwitcher() -> some View {
 		Picker("Page", selection: $selectedTab) {
-			Text("General").tag(FolderViewTab.general)
-			Text("Sharing").tag(FolderViewTab.sharing)
-			if folder.isRegularFolder || folder.isReceiveEncryptedFolder {
-				Label("Advanced", systemImage: "gear").tag(FolderViewTab.advanced)
+			ForEach(DesktopUICatalog.desktop.detailDescriptors["folder"] ?? []) { section in
+				if let tab = FolderViewTab(rawValue: section.id) { Text(section.title).tag(tab) }
 			}
 		}
-		.pickerStyle(.segmented)
+		.pickerStyle(.menu)
 		.controlSize(.large)
 		.dynamicTypeSize(.large)
 		.listRowBackground(Color.clear)

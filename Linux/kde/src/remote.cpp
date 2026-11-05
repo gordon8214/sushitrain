@@ -7,8 +7,10 @@
 #include <QUuid>
 
 void Backend::filesService() {
-  clear("Gateways and Folders");
-  command("Pair…", [this] {
+  const bool foldersPage = m_page == "Folders";
+  clear(foldersPage ? "Folders" : "Remote Access");
+  if (foldersPage) command("Add Folder…", [this] { navigate("Remote Access"); });
+  else command("Pair…", [this] {
     form(
         "Pair with a Gateway", {field("Link", "Pairing link from the gateway")},
         [this](auto p) {
@@ -17,9 +19,11 @@ void Backend::filesService() {
         },
         "Pair");
   });
-  call("status", {}, [this](QJsonValue v, QString) {
+  call("status", {}, [this, foldersPage](QJsonValue v, QString) {
     auto s = v.toObject();
-    for (auto e : s["gateways"].toArray()) {
+    if (!foldersPage && s["gateways"].toArray().isEmpty())
+      row("No Gateways", "Pair with a gateway to choose its available folders.");
+    if (!foldersPage) for (auto e : s["gateways"].toArray()) {
       auto g = e.toObject();
       row(str(g, "name"), str(g, "state"),
           {{"Add Folders",
@@ -57,7 +61,9 @@ void Backend::filesService() {
                       });
             }}});
     }
-    for (auto e : s["folders"].toArray()) {
+    if (foldersPage && s["folders"].toArray().isEmpty())
+      row("No Folders", "Choose Add Folder to select a folder from a paired gateway.");
+    if (foldersPage) for (auto e : s["folders"].toArray()) {
       auto f = e.toObject();
       row(str(f, "label"), str(f, "gateway") + " · " + str(f, "state"),
           {{"Browse",
@@ -83,28 +89,7 @@ void Backend::filesService() {
             }}});
     }
   });
-  call("storage", {}, [this](QJsonValue v, QString) {
-    auto o = v.toObject();
-    row("Storage",
-        "Cached: " + display(o["used"]) +
-            " bytes · Kept: " + display(o["kept"]) + " bytes",
-        {{"Set Cache Budget…", [this, o] {
-            form("Cache Budget",
-                 {field("MiB", "Cache size (MiB)",
-                        QString::number(o["budget"].toInteger() / (1 << 20)))},
-                 [this](auto p) {
-                   bool ok;
-                   auto size = p["MiB"].toString().toLongLong(&ok);
-                   if (!ok || size < 100 || size > 1024000) {
-                     fail("Enter 100–1024000 MiB.");
-                     return;
-                   }
-                   call(
-                       "storage.budget", {{"Bytes", size * (1 << 20)}},
-                       [this](auto, auto) { filesService(); }, true);
-                 });
-          }}});
-  });
+
 }
 void Backend::pending() {
   if (m_mode != "files") {

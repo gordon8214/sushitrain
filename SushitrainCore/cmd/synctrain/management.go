@@ -36,20 +36,20 @@ func (d *desktopUI) folders() {
 				if d.route == "Files" {
 					d.subpage(func() { d.folder = f.ID; d.directory = ""; d.browse() })
 				} else {
-					d.folder, d.directory = f.ID, ""
-					d.navigate("Files")
+					d.openFilesAt(f.ID, "", 0)
 				}
 			}))
 			actions := []struct {
 				name string
 				run  func()
 			}{
-				{"General", func() { d.edit("basic/folder/"+f.ID, "Folder Settings") }},
+				{"Overview", func() { d.edit("basic/folder/"+f.ID, "Folder Settings") }},
 				{"Synchronization", func() { d.edit("folder/"+f.ID, "Synchronization Settings") }},
-				{"Reset Synchronization Settings…", func() { d.edit("reset/folder/"+f.ID, "Reset Synchronization Settings") }},
-				{"Versioning", func() { d.edit("versioning/"+f.ID, "Versioning") }},
 				{"Sharing", func() { d.share(f) }},
+				{"Versioning", func() { d.edit("versioning/"+f.ID, "Versioning") }},
 				{"Ignore Patterns", func() { d.ignores(f.ID) }},
+				{"Advanced", func() { d.edit("advanced/folder/"+f.ID, "Advanced") }},
+				{"Reset Synchronization Settings…", func() { d.edit("reset/folder/"+f.ID, "Reset Synchronization Settings") }},
 				{"Failed Items", func() { d.failedItems(f.ID) }},
 				{"Deleted Files", func() { d.deletedFiles(f.ID) }},
 				{"Rescan", func() { d.action("rescan", f.ID, "") }},
@@ -146,8 +146,10 @@ func (d *desktopUI) devices() {
 				action = "resume"
 			}
 			r.AddSuffix(textButton(pause, func() { d.action(action, "", v.ID) }))
-			r.AddRow(choiceRow("General", "Name, addresses and trust", func() { d.edit("basic/device/"+v.ID, "Device Settings") }))
+			r.AddRow(choiceRow("Overview", "Name, addresses and trust", func() { d.edit("basic/device/"+v.ID, "Device Settings") }))
+			r.AddRow(choiceRow("Shared Folders", "Folders shared with this device", func() { d.sharedDeviceFolders(v.ID) }))
 			r.AddRow(choiceRow("Connection Settings", "Compression, limits and networks", func() { d.edit("device/"+v.ID, "Connection Settings") }))
+			r.AddRow(choiceRow("Advanced", "Expert device settings", func() { d.edit("advanced/device/"+v.ID, "Advanced") }))
 			r.AddRow(choiceRow("Offered Folders", "Folders this device wants to share", func() { d.offeredFolders(v.ID) }))
 			r.AddRow(choiceRow("Remove Device…", "", func() {
 				d.w.confirm("Remove “"+v.Name+"”?", "This device stops sharing folders with this machine.", "Remove", true, func() { d.action("remove", "", v.ID) })
@@ -349,6 +351,29 @@ func (d *desktopUI) offeredFolders(device string) {
 			}
 			if len(list) == 0 {
 				d.text("There are no offered folders.")
+			}
+		})
+	})
+}
+
+func (d *desktopUI) sharedDeviceFolders(device string) {
+	d.subpage(func() {
+		d.reset("Shared Folders")
+		d.load("engine.folders", nil, func(b json.RawMessage) {
+			var folders []desktopapi.Folder
+			if err := json.Unmarshal(b, &folders); err != nil {
+				d.error(err)
+				return
+			}
+			g := d.group("Shared Folders")
+			for _, f := range folders {
+				for _, id := range f.Devices {
+					if id == device {
+						folder := f
+						g.Add(choiceRow(f.Label, f.Path, func() { d.share(folder) }))
+						break
+					}
+				}
 			}
 		})
 	})

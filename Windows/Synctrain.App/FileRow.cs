@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 namespace Synctrain_App;
 
-public sealed record FileAction(string Label, Func<Task> Run);
-public sealed record FileRow(string Title, string Detail, Func<Task> Open, IReadOnlyList<FileAction> Actions)
+public sealed record FileAction(string Label, Func<Task> Run, string ID = "");
+public sealed record FileRow(string Title, string Detail, Func<Task> Open, IReadOnlyList<FileAction> Actions, string Identity = "")
 {
     public string OpenLabel => "Open " + Title;
     public string ActionsLabel => "Actions for " + Title;

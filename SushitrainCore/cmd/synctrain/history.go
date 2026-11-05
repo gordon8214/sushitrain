@@ -49,7 +49,7 @@ func (d *desktopUI) historySources() {
 	})
 }
 func (d *desktopUI) pairLink(link string) {
-	if d.mode == modeSynchronize || d.route == "History Sources" {
+	if d.mode == modeSynchronize || d.route == "History" {
 		d.pairHistory(link)
 	} else {
 		d.input("Pair with a Gateway", "Approve this machine on the gateway after continuing.", link, func(link string) { d.run("pair", map[string]string{"Link": link}, nil) })

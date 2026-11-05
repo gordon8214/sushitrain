@@ -40,7 +40,8 @@ extension FileProviderExtension: NSFileProviderThumbnailing {
 				var data: Data? = nil
 				var error: (any Error)? = nil
 				do {
-					if let id = identifier.itemID, let item = try context.store.item(id: id), item.kind == .file,
+					if let id = try identifier.itemID(in: context.store), let item = try context.store.item(id: id),
+						item.kind == .file,
 						let binding = try context.remoteBinding(folderID: item.folderID)
 					{
 						let type = UTType(filenameExtension: (item.name as NSString).pathExtension) ?? .data

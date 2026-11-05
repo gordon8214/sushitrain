@@ -18,6 +18,7 @@ import (
 	glibv2 "github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"t-shaped.nl/sushitrain/v2/desktopapi"
+	"t-shaped.nl/sushitrain/v2/desktopui"
 	"t-shaped.nl/sushitrain/v2/files"
 )
 
@@ -32,9 +33,25 @@ type browserRow struct {
 }
 
 func (d *desktopUI) browse() {
+	scope := fmt.Sprintf("%s:%s:%s:%d", d.mode, d.folder, d.directory, d.parent)
+	d.browserLoadTarget = len(d.browserRows)
+	if scope != d.browserScope {
+		d.browserSelected = ""
+		d.browserFilter = ""
+		d.browserLoadTarget = 0
+	}
+	d.browserScope = scope
+	if len(d.pages) > 0 {
+		d.pages[len(d.pages)-1].browser = true
+	}
 	d.browserRows = nil
-	d.browserSelected = ""
 	d.browserSearch = false
+	title := "Files"
+	if len(d.pages) > 0 {
+		title = d.pages[len(d.pages)-1].page.Title()
+	}
+	d.reset(title)
+	d.text("Loading…")
 	d.browsePage(0)
 }
 func (d *desktopUI) browsePage(offset int) {
@@ -83,6 +100,10 @@ func (d *desktopUI) browsePage(offset int) {
 			}
 		}
 		d.browserRows = append(d.browserRows, rows...)
+		if len(d.browserRows) < d.browserLoadTarget && d.browserNext > 0 {
+			d.browsePage(d.browserNext)
+			return
+		}
 		d.showBrowser(d.browserRows)
 	})
 }
@@ -94,6 +115,7 @@ func (r browserRow) key() string {
 }
 
 func (d *desktopUI) showBrowser(rows []browserRow) {
+	d.filesCacheInvalid = false
 	gridMode := d.preferences.Grid
 	title := "Files"
 	if d.directory != "" {
@@ -155,6 +177,8 @@ func (d *desktopUI) showBrowser(rows []browserRow) {
 	}
 	filter := gtk.NewSearchEntry()
 	filter.SetPlaceholderText("Filter this folder")
+	filter.SetText(d.browserFilter)
+	filter.NotifyProperty("text", func() { d.browserFilter = filter.Text() })
 	d.body.Append(filter)
 	model := gtk.NewStringList(nil)
 	selection := gtk.NewSingleSelection(model)
@@ -453,11 +477,84 @@ func (d *desktopUI) fileActionsPage(r browserRow) {
 			d.button("Show in Files", func() { d.w.openPath(filepath.Dir(r.native)) })
 		}
 	}
+	d.button("Information", func() { d.subpage(func() { d.reset("Information"); d.text(r.name); d.text(r.path); d.text(r.detail) }) })
+	if !r.directory {
+		d.button("Preview", func() { d.openBrowserRow(r) })
+	}
+	d.orderFileActions()
+
 }
+
+// Primary actions remain in the toolbar; the rest use a native overflow popover.
+func (d *desktopUI) orderFileActions() {
+	var buttons []*gtk.Button
+	for child := d.commands.FirstChild(); child != nil; child = d.commands.FirstChild() {
+		wrapper := gtk.BaseWidget(child).Cast().(*gtk.FlowBoxChild)
+		button, ok := wrapper.Child().(*gtk.Button)
+		if !ok {
+			break
+		}
+		buttons = append(buttons, button)
+		wrapper.SetChild(nil)
+		d.commands.Remove(child)
+	}
+	order := desktopui.Read().DetailDescriptors["fileActions"]
+	rank := func(label string) int {
+		id := "information"
+		switch {
+		case strings.HasPrefix(label, "Open"):
+			id = "open"
+		case label == "Preview":
+			id = "preview"
+		case strings.HasPrefix(label, "Keep") || strings.HasPrefix(label, "Stop Keeping"):
+			id = "offline"
+		case strings.HasPrefix(label, "Delete") || strings.HasPrefix(label, "Move to Trash"):
+			id = "delete"
+		case strings.HasPrefix(label, "Rename") || strings.HasPrefix(label, "Move"):
+			id = "renameMove"
+		case label == "Previous Versions":
+			id = "previousVersions"
+		}
+		for i, entry := range order {
+			if entry.ID == id {
+				return i
+			}
+		}
+		return len(order)
+	}
+	sort.SliceStable(buttons, func(i, j int) bool { return rank(buttons[i].Label()) < rank(buttons[j].Label()) })
+	overflow := gtk.NewMenuButton()
+	overflow.SetIconName("view-more-symbolic")
+	overflow.SetTooltipText("More Actions")
+	popover := gtk.NewPopover()
+	box := gtk.NewBox(gtk.OrientationVertical, 4)
+	popover.SetChild(box)
+	overflow.SetPopover(popover)
+	for i, button := range buttons {
+		if i < 2 {
+			d.commands.Insert(button, -1)
+		} else {
+			box.Append(button)
+			button.ConnectClicked(popover.Popdown)
+		}
+	}
+	if len(buttons) > 2 {
+		d.commands.Insert(overflow, -1)
+	}
+}
+
 func (d *desktopUI) searchFiles(query string) {
 	d.subpage(func() { d.searchFilesPage(query) })
 }
 func (d *desktopUI) searchFilesPage(query string) {
+	scope := fmt.Sprintf("%s:%s:%s:%d:search:%s", d.mode, d.folder, d.directory, d.parent, query)
+	if scope != d.browserScope {
+		d.browserSelected, d.browserFilter = "", ""
+	}
+	d.browserScope = scope
+	if len(d.pages) > 0 {
+		d.pages[len(d.pages)-1].browser = true
+	}
 	d.reset("Search Results")
 	d.browserNext = 0
 	d.browserSearch = true

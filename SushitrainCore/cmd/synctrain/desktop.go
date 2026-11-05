@@ -17,6 +17,7 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"t-shaped.nl/sushitrain/v2/adminsock"
 	"t-shaped.nl/sushitrain/v2/desktopapi"
+	"t-shaped.nl/sushitrain/v2/desktopui"
 )
 
 type desktopUI struct {
@@ -28,18 +29,33 @@ type desktopUI struct {
 	browserRows                            []browserRow
 	browserNext                            int
 	browserSelected                        string
+	browserFilter, browserScope            string
+	browserLoadTarget                      int
+	filesCacheInvalid                      bool
 	parent                                 int64
 	preferences                            Preferences
 	w                                      *mainWindow
 	root                                   *adw.NavigationSplitView
 	navigation                             *adw.NavigationView
 	pages                                  []*navigationPage
+	retainedFiles                          []*navigationPage
+	resumeFiles                            func()
 	detail                                 *adw.ToolbarView
 	body                                   *gtk.Box
 	commands                               *gtk.FlowBox
 	banner                                 *adw.Banner
 	sidebar                                *gtk.ListBox
+	sidebarRoutes                          []string
+	updatingSidebar                        bool
+	sidebarBack, sidebarSettings           *gtk.Button
+	folderShortcuts                        *adw.ExpanderRow
+	shortcutRows                           []gtk.Widgetter
+	shortcutsExpanded                      bool
+	shortcutGeneration                     uint64
+	shortcutContext                        context.Context
+	shortcutCancel                         context.CancelFunc
 	route, mode, socket, folder, directory string
+	appRoute                               string
 	ctx                                    context.Context
 	cancel                                 context.CancelFunc
 	generation                             uint64
@@ -49,7 +65,7 @@ type desktopUI struct {
 	timer                                  coreglib.SourceHandle
 }
 
-var desktopRoutes = []string{"Overview", "Folders", "Devices", "Files", "Remote Files", "History Sources", "Pending Changes", "Settings"}
+var desktopRoutes = desktopui.MainTitles()
 
 func newDesktopUI(w *mainWindow) *desktopUI {
 	d := &desktopUI{w: w, mode: readMode(), route: "Overview", preferences: readPreferences()}
@@ -61,23 +77,21 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 	d.sidebar = gtk.NewListBox()
 	d.sidebar.AddCSSClass("navigation-sidebar")
 	d.sidebar.SetSelectionMode(gtk.SelectionSingle)
-	pages := desktopRoutes
-	for _, name := range pages {
-		r := gtk.NewListBoxRow()
-		l := gtk.NewLabel(name)
-		l.SetXAlign(0)
-		l.SetMarginTop(12)
-		l.SetMarginBottom(12)
-		l.SetMarginStart(12)
-		r.SetChild(l)
-		d.sidebar.Append(r)
-	}
 	side := adw.NewToolbarView()
 	h := adw.NewHeaderBar()
-	h.SetTitleWidget(gtk.NewLabel("Synctrain"))
+	h.SetTitleWidget(gtk.NewLabel(""))
 	side.AddTopBar(h)
-	side.SetContent(d.sidebar)
-	d.root.SetSidebar(adw.NewNavigationPage(side, "Synctrain"))
+	column := gtk.NewBox(gtk.OrientationVertical, 0)
+	d.sidebarBack = textButton("Back to App", func() { d.guard(func() { d.navigate(d.appDestination()) }) })
+	column.Append(d.sidebarBack)
+	scroll := gtk.NewScrolledWindow()
+	scroll.SetVExpand(true)
+	scroll.SetChild(d.sidebar)
+	column.Append(scroll)
+	d.sidebarSettings = textButton("Settings", func() { d.guard(func() { d.navigate("Settings") }) })
+	column.Append(d.sidebarSettings)
+	side.SetContent(column)
+	d.root.SetSidebar(adw.NewNavigationPage(side, "Navigation"))
 	d.navigation = adw.NewNavigationView()
 	d.navigation.ConnectPopped(func(*adw.NavigationPage) { d.pagePopped() })
 	d.root.SetContent(adw.NewNavigationPage(d.navigation, "Synctrain"))
@@ -87,14 +101,14 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 		}
 	})
 	d.sidebar.ConnectRowSelected(func(r *gtk.ListBoxRow) {
-		if r == nil {
+		if r == nil || d.updatingSidebar || r.Index() >= len(d.sidebarRoutes) {
 			return
 		}
-		next := pages[r.Index()]
+		next := d.sidebarRoutes[r.Index()]
 		if next == d.route {
 			return
 		}
-		for i, name := range pages {
+		for i, name := range d.sidebarRoutes {
 			if name == d.route {
 				d.sidebar.SelectRow(d.sidebar.RowAtIndex(i))
 				break
@@ -102,6 +116,7 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 		}
 		d.guard(func() { d.navigate(next) })
 	})
+	d.rebuildSidebar()
 	d.sidebar.SelectRow(d.sidebar.RowAtIndex(0))
 	d.showRoute()
 	d.timer = coreglib.TimeoutSecondsAdd(2, func() bool {
@@ -124,6 +139,9 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 	return d
 }
 func (d *desktopUI) close() {
+	if d.shortcutCancel != nil {
+		d.shortcutCancel()
+	}
 	d.closeEditor()
 	if d.closed {
 		return
@@ -158,7 +176,30 @@ func (d *desktopUI) closeEditor() {
 		go d.request(context.Background(), "settings.close", desktopapi.Request{Token: token}, nil)
 	}
 }
+func (d *desktopUI) appDestination() string {
+	if d.appRoute != "" {
+		return d.appRoute
+	}
+	return "Overview"
+}
+
 func (d *desktopUI) navigate(route string) {
+	route = canonicalRoute(route)
+	if route == "Files" && d.route == route && len(d.pages) > 0 {
+		d.root.SetShowContent(true)
+		return
+	}
+	if d.route == "Files" && route != "Files" && len(d.pages) > 0 {
+		complete := d.editor == "" && !d.dirty && !d.saving
+		for _, page := range d.pages {
+			complete = complete && page.pending == 0 && !page.editor
+		}
+		if complete {
+			current := d.pages[len(d.pages)-1]
+			current.body, current.commands, current.focus = d.body, d.commands, d.w.win.Focus()
+			d.retainedFiles, d.resumeFiles = d.pages, d.browserState()
+		}
+	}
 	d.closeEditor()
 	d.cancel()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
@@ -167,17 +208,58 @@ func (d *desktopUI) navigate(route string) {
 		d.stopPage()
 		d.stopPage = nil
 	}
-	d.route = route
-	for i, name := range desktopRoutes {
-		if name == route {
-			d.sidebar.SelectRow(d.sidebar.RowAtIndex(i))
-			break
-		}
+	if strings.HasPrefix(route, "settings:") && !strings.HasPrefix(d.route, "settings:") {
+		d.appRoute = d.route
 	}
+	d.route = route
+	d.rebuildSidebar()
 	d.root.SetShowContent(true)
 	d.dirty = false
+	if route == "Files" && len(d.retainedFiles) > 0 {
+		d.pages = append([]*navigationPage(nil), d.retainedFiles...)
+		d.resumeFiles()
+		d.retainedFiles, d.resumeFiles = nil, nil
+		current := d.pages[len(d.pages)-1]
+		if d.filesCacheInvalid {
+			for len(d.pages) > 1 && !d.pages[len(d.pages)-1].browser {
+				d.pages = d.pages[:len(d.pages)-1]
+			}
+			ancestor := d.pages[len(d.pages)-1]
+			if ancestor != current && ancestor.resume != nil {
+				ancestor.resume()
+			}
+			current = ancestor
+		}
+		d.restoreNavigationPage(current)
+		pages := make([]*adw.NavigationPage, len(d.pages))
+		for i, page := range d.pages {
+			pages[i] = page.page
+		}
+		d.navigation.Replace(pages)
+		if d.filesCacheInvalid {
+			d.filesCacheInvalid = false
+			d.detail.SetSensitive(false)
+			current.show()
+		}
+		d.updateNavigation()
+		d.focusPage()
+		d.populateFolderShortcuts()
+		return
+	}
 	d.showRoute()
 }
+
+// Explicit folder targets supersede a retained browser location.
+func (d *desktopUI) openFilesAt(folder, directory string, parent int64) {
+	d.retainedFiles, d.resumeFiles = nil, nil
+	d.folder, d.directory, d.parent = folder, directory, parent
+	if d.route == "Files" {
+		d.showRoute()
+	} else {
+		d.navigate("Files")
+	}
+}
+
 func (d *desktopUI) request(ctx context.Context, method string, p, result any) error {
 	if d.mode == modeSynchronize {
 		d.resolveOnce.Do(func() { home, err := describeHome(); d.socket = home.Socket; d.resolveErr = err })
@@ -255,6 +337,7 @@ func (d *desktopUI) runWithFailure(method string, p any, done func(json.RawMessa
 			return
 		}
 
+		d.filesCacheInvalid = true
 		if done != nil {
 			done(out)
 		} else {
@@ -314,10 +397,15 @@ func (d *desktopUI) showRoute() {
 	d.pages = []*navigationPage{p}
 	d.navigation.Replace([]*adw.NavigationPage{p.page})
 	d.renderRoute()
+	d.populateFolderShortcuts()
 }
 
 func (d *desktopUI) renderRoute() {
 	d.reset(d.route)
+	if strings.HasPrefix(d.route, "settings:") {
+		d.settingsCategory(strings.TrimPrefix(d.route, "settings:"))
+		return
+	}
 	switch d.route {
 	case "Overview":
 		d.overview()
@@ -335,7 +423,7 @@ func (d *desktopUI) renderRoute() {
 		}
 	case "Files":
 		d.browse()
-	case "Remote Files":
+	case "Remote Access":
 		if d.mode == modeFiles {
 			d.legacyFiles()
 		} else {
@@ -343,20 +431,27 @@ func (d *desktopUI) renderRoute() {
 			d.detail.SetContent(widget)
 			d.stopPage = stop
 		}
-	case "History Sources":
-		d.historySources()
-	case "Pending Changes":
-		if d.mode == modeFiles {
-			d.legacyFiles()
-		} else {
-			d.text("Pending changes are available in Files mode.")
-		}
+	case "History":
+		d.historyPage()
+	case "Activity":
+		d.activityPage()
 	case "Settings":
 		d.settings()
 	}
 }
 func (d *desktopUI) legacyFiles() {
-	widget, stop := newFilesView(d.w)
+	selected := "folders"
+	switch d.route {
+	case "Remote Access":
+		selected = "gateways"
+	case "Activity":
+		selected = "changes"
+	default:
+		if strings.HasPrefix(d.route, "settings:") {
+			selected = "storage"
+		}
+	}
+	widget, stop := newFilesPage(d.w, selected)
 	d.detail.SetContent(widget)
 	d.stopPage = stop
 }
@@ -366,37 +461,57 @@ func (d *desktopUI) action(action, folder, device string) {
 func (d *desktopUI) overview() {
 	d.reset("Overview")
 	d.serviceButtons()
+	groups := map[string]*adw.PreferencesGroup{}
+	labels := map[string]string{"status": "Status", "attention": "Needs Attention", "summary": "Synchronization", "storage": "Storage"}
+	if d.mode == modeFiles {
+		labels["summary"] = "Gateways"
+	}
+	for _, destination := range desktopui.Read().Destinations {
+		if destination.ID == "overview" {
+			for _, id := range destination.Sections {
+				groups[id] = d.group(labels[id])
+			}
+		}
+	}
 	heading := gtk.NewLabel("Connecting to the background service…")
 	heading.SetXAlign(0)
 	heading.SetWrap(true)
-	d.body.Append(heading)
+	groups["status"].Add(heading)
 	identity := gtk.NewLabel("")
 	identity.SetSelectable(true)
 	identity.SetWrap(true)
 	identity.SetXAlign(0)
-	d.body.Append(identity)
-	summary := gtk.NewLabel("")
-	summary.SetXAlign(0)
-	d.body.Append(summary)
+	groups["status"].Add(identity)
+	reason := gtk.NewLabel("")
+	reason.SetXAlign(0)
+	reason.SetWrap(true)
+	groups["attention"].Add(reason)
+	gatewaySummary := gtk.NewLabel("")
+	gatewaySummary.SetXAlign(0)
+	gatewaySummary.SetVisible(d.mode == modeFiles)
+	groups["summary"].Add(gatewaySummary)
 	download := gtk.NewProgressBar()
 	download.SetShowText(true)
 	download.SetVisible(d.mode == modeSynchronize)
-	d.body.Append(download)
+	groups["summary"].Add(download)
 	upload := gtk.NewProgressBar()
 	upload.SetShowText(true)
 	upload.SetVisible(d.mode == modeSynchronize)
-	d.body.Append(upload)
-	reason := gtk.NewLabel("")
-	reason.SetXAlign(0)
-	d.body.Append(reason)
+	groups["summary"].Add(upload)
+	summary := gtk.NewLabel("")
+	summary.SetXAlign(0)
+	summary.SetWrap(true)
+	groups["storage"].Add(summary)
 	if d.mode == modeSynchronize {
 		d.button("Pause All", func() { d.action("pauseAll", "", "") })
 		d.button("Resume All", func() { d.action("resumeAll", "", "") })
 		d.button("Rescan All", func() { d.action("rescanAll", "", "") })
 	}
+
 	type snapshot struct {
 		Status struct {
 			DeviceID, Name, State, Mount string
+			Folders                      []struct{ Label, State string }
 			RestartRequired              bool
 		}
 		Stats struct {
@@ -411,7 +526,8 @@ func (d *desktopUI) overview() {
 				}
 			}
 		}
-		Policy struct{ Reason string }
+		Policy  struct{ Reason string }
+		Storage struct{ Used, Kept, Budget int64 }
 	}
 	updating := false
 	generation := d.generation
@@ -429,6 +545,11 @@ func (d *desktopUI) overview() {
 			}
 			if err := d.request(ctx, method, nil, &state.Status); err != nil {
 				return state, err
+			}
+			if d.mode == modeFiles {
+				if err := d.request(ctx, "storage", nil, &state.Storage); err != nil {
+					return state, err
+				}
 			}
 			if d.mode == modeSynchronize {
 				if err := d.request(ctx, "engine.stats", nil, &state.Stats); err != nil {
@@ -451,6 +572,9 @@ func (d *desktopUI) overview() {
 			if d.mode == modeFiles {
 				heading.SetText("Files mode — folders are fetched as you open them")
 				identity.SetText(s.Status.Mount)
+				gatewaySummary.SetText(fmt.Sprintf("%d folders available", len(s.Status.Folders)))
+				summary.SetText(fmt.Sprintf("Cached: %s · Kept: %s · Cache budget: %s", humanBytes(s.Storage.Used), humanBytes(s.Storage.Kept), humanBytes(s.Storage.Budget)))
+				reason.SetText("Gateway connection and pending-edit problems are shown in Remote Access and Activity.")
 				return
 			}
 			d.deviceID = s.Status.DeviceID

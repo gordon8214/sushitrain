@@ -5,6 +5,9 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SwiftUI
 @preconcurrency import SushitrainCore
+#if os(macOS)
+	import SynctrainHostKit
+#endif
 
 private struct OverallDownloadProgressView: View {
 	@Environment(AppState.self) private var appState
@@ -272,59 +275,69 @@ struct StartView: View {
 	@State private var changesCount = 0
 	@State private var showMaintenance = false
 	@State private var lastDatabaseMaintenance: Date? = nil
+	#if os(macOS)
+		@State private var totals: SushitrainFolderStats?
+	#endif
 
 	var body: some View {
 		Form {
-			Section {
-				OverallStatusView()
-					.contextMenu {
-						Button("Statistics...") {
-							openWindow(id: "stats")
-						}
-					}
-
-				NetworkStatusView(userSettings: userSettings)
-			}
-
 			#if os(macOS)
-				CrashNoticeSection()
-			#endif
-
-			Section(header: Text("This device's identifier")) {
-				DeviceIDView(device: self.appState.client.peer(withID: self.appState.localDeviceID)!)
-			}
-
-			// Disk space warning
-			if !isDiskSpaceSufficient {
-				Section {
-					DiskSpaceWarningView()
+				ForEach(DesktopUICatalog.desktop.destinations.first { $0.id == "overview" }?.sections ?? [], id: \.self) { id in
+					desktopSection(id)
 				}
-			}
+			#else
 
-			// Getting started, device issues
-			if let p = peers, p.isEmpty {
-				self.gettingStartedDevices()
-			}
-			self.deviceIssuesSection()
+				Section {
+					OverallStatusView()
+						.contextMenu {
+							Button("Statistics...") {
+								openWindow(id: "stats")
+							}
+						}
 
-			// Getting started, folder issues
-			if let f = folders, f.isEmpty {
-				self.gettingStartedFolders()
-			}
-			self.folderIssuesSection()
+					NetworkStatusView(userSettings: userSettings)
+				}
 
-			self.maintenanceIssuesSection()
+				#if os(macOS)
+					CrashNoticeSection()
+				#endif
 
-			Section("Manage files and folders") {
-				NavigationLink(destination: ChangesView(userSettings: appState.userSettings)) {
-					Label("Recent changes", systemImage: "clock.arrow.2.circlepath").badge(changesCount)
-				}.disabled(changesCount == 0)
-			}
+				Section(header: Text("This device's identifier")) {
+					DeviceIDView(device: self.appState.client.peer(withID: self.appState.localDeviceID)!)
+				}
 
-			self.bookmarksSection()
+				// Disk space warning
+				if !isDiskSpaceSufficient {
+					Section {
+						DiskSpaceWarningView()
+					}
+				}
+
+				// Getting started, device issues
+				if let p = peers, p.isEmpty {
+					self.gettingStartedDevices()
+				}
+				self.deviceIssuesSection()
+
+				// Getting started, folder issues
+				if let f = folders, f.isEmpty {
+					self.gettingStartedFolders()
+				}
+				self.folderIssuesSection()
+
+				self.maintenanceIssuesSection()
+
+				Section("Manage files and folders") {
+					NavigationLink(destination: ChangesView(userSettings: appState.userSettings)) {
+						Label("Recent changes", systemImage: "clock.arrow.2.circlepath").badge(changesCount)
+					}.disabled(changesCount == 0)
+				}
+
+				self.bookmarksSection()
+			#endif
 		}
 		.formStyle(.grouped)
-		.navigationTitle("Start")
+		.navigationTitle("Overview")
 		.sheet(isPresented: Binding.isNotNil($fixingInaccessibleExternalFolder)) {
 			if let fe = self.fixingInaccessibleExternalFolder {
 				NavigationStack {
@@ -356,6 +369,57 @@ struct StartView: View {
 			}
 		}
 	}
+
+	#if os(macOS)
+		@ViewBuilder private func desktopSection(_ id: String) -> some View {
+			switch id {
+			case "status":
+				Section("Status") {
+					OverallStatusView().contextMenu { Button("Statistics…") { openWindow(id: "stats") } }
+					NetworkStatusView(userSettings: userSettings)
+					DisclosureGroup("This Device’s Identifier") {
+						if let device = appState.client.peer(withID: appState.localDeviceID) { DeviceIDView(device: device) }
+					}
+				}
+			case "attention":
+				Section("Needs Attention") {
+					if isDiskSpaceSufficient && inaccessibleExternalFolders.isEmpty && foldersWithIssues.isEmpty
+						&& longTimeNotSeenDevices.isEmpty && !showNoPeersEnabledWarning
+					{
+						Text("No synchronization problems reported.")
+					}
+					if !isDiskSpaceSufficient { DiskSpaceWarningView() }
+				}
+				CrashNoticeSection()
+				if let peers, peers.isEmpty { gettingStartedDevices() }
+				deviceIssuesSection()
+				if let folders, folders.isEmpty { gettingStartedFolders() }
+				folderIssuesSection()
+				maintenanceIssuesSection()
+			case "summary":
+				Section("Synchronization") {
+					Text("\(folders?.count ?? 0) folders · \(peers?.filter { !$0.isSelf() }.count ?? 0) devices")
+					NavigationLink("Downloads") { DownloadsView() }
+					NavigationLink("Uploads") { UploadsView() }
+					NavigationLink(destination: ChangesView(userSettings: appState.userSettings)) {
+						Label("Recent Changes", systemImage: "clock.arrow.2.circlepath").badge(changesCount)
+					}.disabled(changesCount == 0)
+				}
+				bookmarksSection()
+			case "storage":
+				Section("Storage") {
+					if let local = totals?.local {
+						LabeledContent("Local files", value: local.files.formatted())
+						LabeledContent("Local storage", value: local.bytes.formatted(.byteCount(style: .file)))
+					}
+					else {
+						Text("Storage information is unavailable while the engine is starting.")
+					}
+				}
+			default: EmptyView()
+			}
+		}
+	#endif
 
 	@ViewBuilder private func bookmarksSection() -> some View {
 		if !self.userSettings.bookmarkedRoutes.isEmpty {
@@ -578,6 +642,10 @@ struct StartView: View {
 	}
 
 	private func update() async {
+		#if os(macOS)
+			let client = appState.client
+			totals = await Task.detached(priority: .utility) { try? client.statistics() }.value
+		#endif
 		self.lastDatabaseMaintenance = appState.client.lastMaintenanceTime()?.date()
 		await self.updateFoldersWithIssues()
 

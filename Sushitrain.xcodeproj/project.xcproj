@@ -25,6 +25,7 @@
     },
   ],
   "files": [
+    { "path": "SushitrainCore/desktopui/catalog.json", "target-membership": [ "Synctrain/resources" ] },
     {
       "path": "Localizable.xcstrings",
       "target-membership": [

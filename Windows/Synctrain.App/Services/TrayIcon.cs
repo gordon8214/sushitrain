@@ -54,6 +54,7 @@ internal sealed class TrayIcon : IDisposable
         try
         {
             AppendMenu(menu, 0, 1, "Open Synctrain");
+            AppendMenu(menu, 0, 6, "Settings");
             if(Synchronize){
             AppendMenu(menu, 0, 2, "Pause All Devices");
             AppendMenu(menu, 0, 3, "Resume All Devices");

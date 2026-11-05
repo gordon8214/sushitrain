@@ -17,7 +17,7 @@ public partial class App : Application
     {
         try {
         var activation = AppInstance.GetCurrent().GetActivatedEventArgs();
-        instance = AppInstance.FindOrRegisterForKey("Synctrain");
+        instance = AppInstance.FindOrRegisterForKey(HostClient.IsolatedTest ? "Synctrain.UIFixture" : "Synctrain");
         if (!instance.IsCurrent) { await instance.RedirectActivationToAsync(activation); Exit(); return; }
         window = new MainWindow();
         instance.Activated += (_, incoming) => window.DispatcherQueue.TryEnqueue(async () =>

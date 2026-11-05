@@ -87,7 +87,7 @@
 							.labelStyle(.titleOnly)
 					}
 				}
-				NavigationLink("Web GUI and REST API settings") {
+				GuardedSettingsLink("Web GUI and REST API settings") {
 					GUISettingsView()
 				}
 			} header: {

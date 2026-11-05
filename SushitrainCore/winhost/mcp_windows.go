@@ -61,13 +61,17 @@ func (h *Host) registerMCP(server *adminsock.Server) error {
 	}
 	probe.Close()
 	for _, name := range names {
-		api.Register(name, func(ctx context.Context, b json.RawMessage) (any, error) {
+		handler := func(ctx context.Context, b json.RawMessage) (any, error) {
 			ctx, finish, err := h.begin(ctx)
 			if err != nil {
 				return nil, err
 			}
 			defer finish()
 			if h.client == nil {
+				// Mode changes already dispose the previous engine's editors.
+				if name == "settings.close" {
+					return nil, nil
+				}
 				return nil, errors.New("the engine is not running in Files mode")
 			}
 			h.mcpMu.Lock()
@@ -81,7 +85,10 @@ func (h *Host) registerMCP(server *adminsock.Server) error {
 				return nil, err
 			}
 			return control.Call(ctx, name, p)
-		})
+		}
+		api.Register(name, handler)
+		// Native UI access uses the host lease and existing engine validation, independently of assistant enablement.
+		server.Register("desktop."+name, handler)
 	}
 	mcpfiles.Register(api, func(ctx context.Context, call func(context.Context, *files.Service, string) (any, error)) (any, error) {
 		ctx, finish, err := h.begin(ctx)
@@ -98,6 +105,15 @@ func (h *Host) registerMCP(server *adminsock.Server) error {
 		}
 		return result, err
 	})
+	// The native Files UI uses the same contained operations and optimistic identities as assistants.
+	for _, method := range api.Methods() {
+		if strings.HasPrefix(method, "mcp.files.") {
+			server.Register("desktop."+strings.TrimPrefix(method, "mcp."), func(ctx context.Context, b json.RawMessage) (any, error) {
+				return api.Invoke(ctx, method, b)
+			})
+		}
+	}
+
 	for method, native := range map[string]string{"exports.list": "gateway.exports", "exports.set": "gateway.export", "exports.remove": "gateway.unexport", "clients.list": "gateway.clients", "clients.revoke": "gateway.revoke", "clients.permission": "gateway.permission", "pairing.pending": "gateway.pending", "pairing.approve": "gateway.approve", "pairing.deny": "gateway.deny"} {
 		api.Register(method, func(ctx context.Context, b json.RawMessage) (any, error) {
 			var p struct {

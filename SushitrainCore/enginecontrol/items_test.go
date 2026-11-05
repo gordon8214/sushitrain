@@ -116,4 +116,48 @@ func TestDesktopItemsIgnoredDirectoryOutsideIndex(t *testing.T) {
 	if len(items) != 1 || items[0].Error != "" || items[0].State != "ignored" || !items[0].Directory {
 		t.Fatalf("ignored directory status: %+v", items)
 	}
+
+	t.Run("checked delete preserves a replacement", func(t *testing.T) {
+		name := "delete-fixture.txt"
+		path := filepath.Join(data, name)
+		if err := os.WriteFile(path, []byte("original"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := folder.RescanSubdirectory(""); err != nil {
+			t.Fatal(err)
+		}
+		var entry *core.Entry
+		for entry == nil {
+			entry, _ = folder.GetFileInformation(name)
+			if entry != nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatal("fixture did not enter the index", ctx.Err())
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+		token := entry.DesktopIdentity()
+		if token == "" {
+			t.Fatal("missing fixture identity")
+		}
+		replacement := []byte("replacement with a different size")
+		if err := os.WriteFile(path, replacement, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.Call(ctx, "engine.action", Request{Folder: "desktop-items", Path: name, Action: "deleteFile", Token: token}); err == nil {
+			t.Fatal("stale delete accepted")
+		}
+		if got, err := os.ReadFile(path); err != nil || string(got) != string(replacement) {
+			t.Fatal("replacement was changed", err)
+		}
+		current := entry.DesktopIdentity()
+		if _, err := c.Call(ctx, "engine.action", Request{Folder: "desktop-items", Path: name, Action: "deleteFile", Token: current}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("confirmed file was not deleted", err)
+		}
+	})
 }

@@ -145,6 +145,13 @@ struct EntryContextMenuWrapper<Content: View>: View {
 
 	@Environment(\.openWindow) private var openWindow
 	@State private var showVersions = false
+	#if os(macOS)
+		@State private var desktopEdit: DesktopEntryEdit?
+		@State private var desktopInfo = false
+		@State private var deleting: DesktopEntryEdit?
+		@State private var operationError: ErrorMessage?
+		@Environment(\.navigateTo) private var navigateTo
+	#endif
 
 	private func previewFile() {
 		openWindow(id: "preview", value: Preview(folderID: entry.folder!.folderID, path: entry.path()))
@@ -186,60 +193,85 @@ struct EntryContextMenuWrapper<Content: View>: View {
 		self.innerTapToViewable()
 			.draggable(entry)
 			.contextMenu {
-				if appState.userSettings.tapFileToPreview {
-					NavigationLink(
-						destination: EntryInfoView(entry: entry, showPath: self.inFolder == nil, siblings: siblings)
-					) { Label("Show info", systemImage: entry.systemImage) }
-				}
+				#if os(macOS)
+					DesktopSyncFileMenu(
+						entry: entry, info: { desktopInfo = true }, versions: { showVersions = true },
+						delete: { deleting = DesktopEntryEdit(entry: entry, kind: .delete) },
+						edit: { desktopEdit = $0 }
+					) {
+						Button("Copy", systemImage: "document.on.document") { copy() }.disabled(!entry.isLocallyPresent())
+						EntryShareButton(entry: entry, showDownloader: $showDownloader)
+						if entry.canShowInFinder {
+							Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
+								do { try entry.showInFinder() }
+								catch { operationError = ErrorMessage(error) }
+							}
+						}
+						if inFolder == nil, let folder = entry.folder {
+							Button("Go to Location") { navigateTo(.folder(folderID: folder.folderID, prefix: entry.parentPath())) }
+						}
+						if entry.hasExternalSharingURL {
+							Divider()
+							FileSharingLinksView(entry: entry, sync: true)
+						}
+					}
+				#else
 
-				if !appState.userSettings.tapFileToPreview {
-					Button("Show preview", systemImage: "doc.text.magnifyingglass") { self.previewFile() }
-						.disabled(!entry.canAttemptPreview)
-				}
-
-				// Show file in Finder
-				if entry.canShowInFinder {
-					Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
-						try? entry.showInFinder()
-					}.labelStyle(.titleAndIcon)
-				}
-
-				if entry.canShowVersions {
-					Button("Previous Versions...", systemImage: "clock.arrow.circlepath") {
-						showVersions = true
-					}.labelStyle(.titleAndIcon)
-				}
-
-				Button("Copy", systemImage: "document.on.document") {
-					self.copy()
-				}
-				.disabled(!entry.isLocallyPresent())
-				.labelStyle(.titleAndIcon)
-
-				// Regular sharing
-				EntryShareButton(entry: entry, showDownloader: $showDownloader)
-
-				// Show 'go to location' in list if we are not in the file's folder already
-				if self.inFolder == nil {
-					if let folder = entry.folder {
+					if appState.userSettings.tapFileToPreview {
 						NavigationLink(
-							destination: BrowserView(folder: folder, prefix: entry.parentPath(), userSettings: appState.userSettings)
-						) {
-							let parentFolderName = entry.parentFolderName
-							if parentFolderName.isEmpty {
-								Label("Go to location", systemImage: "document.circle")
-							}
-							else {
-								Label("Go to directory '\(parentFolderName)'", systemImage: "document.circle")
-							}
+							destination: EntryInfoView(entry: entry, showPath: self.inFolder == nil, siblings: siblings)
+						) { Label("Show info", systemImage: entry.systemImage) }
+					}
+
+					if !appState.userSettings.tapFileToPreview {
+						Button("Show preview", systemImage: "doc.text.magnifyingglass") { self.previewFile() }
+							.disabled(!entry.canAttemptPreview)
+					}
+
+					// Show file in Finder
+					if entry.canShowInFinder {
+						Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
+							try? entry.showInFinder()
 						}.labelStyle(.titleAndIcon)
 					}
-				}
 
-				if entry.hasExternalSharingURL {
-					Divider()
-					FileSharingLinksView(entry: entry, sync: true)
-				}
+					if entry.canShowVersions {
+						Button("Previous Versions...", systemImage: "clock.arrow.circlepath") {
+							showVersions = true
+						}.labelStyle(.titleAndIcon)
+					}
+
+					Button("Copy", systemImage: "document.on.document") {
+						self.copy()
+					}
+					.disabled(!entry.isLocallyPresent())
+					.labelStyle(.titleAndIcon)
+
+					// Regular sharing
+					EntryShareButton(entry: entry, showDownloader: $showDownloader)
+
+					// Show 'go to location' in list if we are not in the file's folder already
+					if self.inFolder == nil {
+						if let folder = entry.folder {
+							NavigationLink(
+								destination: BrowserView(folder: folder, prefix: entry.parentPath(), userSettings: appState.userSettings)
+							) {
+								let parentFolderName = entry.parentFolderName
+								if parentFolderName.isEmpty {
+									Label("Go to location", systemImage: "document.circle")
+								}
+								else {
+									Label("Go to directory '\(parentFolderName)'", systemImage: "document.circle")
+								}
+							}.labelStyle(.titleAndIcon)
+						}
+					}
+
+					if entry.hasExternalSharingURL {
+						Divider()
+						FileSharingLinksView(entry: entry, sync: true)
+					}
+				#endif
 			} preview: {
 				NavigationStack {  // to force the image to take up all available space
 					VStack {
@@ -254,6 +286,33 @@ struct EntryContextMenuWrapper<Content: View>: View {
 					FileVersionsView(folder: folder, path: entry.path())
 				}
 			}
+			#if os(macOS)
+				.sheet(item: $desktopEdit) { DesktopEntryMutationSheet(edit: $0) }
+				.sheet(isPresented: $desktopInfo) {
+					NavigationStack {
+						EntryInfoView(entry: entry, showPath: inFolder == nil, siblings: siblings).toolbar {
+							ToolbarItem(placement: .cancellationAction) { Button("Done") { desktopInfo = false } }
+						}
+					}
+				}
+				.confirmationDialog(
+					"Delete this item from all devices?", isPresented: Binding.isNotNil($deleting), titleVisibility: .visible,
+					presenting: deleting
+				) { target in
+					Button("Delete from All Devices", role: .destructive) {
+						Task {
+							do { try await deleteDesktopEntry(target) }
+							catch { operationError = ErrorMessage(error) }
+						}
+					}
+				} message: { _ in
+					Text(
+						"This deletes the item on this device and synchronizes its deletion. If this is the last copy, it cannot be recovered."
+					)
+				}
+				.errorAlert($operationError)
+			#endif
+
 	}
 
 	private func copy() {

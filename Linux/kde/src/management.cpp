@@ -2,6 +2,8 @@
 #include "backend.h"
 #include "modelutil.h"
 #include <QDesktopServices>
+#include <KAboutData>
+#include <QStandardPaths>
 #include <QJsonDocument>
 #include <QPointer>
 #include <QProcess>
@@ -36,19 +38,16 @@ void Backend::folders() {
       QList<std::pair<QString, std::function<void()>>> buttons = {
           {"Browse",
            [this, f] {
-             m_folder = str(f, "ID");
-             m_directory.clear();
-             navigate("Files");
+             openFiles(str(f, "ID"));
            }},
           {f["Paused"].toBool() ? "Resume" : "Pause",
            [this, f, id] {
              engineAction(f["Paused"].toBool() ? "resume" : "pause", id);
            }},
-          {"General", [this, id] { edit("basic/folder/" + id); }},
+          {"Overview", [this, id] { edit("basic/folder/" + id); }},
           {"Synchronization", [this, id] { edit("folder/" + id); }},
-          {"Reset Synchronization Settings…", [this, id] { edit("reset/folder/" + id); }},
-          {"Versioning", [this, id] { edit("versioning/" + id); }},
           {"Sharing", [this, f] { share(f); }},
+          {"Versioning", [this, id] { edit("versioning/" + id); }},
           {"Ignore Patterns",
            [this, id] {
              call("engine.action", {{"Action", "ignores"}, {"Folder", id}},
@@ -72,6 +71,8 @@ void Backend::folders() {
                          });
                   });
            }},
+          {"Advanced", [this, id] { edit("advanced/folder/" + id); }},
+          {"Reset Synchronization Settings…", [this, id] { edit("reset/folder/" + id); }},
           {"Failed Items",
            [this, id] {
              clear("Failed Items");
@@ -220,8 +221,15 @@ void Backend::devices() {
             [this, d, id] {
               engineAction(d["Paused"].toBool() ? "resume" : "pause", {}, id);
             }},
-           {"General", [this, id] { edit("basic/device/" + id); }},
+           {"Overview", [this, id] { edit("basic/device/" + id); }},
+           {"Shared Folders", [this, id] {
+             clear("Shared Folders"); command("Back", [this] { refresh(); });
+             call("engine.folders", {}, [this, id](QJsonValue v, QString) {
+               for (auto entry : v.toArray()) { auto folder = entry.toObject(); if (folder["Devices"].toArray().contains(id)) row(str(folder, "Label"), str(folder, "Path"), {{"Sharing", [this, folder] { share(folder); }}}); }
+             });
+           }},
            {"Connection Settings", [this, id] { edit("device/" + id); }},
+           {"Advanced", [this, id] { edit("advanced/device/" + id); }},
            {"Offered Folders",
             [this, id] {
               clear("Offered Folders");
@@ -314,131 +322,135 @@ void Backend::edit(const QString &section) {
          });
   });
 }
-void Backend::settings() {
-  row("Files & Previews", "Browsing, preview size, list/grid view, and tray",
-      {{"Configure", [this] { edit("app"); }}});
-  row("Assistant Access",
-      "Local stdio MCP grants full management of accessible files.",
-      {{"Configure", [this] {
-          call("mcp.settings", {}, [this](QJsonValue v, QString) {
-            form("MCP",
-                 {field("Enabled", "Enable full management access",
-                        v.toObject()["Enabled"], "bool")},
-                 [this](auto p) {
-                   call(
-                       "mcp.settings", p, [this](auto, auto) { refresh(); },
-                       true);
-                 });
-          });
-        }}});
-  row("Background Service", "Closing the window leaves the service running.",
-      {{"Start",
-        [this] {
-          helper("desktop.service", {{"Command", "start"}},
-                 [this](auto, auto) { inspect(); });
-        }},
-       {"Stop", [this] {
-          confirm("Stop Background Service?",
-                  "Synchronization or mounted-file access stops.", [this] {
-                    helper("desktop.service", {{"Command", "stop"}},
-                           [this](auto, auto) { refresh(); });
-                  });
-        }}});
-  row("Desktop Integration", "Start the optional tray at login.",
-      {{"Configure", [this] {
-          form("Desktop Integration",
-               {field("Enabled", "Open tray at login", host["Autostart"],
-                      "bool")},
-               [this](auto p) {
-                 helper("desktop.autostart", p, [this](auto, auto) {
-                   m_dialog.clear();
-                   emit dialogChanged();
-                   inspect();
-                 });
-               });
-        }}});
-  command(m_mode == "files" ? "Switch to Synchronize…" : "Switch to Files…",
-          [this] { changeMode(m_mode == "files" ? "synchronize" : "files"); });
-  if (m_mode == "files") {
-    row("Cache and Offline Storage",
-        "Pinned files and pending edits are outside the disposable cache.",
-        {{"Manage", [this] { filesService(); }}});
-    return;
+QVariantList Backend::navigation() const {
+  QVariantList list;
+  const bool settings = m_page.startsWith("settings:");
+  if (settings) list.append(QVariantMap{{"title", "Back to App"}, {"route", lastAppPage}, {"icon", "go-previous"}});
+  for (auto value : catalog[settings ? "settings" : "destinations"].toArray()) {
+    auto item = value.toObject();
+    if (!settings && str(item, "id") == "settings") continue;
+    auto route = settings ? "settings:" + str(item, "id") : str(item, "title");
+    QVariantMap nav{{"title", item["title"].toString()}, {"route", route}, {"icon", item["icon"].toString()}};
+    if (!settings && str(item, "id") == "files") nav["children"] = folderShortcuts;
+    list.append(nav);
   }
-  row("Device Name", "Name shown to other devices",
-      {{"Change…", [this] {
-          form("Device Name", {field("Name", "Name")}, [this](auto p) {
-            p["Action"] = "name";
-            call("engine.action", p, [this](auto, auto) { refresh(); }, true);
-          });
-        }}});
-  const QList<std::pair<QString, QString>> sections = {
-      {"Network", "basic/options"},
-      {"Connection Options", "connections"},
-      {"Proxy", "proxy"},
-      {"Bandwidth", "bandwidth"},
-      {"Engine", "engine"},
-      {"New Folder Defaults", "defaults/folder"},
-      {"Reset New Folder Defaults…", "reset/defaults/folder"},
-      {"New Device Defaults", "defaults/device"},
-      {"Default Versioning", "defaults/versioning"},
-      {"Default Ignore Patterns", "defaults/ignores"},
-      {"Engine Access", "gui"}};
-  for (const auto &[name, section] : sections)
-    row(name, {}, {{"Edit", [this, section] { edit(section); }}});
-  row("Web GUI and REST API", "Optional engine access",
-      {{"Enable/Disable", [this] {
-          call("engine.status", {}, [this](QJsonValue v, QString) {
-            form("Engine Access",
-                 {field("Enabled", "Enable Web GUI and REST API",
-                        v.toObject()["guiEnabled"], "bool")},
-                 [this](auto p) {
-                   p["Action"] = "gui";
-                   call(
-                       "engine.action", p,
-                       [this](auto, auto) {
-                         confirm("Restart Required",
-                                 "Restart to apply the engine access change?",
-                                 [this] { engineAction("restart"); });
-                       },
-                       true);
-                 });
-          });
-        }}});
-  row("Automatic Pausing", "Metered/cellular networks and Power Saver",
-      {{"Configure", [this] { policy(); }}});
-  row("Resource Priority",
-      "CPU and I/O weights for the synchronization service",
-      {{"Configure", [this] {
-          call("policy.get", {}, [this](QJsonValue value, QString error) {
-            if (!error.isEmpty())
-              return;
-            auto priority = value.toObject()["ResourcePriority"].toString();
-            if (priority.isEmpty())
-              priority = "normal";
-            form("Resource Priority",
-                 {field("Priority", "Priority", priority, "enum",
-                        {"normal", "utility", "background"})},
-                 [this](auto p) {
-                   call(
-                       "resources.set", p, [this](auto, auto) { refresh(); },
-                       true);
-                 });
-          });
-        }}});
-  row("Troubleshooting",
-      "Activity logs, logging levels, and database maintenance",
-      {{"Open", [this] { logs(); }}});
-  row("Advanced Configuration", "Every supported engine setting",
-      {{"Open", [this] { advanced(); }}});
-  row("Configuration", "Export the current configuration",
-      {{"Export…", [this] {
-          auto path = chooseSave("config.xml");
-          if (!path.isEmpty())
-            call(
-                "configuration.export", {{"Path", path}},
-                [this](auto, auto) { refresh(); }, true);
-        }}});
+  return list;
+}
+void Backend::settings() {
+  for (auto value : catalog["settings"].toArray()) {
+    auto category = value.toObject();
+    if ("settings:" + str(category, "id") != m_page) continue;
+    m_title = str(category, "title");
+    for (auto item : category["sections"].toArray()) {
+      const auto section = item.toObject();
+      const auto capability = str(section, "capability");
+      if (capability != "always" && capability != m_mode) {
+        row(str(section, "title"), "Available in " + capability + " mode. Change the operating mode in General.");
+      } else {
+        row(str(section, "title"), {}, {{"Configure", [this, section] { openSetting(str(section, "action"), str(section, "title")); }}});
+      }
+    }
+    emit changed();
+  }
+}
+void Backend::openSetting(const QString &action, const QString &title) {
+  if (action == "name") {
+    form("Device Name", {field("Name", "Name")}, [this](auto p) { p["Action"] = "name"; call("engine.action", p, [this](auto, auto) { refresh(); }, true); });
+  } else if (action == "mode") {
+    changeMode(m_mode == "files" ? "synchronize" : "files");
+  } else if (action == "startup") {
+    clear(title); command("Back", [this] { refresh(); });
+    const auto enabled = host["Autostart"].toBool();
+    toggleRow("Launch at Login", "Start Synctrain when you sign in.", enabled, [this, enabled] {
+      helper("desktop.autostart", {{"Enabled", !enabled}}, [this](auto, auto) { inspect(); });
+    });
+  } else if (action == "presence") {
+    clear(title); command("Back", [this] { refresh(); });
+    row("Background Service", "Closing the window leaves the service running.", {
+      {"Start", [this] { helper("desktop.service", {{"Command", "start"}}, [this](auto, auto) { inspect(); }); }},
+      {"Stop", [this] { confirm("Stop Background Service?", "Synchronization or mounted-file access stops.", [this] { helper("desktop.service", {{"Command", "stop"}}, [this](auto, auto) { refresh(); }); }); }}
+    });
+    row("Tray", "Show or hide the optional tray icon", {{"Configure", [this] { edit("app"); }}});
+  } else if (action == "previews" || action == "menuAccess") {
+    edit("app");
+  } else if (action == "storage") {
+    clear(title); command("Back", [this] { refresh(); });
+    call("storage", {}, [this](QJsonValue v, QString) {
+      auto storage = v.toObject();
+      row("Download Cache", "Cached: " + display(storage["used"]) + " bytes • Kept: " + display(storage["kept"]) + " bytes");
+      row("Cache Budget", display(storage["budget"]) + " bytes", {{"Change…", [this, storage] {
+        form("Cache Budget", {field("bytes", "Bytes", display(storage["budget"]))}, [this](auto p) {
+          bool valid = false; auto bytes = p["bytes"].toString().toLongLong(&valid);
+          if (!valid || bytes < 100*1024*1024) { fail("Enter at least 100 MiB."); return; }
+          call("storage.budget", {{"bytes", bytes}}, [this](auto, auto) { refresh(); }, true);
+        });
+      }}});
+      row("Offline Storage", "Kept files and pending edits are retained independently of the disposable cache.");
+    });
+  } else if (action == "locations") {
+    navigate("Folders");
+  } else if (action == "fileManager") {
+    clear(title); command("Back", [this] { refresh(); });
+    row("Dolphin Integration", "Sync status, offline availability, and Previous Versions are available in Dolphin for Synctrain folders.");
+  } else if (action == "mcp") {
+    clear(title); command("Back", [this] { refresh(); });
+    call("mcp.settings", {}, [this](QJsonValue v, QString) {
+      const auto enabled = v.toObject()["Enabled"].toBool();
+      toggleRow("Enable MCP", "Allow full management access through MCP.", enabled, [this, enabled] {
+        call("mcp.settings", {{"Enabled", !enabled}}, [this](auto, auto) { openSetting("mcp", "MCP"); }, true);
+      });
+    });
+  } else if (action == "gui") {
+    clear(title); command("Back", [this] { refresh(); });
+    call("engine.status", {}, [this](QJsonValue v, QString) {
+      const auto enabled = v.toObject()["guiEnabled"].toBool();
+      row("Web GUI and REST API", enabled ? "Enabled" : "Disabled", {{enabled ? "Disable" : "Enable", [this, enabled] {
+        call("engine.action", {{"Action", "gui"}, {"Enabled", !enabled}}, [this](auto, auto) {
+          refresh(); confirm("Restart Required", "Restart the engine to apply the access change?", [this] { engineAction("restart"); });
+        }, true);
+      }}});
+      row("Authentication and Connection Settings", {}, {{"Configure", [this] { edit("gui"); }}});
+    });
+  } else if (action == "policy") {
+    policy();
+  } else if (action == "resources") {
+    call("policy.get", {}, [this](QJsonValue v, QString) {
+      auto priority = str(v.toObject(), "ResourcePriority");
+      form("Resource Priority", {field("Priority", "Priority", priority.isEmpty() ? "normal" : priority, "enum", {"normal", "utility", "background"})}, [this](auto p) { call("resources.set", p, [this](auto, auto) { refresh(); }, true); });
+    });
+  } else if (action == "configuration") {
+    auto path = chooseSave("config.xml");
+    if (!path.isEmpty()) call("configuration.export", {{"Path", path}}, [this](auto, auto) { refresh(); }, true);
+  } else if (action == "advanced") {
+    advanced();
+  } else if (action == "logs") {
+    logs();
+  } else if (action == "versions" || action == "support" || action == "licenses") {
+    clear(title); command("Back", [this] { refresh(); });
+    if (action == "versions") {
+      row("Synctrain", KAboutData::applicationData().version());
+      if (m_mode == "synchronize") call("engine.status", {}, [this](QJsonValue v, QString) { row("Syncthing", v.toObject()["engineVersion"].toString()); });
+      else row("Engine", "Runs on the gateway in Files mode.");
+    } else if (action == "licenses") {
+      row("License", "Mozilla Public License 2.0", {{"Read License", [] { QDesktopServices::openUrl(QUrl("https://www.mozilla.org/MPL/2.0/")); }}});
+      const auto notices = QStandardPaths::locate(QStandardPaths::GenericDataLocation, "doc/synctrain/GoNotices.html");
+      if (!notices.isEmpty()) row("Open-Source Notices", notices, {{"Open", [notices] { QDesktopServices::openUrl(QUrl::fromLocalFile(notices)); }}});
+      else row("Open-Source Notices", "Included in the synctrain package documentation (GoNotices.html).");
+    } else row("Support and Source", "github.com/gordon8214/syncthing-tools", {{"Open", [] { QDesktopServices::openUrl(QUrl("https://github.com/gordon8214/syncthing-tools")); }}});
+  } else {
+    edit(action);
+  }
+}
+void Backend::historyPage() {
+  row("Previous Versions", "Choose a file, then Previous Versions to view its local and remote archives.", {{"Choose a File", [this] { navigate("Files"); }}});
+  if (m_mode == "synchronize") row("Deleted Files", "Choose a synchronized folder to view its archive.", {{"Choose a Folder", [this] { navigate("Folders"); }}});
+  historySources();
+}
+void Backend::activityPage() {
+  if (m_mode == "files") { pending(); return; }
+  row("Transfers", "Synchronization progress and current activity", {{"View", [this] { navigate("Overview"); }}});
+  row("Activity Log", "Events, errors, and diagnostics", {{"Open", [this] { logs(); }}});
+  row("Pending Changes and Recovery", "Available in Files mode.");
 }
 void Backend::policy() {
   call("policy.get", {}, [this](QJsonValue v, QString) {

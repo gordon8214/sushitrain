@@ -5,11 +5,13 @@
 #include <QHash>
 #include <QJsonArray>
 #include <QVariantList>
+#include <optional>
 
 // QML receives presentation data and opaque action keys; protocol identifiers
 // and integer timestamps remain in C++ QJsonValue objects without JS rounding.
 class Backend : public QObject {
   Q_OBJECT
+  Q_PROPERTY(QVariantList navigation READ navigation NOTIFY navigationChanged)
   Q_PROPERTY(QString mode READ mode NOTIFY changed)
   Q_PROPERTY(QString title READ title NOTIFY changed)
   Q_PROPERTY(QString page READ page NOTIFY changed)
@@ -23,6 +25,7 @@ class Backend : public QObject {
   Q_PROPERTY(QVariantMap dialog READ dialog NOTIFY dialogChanged)
 public:
   explicit Backend(QObject *parent = nullptr);
+  QVariantList navigation() const;
   QString mode() const { return m_mode; }
   QString title() const { return m_title; }
   QString page() const { return m_page; }
@@ -38,6 +41,8 @@ public:
   Q_INVOKABLE void activate(const QString &key);
   Q_INVOKABLE void submit(const QVariantMap &values);
   Q_INVOKABLE void cancelDialog();
+  Q_INVOKABLE void keepEditing();
+  Q_INVOKABLE bool requestClose();
   Q_INVOKABLE void fieldChanged();
   Q_INVOKABLE void openDefault(const QString &location, const QString &name);
   Q_INVOKABLE void refresh();
@@ -45,6 +50,8 @@ public:
   void inspect();
 signals:
   void changed();
+  void navigationChanged();
+  void closeReady();
   void dialogChanged();
   void settingsSaveFailed();
   void preview(const QString &file, const QString &kind, const QString &text,
@@ -55,9 +62,9 @@ private:
   ServiceClient client;
   QString m_mode, m_socket, m_title = "Synctrain", m_error, m_page = "Overview",
                             m_folder, m_directory;
-  QVariantList m_rows, m_commands;
+  QVariantList m_rows, m_commands, folderShortcuts;
   QHash<QString, std::function<void()>> actions;
-  QJsonObject host, preferences;
+  QJsonObject host, preferences, catalog;
   QObject *reads = nullptr;
   QObject *mutationOwner = nullptr;
   QObject *initializationOwner = nullptr;
@@ -65,7 +72,7 @@ private:
   QStringList queuedArguments;
   bool inspected = false;
   quint64 serial = 0;
-  bool m_busy = false, m_dirty = false;
+  bool m_busy = false, m_dirty = false, closePending = false;
   QVariantMap m_dialog;
   std::function<void(QJsonObject)> acceptDialog;
   QString editorToken;
@@ -84,7 +91,8 @@ private:
   void command(const QString &label, std::function<void()> fn);
   void
   row(const QString &title, const QString &subtitle,
-      const QList<std::pair<QString, std::function<void()>>> &buttons = {});
+      const QList<std::pair<QString, std::function<void()>>> &buttons = {}, const QString &section = {}, std::optional<double> progress = std::nullopt);
+  void toggleRow(const QString &title, const QString &subtitle, bool checked, std::function<void()> toggle);
   void clear(const QString &title);
   void call(const QString &method, const QJsonObject &p, Reply reply,
             bool mutation = false, int timeout = 15000);
@@ -99,12 +107,27 @@ private:
   void overview();
   void folders();
   void devices();
+  void loadShortcuts();
   void settings();
+  void openSetting(const QString &action, const QString &title);
+  void historyPage();
+  void activityPage();
   void edit(const QString &section);
   void remote();
   void filesService();
   void historySources();
   void pending();
+  struct BrowserSnapshot {
+    bool valid = false;
+    QString folder, directory, search, title, error, moreKey;
+    qint64 parent = 0;
+    int next = 0;
+    QList<qint64> parents;
+    QVariantList rows, commands;
+    QHash<QString, std::function<void()>> actions;
+  } browserSnapshot;
+  QString browserSearch, lastAppPage = "Overview";
+  void openFiles(const QString &folder);
   void browse(int offset = 0, bool append = false, const QString &search = {});
   void versions(const QJsonObject &entry, const QString &path);
   void remoteVersions(const QString &folder, const QString &path,

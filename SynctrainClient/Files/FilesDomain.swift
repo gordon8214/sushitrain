@@ -236,7 +236,8 @@ import SynctrainFileProviderKit
 			guard let item = try store.item(folderID: folderID, path: path) else {
 				return nil
 			}
-			return try await manager.getUserVisibleURL(for: NSFileProviderItemIdentifier(ItemIdentifiers.string(for: item.id)))
+			return try await manager.getUserVisibleURL(
+				for: NSFileProviderItemIdentifier(item.fileProviderIdentifier ?? ItemIdentifiers.string(for: item.id)))
 		}
 		catch {
 			Log.warn("Could not find \(folderID):\(path) in the Files app: \(error.localizedDescription)")

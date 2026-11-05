@@ -9,6 +9,40 @@ import Testing
 @testable import SynctrainFileProviderKit
 
 @Suite struct OutboxStoreTests {
+	@Test(arguments: [false, true]) func staleDesktopMutationPreservesRefreshedItem(deleting: Bool) throws {
+		let store = try makeRemoteStore()
+		try store.snapshot([remoteRoot, remoteFile("itm_a", "a.txt")])
+		let selected = try #require(try store.item(folderID: "docs", path: "a.txt"))
+		let parent = try #require(selected.parentID)
+		// A coordinator uses a separate connection and commits after the UI captured its selection.
+		let coordinator = IndexStore(url: store.url)
+		try coordinator.snapshot([remoteRoot, remoteFile("itm_a", "a.txt", rev: "new revision", size: 7)])
+		let refreshed = try #require(try store.item(id: selected.id))
+		#expect(refreshed.metadataRevision != selected.metadataRevision)
+		#expect(throws: IndexError.notAllowed("the item changed; refresh before changing it")) {
+			if deleting {
+				_ = try store.recordRemoteDeletion(itemID: selected.id, expectedMetadataRevision: selected.metadataRevision)
+			}
+			else {
+				_ = try store.recordRemoteMove(
+					itemID: selected.id, toParentItemID: parent, name: "renamed.txt",
+					expectedMetadataRevision: selected.metadataRevision)
+			}
+		}
+		#expect(try store.mutations().isEmpty)
+		#expect(try store.item(id: selected.id) == refreshed)
+		if deleting {
+			_ = try store.recordRemoteDeletion(itemID: selected.id, expectedMetadataRevision: refreshed.metadataRevision)
+			#expect(try store.item(id: selected.id) == nil)
+		}
+		else {
+			let result = try store.recordRemoteMove(
+				itemID: selected.id, toParentItemID: parent, name: "renamed.txt",
+				expectedMetadataRevision: refreshed.metadataRevision)
+			#expect(result.item?.name == "renamed.txt")
+		}
+	}
+
 	/// The app and the extension each open the database themselves
 	@Test func claimsAndGenerationsAcrossProcesses() throws {
 		let app = try makeRemoteStore()

@@ -47,6 +47,9 @@ public struct IndexItem: Sendable, Hashable {
 	public var changedSequence: Int64
 	public var pending: PendingChange
 	public var isDeleted: Bool
+	/// Persistent system identifiers can predate this database's row IDs.
+	public var fileProviderIdentifier: String? = nil
+	public var parentFileProviderIdentifier: String? = nil
 
 	public var modificationDate: Date? {
 		modifiedNanoseconds == 0 ? nil : Date(timeIntervalSince1970: Double(modifiedNanoseconds) / 1_000_000_000)

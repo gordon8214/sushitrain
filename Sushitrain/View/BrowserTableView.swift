@@ -19,6 +19,11 @@ struct BrowserTableView: View {
 	@State private var entries: [SushitrainEntry] = []
 	@State private var showDownloaderFor: SushitrainEntry? = nil
 	@State private var showVersionsFor: SushitrainEntry? = nil
+	#if os(macOS)
+		@State private var desktopEdit: DesktopEntryEdit?
+		@State private var deletingEntry: DesktopEntryEdit?
+		@State private var operationError: ErrorMessage?
+	#endif
 
 	@SceneStorage("BrowserTableViewConfig") private var columnCustomization: TableColumnCustomization<SushitrainEntry>
 	@Environment(\.openURL) private var openURL
@@ -147,6 +152,26 @@ struct BrowserTableView: View {
 		.sheet(item: $showVersionsFor) { entry in
 			FileVersionsView(folder: self.folder, path: entry.path())
 		}
+		#if os(macOS)
+			.sheet(item: $desktopEdit) { DesktopEntryMutationSheet(edit: $0) }
+			.confirmationDialog(
+				"Delete this item from all devices?", isPresented: Binding.isNotNil($deletingEntry), titleVisibility: .visible,
+				presenting: deletingEntry
+			) { target in
+				Button("Delete from All Devices", role: .destructive) {
+					Task {
+						do { try await deleteDesktopEntry(target) }
+						catch { operationError = ErrorMessage(error) }
+					}
+				}
+			} message: { _ in
+				Text(
+					"This deletes the item on this device and synchronizes its deletion. If this is the last copy, it cannot be recovered."
+				)
+			}
+			.errorAlert($operationError)
+		#endif
+
 	}
 
 	@ViewBuilder private func itemsMenu(items: Set<SushitrainEntry.ID>) -> some View {
@@ -156,72 +181,97 @@ struct BrowserTableView: View {
 		else if let item = items.first, items.count == 1 {
 			// Single item selected
 			if let oe = self.entryById(item) {
-				if oe.isDirectory() {
-					Button("Subdirectory properties", systemImage: "folder.badge.gearshape") {
-						self.openedEntry = (oe, false)
-					}.labelStyle(.titleAndIcon)
-				}
-				else {
-					Button("Show info", systemImage: "info.circle") {
-						self.openedEntry = (oe, false)
-					}.labelStyle(.titleAndIcon)
-				}
-
-				// Preview and copy (only for files, not folders)
-				if !oe.isDirectory() && !oe.isSymlink() {
-					Button("Show preview", systemImage: "doc.text.magnifyingglass") {
-						openWindow(
-							id: "preview",
-							value: Preview(folderID: self.folder.folderID, path: oe.path())
-						)
-					}.disabled(!oe.canPreview)
-
-					// Copy
-					Button("Copy", systemImage: "document.on.document") {
-						self.copy(oe)
-					}
-					.disabled(!oe.isLocallyPresent())
-					.labelStyle(.titleAndIcon)
-				}
-
-				// Regular sharing
-				EntryShareButton(
-					entry: oe,
-					showDownloader: Binding(
-						get: {
-							self.showDownloaderFor != nil
-						},
-						set: { nv in
-							if nv {
-								self.showDownloaderFor = oe
+				#if os(macOS)
+					DesktopSyncFileMenu(
+						entry: oe, info: { openedEntry = (oe, false) }, versions: { showVersionsFor = oe },
+						delete: { deletingEntry = DesktopEntryEdit(entry: oe, kind: .delete) }, edit: { desktopEdit = $0 },
+						extra: {
+							Button("Copy", systemImage: "document.on.document") { copy(oe) }.disabled(!oe.isLocallyPresent())
+							EntryShareButton(
+								entry: oe,
+								showDownloader: Binding(get: { showDownloaderFor != nil }, set: { showDownloaderFor = $0 ? oe : nil })
+							)
+							if oe.canShowInFinder {
+								Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
+									do { try oe.showInFinder() }
+									catch { operationError = ErrorMessage(error) }
+								}
 							}
-							else {
-								self.showDownloaderFor = nil
+							if oe.hasExternalSharingURL {
+								Divider()
+								FileSharingLinksView(entry: oe, sync: true)
 							}
-						})
-				).labelStyle(.titleAndIcon)
+						}
+					)
+				#else
 
-				// Show item in Finder
-				if oe.canShowInFinder {
-					Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
-						try? oe.showInFinder()
+					if oe.isDirectory() {
+						Button("Subdirectory properties", systemImage: "folder.badge.gearshape") {
+							self.openedEntry = (oe, false)
+						}.labelStyle(.titleAndIcon)
 					}
-					.labelStyle(.titleAndIcon)
-				}
-
-				if oe.canShowVersions {
-					Button("Previous Versions...", systemImage: "clock.arrow.circlepath") {
-						self.showVersionsFor = oe
+					else {
+						Button("Show info", systemImage: "info.circle") {
+							self.openedEntry = (oe, false)
+						}.labelStyle(.titleAndIcon)
 					}
-					.labelStyle(.titleAndIcon)
-				}
 
-				// External sharing
-				if oe.hasExternalSharingURL {
-					Divider()
-					FileSharingLinksView(entry: oe, sync: true)
+					// Preview and copy (only for files, not folders)
+					if !oe.isDirectory() && !oe.isSymlink() {
+						Button("Show preview", systemImage: "doc.text.magnifyingglass") {
+							openWindow(
+								id: "preview",
+								value: Preview(folderID: self.folder.folderID, path: oe.path())
+							)
+						}.disabled(!oe.canPreview)
+
+						// Copy
+						Button("Copy", systemImage: "document.on.document") {
+							self.copy(oe)
+						}
+						.disabled(!oe.isLocallyPresent())
 						.labelStyle(.titleAndIcon)
-				}
+					}
+
+					// Regular sharing
+					EntryShareButton(
+						entry: oe,
+						showDownloader: Binding(
+							get: {
+								self.showDownloaderFor != nil
+							},
+							set: { nv in
+								if nv {
+									self.showDownloaderFor = oe
+								}
+								else {
+									self.showDownloaderFor = nil
+								}
+							})
+					).labelStyle(.titleAndIcon)
+
+					// Show item in Finder
+					if oe.canShowInFinder {
+						Button(openInFilesAppLabel, systemImage: "arrow.up.forward.app") {
+							try? oe.showInFinder()
+						}
+						.labelStyle(.titleAndIcon)
+					}
+
+					if oe.canShowVersions {
+						Button("Previous Versions...", systemImage: "clock.arrow.circlepath") {
+							self.showVersionsFor = oe
+						}
+						.labelStyle(.titleAndIcon)
+					}
+
+					// External sharing
+					if oe.hasExternalSharingURL {
+						Divider()
+						FileSharingLinksView(entry: oe, sync: true)
+							.labelStyle(.titleAndIcon)
+					}
+				#endif
 			}
 		}
 		else {

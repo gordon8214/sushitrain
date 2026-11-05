@@ -27,8 +27,9 @@
 					detail(navigation.selection)
 						.navigationTitle(Text(navigation.selection.title))
 				}
-				.id(navigation.selection)
+				.id("\(navigation.selection.rawValue).\(navigation.editorRevision)")
 			}
+			.background(SettingsWindowCloseGuard(navigation: navigation))
 			.environment(\.settingsNavigation, navigation)
 			.formStyle(.grouped)
 			.frame(minWidth: 800, minHeight: 560)
@@ -81,40 +82,10 @@
 
 		var body: some View {
 			MacSettingsView(mode: .synchronize) { category in
-				if category == .mcp || appState.startupState == .started || appState.isEngineRestarting {
-					SynchronizeSettingsDetail(category: category, presence: $presence)
-				}
-				else {
-					ContentUnavailableView(
-						"Settings unavailable", systemImage: "gearshape", description: Text("Start the engine to change its settings."))
-				}
+				DesktopSettingsCategoryView(category: category, mode: .synchronize, presence: $presence, appState: appState)
 			}
 			.task { MCPIntegration.shared.start(appState) }
 		}
 	}
 
-	private struct SynchronizeSettingsDetail: View {
-		let category: MacSettingsCategory
-		@Binding var presence: AppPresence
-		@Environment(AppState.self) private var appState
-
-		var body: some View {
-			switch category {
-			case .mcp: MCPSettingsView()
-			case .historySources: HistorySourcesView()
-			case .general: GeneralSettingsView(userSettings: appState.userSettings, presence: $presence)
-			case .filesAndPreviews: FilesPreviewSettingsView(userSettings: appState.userSettings)
-			case .network: NetworkSettingsView(userSettings: appState.userSettings)
-			case .bandwidth: BandwidthSettingsView(userSettings: appState.userSettings)
-			case .engine: EngineOptionsView()
-			case .defaults: DefaultsSettingsView()
-			case .remoteFileService: GatewaySettingsView()
-			case .engineAccess: Form { EngineAccessSection() }
-			case .configuration: ConfigurationSettingsView()
-			case .troubleshooting: TroubleshootingView(userSettings: appState.userSettings)
-			case .advancedConfiguration: AdvancedConfigurationView()
-			default: EmptyView()
-			}
-		}
-	}
 #endif

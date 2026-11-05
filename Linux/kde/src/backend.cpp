@@ -16,7 +16,12 @@
 #include <QUuid>
 
 #include "modelutil.h"
+#include <algorithm>
 Backend::Backend(QObject *parent) : QObject(parent), client(this) {
+  QFile catalogFile(":/desktop-ui/catalog.json");
+  if (!catalogFile.open(QIODevice::ReadOnly)) qFatal("Desktop UI catalog is missing");
+  catalog = QJsonDocument::fromJson(catalogFile.readAll()).object();
+  if (catalog["version"].toInt() != 1) qFatal("Invalid desktop UI catalog");
   reads = new QObject(this);
   auto *timer = new QTimer(this);
   timer->setInterval(2000);
@@ -48,12 +53,28 @@ void Backend::command(const QString &label, std::function<void()> fn) {
 }
 void Backend::row(
     const QString &title, const QString &subtitle,
-    const QList<std::pair<QString, std::function<void()>>> &buttons) {
+    const QList<std::pair<QString, std::function<void()>>> &buttons, const QString &section, std::optional<double> progress) {
   QVariantList list;
   for (const auto &[name, fn] : buttons)
     action(name, fn, &list);
-  m_rows.append(
-      QVariantMap{{"title", title}, {"subtitle", subtitle}, {"actions", list}});
+  QVariantMap model{{"title", title}, {"subtitle", subtitle}, {"actions", list}, {"section", section}};
+  if (progress) model["progress"] = qBound(0.0, *progress, 1.0);
+  m_rows.append(model);
+  if (m_page == "Overview") {
+    QJsonArray order;
+    for (auto entry : catalog["destinations"].toArray()) if (entry.toObject()["id"] == "overview") order = entry.toObject()["sections"].toArray();
+    auto rank = [order](const QVariant &value) -> int { auto key = value.toMap()["section"].toString(); for (int i=0;i<order.size();++i) if(order[i].toString()==key)return i; return order.size(); };
+    std::stable_sort(m_rows.begin(),m_rows.end(),[rank](const QVariant &a,const QVariant &b){return rank(a)<rank(b);});
+  }
+  emit changed();
+}
+void Backend::toggleRow(const QString &title, const QString &subtitle, bool checked,
+                        std::function<void()> toggle) {
+  row(title, subtitle);
+  auto item = m_rows.last().toMap();
+  item["checked"] = checked;
+  item["toggleKey"] = action(title, std::move(toggle));
+  m_rows.last() = item;
   emit changed();
 }
 void Backend::clear(const QString &title) {
@@ -106,6 +127,7 @@ void Backend::call(const QString &method, const QJsonObject &p, Reply reply,
             drainArguments();
           return;
         }
+        if (mutation) browserSnapshot.valid=false;
         if (mutation && !m_dialog.isEmpty()) {
           m_dialog.clear();
           m_dirty = false;
@@ -158,6 +180,7 @@ void Backend::inspect() {
           fail(error);
           return;
         }
+        const auto oldMode=m_mode,oldSocket=m_socket;
         host = value.toObject();
         m_mode = str(host, "Mode");
         m_socket = m_mode == "files" ? str(host, "FilesSocket")
@@ -170,6 +193,9 @@ void Backend::inspect() {
                                                    : "SYNCTRAIN_GATEWAY_ADMIN");
         if (!configured.isEmpty())
           m_socket = configured;
+        if(oldMode!=m_mode || oldSocket!=m_socket) {
+          browserSnapshot.valid=false;browserSearch.clear();m_folder.clear();m_directory.clear();parentItem=0;parents.clear();
+        }
         if (m_mode.isEmpty()) {
           inspected = true;
           refresh();
@@ -276,7 +302,8 @@ void Backend::cancelDialog() {
   acceptDialog = {};
   emit dialogChanged();
   emit changed();
-  drainArguments();
+  if (closePending) { closePending = false; QTimer::singleShot(0, this, &Backend::closeReady); }
+  else drainArguments();
 }
 void Backend::drainArguments() {
   QTimer::singleShot(0, this, [this] {
@@ -288,11 +315,40 @@ void Backend::drainArguments() {
   });
 }
 void Backend::navigate(const QString &page) {
+  if (page == "Files" && m_page == "Files") return;
   if (m_busy || !m_dialog.isEmpty())
     return;
+  if (m_page == "Files" && page != "Files" && activeReads == 0 && m_title == "Files" && editorToken.isEmpty()) {
+    browserSnapshot = {true,m_folder,m_directory,browserSearch,m_title,m_error,moreKey,parentItem,nextOffset,parents,m_rows,m_commands,actions};
+  }
   closeEditor();
-  m_page = page;
+  auto target = page;
+  if (target == "Settings") target = "settings:general";
+  const auto alias = catalog["aliases"].toObject()[target].toString();
+  for (auto entry : catalog["destinations"].toArray())
+    if (entry.toObject()["id"].toString() == alias) target = entry.toObject()["title"].toString();
+  if (target.startsWith("folder:")) {
+    browserSnapshot.valid = false; browserSearch.clear();
+    if (m_mode == "files") { parentItem = target.mid(7).toLongLong(); parents.clear(); }
+    else { m_folder = target.mid(7); m_directory.clear(); }
+    target = "Files";
+  }
+  if(target.startsWith("settings:") && !m_page.startsWith("settings:"))lastAppPage=m_page;
+  m_page = target;
+  emit navigationChanged();
+  if (m_page == "Files" && browserSnapshot.valid) {
+    auto saved = std::move(browserSnapshot); browserSnapshot.valid = false;
+    clear(saved.title);
+    m_folder=saved.folder; m_directory=saved.directory; browserSearch=saved.search; parentItem=saved.parent; nextOffset=saved.next; parents=saved.parents;
+    m_rows=saved.rows; m_commands=saved.commands; actions=saved.actions; m_error=saved.error; moreKey=saved.moreKey;
+    emit changed(); loadShortcuts(); return;
+  }
   refresh();
+}
+void Backend::openFiles(const QString &folder) {
+  browserSnapshot.valid=false; browserSearch.clear();
+  m_folder=folder; m_directory.clear();
+  if(m_page=="Files") refresh(); else navigate("Files");
 }
 void Backend::refresh() {
   if (m_busy || !m_dialog.isEmpty())
@@ -314,31 +370,32 @@ void Backend::refresh() {
       folders();
   } else if (m_page == "Devices") {
     if (m_mode == "files")
-      filesService();
+      row("Devices are managed by each gateway", "Switch to Synchronize mode to manage local synchronization devices.");
     else
       devices();
   } else if (m_page == "Files")
     browse();
-  else if (m_page == "Settings")
+  else if (m_page.startsWith("settings:"))
     settings();
-  else if (m_page == "Remote Files") {
+  else if (m_page == "Remote Access") {
     if (m_mode == "files")
       filesService();
     else
       remote();
-  } else if (m_page == "History Sources")
-    historySources();
-  else if (m_page == "Pending Changes")
-    pending();
+  } else if (m_page == "History")
+    historyPage();
+  else if (m_page == "Activity")
+    activityPage();
+  if (!m_page.startsWith("settings:")) loadShortcuts();
 }
 void Backend::overview() {
   if (m_mode == "files") {
     call("status", {}, [this](QJsonValue v, QString) {
       auto s = v.toObject();
-      row("Files mode", str(s, "mount"));
+      row("Files mode", str(s, "mount"), {}, "status");
       for (auto f : s["folders"].toArray()) {
         auto o = f.toObject();
-        row(str(o, "label"), str(o, "state"));
+        row(str(o, "label"), str(o, "state"), {}, "summary");
       }
     });
     call("storage", {}, [this](QJsonValue v, QString) {
@@ -348,28 +405,27 @@ void Backend::overview() {
           "Cached: " + locale.formattedDataSize(o["used"].toInteger()) +
               " · Kept: " + locale.formattedDataSize(o["kept"].toInteger()) +
               " · Cache budget: " +
-              locale.formattedDataSize(o["budget"].toInteger()));
+              locale.formattedDataSize(o["budget"].toInteger()), {}, "storage");
     });
   } else {
     call("engine.status", {}, [this](QJsonValue v, QString) {
       auto o = v.toObject();
       row(str(o, "name"), "Device ID: " + str(o, "deviceID"),
           {{"Copy ID",
-            [o] { QApplication::clipboard()->setText(str(o, "deviceID")); }}});
-      row("Engine", str(o, "engineVersion") + " · " + str(o, "error"));
+            [o] { QApplication::clipboard()->setText(str(o, "deviceID")); }}}, "status");
+      row("Engine", str(o, "engineVersion"), {}, "status");
+      if (!str(o,"error").isEmpty()) row("Needs Attention",str(o,"error"),{},"attention");
       if (o["restartRequired"].toBool())
         row("Restart Required", "Saved settings require an engine restart.",
-            {{"Restart", [this] { engineAction("restart"); }}});
+            {{"Restart", [this] { engineAction("restart"); }}}, "attention");
     });
     call("engine.folders", {}, [this](QJsonValue v, QString) {
       for (auto f : v.toArray()) {
         auto o = f.toObject();
         row(str(o, "Label"), str(o, "State") + " · " + str(o, "Error"),
             {{"Browse", [this, o] {
-                m_folder = str(o, "ID");
-                m_directory.clear();
-                navigate("Files");
-              }}});
+                openFiles(str(o, "ID"));
+              }}}, "summary");
       }
     });
     call("engine.stats", {}, [this](QJsonValue v, QString) {
@@ -382,24 +438,21 @@ void Backend::overview() {
               locale.formattedDataSize(
                   totals["Local"].toObject()["Bytes"].toInteger()) + " · " +
               locale.toString(totals["LocalNeed"].toObject()["Files"].toInteger()) +
-              " files remaining");
+              " files remaining", {}, "storage");
       for (const auto &name : QStringList{"Download", "Upload"}) {
         auto progress = stats[name.toLower()].toObject();
         row(name, progress.isEmpty()
                       ? QString("Idle")
                       : locale.formattedDataSize(progress["BytesDone"].toInteger()) +
                             " of " + locale.formattedDataSize(
-                                         progress["BytesTotal"].toInteger()));
-        auto model = m_rows.takeLast().toMap();
-        model["progress"] = qBound(0.0, progress["Percentage"].toDouble(), 1.0);
-        m_rows.append(model);
+                                         progress["BytesTotal"].toInteger()), {}, "summary", progress["Percentage"].toDouble());
       }
       emit changed();
     });
     call("policy.get", {}, [this](QJsonValue v, QString) {
       const auto reason = v.toObject()["Reason"].toString();
       if (!reason.isEmpty())
-        row("Automatic Pause", reason);
+        row("Automatic Pause", reason, {}, "attention");
     });
     command("Pause All", [this] { engineAction("pauseAll"); });
     command("Resume All", [this] { engineAction("resumeAll"); });
@@ -537,4 +590,37 @@ void Backend::setupTray() {
   tray->setContextMenu(menu);
   connect(tray.get(), &KStatusNotifierItem::activateRequested, this,
           [this](bool, const QPoint &) { emit present(); });
+}
+
+void Backend::loadShortcuts() {
+  const auto files = m_mode == "files";
+  call(files ? "files.children" : "engine.folders", {{"Parent", 0}}, [this, files](QJsonValue v, QString error) {
+    if (!error.isEmpty()) return;
+    auto entries = v.toArray();
+    QVariantList next;
+    for (auto value : entries) {
+      auto entry = value.toObject();
+      auto name = str(entry, files ? "Name" : "Label");
+      auto id = files ? display(entry["Item"]) : str(entry, "ID");
+      if (name.isEmpty()) name = id;
+      next.append(QVariantMap{{"title", name}, {"route", "folder:" + id}, {"icon", "folder"}});
+    }
+    std::stable_sort(next.begin(), next.end(), [](auto a, auto b) { const auto first=a.toMap(),second=b.toMap();const auto x=first["title"].toString().toLower(),y=second["title"].toString().toLower(); return x==y?first["route"].toString()<second["route"].toString():x<y; });
+    if (next != folderShortcuts) { folderShortcuts = next; emit navigationChanged(); }
+  });
+}
+
+void Backend::keepEditing() {
+  if (!m_dialog.value("discard").toBool()) return;
+  closePending = false;
+  m_dialog.remove("discard");
+  m_dirty = true;
+  emit dialogChanged(); emit changed();
+}
+bool Backend::requestClose() {
+  if (m_busy) return false;
+  if (m_dialog.isEmpty()) return true;
+  closePending = true;
+  if (!m_dialog.value("discard").toBool()) cancelDialog();
+  return false;
 }

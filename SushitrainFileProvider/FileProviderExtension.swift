@@ -116,12 +116,11 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 			completionHandler(nil, unavailableError)
 			return Progress()
 		}
-		guard let id = identifier.itemID else {
-			completionHandler(nil, NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier))
-			return Progress()
-		}
-
 		do {
+			guard let id = try identifier.itemID(in: context.store) else {
+				completionHandler(nil, NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier))
+				return Progress()
+			}
 			guard let item = try context.store.item(id: id) else {
 				completionHandler(nil, NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier))
 				return Progress()
@@ -152,7 +151,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		default:
 			let found: IndexItem?
 			do {
-				found = try containerItemIdentifier.itemID.map { try context.store.item(id: $0) } ?? nil
+				found = try containerItemIdentifier.itemID(in: context.store).map { try context.store.item(id: $0) } ?? nil
 			}
 			catch let error as IndexError {
 				// Not knowing is not the same as not existing: the system would delete the item
@@ -178,7 +177,8 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 			return Progress()
 		}
 		do {
-			guard let id = itemIdentifier.itemID, let item = try context.store.item(id: id), item.kind == .file,
+			guard let id = try itemIdentifier.itemID(in: context.store), let item = try context.store.item(id: id),
+				item.kind == .file,
 				let binding = try context.remoteBinding(folderID: item.folderID)
 			else {
 				completionHandler(nil, nil, NSError.fileProviderErrorForNonExistentItem(withIdentifier: itemIdentifier))
@@ -209,7 +209,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 			return Progress()
 		}
 		do {
-			guard let parentID = itemTemplate.parentItemIdentifier.itemID else {
+			guard let parentID = try itemTemplate.parentItemIdentifier.itemID(in: context.store) else {
 				let root = try remote.existingFolderRoot(for: itemTemplate, options: options)
 				completionHandler(try context.makeItem(root), [], false, nil)
 				return Progress()
@@ -246,7 +246,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 			return Progress()
 		}
 		do {
-			guard let id = item.itemIdentifier.itemID, let stored = try context.store.item(id: id),
+			guard let id = try item.itemIdentifier.itemID(in: context.store), let stored = try context.store.item(id: id),
 				let binding = try context.remoteBinding(folderID: stored.folderID)
 			else {
 				throw NSFileProviderError(.noSuchItem)
@@ -335,7 +335,7 @@ extension FileProviderExtension: NSFileProviderCustomAction {
 		do {
 			var found: [IndexItem] = []
 			for identifier in itemIdentifiers {
-				if let id = identifier.itemID, let item = try context.store.item(id: id),
+				if let id = try identifier.itemID(in: context.store), let item = try context.store.item(id: id),
 					try context.remoteBinding(folderID: item.folderID) != nil
 				{
 					found.append(item)

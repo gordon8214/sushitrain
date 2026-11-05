@@ -45,8 +45,7 @@ func runVersions(path string) int {
 					d.error(err)
 					return
 				}
-				d.parent = 0
-				d.navigate("Files")
+				d.openFilesAt("", "", 0)
 				d.filesVersions(browserRow{name: e.Name, item: e.Item, node: e.Node, size: e.Size, writable: e.Writable})
 			})
 		} else {
@@ -61,7 +60,7 @@ func runVersions(path string) int {
 				if d.directory == "." {
 					d.directory = ""
 				}
-				d.navigate("Files")
+				d.openFilesAt(d.folder, d.directory, 0)
 				d.localVersions(target.Path, filepath.Base(abs))
 			})
 		}

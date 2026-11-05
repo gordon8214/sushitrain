@@ -79,7 +79,7 @@ import SynctrainFileProviderKit
 
 	#if DEBUG && os(macOS)
 		/// Read-only presentation fixtures: no shared environment, credential, connection, or domain is started.
-		func loadSettingsFixture() {
+		func loadSettingsFixture(environment: RemoteEnvironment? = nil) {
 			guard TestRun.isActive, !TestRun.allowsFileProvider else { return }
 			gateways = [
 				RemoteGatewayStatus(
@@ -93,6 +93,13 @@ import SynctrainFileProviderKit
 					kind: .replace, state: .failed, name: "Notes.txt", lastError: "The fixture gateway is offline.",
 					updatedAt: Date(), stagedPath: nil)
 			]
+			if let environment {
+				do {
+					folders = try environment.store.folders()
+					bindings = Dictionary(uniqueKeysWithValues: try environment.store.remoteBindings().map { ($0.folderID, $0) })
+				}
+				catch { preconditionFailure("Could not load desktop fixture folders: \(error)") }
+			}
 			hasUnresolvedOperations = true
 		}
 	#endif

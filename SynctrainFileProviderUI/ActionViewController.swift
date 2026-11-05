@@ -52,7 +52,9 @@ final class ActionViewController: FPUIActionExtensionViewController {
 	@concurrent private nonisolated static func itemID(
 		of identifier: NSFileProviderItemIdentifier, in domainIdentifier: NSFileProviderDomainIdentifier
 	) async -> Int64? {
-		if let itemID = ItemIdentifiers.itemID(from: identifier.rawValue) {
+		guard let container = SharedContainer.appGroup() else { return nil }
+		let store = IndexStore(container: container)
+		if let itemID = try? store.fileProviderItemID(for: identifier.rawValue) {
 			return itemID
 		}
 		do {
@@ -64,7 +66,7 @@ final class ActionViewController: FPUIActionExtensionViewController {
 			}
 			let url = try await manager.getUserVisibleURL(for: identifier)
 			let (resolved, _) = try await NSFileProviderManager.identifierForUserVisibleFile(at: url)
-			return ItemIdentifiers.itemID(from: resolved.rawValue)
+			return try store.fileProviderItemID(for: resolved.rawValue)
 		}
 		catch {
 			log.warning(

@@ -17,27 +17,28 @@ under Privacy & Security. Earlier versions were sandboxed; the app tells whether
 
 ## Settings window
 
-Both Mac modes use a sidebar and detail settings window. It opens at 1000 × 720 points, can be resized down to
-800 × 560, and remembers its last category separately for each mode. A category change returns its detail to the
-root page. An editor with unsaved changes asks **Discard Changes** or **Keep Editing** before changing categories,
-even when its input is invalid and Save is unavailable. Categories cannot change during a save. Existing Back and
-window-close behavior stays the same.
+Both Mac modes use the same main destinations: **Overview**, **Folders**, **Devices**, **Files**, **Remote Access**,
+**History**, **Activity**, and a bottom **Settings** action. Files has expandable folder shortcuts with stable identities.
+Files mode also has a full native browsing window; entering a folder reads indexed metadata without downloading contents.
+Open, Preview, and explicit offline actions use the existing File Provider and transfer services.
 
-Both sidebars are flat category lists without section headers. The Synchronize settings use a single normal
-window, opened by the app menu, Command-comma or the menu-bar command. Its unified toolbar keeps the sidebar button
-beside the divider and the page title at the leading edge of the detail column, as in BetterLight.
+Settings remains a separate native window, opened through the sidebar, app menu, Command-comma, or menu-bar command.
+It opens at 1000 × 720 points, can be resized down to 800 × 560, and remembers its last category separately for each mode.
+The flat sidebar uses **General**, **Files & Storage**, **Network**, **Synchronization**, **Integrations**, **Defaults**,
+**Advanced**, and **About** in both modes. Unavailable sections explain their operating-mode requirement.
+The authoritative order and section IDs are in `SushitrainCore/desktopui/catalog.json`.
 
-In **Synchronize** mode, the categories are **General**, **Files & Previews**, **Network**, **Bandwidth**, **Engine**,
-**Defaults**, **Remote File Service**, **Engine Access**, **Configuration**, **Troubleshooting** and **Advanced
-Configuration**. General is the initial category. Network leads to Connection options, Proxy and Ignored devices.
-Engine includes scanning priority. Files & Previews contains browsing behavior, image and video previews, and thumbnail
-caching. Engine Access contains the Web GUI and REST API controls and their detailed settings. Settings are still immediate where they were before; expert pages
-retain their explicit Save buttons, validation and restart confirmations.
+General contains identity, mode, startup, and app presence. Files & Storage contains browsing, previews, caches, and locations.
+Network includes connectivity, discovery, relays, connection options, proxy, and bandwidth. Synchronization contains
+pausing, resource priority, scanning/database options, and reporting. Integrations contains Finder, menu access, and MCP.
+Advanced contains Web GUI/REST access, configuration, expert options, and diagnostics. Remote service management is under
+Remote Access; history sources are under History. Existing contextual shortcuts remain available.
 
-In **Files in Finder** mode, **General** contains launch, app presence and mode switching; **Gateways** contains pairing
-and gateway details, with crash notices; **Finder** contains the location controls; and **Pending Edits** contains edits
-being sent or needing review. Gateways is the initial category. Finder and Pending Edits explain their empty states.
-The iOS settings layout stays the same.
+Simple preferences apply immediately and show persistence errors. Multi-field editors use Save/Cancel and preserve invalid
+or failed drafts. Unsaved changes prompt **Discard Changes** or **Keep Editing** before changing settings categories or
+closing Settings. Nested staged editors use guarded modal panels, and category navigation and closing are blocked during
+saves. Existing validation and restart confirmations remain in their backends. The iOS settings layout stays the same.
+See [desktop UI acceptance](desktop-ui-acceptance.md) for current build and interaction evidence.
 
 For an isolated native check of the Files-mode settings shell, a Debug build accepts
 `SYNCTRAIN_TEST_SETTINGS_MODE=files` together with `SYNCTRAIN_TEST_ROOT` (and the same scratch path in `HOME`).
@@ -326,7 +327,7 @@ accepting folders from an untrusted device.
 
 ## Folder status and failed items
 
-The General tab of a folder shows its status, with the engine's own message when it stopped on an error. Before, that
+The Overview tab of a folder shows its status, with the engine's own message when it stopped on an error. Before, that
 message didn't reach the app: `Folder.State` returned the state and the error together, and gomobile returns no value
 along with an error. It now returns the state, and `StateError` the message.
 
@@ -388,7 +389,7 @@ intervening edits, and recover interrupted archive/publication transactions befo
   list shows when a file was last archived, which isn't when it was deleted: a deletion on this device archives nothing, so
   restoring can bring back an older version, as the confirmation says.
 
-## Manual settings verification
+## Earlier manual settings verification (November 3)
 
 A follow-up comparison with BetterLight on November 3 replaced the dedicated Settings scene with a normal window
 and a unified toolbar. The app menu, Command-comma and menu-bar command now target the same `appSettings` window.
@@ -461,7 +462,7 @@ the same way:
   instead of stopping the engine, and move back once it is free again (unless their address was changed meanwhile);
   the marker records where they belong. If they can't listen on their address at all, they are turned off. Either
   way the app's settings say so. An address set with `STGUIADDRESS` is left alone.
-- Settings › Engine Access shows whether they are on, their address and the API key (shown on request, copied so that
+- Settings › Advanced › Web GUI and REST API shows whether they are on, their address and the API key (shown on request, copied so that
   clipboard managers that honor it don't keep it, and regenerated after a warning). Turning them on or off restarts
   the engine: they start with it, and one that runs keeps listening until then. Turning them on gives them a password
   if they have none, also after clearing the user name on purpose.
@@ -490,7 +491,7 @@ the same way:
 The Syncthing Web GUI window shows the GUI inside the app, at the address and with the TLS of the configuration. Its
 self-signed certificate is trusted by its fingerprint, from `https-cert.pem`. The window opens with **Open Web GUI**
 (⌥⌘O), and **Open Web GUI in Browser** (⌥⇧⌘O) and the window's Open in Browser use the default browser. Both are in the
-app menu, the menu bar menu and the settings, under Engine Access, and are unavailable while the web GUI is off or on a
+app menu, the menu bar menu and the settings, under Advanced › Web GUI and REST API, and are unavailable while the web GUI is off or on a
 Unix socket. iOS doesn't get them: it has no engine, and a gateway's web GUI belongs to the system that runs it.
 
 - What the window shows follows the engine and the configuration, so it never keeps a page of a service that went away.
@@ -1027,12 +1028,12 @@ measured niceness/UI impact relevant to issue #22. Normal app builds still need
 
 ## Finder menus and sync badges
 
-In Synchronize mode, enable **Synctrain Finder Sync** through Settings › General › Finder integration ›
+In Synchronize mode, enable **Synctrain Finder Sync** through Settings › Integrations › File Manager Integration ›
 **Manage Finder Extension…**. macOS controls whether the extension is enabled. Right-click a synchronized folder,
 file, Finder window background, or sidebar folder to see Synctrain's commands directly in the context menu, each
 with the app icon. The commands are **Show in Synctrain**, **Show Info…** for indexed entries, **Folder Settings…**,
 and **Previous Versions…** for regular files in folders with supported versioning or enabled matching history sources.
-Settings › **History Sources** includes archives from other paired gateways without mounting their folders; see
+History › **History Sources** includes archives from other paired gateways without mounting their folders; see
 [additional history sources](gateway.md#additional-history-sources). Multiple selected items in one
 sync folder offer their common directory and folder settings.
 Selections spanning different sync folders have no Synctrain commands.

@@ -210,7 +210,7 @@ extension SushitrainClient {
 	}
 }
 
-private struct LogView: View {
+struct LogView: View {
 	/// A line as the view lists it
 	private struct Row: Identifiable {
 		let id: Int

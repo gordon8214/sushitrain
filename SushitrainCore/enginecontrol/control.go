@@ -357,7 +357,7 @@ func (c *Control) Call(ctx context.Context, method string, p Request) (any, erro
 		delete(c.editors, p.Token)
 		return nil, nil
 	case "engine.action":
-		if p.Action == "mkdir" || p.Action == "import" || p.Action == "rename" || p.Action == "move" || p.Action == "trashFile" {
+		if p.Action == "mkdir" || p.Action == "import" || p.Action == "rename" || p.Action == "move" || p.Action == "trashFile" || (p.Action == "deleteFile" && p.Token != "") {
 			f, err := c.folder(p.Folder)
 			if err != nil {
 				return nil, err

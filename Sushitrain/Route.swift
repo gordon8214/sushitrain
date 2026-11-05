@@ -4,8 +4,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import SushitrainCore
+import SynctrainHostKit
 
 enum Route: Hashable, Equatable {
+	case desktop(String)
 	case start
 	case folders
 	case folder(folderID: String, prefix: String?)
@@ -33,6 +35,11 @@ enum Route: Hashable, Equatable {
 	init?(url: URL) {
 		if url.scheme != Self.urlScheme {
 			return nil
+		}
+
+		if let id = DesktopRouteURL.destinationID(from: url) {
+			self = .desktop(id)
+			return
 		}
 
 		var type = url.path
@@ -94,6 +101,7 @@ enum Route: Hashable, Equatable {
 
 	var url: URL {
 		switch self {
+		case .desktop(let id): return DesktopRouteURL.url(destinationID: id)
 		case .start:
 			return Self.urlFrom(scheme: Self.urlScheme, path: "start")
 		case .folders:
@@ -111,7 +119,7 @@ enum Route: Hashable, Equatable {
 
 	var splitted: [Route] {
 		switch self {
-		case .start, .folders, .devices, .search:
+		case .desktop, .start, .folders, .devices, .search:
 			return [self]
 
 		case .file(let folderID, let path):
@@ -149,7 +157,7 @@ enum Route: Hashable, Equatable {
 
 	var localizedSubtitle: String? {
 		switch self {
-		case .start, .folders, .devices, .search(for: _):
+		case .desktop, .start, .folders, .devices, .search(for: _):
 			return nil
 		case .folder(let folderID, let prefix):
 			if let p = prefix, !p.isEmpty && p != "/" {
@@ -167,6 +175,7 @@ enum Route: Hashable, Equatable {
 
 	var localizedTitle: String {
 		switch self {
+		case .desktop(let id): return DesktopUICatalog.desktop.destinations.first { $0.id == id }?.title ?? "Overview"
 		case .search(for: let q):
 			if q.isEmpty {
 				return String(localized: "Search files/folders")
@@ -175,7 +184,7 @@ enum Route: Hashable, Equatable {
 				return String(localized: "Search for '\(q)'")
 			}
 		case .start:
-			return String(localized: "Start")
+			return String(localized: "Overview")
 		case .folders:
 			return String(localized: "Folders")
 		case .folder(let folderID, let prefix):

@@ -11,11 +11,17 @@ public struct IndexStore: Sendable {
 	public let url: URL
 	private let container: SharedContainer?
 
-	static let schemaVersion = 2
+	static let schemaVersion = 3
 
 	static let itemColumns = """
 		id, folder_id, path, parent_id, name, kind, size, mod_ns, blocks_hash, content_rev, meta_rev, changed_seq, \
-		pending, deleted
+		pending, deleted, \
+		COALESCE((SELECT identifier FROM file_provider_legacy_identifiers WHERE item_id = items.id), \
+			(CASE WHEN EXISTS (SELECT 1 FROM meta WHERE key = 'legacy_file_provider_identifiers') \
+				THEN 'gateway:' ELSE '' END) || items.id), \
+		COALESCE((SELECT identifier FROM file_provider_legacy_identifiers WHERE item_id = items.parent_id), \
+			(CASE WHEN EXISTS (SELECT 1 FROM meta WHERE key = 'legacy_file_provider_identifiers') \
+				THEN 'gateway:' ELSE '' END) || items.parent_id)
 		"""
 
 	public init(url: URL) {
@@ -40,6 +46,9 @@ public struct IndexStore: Sendable {
 		}
 		let connection = try SQLiteConnection(url: url)
 		try Self.createSchemaIfNeeded(connection)
+		if let container {
+			try Self.importLegacyFileProviderIdentifiers(connection, container: container)
+		}
 		return try block(connection)
 	}
 
@@ -49,13 +58,13 @@ public struct IndexStore: Sendable {
 		}
 	}
 
-	/// Creates the tables of a new database. A database of any other version is not this app's to change.
+	/// Creates new tables or upgrades a supported earlier schema without changing item rows.
 	static func createSchemaIfNeeded(_ connection: SQLiteConnection) throws(IndexError) {
 		let version = try connection.userVersion
 		if version == schemaVersion {
 			return
 		}
-		if version != 0 && version != 1 {
+		if version < 0 || version > schemaVersion {
 			throw .unsupportedSchema(version)
 		}
 		try connection.transaction { () throws(IndexError) in
@@ -66,6 +75,7 @@ public struct IndexStore: Sendable {
 			try createItemSchema(connection)
 			try createRemoteSchema(connection)
 			try createHistorySchema(connection)
+			try createFileProviderIdentifierSchema(connection)
 			try connection.setUserVersion(schemaVersion)
 		}
 	}
@@ -136,7 +146,9 @@ public struct IndexStore: Sendable {
 			metadataRevision: row.int64(10),
 			changedSequence: row.int64(11),
 			pending: PendingChange(rawValue: Int(row.int64(12))) ?? .none,
-			isDeleted: row.bool(13)
+			isDeleted: row.bool(13),
+			fileProviderIdentifier: row.optionalText(14),
+			parentFileProviderIdentifier: row.optionalText(15)
 		)
 	}
 

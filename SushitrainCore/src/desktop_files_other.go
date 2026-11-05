@@ -104,9 +104,9 @@ func (f *Folder) DesktopFileAction(ctx context.Context, action, name, target, so
 			}
 			err = parent.Link(temporary, filepath.Base(name))
 
-		case "rename", "move":
-			if expected == "" || !finderPathAllowed(target) || h.IsIgnored(target) {
-				return errors.New("refresh this file before moving it")
+		case "rename", "move", "deleteFile":
+			if expected == "" || (action != "deleteFile" && (!finderPathAllowed(target) || h.IsIgnored(target))) {
+				return errors.New("refresh this item before changing it")
 			}
 			if err = osutil.TraversesSymlink(h.Filesystem(), filepath.Dir(target)); err != nil {
 				return err
@@ -117,9 +117,13 @@ func (f *Folder) DesktopFileAction(ctx context.Context, action, name, target, so
 			}
 			actual := fmt.Sprintf("%s:%d:%d", historyFileIdentity(info), info.Size(), info.ModTime().UnixNano())
 			if actual != expected {
-				return errors.New("this file changed; refresh before moving it")
+				return errors.New("this file changed; refresh before changing it")
 			}
-			err = desktopRenameExclusive(root, name, target)
+			if action == "deleteFile" {
+				err = h.Filesystem().Remove(name)
+			} else {
+				err = desktopRenameExclusive(root, name, target)
+			}
 		default:
 			return errors.New("unsupported native file operation")
 		}

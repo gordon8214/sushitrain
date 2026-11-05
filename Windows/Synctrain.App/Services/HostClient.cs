@@ -15,6 +15,29 @@ internal sealed class HostClient
 {
     private readonly string pipeName = "Synctrain-" + WindowsIdentity.GetCurrent().User!.Value;
 
+    // Only Debug builds can attach an isolated UI run to a separately started test host.
+    public static bool IsolatedTest
+    {
+        get
+        {
+#if DEBUG
+            var root = Environment.GetEnvironmentVariable("SYNCTRAIN_TEST_ROOT");
+            var pipe = Environment.GetEnvironmentVariable("SYNCTRAIN_TEST_PIPE");
+            if (root is null && pipe is null) return false;
+            if (root is null || !Path.IsPathFullyQualified(root) || !File.Exists(Path.Combine(root, "desktop-ui-fixture")) || pipe?.StartsWith("Synctrain-UI-", StringComparison.Ordinal) != true)
+                throw new InvalidOperationException("Invalid isolated UI test configuration; refusing to connect to a production host.");
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
+
+    public HostClient()
+    {
+        if (IsolatedTest) pipeName = Environment.GetEnvironmentVariable("SYNCTRAIN_TEST_PIPE")!;
+    }
+
     public async Task<JsonNode?> Call(string method, object? parameters = null, int timeoutSeconds = 60)
     {
         if(method=="quit"){
@@ -54,6 +77,7 @@ internal sealed class HostClient
 
     public async Task EnsureRunning()
     {
+        if (IsolatedTest) { await Call("status", timeoutSeconds: 6); return; }
         try { await Call("status", timeoutSeconds: 6); return; }
         catch (Exception error) when (error is IOException or TimeoutException or OperationCanceledException) { }
         Process.Start(new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "synctrain-host.exe")) { UseShellExecute = false, CreateNoWindow = true });

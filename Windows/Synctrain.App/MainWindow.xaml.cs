@@ -21,7 +21,7 @@ public sealed partial class MainWindow : Window
         RootFrame.Navigate(typeof(MainPage));
         tray = new TrayIcon(this, HandleTray);
         if(RootFrame.Content is MainPage page)page.ModeChanged+=mode=>tray.Synchronize=mode=="synchronize";
-        AppWindow.Closing += (_, args) => { if (!quitting) { args.Cancel = true; AppWindow.Hide(); } };
+        AppWindow.Closing += async (_, args) => { if (!quitting) { args.Cancel = true; if (RootFrame.Content is MainPage current && await current.CanClose()) AppWindow.Hide(); } };
         Closed += (_, _) => tray.Dispose();
     }
 
@@ -37,7 +37,8 @@ public sealed partial class MainWindow : Window
         try
         {
             if (command == 1) {await host.EnsureRunning();Open();}
-            else if (command == 5) { await host.Call("quit"); quitting = true; Close(); Application.Current.Exit(); }
+            else if (command == 6) { Open(); if (RootFrame.Content is MainPage current) await current.OpenSettings(); }
+            else if (command == 5) { if(RootFrame.Content is MainPage current && !await current.CanClose())return; await host.Call("quit"); quitting = true; Close(); Application.Current.Exit(); }
             else await host.Call("engine.action", new { Action = command switch { 2 => "pauseAll", 3 => "resumeAll", 4 => "rescanAll", _ => "" } });
         }
         catch (Exception error)

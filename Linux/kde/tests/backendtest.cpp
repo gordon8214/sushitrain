@@ -18,6 +18,7 @@
 #include <QQuickWindow>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QSignalSpy>
 #include <QTimer>
 #include <sys/file.h>
 
@@ -160,8 +161,8 @@ private slots:
     quickWindow->show();
     QVERIFY(QTest::qWaitForWindowExposed(quickWindow, 1000));
     QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
-    b.navigate("Settings");
-    b.activate(rowAction(b, "Network", "Edit"));
+    b.navigate("settings:network");
+    b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure"));
     auto *editor = window->findChild<QObject *>("settingsEditor");
     QVERIFY(editor);
     QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
@@ -227,8 +228,8 @@ private slots:
     quickWindow->show();
     QVERIFY(QTest::qWaitForWindowExposed(quickWindow, 1000));
     QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
-    b.navigate("Settings");
-    auto open = [&] { b.activate(rowAction(b, "Network", "Edit")); };
+    b.navigate("settings:network");
+    auto open = [&] { b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure")); };
     open();
     auto *editor = window->findChild<QObject *>("settingsEditor");
     auto *disclosure = window->findChild<QQuickItem *>("editorAdvanced");
@@ -341,8 +342,9 @@ private slots:
     QTRY_VERIFY_WITH_TIMEOUT(b.dialog().isEmpty(), 1000);
     QTRY_COMPARE_WITH_TIMEOUT(f.calls.count("settings.close"), 1, 1000);
     QCOMPARE(f.calls.count("settings.save"), 0);
-    b.navigate("Settings");
-    b.activate(rowAction(b, "Reset New Folder Defaults…", "Edit"));
+    b.navigate("settings:network");
+    b.navigate("settings:defaults");
+    b.activate(rowAction(b, "Reset Synchronization Defaults…", "Configure"));
     QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
     QCOMPARE(f.parameters.at(f.calls.lastIndexOf("settings.get"))["Section"].toString(), QString("reset/defaults/folder"));
     QVERIFY(!advanced->isVisible());
@@ -369,31 +371,33 @@ private slots:
     QVERIFY(!sidebar->property("collapsible").toBool());
     QVERIFY(!sidebar->property("collapseButtonVisible").toBool());
     QQmlListReference actions(sidebar, "actions");
-    QCOMPARE(actions.count(), 8);
+    QCOMPARE(actions.count(), 7);
     auto *overview = actions.at(0);
-    auto *devices = actions.at(2);
-    auto *settings = actions.at(7);
+    auto *settings = window->findChild<QObject *>("settingsNavigation");
+    QVERIFY(settings);
     QVERIFY(overview->property("checked").toBool());
-    QVERIFY(QMetaObject::invokeMethod(settings, "trigger"));
-    QCOMPARE(b.page(), QString("Settings"));
-    QVERIFY(settings->property("checked").toBool());
-    QVERIFY(!overview->property("checked").toBool());
-    // A detail page keeps its parent selected even though the title changes.
-    b.activate(rowAction(b, "Advanced Configuration", "Open"));
+    QVERIFY(QMetaObject::invokeMethod(settings, "clicked"));
+    QCOMPARE(b.page(), QString("settings:general"));
+    QCOMPARE(actions.count(), 9); // Back to App followed by all eight categories.
+    QCOMPARE(actions.at(1)->property("text").toString(), QString("General"));
+    QCOMPARE(actions.at(8)->property("text").toString(), QString("About"));
+    QVERIFY(actions.at(1)->property("checked").toBool());
+    b.navigate("settings:advanced");
+    b.activate(rowAction(b, "Expert Configuration", "Configure"));
     QCOMPARE(b.title(), QString("Advanced Configuration"));
-    QVERIFY(settings->property("checked").toBool());
     b.activate(rowAction(b, "options", "Edit"));
     QTRY_VERIFY_WITH_TIMEOUT(!b.dialog().isEmpty(), 1000);
-    QVERIFY(!devices->property("enabled").toBool());
+    QVERIFY(!actions.at(0)->property("enabled").toBool());
     b.navigate("Devices");
-    QCOMPARE(b.page(), QString("Settings"));
-    QVERIFY(settings->property("checked").toBool());
+    QCOMPARE(b.page(), QString("settings:advanced"));
     b.cancelDialog();
-    QVERIFY(QMetaObject::invokeMethod(devices, "trigger"));
-    QCOMPARE(b.page(), QString("Devices"));
-    QVERIFY(devices->property("checked").toBool());
-    QVERIFY(!settings->property("checked").toBool());
+    QVERIFY(QMetaObject::invokeMethod(actions.at(0), "trigger"));
+    QCOMPARE(b.page(), QString("Overview"));
+    QCOMPARE(actions.count(), 7);
+    b.navigate("Devices");
+    QVERIFY(actions.at(2)->property("checked").toBool());
   }
+
   void qmlCancelPreservesDirtyDraft() {
     Fixture f;
     f.handler = [](QString m, auto) {
@@ -410,8 +414,8 @@ private slots:
     QScopedPointer<QObject> window(component.create());
     QVERIFY2(window, qPrintable(component.errorString()));
     QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
-    b.navigate("Settings");
-    b.activate(rowAction(b, "Network", "Edit"));
+    b.navigate("settings:network");
+    b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure"));
     QTRY_VERIFY_WITH_TIMEOUT(!b.dialog().isEmpty(), 1000);
     auto *editor = window->findChild<QObject *>("settingsEditor");
     auto *cancel = window->findChild<QObject *>("editorCancel");
@@ -426,12 +430,43 @@ private slots:
     QVERIFY(editor->property("opened").toBool());
     QCOMPARE(editor->property("draft").toMap()["name"].toString(), QString("unsaved"));
     // An invalid save must keep the same visible draft as well.
-    QVERIFY(QMetaObject::invokeMethod(save, "clicked"));
+    QVERIFY(QMetaObject::invokeMethod(save, "clicked")); // Keep Editing
+    QVERIFY(!b.dialog().value("discard").toBool());
+    QVERIFY(QMetaObject::invokeMethod(save, "clicked")); // Save the preserved draft
     QTRY_COMPARE_WITH_TIMEOUT(b.error(), QString("Invalid settings"), 1000);
     QVERIFY(editor->property("opened").toBool());
     QCOMPARE(editor->property("draft").toMap()["name"].toString(), QString("unsaved"));
     QVERIFY(QMetaObject::invokeMethod(cancel, "clicked"));
+    QVERIFY(b.dialog()["discard"].toBool());
+    QVERIFY(editor->property("opened").toBool());
+    QVERIFY(QMetaObject::invokeMethod(cancel, "clicked")); // Confirm Discard
     QTRY_VERIFY_WITH_TIMEOUT(b.dialog().isEmpty(), 1000);
+  }
+  void closePreservesDirtyEditorUntilExplicitDiscard() {
+    Fixture f;
+    f.handler = [](QString method, auto) {
+      if (method == "settings.get") return result(QJsonObject{{"Token", "close-fixture"}, {"Fields", QJsonArray{}}});
+      return result(QJsonObject{});
+    };
+    Backend b;
+    QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
+    b.navigate("settings:network");
+    b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure"));
+    QTRY_VERIFY_WITH_TIMEOUT(!b.dialog().isEmpty(), 1000);
+    b.fieldChanged();
+    QSignalSpy closed(&b, &Backend::closeReady);
+    QVERIFY(!b.requestClose());
+    QVERIFY(b.dialog().value("discard").toBool());
+    QVERIFY(!b.requestClose());
+    QCOMPARE(closed.count(),0);
+    QVERIFY(b.dialog().value("discard").toBool());
+    b.keepEditing();
+    QVERIFY(b.dirty());
+    QCOMPARE(closed.count(), 0);
+    QVERIFY(!b.requestClose());
+    b.cancelDialog();
+    QTRY_COMPARE_WITH_TIMEOUT(closed.count(), 1, 1000);
+    QVERIFY(b.dialog().isEmpty());
   }
   void coldActivationWaitsForPreferences() {
     Fixture f;
@@ -447,7 +482,7 @@ private slots:
     QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Sync Status"), 1000);
     QVERIFY(b.gridView());
     QVERIFY(f.calls.contains("mcp.preferences.close"));
-    QCOMPARE(f.calls.count("desktop.items"), 1);
+    QTRY_COMPARE_WITH_TIMEOUT(f.calls.count("desktop.items"), 1, 1000);
   }
   void settingsLoadsSerializeAndRestartPromptUsesWireKey() {
     Fixture f;
@@ -461,9 +496,9 @@ private slots:
     };
     Backend b;
     QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
-    b.navigate("Settings");
-    b.activate(rowAction(b, "Network", "Edit"));
-    b.activate(rowAction(b, "Files & Previews", "Configure"));
+    b.navigate("settings:network");
+    b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure"));
+    b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure"));
     QTRY_VERIFY_WITH_TIMEOUT(!b.dialog().isEmpty(), 1000);
     QCOMPARE(f.calls.count("settings.get"), 1);
     QCOMPARE(f.calls.count("mcp.preferences.get"), 1); // Startup only.
@@ -483,8 +518,8 @@ private slots:
     };
     Backend b;
     QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
-    b.navigate("Settings");
-    b.activate(rowAction(b, "Network", "Edit"));
+    b.navigate("settings:network");
+    b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure"));
     b.navigate("Devices");
     QTRY_VERIFY_WITH_TIMEOUT(f.calls.contains("settings.close"), 1000);
     const auto i = f.calls.indexOf("settings.close");
@@ -616,9 +651,9 @@ private slots:
     };
     Backend b;
     QTRY_COMPARE_WITH_TIMEOUT(b.mode(), QString("synchronize"), 2000);
-    b.navigate("Settings");
-    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(b, "Network", "Edit").isEmpty(), 1000);
-    b.activate(rowAction(b, "Network", "Edit"));
+    b.navigate("settings:network");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(b, "Connectivity, Discovery, and Relays", "Configure").isEmpty(), 1000);
+    b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure"));
     QTRY_VERIFY_WITH_TIMEOUT(!b.dialog().isEmpty(), 1000);
     b.fieldChanged();
     b.submit({{"name", "draft"}});
@@ -666,7 +701,7 @@ private slots:
     Fixture f("files");
     Backend b;
     QTRY_COMPARE_WITH_TIMEOUT(b.mode(), QString("files"), 2000);
-    b.navigate("Folders");
+    b.navigate("Remote Access");
     QTRY_VERIFY_WITH_TIMEOUT(!key(b.commands(), "Pair…").isEmpty(), 1000);
     b.activate(key(b.commands(), "Pair…"));
     b.submit({{"Link", "synctrain+pair://fixture"}});
@@ -707,6 +742,123 @@ private slots:
     b.activate(old);
     QTest::qWait(30);
     QCOMPARE(f.calls.count("files.childrenPage"), 2);
+    b.navigate("History");
+    b.navigate("Files");
+    QCOMPARE(b.rows().size(),2);
+    QCOMPARE(f.calls.count("files.childrenPage"),2);
+  }
+  void overviewProgressBelongsToTransferRows() {
+    Fixture fixture;
+    fixture.delay=[](QString method,auto) { return method=="engine.stats"?40:0; };
+    fixture.handler=[](QString method,auto) {
+      if(method=="engine.status") return result(QJsonObject{{"name","Upload"}});
+      if(method=="engine.folders") return result(QJsonArray{QJsonObject{{"ID","folder"},{"Label","Download"}}});
+      if(method=="engine.stats") return result(QJsonObject{
+        {"download",QJsonObject{{"Percentage",0.25}}},{"upload",QJsonObject{{"Percentage",0.75}}}});
+      return result(QJsonObject{});
+    };
+    Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.title(),QString("Overview"),1000);
+    auto progressRows=[&] { int count=0;for(auto value:backend.rows())if(value.toMap().contains("progress"))++count;return count; };
+    QTRY_COMPARE_WITH_TIMEOUT(progressRows(),2,1000);
+    for(auto value:backend.rows()) {
+      auto row=value.toMap();
+      if(!row["actions"].toList().isEmpty())QVERIFY(!row.contains("progress"));
+      if(row.contains("progress")) {
+        QVERIFY(row["actions"].toList().isEmpty());
+        QCOMPARE(row["progress"].toDouble(),row["title"]=="Download"?0.25:0.75);
+      }
+    }
+  }
+
+  void filesFoldersAndRemoteAccessHaveDistinctContent() {
+    Fixture fixture("files");
+    fixture.handler=[](QString method,auto) {
+      if(method=="status") return result(QJsonObject{
+        {"gateways",QJsonArray{QJsonObject{{"name","Fixture Gateway"},{"serviceID","gateway"},{"state","offline"}}}},
+        {"folders",QJsonArray{QJsonObject{{"label","Fixture Folder"},{"id","folder"},{"gateway","gateway"},{"state","offline"}}}}});
+      return result(QJsonObject{});
+    };
+    Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),QString("files"),1000);
+    backend.navigate("Folders");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"Fixture Folder","Browse").isEmpty(),1000);
+    QVERIFY(rowAction(backend,"Fixture Gateway","Add Folders").isEmpty());
+    QVERIFY(!key(backend.commands(),"Add Folder…").isEmpty());
+    backend.navigate("Remote Access");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"Fixture Gateway","Add Folders").isEmpty(),1000);
+    QVERIFY(rowAction(backend,"Fixture Folder","Browse").isEmpty());
+    QVERIFY(!key(backend.commands(),"Pair…").isEmpty());
+  }
+  void immediatePreferenceFailureKeepsConfirmedValue() {
+    Fixture fixture("files");
+    fixture.handler=[](QString method,QJsonObject params) {
+      if(method=="mcp.settings") {
+        if(params.contains("Enabled")) return QJsonObject{{"error","Fixture persistence failure"}};
+        return result(QJsonObject{{"Enabled",true}});
+      }
+      return result(QJsonObject{});
+    };
+    Backend backend;
+    QQmlEngine engine;engine.rootContext()->setContextProperty("backend",&backend);
+    QQmlComponent component(&engine,QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> window(component.create());QVERIFY2(window,qPrintable(component.errorString()));
+    auto *quickWindow=qobject_cast<QQuickWindow *>(window.data());QVERIFY(quickWindow);
+    quickWindow->show();QVERIFY(QTest::qWaitForWindowExposed(quickWindow,1000));
+    QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),QString("files"),1000);
+    backend.navigate("settings:integrations");
+    backend.activate(rowAction(backend,"MCP","Configure"));
+    QTRY_COMPARE_WITH_TIMEOUT(backend.rows().size(),1,1000);
+    auto *toggle=visualItem(quickWindow->contentItem(),"immediatePreferenceToggle");QVERIFY(toggle);
+    QVERIFY(toggle->isVisible());QVERIFY(toggle->property("checked").toBool());
+    toggle->forceActiveFocus();QTest::keyClick(quickWindow,Qt::Key_Space);
+    QTRY_VERIFY_WITH_TIMEOUT(!backend.error().isEmpty(),1000);
+    QVERIFY(backend.rows().first().toMap()["checked"].toBool());
+    toggle=visualItem(quickWindow->contentItem(),"immediatePreferenceToggle");QVERIFY(toggle);
+    QVERIFY(toggle->property("checked").toBool());
+    QVERIFY(backend.dialog().isEmpty());
+  }
+
+  void operatingModeChangeDiscardsBrowserSnapshot() {
+    Fixture fixture("synchronize");
+    fixture.handler=[](QString method,auto) {
+      if(method=="engine.folders")return result(QJsonArray{QJsonObject{{"ID","old"},{"Label","Old Folder"}}});
+      if(method=="engine.browsePage")return result(QJsonObject{{"Entries",QJsonArray{QJsonObject{{"Name","old.txt"},{"Path","old.txt"},{"Directory",false},{"Local",true},{"Identity","old-token"}}}}});
+      if(method=="files.childrenPage")return result(QJsonObject{{"Entries",QJsonArray{QJsonObject{{"Name","New Remote Folder"},{"Item",1},{"Kind",3}}}}});
+      return result(QJsonObject{});
+    };
+    Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),QString("synchronize"),1000);
+    backend.navigate("folder:old");QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"old.txt","Open").isEmpty(),1000);
+    QTest::qWait(20);
+    backend.navigate("settings:general");
+    QFile helper(fixture.dir.path()+"/synctrain-desktop");QVERIFY(helper.open(QIODevice::WriteOnly|QIODevice::Truncate));
+    QJsonObject host{{"Mode","files"},{"FilesSocket",fixture.server.fullServerName()}};
+    helper.write("#!/bin/sh\nprintf '%s\\n' '");helper.write(QJsonDocument(result(host)).toJson(QJsonDocument::Compact));helper.write("'\n");helper.close();
+    backend.activate(rowAction(backend,"Operating Mode","Configure"));backend.submit({});
+    QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),QString("files"),1000);
+    backend.navigate("Files");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"New Remote Folder","Open Folder").isEmpty(),1000);
+    QVERIFY(rowAction(backend,"old.txt","Open").isEmpty());
+  }
+
+  void catalogCategoriesAndCapabilitiesAcrossModes() {
+    QFile resource(":/desktop-ui/catalog.json"); QVERIFY(resource.open(QIODevice::ReadOnly));
+    const auto catalog=QJsonDocument::fromJson(resource.readAll()).object();
+    for(const auto &mode:QStringList{"synchronize","files"}) {
+      Fixture fixture(mode);Backend backend;
+      QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),mode,1000);
+      for(auto entry:catalog["settings"].toArray()) {
+        auto category=entry.toObject();backend.navigate("settings:"+category["id"].toString());
+        QCOMPARE(backend.title(),category["title"].toString());
+        QCOMPARE(backend.navigation().size(),9);
+        const auto sections=category["sections"].toArray();QCOMPARE(backend.rows().size(),sections.size());
+        for(int i=0;i<sections.size();++i) {
+          const auto section=sections[i].toObject(),row=QJsonObject::fromVariantMap(backend.rows()[i].toMap());
+          QCOMPARE(row["title"],section["title"]);
+          bool available=section["capability"]=="always" || section["capability"]==mode;
+          QCOMPARE(!row["actions"].toArray().isEmpty(),available);
+          if(!available)QVERIFY(row["subtitle"].toString().contains("Available in"));
+        }
+      }
+    }
   }
 };
 QTEST_MAIN(BackendTest)

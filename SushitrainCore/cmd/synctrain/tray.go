@@ -116,11 +116,17 @@ func (d *desktopUI) desktopSettings() {
 	tray.NotifyProperty("active", func() {
 		next := d.preferences
 		next.Tray = tray.Active()
+		if next.Tray == d.preferences.Tray {
+			return
+		}
 		if err := configureTray(next.Tray); err != nil {
+			tray.SetActive(d.preferences.Tray)
 			d.error(err)
 			return
 		}
 		if err := writePreferences(&next); err != nil {
+			_ = configureTray(d.preferences.Tray)
+			tray.SetActive(d.preferences.Tray)
 			d.error(err)
 			return
 		}
@@ -131,8 +137,12 @@ func (d *desktopUI) desktopSettings() {
 	startup.SetTitle("Open the tray at login")
 	file := filepath.Join(configDir(), "autostart", "synctrain.desktop")
 	_, err := os.Stat(file)
-	startup.SetActive(err == nil)
+	confirmedStartup := err == nil
+	startup.SetActive(confirmedStartup)
 	startup.NotifyProperty("active", func() {
+		if startup.Active() == confirmedStartup {
+			return
+		}
 		var err error
 		if startup.Active() && !tray.Active() {
 			tray.SetActive(true)
@@ -143,7 +153,10 @@ func (d *desktopUI) desktopSettings() {
 		}
 		err = linuxdesktop.Autostart(startup.Active())
 		if err != nil {
+			startup.SetActive(confirmedStartup)
 			d.error(err)
+		} else {
+			confirmedStartup = startup.Active()
 		}
 	})
 	g.Add(startup)

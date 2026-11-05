@@ -58,6 +58,9 @@
 			.windowResizability(.contentMinSize)
 			.commandsRemoved()
 			.commands {
+				CommandGroup(replacing: .appSettings) {
+					Button("Settings…") { AppWindowPresentation.open { openWindow(id: "appSettings") } }.keyboardShortcut(",")
+				}
 				CommandGroup(replacing: .appInfo) {
 					Button("About Synctrain") {
 						openWindow(id: "about")
@@ -77,6 +80,12 @@
 				NSApp.activate()
 			}
 
+			Window("Settings", id: "appSettings") { FilesSettingsView(presence: $presence) }
+				.windowToolbarStyle(.unified)
+				.defaultSize(width: 1000, height: 720)
+				.defaultLaunchBehavior(.suppressed)
+				.restorationBehavior(.disabled)
+
 			Window("About Synctrain", id: "about") {
 				AboutView(showsIntroduction: false)
 			}
@@ -91,6 +100,7 @@
 						openWindow(id: Self.window, value: Self.window)
 					}
 				}
+				Button("Settings…", systemImage: "gearshape") { AppWindowPresentation.open { openWindow(id: "appSettings") } }
 				Button("Show in Finder", systemImage: "folder") {
 					showLocation()
 				}
@@ -180,7 +190,7 @@
 							SwitchToSynchronizeButton(keepsLocation: true)
 						}
 					case .needsGateway, .needsFolders, .ready:
-						FilesSettingsView(presence: $presence)
+						DesktopFilesWindow()
 					}
 				}
 			}

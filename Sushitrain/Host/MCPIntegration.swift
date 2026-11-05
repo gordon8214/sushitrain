@@ -48,7 +48,8 @@
 				try server.setEnabled(value)
 				enabled = server.isEnabled()
 				error = nil
-			} catch { self.error = error.localizedDescription }
+			}
+			catch { self.error = error.localizedDescription }
 		}
 		func refresh() { enabled = server?.isEnabled() ?? false }
 		func stop() async {
@@ -56,6 +57,11 @@
 			self.server = nil
 			try? await goBlocking { server.close() }
 			delegate = nil
+		}
+
+		func nativeEngineCall(_ method: String, data: Data) async throws -> Data {
+			guard let server else { throw MCPAppError("The engine connection is unavailable. Restart Synctrain.") }
+			return try await goBlocking { try server.nativeCall(method, data: data) } ?? Data("null".utf8)
 		}
 
 		func perform(_ method: String, data: Data, cancellation: MCPCancellation? = nil) async throws -> Data {
@@ -73,7 +79,8 @@
 				return try preferences(method, parameters: parameters)
 			}
 			if method.hasPrefix("service.") || method.hasPrefix("exports.") || method.hasPrefix("clients.")
-				|| method.hasPrefix("pairing.") {
+				|| method.hasPrefix("pairing.")
+			{
 				guard appState != nil else { throw MCPAppError("The remote file service requires Synchronize mode.") }
 				return try await GatewayController.shared.mcpCall(method, parameters: parameters)
 			}
@@ -116,7 +123,8 @@
 				let outcome: Result<Data, any Error>
 				do {
 					outcome = .success(try await MCPIntegration.shared.perform(method, data: data, cancellation: progress))
-				} catch { outcome = .failure(error) }
+				}
+				catch { outcome = .failure(error) }
 				result.withLock { $0 = outcome }
 				finished.signal()
 			}
@@ -141,7 +149,7 @@
 			"mcp.files.transfers", "mcp.files.storage", "mcp.files.storage.budget", "mcp.preferences.get",
 			"mcp.preferences.save",
 			"mcp.preferences.close",
-			"history.sources", "history.pair", "history.enable", "history.forget", "history.list", "history.export"
+			"history.sources", "history.pair", "history.enable", "history.forget", "history.list", "history.export",
 		]
 	}
 #endif

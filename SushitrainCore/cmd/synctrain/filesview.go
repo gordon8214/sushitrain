@@ -47,7 +47,9 @@ type filesState struct {
 	storage files.Storage
 }
 
-func newFilesView(w *mainWindow) (gtk.Widgetter, func()) {
+func newFilesView(w *mainWindow) (gtk.Widgetter, func()) { return newFilesPage(w, "") }
+
+func newFilesPage(w *mainWindow, selected string) (gtk.Widgetter, func()) {
 	v := &filesView{w: w}
 	toolbar := adw.NewToolbarView()
 	stack := adw.NewViewStack()
@@ -57,7 +59,9 @@ func newFilesView(w *mainWindow) (gtk.Widgetter, func()) {
 	switcher.SetHAlign(gtk.AlignCenter)
 	switcher.SetMarginTop(4)
 	switcher.SetMarginBottom(4)
-	toolbar.AddTopBar(switcher)
+	if selected == "" {
+		toolbar.AddTopBar(switcher)
+	}
 	v.banner = adw.NewBanner("Synctrain Files isn't running")
 	v.banner.SetButtonLabel("Start")
 	v.banner.ConnectButtonClicked(func() {
@@ -100,7 +104,7 @@ func newFilesView(w *mainWindow) (gtk.Widgetter, func()) {
 			bytes := int64(v.budget.Value() * 1e9)
 			background(func() (struct{}, error) {
 				return struct{}{}, callFiles("storage.budget", map[string]int64{"bytes": bytes}, nil)
-			}, func(_ struct{}, err error) { w.failed(err) })
+			}, func(_ struct{}, err error) { v.mutationFinished(err); w.failed(err) })
 		})
 	})
 	storage.Add(v.budget)
@@ -120,13 +124,16 @@ func newFilesView(w *mainWindow) (gtk.Widgetter, func()) {
 	stack.AddTitledWithIcon(page(storage), "storage", "Storage", "drive-harddisk-symbolic")
 	if w.desk != nil {
 		switch w.desk.route {
-		case "Remote Files":
+		case "Remote Access":
 			stack.SetVisibleChildName("gateways")
-		case "Pending Changes":
+		case "Activity":
 			stack.SetVisibleChildName("changes")
-		case "Settings":
+		case "settings:filesAndStorage":
 			stack.SetVisibleChildName("storage")
 		}
+	}
+	if selected != "" {
+		stack.SetVisibleChildName(selected)
 	}
 	toolbar.SetContent(stack)
 
@@ -142,6 +149,14 @@ func page(group *adw.PreferencesGroup) *adw.PreferencesPage {
 	p := adw.NewPreferencesPage()
 	p.Add(group)
 	return p
+}
+
+// A management action can change metadata shown by a retained Files page.
+func (v *filesView) mutationFinished(err error) {
+	if err == nil && v.w.desk != nil {
+		v.w.desk.filesCacheInvalid = true
+		v.w.desk.populateFolderShortcuts()
+	}
 }
 
 // refresh shows what the daemon has now
@@ -290,6 +305,7 @@ func (v *filesView) removeFolder(f files.Folder) {
 				v.w.toast("“" + f.DirName + "” wasn't removed: " + err.Error())
 				return
 			}
+			v.mutationFinished(nil)
 			if r.Moved > 0 {
 				v.w.toast(fmt.Sprintf("Removed. %d files that were only here are in %s", r.Moved, r.Leftovers))
 			} else {
@@ -306,6 +322,7 @@ func (v *filesView) forget(g files.Gateway) {
 			background(func() (struct{}, error) {
 				return struct{}{}, callFiles("gateways.forget", map[string]string{"serviceID": g.ServiceID}, nil)
 			}, func(_ struct{}, err error) {
+				v.mutationFinished(err)
 				v.w.failed(err)
 				v.refresh()
 			})
@@ -318,6 +335,7 @@ func (v *filesView) discard(e files.Edit) {
 		background(func() (struct{}, error) {
 			return struct{}{}, callFiles("pending.discard", map[string]int64{"id": e.ID}, nil)
 		}, func(_ struct{}, err error) {
+			v.mutationFinished(err)
 			v.w.failed(err)
 			v.refresh()
 		})
@@ -401,6 +419,7 @@ func (v *filesView) pair() {
 				status.SetText(err.Error())
 				return
 			}
+			v.mutationFinished(nil)
 			d.Close()
 		})
 	})
@@ -488,6 +507,7 @@ func (v *filesView) addFolder() {
 								v.w.toast(err.Error())
 								return
 							}
+							v.mutationFinished(nil)
 							add.SetLabel("Added")
 							v.w.toast("Added “" + folder.DirName + "” to " + mountName)
 							v.refresh()

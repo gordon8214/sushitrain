@@ -15,6 +15,7 @@ struct NetworkSettingsView: View {
 	@State private var showDiscoveryAddresses = false
 	@State private var showSTUNAddresses = false
 	@State private var updateCounter = 0
+	@State private var errorMessage: ErrorMessage?
 
 	var body: some View {
 		let _ = updateCounter
@@ -27,7 +28,8 @@ struct NetworkSettingsView: View {
 							return appState.client.isListening()
 						},
 						set: { listening in
-							try? appState.client.setListening(listening)
+							do { try appState.client.setListening(listening) }
+							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
 						}))
 
@@ -76,7 +78,8 @@ struct NetworkSettingsView: View {
 								try appState.client.setEnoughConnections(enough ? 1 : 0)
 							}
 							catch {
-								Log.warn("Could not change the connection setting: \(error.localizedDescription)")
+								errorMessage = ErrorMessage(error)
+								updateCounter += 1
 							}
 						}))
 			} footer: {
@@ -93,7 +96,8 @@ struct NetworkSettingsView: View {
 							return appState.client.isLocalAnnounceEnabled()
 						},
 						set: { nv in
-							try? appState.client.setLocalAnnounceEnabled(nv)
+							do { try appState.client.setLocalAnnounceEnabled(nv) }
+							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
 						}))
 
@@ -104,7 +108,8 @@ struct NetworkSettingsView: View {
 							return appState.client.isAnnounceLANAddressesEnabled()
 						},
 						set: { nv in
-							try? appState.client.setAnnounceLANAddresses(nv)
+							do { try appState.client.setAnnounceLANAddresses(nv) }
+							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
 						}))
 
@@ -115,7 +120,8 @@ struct NetworkSettingsView: View {
 							return appState.client.isGlobalAnnounceEnabled()
 						},
 						set: { nv in
-							try? appState.client.setGlobalAnnounceEnabled(nv)
+							do { try appState.client.setGlobalAnnounceEnabled(nv) }
+							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
 						}))
 
@@ -146,7 +152,8 @@ struct NetworkSettingsView: View {
 							return appState.client.isRelaysEnabled()
 						},
 						set: { nv in
-							try? appState.client.setRelaysEnabled(nv)
+							do { try appState.client.setRelaysEnabled(nv) }
+							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
 						}))
 
@@ -157,7 +164,8 @@ struct NetworkSettingsView: View {
 							return appState.client.isNATEnabled()
 						},
 						set: { nv in
-							try? appState.client.setNATEnabled(nv)
+							do { try appState.client.setNATEnabled(nv) }
+							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
 						}))
 
@@ -168,7 +176,8 @@ struct NetworkSettingsView: View {
 							return appState.client.isSTUNEnabled()
 						},
 						set: { nv in
-							try? appState.client.setSTUNEnabled(nv)
+							do { try appState.client.setSTUNEnabled(nv) }
+							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
 						}))
 
@@ -192,7 +201,7 @@ struct NetworkSettingsView: View {
 			}
 
 			Section {
-				NavigationLink("Connection options") {
+				GuardedSettingsLink("Connection options") {
 					ConnectionOptionsView()
 				}
 			} footer: {
@@ -200,7 +209,7 @@ struct NetworkSettingsView: View {
 			}
 
 			Section {
-				NavigationLink("Proxy") {
+				GuardedSettingsLink("Proxy") {
 					ProxySettingsView()
 				}
 			} footer: {
@@ -231,5 +240,6 @@ struct NetworkSettingsView: View {
 			}
 		}
 		.formStyle(.grouped)
+		.errorAlert($errorMessage)
 	}
 }
