@@ -130,7 +130,7 @@ func newMainWindow(app *adw.Application) *mainWindow {
 		}
 	}}, {"refresh", "F5", func() {
 		if w.desk != nil {
-			w.desk.guard(w.desk.showRoute)
+			w.desk.guard(w.desk.refreshView)
 		}
 	}}, {"close", "<Control>w", func() { w.win.Close() }}} {
 		entry := entry

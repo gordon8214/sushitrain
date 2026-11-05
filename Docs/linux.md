@@ -84,6 +84,23 @@ deleted files, scanning, pause/resume, and all supported engine settings. Common
 Advanced Settings exposes the complete engine schema, including defaults. Editors keep drafts until Save, show
 validation errors, and ask before discarding changes. The web GUI and REST API are optional and can stay disabled.
 
+On GNOME, settings use hierarchical navigation inside the Settings location, following the
+[GNOME browsing guidelines](https://developer.gnome.org/hig/patterns/nav/browsing.html).
+Each destination is an `AdwNavigationPage` in an `AdwNavigationView`, with its own `AdwHeaderBar`.
+The header shows the current page title and a Back arrow at the leading edge. Back returns to the
+previous category; the settings list retains its scroll position. Save and Cancel also return to the
+immediate parent. Clean pages support libadwaita's Escape, Alt+Left, mouse Back, and swipe navigation
+(directions follow the locale). With unsaved edits, Back and the keyboard shortcuts ask before
+discarding; native gestures are blocked with `can-pop` so they cannot discard a draft silently.
+
+The GTK navigation regression test uses an isolated service socket and a virtual display. After
+building GTK dependencies, it normally takes a few seconds, with a 20-second test timeout:
+
+```bash
+cd SushitrainCore
+timeout 180s dbus-run-session -- xvfb-run -a go test -trimpath -timeout 20s -run TestSettingsNavigation ./cmd/synctrain
+```
+
 The native file browser supports paged lists and grids, search, thumbnails, import, move, rename, creating folders,
 Save a Copy, and local Trash. Files mode also supports Keep on This Device, offline edits, and pending-change review.
 Images, audio, video, PDF pages, and UTF-8 text have native previews; other documents and HTML open in the default app.

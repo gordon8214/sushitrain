@@ -58,7 +58,6 @@ func writePreferences(p *Preferences) error {
 func (d *desktopUI) previewSettings() { d.subpage(func() { d.previewSettingsPage() }) }
 func (d *desktopUI) previewSettingsPage() {
 	d.reset("Files & Previews")
-	d.button("Back", func() { d.guard(d.showRoute) })
 	g := d.group("Browsing and Previews")
 	for _, s := range []struct {
 		title string

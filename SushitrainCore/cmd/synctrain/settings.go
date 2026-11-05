@@ -18,7 +18,7 @@ func (d *desktopUI) settings() {
 		g := d.group("Settings")
 		g.Add(choiceRow("MCP", "Local assistant access", d.mcpSettings))
 		g.Add(choiceRow("Files & Previews", "Browsing and native previews", d.previewSettings))
-		g.Add(choiceRow("Cache and Offline Storage", "Manage fetched and pinned files", func() { d.legacyFiles() }))
+		g.Add(choiceRow("Cache and Offline Storage", "Manage fetched and pinned files", func() { d.subpage(func() { d.reset("Cache and Offline Storage"); d.legacyFiles() }) }))
 		d.serviceButtons()
 		d.desktopSettings()
 		return
@@ -78,7 +78,7 @@ func (d *desktopUI) editPage(section, title string) {
 		}
 		d.editor = editor.Token
 		d.reset(title)
-		d.dirty = false
+		d.setDirty(false)
 		if section == "gui" {
 			d.load("engine.status", nil, func(b json.RawMessage) {
 				var status struct{ GUIEnabled bool }
@@ -96,10 +96,10 @@ func (d *desktopUI) editPage(section, title string) {
 					r.SetActive(status.GUIEnabled)
 					d.guard(func() {
 						d.run("engine.action", desktopapi.Request{Action: "gui", Enabled: enabled}, func(json.RawMessage) {
-							d.dirty = false
+							d.setDirty(false)
 							d.closeEditor()
 							d.w.confirm("Restart Required", "Restart to apply the engine access change?", "Restart", false, func() { d.action("restart", "", "") })
-							d.showRoute()
+							d.finishSettings()
 						})
 					})
 				})
@@ -116,7 +116,7 @@ func (d *desktopUI) editPage(section, title string) {
 				r.SetTitle(f.Label)
 				r.SetActive(f.Value == "true")
 				r.SetSensitive(!f.IsReadOnly)
-				r.NotifyProperty("active", func() { d.dirty = true })
+				r.NotifyProperty("active", func() { d.setDirty(true) })
 				getters[f.Path] = func() string {
 					if r.Active() {
 						return "true"
@@ -136,7 +136,7 @@ func (d *desktopUI) editPage(section, title string) {
 				}
 				r.SetSelected(selected)
 				r.SetSensitive(!f.IsReadOnly)
-				r.NotifyProperty("selected", func() { d.dirty = true })
+				r.NotifyProperty("selected", func() { d.setDirty(true) })
 				getters[f.Path] = func() string {
 					index := r.Selected()
 					if int(index) < len(f.Options) {
@@ -149,7 +149,7 @@ func (d *desktopUI) editPage(section, title string) {
 				r := adw.NewPasswordEntryRow()
 				r.SetTitle(f.Label + " (leave empty to keep)")
 				r.SetSensitive(!f.IsReadOnly)
-				r.ConnectChanged(func() { d.dirty = true })
+				r.ConnectChanged(func() { d.setDirty(true) })
 				getters[f.Path] = func() string { return r.Text() }
 				g.Add(r)
 			case f.Kind == "list" || f.Kind == "json":
@@ -161,7 +161,7 @@ func (d *desktopUI) editPage(section, title string) {
 				view.SetMonospace(true)
 				view.SetEditable(!f.IsReadOnly)
 				view.SetSizeRequest(-1, 120)
-				buffer.ConnectChanged(func() { d.dirty = true })
+				buffer.ConnectChanged(func() { d.setDirty(true) })
 				r.AddRow(view)
 				getters[f.Path] = func() string { return buffer.Text(buffer.StartIter(), buffer.EndIter(), true) }
 				g.Add(r)
@@ -170,7 +170,7 @@ func (d *desktopUI) editPage(section, title string) {
 				r.SetTitle(f.Label)
 				r.SetText(f.Value)
 				r.SetSensitive(!f.IsReadOnly)
-				r.ConnectChanged(func() { d.dirty = true })
+				r.ConnectChanged(func() { d.setDirty(true) })
 				getters[f.Path] = func() string { return r.Text() }
 				g.Add(r)
 			}
@@ -182,16 +182,16 @@ func (d *desktopUI) editPage(section, title string) {
 			}
 			d.run("settings.save", desktopapi.Request{Token: editor.Token, Values: values}, func(b json.RawMessage) {
 				d.editor = ""
-				d.dirty = false
+				d.setDirty(false)
 				var result struct{ RestartRequired bool }
 				json.Unmarshal(b, &result)
-				d.showRoute()
+				d.finishSettings()
 				if result.RestartRequired {
 					d.w.confirm("Restart Required", "Restart the engine to apply the saved settings?", "Restart", false, func() { d.action("restart", "", "") })
 				}
 			})
 		})
-		d.button("Cancel", func() { d.guard(func() { d.closeEditor(); d.showRoute() }) })
+		d.button("Cancel", func() { d.guard(func() { d.closeEditor(); d.finishSettings() }) })
 	})
 }
 func (d *desktopUI) policySettings() { d.subpage(func() { d.policySettingsPage() }) }
@@ -203,7 +203,6 @@ func (d *desktopUI) policySettingsPage() {
 		}
 		json.Unmarshal(b, &p)
 		d.reset("Automatic Pausing")
-		d.button("Back", func() { d.guard(d.showRoute) })
 		g := d.group("Pause Synchronization")
 		for _, setting := range []struct {
 			title string
@@ -214,7 +213,7 @@ func (d *desktopUI) policySettingsPage() {
 			r := adw.NewSwitchRow()
 			r.SetTitle(s.title)
 			r.SetActive(s.get())
-			r.NotifyProperty("active", func() { s.set(r.Active()); d.dirty = true })
+			r.NotifyProperty("active", func() { s.set(r.Active()); d.setDirty(true) })
 			g.Add(r)
 		}
 		if !p.NetworkKnown || p.Cellular && !p.CellularKnown {
@@ -226,38 +225,39 @@ func (d *desktopUI) policySettingsPage() {
 		if p.Reason != "" {
 			d.text(p.Reason)
 		}
-		d.button("Save", func() { d.run("policy.save", p, func(json.RawMessage) { d.dirty = false; d.showRoute() }) })
+		d.button("Save", func() { d.run("policy.save", p, func(json.RawMessage) { d.setDirty(false); d.finishSettings() }) })
 	})
 }
 func (d *desktopUI) logs() { d.subpage(func() { d.logsPage() }) }
 func (d *desktopUI) logsPage() {
 	d.load("engine.logs", nil, func(b json.RawMessage) {
 		d.reset("Activity Log")
-		d.button("Back", func() { d.guard(d.showRoute) })
-		d.button("Refresh", d.logs)
+		d.button("Refresh", func() { d.startView(); d.logsPage() })
 		d.button("Logging Levels", func() {
-			d.load("engine.action", desktopapi.Request{Action: "logFacilities"}, func(b json.RawMessage) {
-				var levels []struct {
-					Name  string
-					Level int
-				}
-				json.Unmarshal(b, &levels)
-				d.reset("Logging Levels")
-				for _, f := range levels {
-					f := f
-					r := row(f.Name, "")
-					for _, level := range []struct {
-						name  string
-						value int
-					}{{"Debug", -4}, {"Info", 0}, {"Warning", 4}, {"Error", 8}} {
-						level := level
-						r.AddSuffix(textButton(level.name, func() {
-							d.run("engine.action", desktopapi.Request{Action: "logLevel", Name: f.Name, Offset: int64(level.value)}, nil)
-						}))
+			d.subpage(func() {
+				d.load("engine.action", desktopapi.Request{Action: "logFacilities"}, func(b json.RawMessage) {
+					var levels []struct {
+						Name  string
+						Level int
 					}
-					d.body.Append(r)
-				}
-				d.button("Reset", func() { d.action("resetLogLevels", "", "") })
+					json.Unmarshal(b, &levels)
+					d.reset("Logging Levels")
+					for _, f := range levels {
+						f := f
+						r := row(f.Name, "")
+						for _, level := range []struct {
+							name  string
+							value int
+						}{{"Debug", -4}, {"Info", 0}, {"Warning", 4}, {"Error", 8}} {
+							level := level
+							r.AddSuffix(textButton(level.name, func() {
+								d.run("engine.action", desktopapi.Request{Action: "logLevel", Name: f.Name, Offset: int64(level.value)}, nil)
+							}))
+						}
+						d.body.Append(r)
+					}
+					d.button("Reset", func() { d.action("resetLogLevels", "", "") })
+				})
 			})
 		})
 		d.button("Database Maintenance", func() { d.action("maintenance", "", "") })
@@ -279,7 +279,6 @@ func (d *desktopUI) advancedConfiguration() { d.subpage(func() { d.advancedConfi
 func (d *desktopUI) advancedConfigurationPage() {
 	d.reset("Advanced Configuration")
 	d.text("Expert settings. Changes can affect connectivity, synchronization and security.")
-	d.button("Back", func() { d.guard(d.showRoute) })
 	g := d.group("Configuration Sections")
 	for _, s := range []string{"options", "gui", "ldap", "defaults/folder", "defaults/device", "defaults/ignores"} {
 		s := s
@@ -307,7 +306,6 @@ func (d *desktopUI) resourceSettings() { d.subpage(func() { d.resourceSettingsPa
 func (d *desktopUI) resourceSettingsPage() {
 	d.reset("Background Resource Use")
 	d.text("These controls affect the entire synchronization service, including transfers.")
-	d.button("Back", func() { d.guard(d.showRoute) })
 	for _, p := range []struct{ title, value string }{{"Normal", "normal"}, {"Utility", "utility"}, {"Background", "background"}} {
 		p := p
 		d.body.Append(textButton(p.title, func() {

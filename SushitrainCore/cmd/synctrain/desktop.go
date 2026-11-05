@@ -33,10 +33,11 @@ type desktopUI struct {
 	preferences                            Preferences
 	w                                      *mainWindow
 	root                                   *adw.NavigationSplitView
+	navigation                             *adw.NavigationView
+	pages                                  []*settingsPage
 	detail                                 *adw.ToolbarView
 	body                                   *gtk.Box
 	commands                               *gtk.FlowBox
-	title                                  *gtk.Label
 	banner                                 *adw.Banner
 	sidebar                                *gtk.ListBox
 	route, mode, socket, folder, directory string
@@ -49,6 +50,8 @@ type desktopUI struct {
 	timer                                  coreglib.SourceHandle
 }
 
+var desktopRoutes = []string{"Overview", "Folders", "Devices", "Files", "Remote Files", "History Sources", "Pending Changes", "Settings"}
+
 func newDesktopUI(w *mainWindow) *desktopUI {
 	d := &desktopUI{w: w, mode: readMode(), route: "Overview", preferences: readPreferences()}
 	d.ctx, d.cancel = context.WithCancel(context.Background())
@@ -59,7 +62,7 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 	d.sidebar = gtk.NewListBox()
 	d.sidebar.AddCSSClass("navigation-sidebar")
 	d.sidebar.SetSelectionMode(gtk.SelectionSingle)
-	pages := []string{"Overview", "Folders", "Devices", "Files", "Remote Files", "History Sources", "Pending Changes", "Settings"}
+	pages := desktopRoutes
 	for _, name := range pages {
 		r := gtk.NewListBoxRow()
 		l := gtk.NewLabel(name)
@@ -76,20 +79,9 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 	side.AddTopBar(h)
 	side.SetContent(d.sidebar)
 	d.root.SetSidebar(adw.NewNavigationPage(side, "Synctrain"))
-	d.detail = adw.NewToolbarView()
-	head := adw.NewHeaderBar()
-	d.title = gtk.NewLabel("Overview")
-	d.title.AddCSSClass("title")
-	head.SetTitleWidget(d.title)
-	switchLabel := "Switch to Files…"
-	if d.mode == modeFiles {
-		switchLabel = "Switch to Synchronize…"
-	}
-	head.PackEnd(w.menuButton(switchLabel))
-	d.detail.AddTopBar(head)
-	d.banner = adw.NewBanner("")
-	d.detail.AddTopBar(d.banner)
-	d.root.SetContent(adw.NewNavigationPage(d.detail, "Synctrain"))
+	d.navigation = adw.NewNavigationView()
+	d.navigation.ConnectPopped(func(*adw.NavigationPage) { d.settingsPopped() })
+	d.root.SetContent(adw.NewNavigationPage(d.navigation, "Synctrain"))
 	d.sidebar.ConnectRowActivated(func(r *gtk.ListBoxRow) {
 		if r != nil {
 			d.root.SetShowContent(true)
@@ -109,10 +101,9 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 				break
 			}
 		}
-		d.guard(func() { d.navigate(next); d.sidebar.SelectRow(r) })
+		d.guard(func() { d.navigate(next) })
 	})
 	d.sidebar.SelectRow(d.sidebar.RowAtIndex(0))
-	d.reset("Overview")
 	d.showRoute()
 	d.timer = coreglib.TimeoutSecondsAdd(2, func() bool {
 		if d.closed {
@@ -122,7 +113,7 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 		if next.Preferences != d.preferences.Preferences && !d.saving && !d.dirty {
 			d.preferences = next
 			_ = configureTray(next.Tray)
-			d.showRoute()
+			d.refreshView()
 		}
 		if d.route == "Overview" && !d.saving {
 			if d.overviewRefresh != nil {
@@ -175,6 +166,12 @@ func (d *desktopUI) navigate(route string) {
 		d.stopPage = nil
 	}
 	d.route = route
+	for i, name := range desktopRoutes {
+		if name == route {
+			d.sidebar.SelectRow(d.sidebar.RowAtIndex(i))
+			break
+		}
+	}
 	d.root.SetShowContent(true)
 	d.dirty = false
 	d.showRoute()
@@ -229,6 +226,7 @@ func (d *desktopUI) run(method string, p any, done func(json.RawMessage)) {
 		return
 	}
 	d.saving = true
+	d.updateSettingsNavigation()
 	d.detail.SetSensitive(false)
 	background(func() (json.RawMessage, error) {
 		var out json.RawMessage
@@ -236,6 +234,7 @@ func (d *desktopUI) run(method string, p any, done func(json.RawMessage)) {
 		return out, err
 	}, func(out json.RawMessage, err error) {
 		d.saving = false
+		d.updateSettingsNavigation()
 		d.detail.SetSensitive(true)
 		if d.closed {
 			return
@@ -247,13 +246,15 @@ func (d *desktopUI) run(method string, p any, done func(json.RawMessage)) {
 		if done != nil {
 			done(out)
 		} else {
-			d.showRoute()
+			d.refreshView()
 		}
 	})
 }
 func (d *desktopUI) error(err error) { d.banner.SetTitle(sentence(err)); d.banner.SetRevealed(true) }
 func (d *desktopUI) reset(title string) {
-	d.title.SetText(title)
+	if len(d.pages) > 0 {
+		d.pages[len(d.pages)-1].page.SetTitle(title)
+	}
 	d.body = gtk.NewBox(gtk.OrientationVertical, 12)
 	d.detail.SetSensitive(!d.saving)
 	d.body.SetMarginStart(24)
@@ -295,6 +296,10 @@ func (d *desktopUI) showRoute() {
 		d.stopPage()
 		d.stopPage = nil
 	}
+	d.pages = nil
+	p := d.newSettingsPage(d.route, nil)
+	d.pages = []*settingsPage{p}
+	d.navigation.Replace([]*adw.NavigationPage{p.page})
 	d.reset(d.route)
 	switch d.route {
 	case "Overview":
@@ -540,7 +545,16 @@ func (d *desktopUI) startView() {
 		d.stopPage = nil
 	}
 }
-func (d *desktopUI) subpage(show func()) { d.guard(func() { d.startView(); show() }) }
+func (d *desktopUI) subpage(show func()) {
+	d.guard(func() {
+		if d.route == "Settings" {
+			d.pushSettingsPage(show)
+		} else {
+			d.startView()
+			show()
+		}
+	})
+}
 func (d *desktopUI) passwordInput(title, caption string, done func(string)) {
 	dialog := adw.NewAlertDialog(title, caption)
 	entry := adw.NewPasswordEntryRow()
