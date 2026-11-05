@@ -12,6 +12,7 @@ class Backend : public QObject {
   Q_OBJECT
   Q_PROPERTY(QString mode READ mode NOTIFY changed)
   Q_PROPERTY(QString title READ title NOTIFY changed)
+  Q_PROPERTY(QString page READ page NOTIFY changed)
   Q_PROPERTY(QString error READ error NOTIFY changed)
   Q_PROPERTY(QVariantList rows READ rows NOTIFY changed)
   Q_PROPERTY(QVariantList commands READ commands NOTIFY changed)
@@ -24,6 +25,7 @@ public:
   explicit Backend(QObject *parent = nullptr);
   QString mode() const { return m_mode; }
   QString title() const { return m_title; }
+  QString page() const { return m_page; }
   QString error() const { return m_error; }
   QVariantList rows() const { return m_rows; }
   QVariantList commands() const { return m_commands; }

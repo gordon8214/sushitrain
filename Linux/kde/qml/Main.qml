@@ -12,18 +12,25 @@ Kirigami.ApplicationWindow {
   if (backend.busy || Object.keys(backend.dialog).length > 0) { close.accepted = false; return }
  }
  globalDrawer: Kirigami.GlobalDrawer {
-  title: "Synctrain"; titleIcon: "com.gordonbyrnes.Synctrain"
-  isMenu: false; modal: false; collapsible: true
+  objectName: "navigationSidebar"
+  isMenu: false; modal: false; drawerOpen: true
+  collapsible: false; collapseButtonVisible: false
+  preferredSize: Kirigami.Units.gridUnit * 14
   actions: [
-   Kirigami.Action { text: "Overview"; icon.name: "view-dashboard"; onTriggered: backend.navigate(text) },
-   Kirigami.Action { text: "Folders"; icon.name: "folder-sync"; onTriggered: backend.navigate(text) },
-   Kirigami.Action { text: "Devices"; icon.name: "network-workgroup"; onTriggered: backend.navigate(text) },
-   Kirigami.Action { text: "Files"; icon.name: "folder"; onTriggered: backend.navigate(text) },
-   Kirigami.Action { text: "Remote Files"; icon.name: "folder-remote"; onTriggered: backend.navigate(text) },
-   Kirigami.Action { text: "History Sources"; icon.name: "document-open-recent"; onTriggered: backend.navigate(text) },
-   Kirigami.Action { text: "Pending Changes"; icon.name: "document-send"; onTriggered: backend.navigate(text) },
-   Kirigami.Action { text: "Settings"; icon.name: "configure"; onTriggered: backend.navigate(text) }
+   NavigationAction { text: "Overview"; icon.name: "view-statistics" },
+   NavigationAction { text: "Folders"; icon.name: "folder-sync" },
+   NavigationAction { text: "Devices"; icon.name: "network-workgroup" },
+   NavigationAction { text: "Files"; icon.name: "folder" },
+   NavigationAction { text: "Remote Files"; icon.name: "folder-remote" },
+   NavigationAction { text: "History Sources"; icon.name: "document-open-recent" },
+   NavigationAction { text: "Pending Changes"; icon.name: "document-send" },
+   NavigationAction { text: "Settings"; icon.name: "configure" }
   ]
+ }
+ component NavigationAction: Kirigami.Action {
+  checked: backend.page === text
+  enabled: !backend.busy && Object.keys(backend.dialog).length === 0
+  onTriggered: backend.navigate(text)
  }
  pageStack.initialPage: Kirigami.ScrollablePage {
   title: backend.title
@@ -60,45 +67,48 @@ Kirigami.ApplicationWindow {
    }
   }
  }
- QQC2.Dialog {
+ Kirigami.Dialog {
   id: editor
   objectName: "settingsEditor"
-  parent: root.overlay; anchors.centerIn: parent
-  width: Math.min(700, root.width - 40); height: Math.min(650, implicitHeight)
+  parent: root.overlay
+  anchors.centerIn: parent
+  preferredWidth: Kirigami.Units.gridUnit * 32
+  padding: Kirigami.Units.largeSpacing
   title: backend.dialog.discard ? "Discard Changes?" : backend.dialog.title || ""
   modal: true; closePolicy: QQC2.Popup.NoAutoClose
+  showCloseButton: false
   property var draft: ({})
   property var fields: []
-  contentItem: QQC2.ScrollView {
-   id: formScroll
-   clip: true
-   contentWidth: availableWidth
-   ColumnLayout {
-    width: formScroll.availableWidth
-    Kirigami.InlineMessage { Layout.fillWidth: true; visible: backend.error.length > 0; text: backend.error; type: Kirigami.MessageType.Error }
+  ColumnLayout {
+   spacing: Kirigami.Units.largeSpacing
+   Kirigami.InlineMessage { Layout.fillWidth: true; visible: backend.error.length > 0; text: backend.error; type: Kirigami.MessageType.Error }
+   Kirigami.FormLayout {
+    objectName: "editorForm"
+    Layout.fillWidth: true
     Repeater {
      model: editor.fields
-     ColumnLayout {
+     Loader {
       required property var modelData
-      Layout.fillWidth: true
-      QQC2.Label { Layout.fillWidth: true; text: modelData.Label; wrapMode: Text.Wrap; textFormat: Text.PlainText }
-      Loader {
-       Layout.fillWidth: true
-       property var field: parent.modelData
-       sourceComponent: field.Kind === "notice" ? notice : field.Kind === "bool" ? check : field.Kind === "enum" ? combo : field.Kind === "list" || field.Kind === "json" ? multiline : singleline
-      }
+      property var field: modelData
+      objectName: "editorField_" + field.Path
+      Layout.fillWidth: true; Layout.minimumWidth: 0
+      Kirigami.FormData.label: field.Kind === "bool" || field.Kind === "notice" ? "" : field.Label + ":"
+      Kirigami.FormData.buddyFor: item
+      Kirigami.FormData.isSection: field.Kind === "notice"
+      sourceComponent: field.Kind === "notice" ? notice : field.Kind === "bool" ? check : field.Kind === "enum" ? combo : field.Kind === "list" || field.Kind === "json" ? multiline : singleline
      }
     }
    }
   }
   footer: QQC2.DialogButtonBox {
+   padding: Kirigami.Units.largeSpacing
    QQC2.Button { objectName: "editorCancel"; text: backend.dialog.discard ? "Discard Changes" : "Cancel"; QQC2.DialogButtonBox.buttonRole: QQC2.DialogButtonBox.ActionRole; enabled: !backend.busy || backend.cancelable; onClicked: backend.cancelDialog() }
    QQC2.Button { objectName: "editorSave"; text: backend.dialog.accept || "Save"; QQC2.DialogButtonBox.buttonRole: QQC2.DialogButtonBox.ActionRole; enabled: !backend.busy; onClicked: backend.submit(editor.draft) }
   }
  }
  function update(field, value) { editor.draft[field.Path] = value; backend.fieldChanged() }
- Component { id: notice; Item { implicitHeight: 0 } }
- Component { id: check; QQC2.CheckBox { checked: field.Value === true || field.Value === "true"; enabled: !field.IsReadOnly && !backend.busy; onToggled: root.update(field, checked); Accessible.name: field.Label } }
+ Component { id: notice; QQC2.Label { text: field.Label; wrapMode: Text.Wrap; textFormat: Text.PlainText } }
+ Component { id: check; QQC2.CheckBox { text: field.Label; checked: field.Value === true || field.Value === "true"; enabled: !field.IsReadOnly && !backend.busy; onToggled: root.update(field, checked); Accessible.name: field.Label } }
  Component { id: combo; QQC2.ComboBox { model: field.Options || []; currentIndex: Math.max(0, model.indexOf(field.Value)); enabled: !field.IsReadOnly && !backend.busy; onActivated: root.update(field, currentText); Accessible.name: field.Label } }
  Component { id: singleline; QQC2.TextField { text: field.IsSecret || field.Value === undefined || field.Value === null ? "" : String(field.Value); echoMode: field.IsSecret || field.Kind === "password" ? TextInput.Password : TextInput.Normal; enabled: !field.IsReadOnly && !backend.busy; onTextEdited: root.update(field, text); selectByMouse: true; Accessible.name: field.Label; placeholderText: field.IsSecret ? "Leave empty to keep" : "" } }
  Component { id: multiline; QQC2.TextArea { text: field.Value || ""; enabled: !field.IsReadOnly && !backend.busy; implicitHeight: 130; wrapMode: TextEdit.Wrap; onTextChanged: if (activeFocus) root.update(field, text); Accessible.name: field.Label; selectByMouse: true } }

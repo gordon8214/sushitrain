@@ -13,6 +13,9 @@
 #include <QScopedPointer>
 #include <QQmlContext>
 #include <QQmlEngine>
+#include <QQmlListReference>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
@@ -93,9 +96,157 @@ static QString rowAction(Backend &backend, const QString &title,
   }
   return {};
 }
+static QQuickItem *visualItem(QQuickItem *root, const QString &name) {
+  if (root->objectName() == name)
+    return root;
+  for (auto *child : root->childItems()) {
+    if (auto *found = visualItem(child, name))
+      return found;
+  }
+  return nullptr;
+}
 class BackendTest : public QObject {
   Q_OBJECT
 private slots:
+  void qmlDialogLayout_data() {
+    QTest::addColumn<bool>("longForm");
+    QTest::addColumn<bool>("noticeOnly");
+    QTest::addColumn<QSize>("windowSize");
+    QTest::newRow("mixed-fields") << false << false << QSize(1100, 780);
+    QTest::newRow("confirmation") << false << true << QSize(1100, 780);
+    QTest::newRow("scrolling") << true << false << QSize(1100, 780);
+    QTest::newRow("compact-window") << true << false << QSize(640, 480);
+  }
+  void qmlDialogLayout() {
+    QFETCH(bool, longForm);
+    QFETCH(bool, noticeOnly);
+    QFETCH(QSize, windowSize);
+    QJsonArray fields{QJsonObject{{"Path", "notice"}, {"Kind", "notice"},
+        {"Label", "Approve this machine on the gateway. Cancel stops waiting."}}};
+    if (!noticeOnly) {
+      fields.append(QJsonObject{{"Path", "Enabled"}, {"Kind", "bool"},
+          {"Label", "Enable image previews"}, {"Value", true}});
+      fields.append(QJsonObject{{"Path", "Name"}, {"Kind", "string"},
+          {"Label", "Device name"}, {"Value", "Fedora KDE"}});
+      fields.append(QJsonObject{{"Path", "Mode"}, {"Kind", "enum"},
+          {"Label", "Mode"}, {"Value", "normal"},
+          {"Options", QJsonArray{"normal", "background"}}});
+      fields.append(QJsonObject{{"Path", "Secret"}, {"Kind", "password"},
+          {"Label", "Password"}, {"IsSecret", true}, {"Value", "hidden"}});
+      fields.append(QJsonObject{{"Path", "Rules"}, {"Kind", "list"},
+          {"Label", "Ignore patterns"}, {"Value", "*.tmp\n*.bak"}});
+    }
+    if (longForm) {
+      for (int i = 0; i < 40; ++i)
+        fields.append(QJsonObject{{"Path", QString("Option%1").arg(i)},
+            {"Kind", "string"}, {"Label", QString("Option %1").arg(i)},
+            {"Value", "value"}});
+    }
+    Fixture f;
+    f.handler = [fields](QString m, auto) {
+      if (m == "settings.get")
+        return result(QJsonObject{{"Token", "editor"}, {"Fields", fields}});
+      return result(QJsonObject{});
+    };
+    Backend b;
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty("backend", &b);
+    QQmlComponent component(&engine, QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> window(component.create());
+    QVERIFY2(window, qPrintable(component.errorString()));
+    auto *quickWindow = qobject_cast<QQuickWindow *>(window.data());
+    QVERIFY(quickWindow);
+    quickWindow->resize(windowSize);
+    quickWindow->show();
+    QVERIFY(QTest::qWaitForWindowExposed(quickWindow, 1000));
+    QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
+    b.navigate("Settings");
+    b.activate(rowAction(b, "Network", "Edit"));
+    auto *editor = window->findChild<QObject *>("settingsEditor");
+    QVERIFY(editor);
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    auto *form = window->findChild<QQuickItem *>("editorForm");
+    auto *content = qvariant_cast<QQuickItem *>(editor->property("contentItem"));
+    QVERIFY(form && content);
+    const qreal padding = editor->property("padding").toReal();
+    QVERIFY(padding > 0);
+    const auto formOrigin = form->mapToScene(QPointF());
+    QVERIFY(formOrigin.x() >= editor->property("x").toReal() + padding);
+    QVERIFY(formOrigin.x() + form->width() <=
+            editor->property("x").toReal() + editor->property("width").toReal() - padding);
+    QVERIFY(editor->property("y").toReal() >= 0);
+    QVERIFY(editor->property("height").toReal() <= quickWindow->height());
+    if (!noticeOnly) {
+      auto *loader = visualItem(form, "editorField_Enabled");
+      QVERIFY(loader);
+      auto *checkBox = qvariant_cast<QObject *>(loader->property("item"));
+      QVERIFY(checkBox);
+      QCOMPARE(checkBox->property("text").toString(), QString("Enable image previews"));
+      QVERIFY(checkBox->property("checked").toBool());
+      auto *secret = visualItem(form, "editorField_Secret");
+      QVERIFY(secret);
+      auto *password = qvariant_cast<QObject *>(secret->property("item"));
+      QVERIFY(password);
+      QVERIFY(password->property("text").toString().isEmpty());
+    }
+    if (longForm) {
+      QVERIFY(content->property("contentHeight").toReal() > content->height());
+      auto *flickable = qvariant_cast<QObject *>(content->property("contentItem"));
+      QVERIFY(flickable);
+      const qreal end = flickable->property("contentHeight").toReal() - flickable->property("height").toReal();
+      QVERIFY(flickable->setProperty("contentY", end));
+      auto *last = visualItem(form, "editorField_Option39");
+      QVERIFY(last);
+      QVERIFY(last->mapToItem(content, QPointF()).y() + last->height() <= content->height() + 1);
+    }
+    b.cancelDialog();
+    QTRY_VERIFY_WITH_TIMEOUT(b.dialog().isEmpty(), 1000);
+  }
+  void qmlSidebarTracksNavigation() {
+    Fixture f;
+    f.handler = [](QString m, auto) {
+      if (m == "settings.get")
+        return result(QJsonObject{{"Token", "editor"}, {"Fields", QJsonArray{}}});
+      return result(QJsonObject{});
+    };
+    Backend b;
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty("backend", &b);
+    QQmlComponent component(&engine, QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> window(component.create());
+    QVERIFY2(window, qPrintable(component.errorString()));
+    QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
+    auto *sidebar = window->findChild<QObject *>("navigationSidebar");
+    QVERIFY(sidebar);
+    QVERIFY(sidebar->property("drawerOpen").toBool());
+    QVERIFY(!sidebar->property("collapsible").toBool());
+    QVERIFY(!sidebar->property("collapseButtonVisible").toBool());
+    QQmlListReference actions(sidebar, "actions");
+    QCOMPARE(actions.count(), 8);
+    auto *overview = actions.at(0);
+    auto *devices = actions.at(2);
+    auto *settings = actions.at(7);
+    QVERIFY(overview->property("checked").toBool());
+    QVERIFY(QMetaObject::invokeMethod(settings, "trigger"));
+    QCOMPARE(b.page(), QString("Settings"));
+    QVERIFY(settings->property("checked").toBool());
+    QVERIFY(!overview->property("checked").toBool());
+    // A detail page keeps its parent selected even though the title changes.
+    b.activate(rowAction(b, "Advanced Configuration", "Open"));
+    QCOMPARE(b.title(), QString("Advanced Configuration"));
+    QVERIFY(settings->property("checked").toBool());
+    b.activate(rowAction(b, "options", "Edit"));
+    QTRY_VERIFY_WITH_TIMEOUT(!b.dialog().isEmpty(), 1000);
+    QVERIFY(!devices->property("enabled").toBool());
+    b.navigate("Devices");
+    QCOMPARE(b.page(), QString("Settings"));
+    QVERIFY(settings->property("checked").toBool());
+    b.cancelDialog();
+    QVERIFY(QMetaObject::invokeMethod(devices, "trigger"));
+    QCOMPARE(b.page(), QString("Devices"));
+    QVERIFY(devices->property("checked").toBool());
+    QVERIFY(!settings->property("checked").toBool());
+  }
   void qmlCancelPreservesDirtyDraft() {
     Fixture f;
     f.handler = [](QString m, auto) {
