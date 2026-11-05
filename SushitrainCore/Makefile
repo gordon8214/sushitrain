@@ -7,7 +7,7 @@ export PATH := $(CURDIR):/opt/homebrew/bin:$(HOME)/go/bin:$(PATH)
 SHELL := /bin/bash
 GO_VERSION := $(shell go version)
 
-.PHONY: clean install deps test test-engine mcp-linux gateway-linux gateway-test-linux linux linux-window linux-test linux-nautilus linux-nautilus-test
+.PHONY: clean install deps test test-engine mcp-linux gateway-linux gateway-test-linux linux linux-window linux-test linux-nautilus linux-nautilus-test linux-kde linux-kde-test
 
 build: build/SushitrainCore.xcframework
 
@@ -79,6 +79,7 @@ mcp-linux:
 	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags "-s -w -X main.version=$(LINUX_VERSION)" -o build/linux-$(LINUX_ARCH)/synctrain-mcp ./cmd/synctrain-mcp
 
 linux: gateway-linux
+	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go build -mod=readonly -trimpath -o build/linux-$(LINUX_ARCH)/synctrain-desktop ./cmd/synctrain-desktop
 	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(LINUX_VERSION)" \
 		-o build/linux-$(LINUX_ARCH)/synctrain-files ./cmd/synctrain-files
 
@@ -86,7 +87,7 @@ linux: gateway-linux
 # with ../Linux/build/build-window.sh
 linux-window:
 	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X main.version=$(LINUX_VERSION)" \
-		-o build/linux-$(LINUX_ARCH)/synctrain ./cmd/synctrain
+		-o build/linux-$(LINUX_ARCH)/synctrain-gtk ./cmd/synctrain
 
 # Native Nautilus module and its bounded GLib suite; build on the target Linux architecture.
 linux-nautilus:
@@ -97,7 +98,7 @@ linux-nautilus-test:
 
 # Test executables of Synctrain for Linux, to run on a Linux host (go test -c). Fixtures are read from ../Docs, so run
 # them from a checkout's SushitrainCore/<package> directory. The FUSE tests need /dev/fuse and fusermount3.
-LINUX_TEST_PACKAGES = desktopsettings mcpapi mcpcontrol mcpfiles mcpserver remoteapi adminsock remoteclient files files/fusefs enginecontrol linuxpolicy desktoptray history safecopy previewcache
+LINUX_TEST_PACKAGES = linuxdesktop desktopapi desktopsettings mcpapi mcpcontrol mcpfiles mcpserver remoteapi adminsock remoteclient files files/fusefs enginecontrol linuxpolicy desktoptray history safecopy previewcache
 linux-test:
 	for p in $(LINUX_TEST_PACKAGES); do \
 		GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go test -c -tags noassets -o build/linux-$(LINUX_ARCH)/$$(echo $$p | tr / -).test \
@@ -109,3 +110,9 @@ gateway-test-linux:
 	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go test -c -tags noassets,gwintegration -o build/linux-$(LINUX_ARCH)/gateway.test ./gateway
 	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go test -c -o build/linux-$(LINUX_ARCH)/synctrain-gateway.test ./cmd/synctrain-gateway
 	GOOS=linux GOARCH=$(LINUX_ARCH) CGO_ENABLED=0 go test -c -tags noassets -o build/linux-$(LINUX_ARCH)/sthome.test ./sthome
+
+# Native Qt/KDE frontend and Dolphin integration, independent of GTK.
+linux-kde:
+	../Linux/build/build-kde.sh
+linux-kde-test:
+	../Linux/build/build-kde.sh test

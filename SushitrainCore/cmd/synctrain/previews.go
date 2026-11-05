@@ -7,21 +7,18 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"t-shaped.nl/sushitrain/v2/desktopsettings"
-	"t-shaped.nl/sushitrain/v2/previewcache"
-	"t-shaped.nl/sushitrain/v2/safecopy"
 	"time"
 	"unicode/utf8"
+
+	"t-shaped.nl/sushitrain/v2/desktopsettings"
+	"t-shaped.nl/sushitrain/v2/linuxdesktop"
+	"t-shaped.nl/sushitrain/v2/previewcache"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
@@ -228,77 +225,9 @@ func (d *desktopUI) launch(location, name string) {
 	}
 }
 func previewCopy(ctx context.Context, location, name string, limit int64) (string, error) {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	base = filepath.Join(base, "synctrain", "desktop-previews")
-	if err = os.MkdirAll(base, 0700); err != nil {
-		return "", err
-	}
-	releaseQuota, err := previewcache.Reserve(ctx, base, limit)
-	if err != nil {
-		return "", err
-	}
-	defer releaseQuota()
-	dir, err := os.MkdirTemp(base, "preview-")
-	if err != nil {
-		return "", err
-	}
-	success := false
-	defer func() {
-		if !success {
-			os.RemoveAll(dir)
-		}
-	}()
-	dest := filepath.Join(dir, filepath.Base(name))
-	var reader io.ReadCloser
-	if strings.HasPrefix(location, "http://") {
-		u, err := url.Parse(location)
-		if err != nil || u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" {
-			return "", errors.New("the preview URL is not a local service")
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, location, nil)
-		if err != nil {
-			return "", err
-		}
-		client := http.Client{Timeout: 2 * time.Minute}
-		resp, err := client.Do(req)
-		if err != nil {
-			return "", err
-		}
-		if resp.StatusCode != 200 && resp.StatusCode != 204 {
-			resp.Body.Close()
-			return "", fmt.Errorf("preview service returned %s", resp.Status)
-		}
-		reader = resp.Body
-	} else {
-		reader, err = os.Open(location)
-		if err != nil {
-			return "", err
-		}
-	}
-	defer reader.Close()
-	stopRead := context.AfterFunc(ctx, func() { reader.Close() })
-	defer stopRead()
-	out, err := os.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return "", err
-	}
-	n, copyErr := safecopy.Copy(ctx, out, io.LimitReader(reader, limit+1))
-	closeErr := out.Close()
-	if copyErr != nil || closeErr != nil {
-		return "", errors.Join(copyErr, closeErr)
-	}
-	if n > limit {
-		return "", errors.New("the file exceeds the preview size limit")
-	}
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	success = true
-	return dest, nil
+	return linuxdesktop.PreviewCopy(ctx, location, name, limit)
 }
+
 func (d *desktopUI) pdfPreview(ctx context.Context, toolbar *adw.ToolbarView, file string) {
 	page := 1
 	pages := 1

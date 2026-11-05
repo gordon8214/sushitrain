@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"t-shaped.nl/sushitrain/v2/linuxdesktop"
+
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
@@ -851,27 +853,8 @@ type synchronizeCheck struct {
 }
 
 func checkSynchronize() (synchronizeCheck, error) {
-	var c synchronizeCheck
-	h, err := describeHome()
-	if err != nil {
-		return c, err
-	}
-	c.home = h
-	switch {
-	case h.Problem != "":
-		c.refusal = "The Syncthing in " + h.Dir + " can't be taken over: " + h.Problem + "."
-	case environmentDiffers() != "":
-		c.refusal = environmentDiffers() + " is set here but not in your user's service manager, where Synctrain " +
-			"runs: set it there too (systemctl --user set-environment), or not at all."
-	case systemSyncthing():
-		c.refusal = "Syncthing runs as a system service (syncthing@" + userName() + "): have an administrator " +
-			"disable it first."
-	case !h.Exists && systemctl("is-active", "--quiet", "syncthing.service") == nil:
-		c.refusal = "syncthing.service runs with a home Synctrain can't find (" + h.Dir + " has no configuration). " +
-			"Stop it, or start Synctrain with that home as STHOMEDIR in your user's service manager."
-	}
-	c.tray = trayStartsSyncthing()
-	return c, nil
+	c, err := linuxdesktop.Inspect()
+	return synchronizeCheck{home: c.Home, refusal: c.Refusal, tray: c.Tray}, err
 }
 
 // askSynchronize sets Synchronize mode up after asking: a new Syncthing, the one already here taken over in place, or
@@ -954,78 +937,8 @@ func (w *mainWindow) startSynchronize(h gatewayadmin.Home, fromFiles bool) {
 		return
 	}
 	background(func() (synchronizeResult, error) {
-		var r synchronizeResult
-		var undos []func()
-		undo := func() {
-			for i := len(undos) - 1; i >= 0; i-- {
-				undos[i]()
-			}
-		}
-		switch {
-		case h.Exists && !h.Taken:
-			wasActive := systemctl("is-active", "--quiet", "syncthing.service") == nil
-			if wasActive {
-				if err := systemctl("stop", "syncthing.service"); err != nil {
-					return r, err
-				}
-			}
-			if err := systemctl("mask", "syncthing.service"); err != nil {
-				return r, err
-			}
-			undos = append(undos, func() {
-				if r.gatewayStarted {
-					return
-				}
-				_ = systemctl("unmask", "syncthing.service")
-				if wasActive {
-					_ = systemctl("start", "syncthing.service")
-				}
-			})
-			// One that systemd didn't start, such as from Syncthing Tray
-			if _, err := gatewayCommand("home", "--stop"); err != nil {
-				undo()
-				return r, err
-			}
-			backup := h.Dir + ".before-synctrain-" + time.Now().Format("20060102-150405")
-			if _, err := gatewayCommand("home", "--backup", backup); err != nil {
-				undo()
-				return r, err
-			}
-			r.backup = backup
-		case h.Locked:
-			// Taken before, with something else running on it now (a Syncthing started outside its masked unit)
-			if _, err := gatewayCommand("home", "--stop"); err != nil {
-				return r, err
-			}
-		}
-		if fromFiles {
-			if running(filesSocket()) {
-				if err := callFiles("leave", map[string]time.Duration{"timeout": 2 * time.Minute},
-					&r.removals); err != nil {
-					undo()
-					return r, err
-				}
-			}
-			if err := systemctl("disable", "--now", "synctrain-files.service"); err != nil {
-				undo()
-				return r, err
-			}
-			undos = append(undos, func() { _ = systemctl("enable", "--now", "synctrain-files.service") })
-		}
-		r.gatewayStarted = true
-		err := systemctl("enable", "--now", "synctrain-gateway.service")
-		if err == nil {
-			// A large database may be migrated first
-			err = waitForService("synctrain-gateway.service", h.Socket, 10*time.Minute)
-		}
-		if err == nil {
-			err = writeMode(modeSynchronize)
-		}
-		if err != nil {
-			stopUnit("synctrain-gateway.service")
-			undo()
-		}
-		return r, err
+		result, err := linuxdesktop.Synchronize(h, fromFiles)
+		return synchronizeResult{backup: result.Backup, removals: result.Removals, gatewayStarted: result.GatewayStarted}, err
 	}, func(r synchronizeResult, err error) {
 		notes := r.notes()
 		switch {
@@ -1054,22 +967,7 @@ func (w *mainWindow) leaveSynchronize() {
 			return
 		}
 		background(func() (struct{}, error) {
-			// syncthing.service stays masked: the engine's database may be newer than the stock Syncthing's
-			if err := systemctl("disable", "--now", "synctrain-gateway.service"); err != nil {
-				return struct{}{}, err
-			}
-			err := systemctl("enable", "--now", "synctrain-files.service")
-			if err == nil {
-				err = waitForService("synctrain-files.service", filesSocket(), time.Minute)
-			}
-			if err == nil {
-				err = writeMode(modeFiles)
-			}
-			if err != nil {
-				stopUnit("synctrain-files.service")
-				_ = systemctl("enable", "--now", "synctrain-gateway.service")
-			}
-			return struct{}{}, err
+			return struct{}{}, linuxdesktop.Files(true)
 		}, func(_ struct{}, err error) {
 			if err != nil {
 				w.report("Synctrain Files Couldn't Start", sentence(err))

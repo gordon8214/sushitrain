@@ -116,7 +116,10 @@ jobs:
         run: |
           dnf install -y --setopt=install_weak_deps=False git make gcc tar gzip pkgconf-pkg-config gtk4-devel \
             libadwaita-devel gobject-introspection-devel rpm-build systemd-rpm-macros desktop-file-utils appstream \
-            nautilus-devel json-glib-devel dbus-daemon
+            nautilus-devel json-glib-devel dbus-daemon gcc-c++ cmake ninja-build extra-cmake-modules \
+            qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qtpdf-devel \
+            kf6-kirigami-devel kf6-ki18n-devel kf6-kcoreaddons-devel kf6-kdbusaddons-devel \
+            kf6-kio-devel kf6-knotifications-devel kf6-kstatusnotifieritem-devel kf6-prison-devel
 
       - name: Check out repository
         uses: actions/checkout@v4
@@ -140,12 +143,16 @@ jobs:
       - name: Test
         working-directory: SushitrainCore
         run: |
-          timeout 360 go test -timeout 300s -tags noassets ./desktopsettings ./mcpapi ./mcpcontrol ./mcpfiles ./mcpserver ./desktopapi ./enginecontrol ./linuxpolicy ./desktoptray ./history ./safecopy ./previewcache ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin ./sthome \
-            ./cmd/synctrain-gateway ./cmd/synctrain-files
+          timeout 360 go test -timeout 300s -tags noassets ./linuxdesktop ./desktopsettings ./mcpapi ./mcpcontrol ./mcpfiles ./mcpserver ./desktopapi ./enginecontrol ./linuxpolicy ./desktoptray ./history ./safecopy ./previewcache ./remoteapi ./adminsock ./remoteclient ./files/... ./gatewayadmin ./sthome \
+            ./cmd/synctrain-gateway ./cmd/synctrain-files ./cmd/synctrain-desktop
 
       - name: Test Nautilus integration
         run: |
           make -C SushitrainCore linux-nautilus-test
+
+      - name: Test KDE and Dolphin integration
+        run: |
+          timeout 600 Linux/build/build-kde.sh test
 
       - name: Validate desktop files
         run: |

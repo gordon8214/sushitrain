@@ -26,7 +26,7 @@ In Synchronize mode it has some extra tricks up its sleeve:
 
 On iOS and iPadOS, Synctrain is a [client of gateways](./Docs/file-provider.md): it runs no Syncthing itself. Choose folders from a Mac running Synctrain or a server running `synctrain-gateway`, then browse, search and play them in the app, and open, edit and add files from the Files app.
 
-On Linux (Fedora with GNOME), [Synctrain for Linux](./Docs/linux.md) has the same two modes: **Synchronize** runs Syncthing, with the remote file service for phones, and **Files** shows the folders of a gateway in `~/Synctrain`, fetching files as they are opened. Build its package with `Linux/build/build-rpm.sh`.
+On Linux (Fedora with GNOME or KDE Plasma), [Synctrain for Linux](./Docs/linux.md) has the same two modes: **Synchronize** runs Syncthing, with the remote file service for phones, and **Files** shows the folders of a gateway in `~/Synctrain`, fetching files as they are opened. Build its package with `Linux/build/build-rpm.sh`.
 
 On Windows 11, [Synctrain for Windows](./Docs/windows.md) uses native WinUI controls and supports **Synchronize** and **Files in Explorer** modes. The Files mode integrates with Windows Cloud Files for on-demand access, editing, pinning, thumbnails, and version history. Build ARM64 and x64 MSIX packages with `Windows/build.ps1`.
 

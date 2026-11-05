@@ -9,12 +9,15 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +26,72 @@ import (
 	"github.com/godbus/dbus/v5"
 	"t-shaped.nl/sushitrain/v2/files"
 )
+
+// kdePlacesUpdater keeps one latest snapshot and one worker. Ordinary RPCs never
+// wait for Qt, and metadata-only changes do not start the optional helper again.
+func kdePlacesUpdater(ctx context.Context, apply func(context.Context, []byte)) func(string, []files.Folder) {
+	var mu sync.Mutex
+	var latest []byte
+	wake := make(chan struct{}, 1)
+	go func() {
+		var processed []byte
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-wake:
+				mu.Lock()
+				data := latest
+				mu.Unlock()
+				if ctx.Err() == nil && !bytes.Equal(data, processed) {
+					apply(ctx, data)
+					processed = data
+				}
+			}
+		}
+	}()
+	return func(mount string, folders []files.Folder) {
+		type place struct {
+			DirName string `json:"dirName"`
+			Label   string `json:"label"`
+		}
+		places := make([]place, 0, len(folders))
+		for _, folder := range folders {
+			places = append(places, place{folder.DirName, folder.Label})
+		}
+		sort.Slice(places, func(i, j int) bool { return places[i].DirName < places[j].DirName })
+		data, err := json.Marshal(map[string]any{"mount": mount, "folders": places})
+		if err != nil {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if bytes.Equal(data, latest) || ctx.Err() != nil {
+			return
+		}
+		latest = data
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// syncKDEPlaces uses KDE's model instead of rewriting the user's XBEL file.
+// The helper is optional; the Files service never depends on either desktop UI.
+func syncKDEPlaces(parent context.Context, data []byte, logger *slog.Logger) {
+	program, err := exec.LookPath("synctrain-kde")
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, program, "--sync-places")
+	cmd.Stdin = bytes.NewReader(data)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		logger.Warn("Could not update Dolphin Places", "error", err, "detail", string(output))
+	}
+}
 
 // credentialStore is where credentials are kept: the desktop's keyring when there is one (the credentials in the
 // file are moved into it), the file otherwise

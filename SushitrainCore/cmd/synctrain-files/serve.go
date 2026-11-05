@@ -101,9 +101,13 @@ func serve(args []string) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	updateKDEPlaces := kdePlacesUpdater(ctx, func(ctx context.Context, data []byte) {
+		syncKDEPlaces(ctx, data, logger)
+	})
 	foldersChanged := func() {
 		if folders, err := service.Folders(); err == nil {
 			syncBookmarks(*mount, folders, logger)
+			updateKDEPlaces(*mount, folders)
 		}
 	}
 	foldersChanged()

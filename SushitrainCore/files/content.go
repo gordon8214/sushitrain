@@ -19,8 +19,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"t-shaped.nl/sushitrain/v2/sharedfile"
+	"sync/atomic"
 	"time"
+
+	"t-shaped.nl/sushitrain/v2/sharedfile"
 
 	"t-shaped.nl/sushitrain/v2/remoteapi"
 	"t-shaped.nl/sushitrain/v2/remoteclient"
@@ -50,9 +52,11 @@ var (
 
 // cache keeps verified content, named after its content ID, and the downloads that fill it
 type cache struct {
-	s            *Service
-	contentDir   string
-	transfersDir string
+	// File-content response bytes received since this service started; excludes metadata and thumbnails.
+	downloadedBytes atomic.Int64
+	s               *Service
+	contentDir      string
+	transfersDir    string
 
 	mutex     sync.Mutex
 	pinned    map[string]int
@@ -753,7 +757,9 @@ func (t *transfer) fetch(ctx context.Context) error {
 		for i := first; i <= last; i++ {
 			b := t.blocks[i]
 			data := buffer[:b.Size]
-			if _, err := io.ReadFull(r.Body, data); err != nil {
+			n, readErr := io.ReadFull(r.Body, data)
+			t.c.downloadedBytes.Add(int64(n))
+			if err := readErr; err != nil {
 				r.Body.Close()
 				return &remoteclient.Error{Kind: remoteclient.KindUnreachable, Message: "the content stopped", Err: err}
 			}

@@ -276,6 +276,9 @@ func TestReadsOnDemand(t *testing.T) {
 	g.Export(false)
 	ts := newTestService(t, g, 0)
 	entry := ts.mustLookup("docs/video.bin")
+	if st, err := ts.Storage(); err != nil || st.DownloadedBytes != 0 {
+		t.Fatalf("metadata downloaded content: %+v, %v", st, err)
+	}
 	if state, _ := ts.State(entry); state != "remote" {
 		t.Fatalf("state before reading: %s", state)
 	}
@@ -305,6 +308,9 @@ func TestReadsOnDemand(t *testing.T) {
 		state, _ := ts.State(entry)
 		return state == "local"
 	})
+	if st, err := ts.Storage(); err != nil || st.DownloadedBytes != int64(len(contents)) {
+		t.Fatalf("downloaded byte count: %+v, %v", st, err)
+	}
 	// Opened again, it is local
 	r, err = ts.OpenFile(entry.Item)
 	if err != nil {

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Copyright (C) 2026 Gordon. SPDX-License-Identifier: MPL-2.0
+# One entry point for desktop activation, pairing links, and file-manager actions.
+set -eu
+case "${SYNCTRAIN_DESKTOP:-auto}" in
+ kde) preferred=synctrain-kde; fallback=synctrain-gtk ;;
+ gnome) preferred=synctrain-gtk; fallback=synctrain-kde ;;
+ auto)
+  case ":${XDG_CURRENT_DESKTOP:-}:" in *:KDE:*) preferred=synctrain-kde; fallback=synctrain-gtk ;; *) preferred=synctrain-gtk; fallback=synctrain-kde ;; esac ;;
+ *) echo 'SYNCTRAIN_DESKTOP must be auto, kde, or gnome' >&2; exit 2 ;;
+esac
+for program in "$preferred" "$fallback"; do
+ if command -v "$program" >/dev/null 2>&1; then exec "$program" "$@"; fi
+done
+echo 'Install synctrain-kde or synctrain to open Synctrain.' >&2
+exit 1

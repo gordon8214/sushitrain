@@ -1,0 +1,17 @@
+{
+  "KPlugin": {
+    "Name": "Synctrain",
+    "Description": "Sync status, offline files, and previous versions",
+    "Icon": "com.gordonbyrnes.Synctrain",
+    "MimeTypes": [
+      "all/all",
+      "application/octet-stream",
+      "inode/directory"
+    ],
+    "EnabledByDefault": true
+  },
+  "X-KDE-Protocols": [
+    "file"
+  ],
+  "X-KDE-Show-In-Submenu": false
+}

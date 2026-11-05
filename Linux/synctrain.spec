@@ -11,16 +11,40 @@ License:        MPL-2.0
 URL:            https://github.com/gordon8214/sushitrain
 ExclusiveArch:  x86_64 aarch64
 
+%bcond_without gnome
+%bcond_without kde
 BuildRequires:  systemd-rpm-macros
-Requires:       fuse3
+Requires:       synctrain-common = %{version}-%{release}
 Requires:       gtk4
 Requires:       libadwaita >= 1.9
 Requires:       poppler-utils
 Requires:       gstreamer1-plugins-base
 Recommends:     gstreamer1-plugins-good
-# Video and PDF thumbnails for clients of the remote file service
-Recommends:     ffmpeg-free
-Recommends:     poppler-utils
+
+%package -n synctrain-common
+Obsoletes: synctrain < %{version}-%{release}
+Summary: Shared services and launcher for Synctrain
+Requires: fuse3
+Recommends: ffmpeg-free
+Recommends: poppler-utils
+
+%description -n synctrain-common
+Shared Go services, desktop lifecycle helper, and desktop-aware launcher used by
+Synctrain's GNOME and KDE interfaces. Services retain their existing homes and identity.
+
+%package -n synctrain-kde
+Summary: Native KDE interface and Dolphin integration for Synctrain
+Requires: synctrain-common = %{version}-%{release}
+Requires: kf6-kirigami
+Requires: kf6-qqc2-desktop-style
+Requires: qt6-qtdeclarative
+Requires: qt6-qtmultimedia
+Requires: qt6-qtpdf
+Recommends: qt6-qtwayland
+
+%description -n synctrain-kde
+Native Qt and Kirigami interface for both Synctrain modes, with Dolphin context
+menu actions and live status badges.
 
 # The programs are built and stripped already
 %global debug_package %{nil}
@@ -32,6 +56,14 @@ folders of a gateway on another system appear in ~/Synctrain, and files are fetc
 
 %install
 install -Dm755 %{_sourcedir}/synctrain %{buildroot}%{_bindir}/synctrain
+install -Dm755 %{_sourcedir}/synctrain-desktop %{buildroot}%{_bindir}/synctrain-desktop
+%if %{with gnome}
+install -Dm755 %{_sourcedir}/synctrain-gtk %{buildroot}%{_bindir}/synctrain-gtk
+install -Dm755 %{_sourcedir}/libsynctrain-nautilus.so %{buildroot}%{_libdir}/nautilus/extensions-4/libsynctrain-nautilus.so
+%endif
+%if %{with kde}
+cp -a %{_sourcedir}/kde-stage/usr/. %{buildroot}%{_prefix}/
+%endif
 install -Dm755 %{_sourcedir}/synctrain-mcp %{buildroot}%{_bindir}/synctrain-mcp
 install -Dm755 %{_sourcedir}/synctrain-files %{buildroot}%{_bindir}/synctrain-files
 install -Dm755 %{_sourcedir}/synctrain-gateway %{buildroot}%{_bindir}/synctrain-gateway
@@ -43,7 +75,6 @@ install -Dm644 %{_sourcedir}/com.gordonbyrnes.Synctrain.metainfo.xml \
 	%{buildroot}%{_metainfodir}/com.gordonbyrnes.Synctrain.metainfo.xml
 install -Dm644 %{_sourcedir}/com.gordonbyrnes.Synctrain.png \
 	%{buildroot}%{_datadir}/icons/hicolor/256x256/apps/com.gordonbyrnes.Synctrain.png
-install -Dm755 %{_sourcedir}/libsynctrain-nautilus.so %{buildroot}%{_libdir}/nautilus/extensions-4/libsynctrain-nautilus.so
 install -Dm644 %{_sourcedir}/LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 install -Dm644 %{_sourcedir}/linux.md %{buildroot}%{_docdir}/%{name}/linux.md
 
@@ -52,18 +83,32 @@ install -Dm644 %{_sourcedir}/mcp-acceptance.md %{buildroot}%{_docdir}/%{name}/mc
 install -Dm644 %{_sourcedir}/GoNotices.html %{buildroot}%{_docdir}/%{name}/GoNotices.html
 
 # The window enables one of the units when a mode is chosen; nothing runs before that
-%post
+%post -n synctrain-common
 %systemd_user_post synctrain-files.service synctrain-gateway.service
 
-%preun
+%preun -n synctrain-common
 %systemd_user_preun synctrain-files.service synctrain-gateway.service
 
 # Not restarted on an upgrade: restarting synctrain-files unmounts ~/Synctrain under open files. The new version runs
 # from the next login, or when the window starts it again.
-%postun
+%postun -n synctrain-common
 %systemd_user_postun synctrain-files.service synctrain-gateway.service
 
+%if %{with gnome}
 %files
+%{_bindir}/synctrain-gtk
+%{_libdir}/nautilus/extensions-4/libsynctrain-nautilus.so
+%endif
+
+%if %{with kde}
+%files -n synctrain-kde
+%{_bindir}/synctrain-kde
+%{_libdir}/qt6/plugins/kf6/kfileitemaction/synctrain-actions.so
+%{_libdir}/qt6/plugins/kf6/overlayicon/synctrain-overlays.so
+%endif
+
+%files -n synctrain-common
+%{_bindir}/synctrain-desktop
 %dir %{_licensedir}/%{name}
 %license %{_licensedir}/%{name}/LICENSE
 %dir %{_docdir}/%{name}
@@ -80,4 +125,3 @@ install -Dm644 %{_sourcedir}/GoNotices.html %{buildroot}%{_docdir}/%{name}/GoNot
 %{_datadir}/applications/com.gordonbyrnes.Synctrain.desktop
 %{_metainfodir}/com.gordonbyrnes.Synctrain.metainfo.xml
 %{_datadir}/icons/hicolor/256x256/apps/com.gordonbyrnes.Synctrain.png
-%{_libdir}/nautilus/extensions-4/libsynctrain-nautilus.so

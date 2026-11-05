@@ -1,0 +1,5 @@
+FROM registry.fedoraproject.org/fedora:44
+RUN dnf install -y --setopt=install_weak_deps=False make gcc-c++ cmake ninja-build extra-cmake-modules \
+ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qtpdf-devel \
+ kf6-kirigami-devel kf6-ki18n-devel kf6-kcoreaddons-devel kf6-kdbusaddons-devel \
+ kf6-kio-devel kf6-knotifications-devel kf6-kstatusnotifieritem-devel kf6-prison-devel && dnf clean all

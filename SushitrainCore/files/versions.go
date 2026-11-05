@@ -366,6 +366,8 @@ func readOnly(err error) error {
 
 // Storage is how much the cache holds
 type Storage struct {
+	// File-content response bytes since service startup, excluding thumbnails and metadata.
+	DownloadedBytes int64 `json:"downloadedBytes"`
 	// Content fetched and kept within the budget
 	Used   int64 `json:"used"`
 	Budget int64 `json:"budget"`
@@ -386,7 +388,7 @@ func (s *Service) Storage() (Storage, error) {
 		return Storage{}, err
 	}
 	defer rows.Close()
-	st := Storage{Budget: s.cacheBudget()}
+	st := Storage{Budget: s.cacheBudget(), DownloadedBytes: s.cache.downloadedBytes.Load()}
 	for rows.Next() {
 		var contentID string
 		var size int64

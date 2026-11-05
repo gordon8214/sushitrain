@@ -10,9 +10,10 @@ package main
 
 import (
 	"context"
-	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"t-shaped.nl/sushitrain/v2/linuxdesktop"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
@@ -340,17 +341,7 @@ func (w *mainWindow) setUpFiles() {
 		return
 	}
 	background(func() (struct{}, error) {
-		err := systemctl("enable", "--now", "synctrain-files.service")
-		if err == nil {
-			err = waitForService("synctrain-files.service", filesSocket(), time.Minute)
-		}
-		if err == nil {
-			err = writeMode(modeFiles)
-		}
-		if err != nil {
-			stopUnit("synctrain-files.service")
-		}
-		return struct{}{}, err
+		return struct{}{}, linuxdesktop.Files(false)
 	}, func(_ struct{}, err error) {
 		if err != nil {
 			w.report("Synctrain Files Couldn't Start", sentence(err))

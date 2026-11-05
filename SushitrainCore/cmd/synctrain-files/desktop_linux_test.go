@@ -7,13 +7,67 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"t-shaped.nl/sushitrain/v2/files"
 )
+
+func TestKDEPlacesUpdatesAreBoundedAndDoNotBlockRPCs(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	started := make(chan []byte, 2)
+	release := make(chan struct{})
+	defer close(release)
+	update := kdePlacesUpdater(ctx, func(ctx context.Context, data []byte) {
+		started <- data
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+	})
+	update("/mount", []files.Folder{{DirName: "folder", Label: "first"}})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("Places worker did not start")
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 1000; i++ {
+			update("/mount", []files.Folder{{DirName: "folder", Label: "latest", State: "changing"}})
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("an optional desktop helper blocked an RPC")
+	}
+	release <- struct{}{}
+	select {
+	case data := <-started:
+		var snapshot struct{ Folders []files.Folder }
+		if err := json.Unmarshal(data, &snapshot); err != nil || len(snapshot.Folders) != 1 || snapshot.Folders[0].Label != "latest" {
+			t.Fatal("worker did not coalesce the latest folder snapshot", string(data), err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("latest Places snapshot was lost")
+	}
+	// Changes to availability do not relaunch Qt for an unchanged place.
+	update("/mount", []files.Folder{{DirName: "folder", Label: "latest", State: "online"}})
+	release <- struct{}{}
+	select {
+	case <-started:
+		t.Fatal("unchanged Places relaunched the helper")
+	case <-time.After(30 * time.Millisecond):
+	}
+}
 
 func TestBookmarks(t *testing.T) {
 	config := t.TempDir()

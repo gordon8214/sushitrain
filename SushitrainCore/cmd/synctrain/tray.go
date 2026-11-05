@@ -5,12 +5,14 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
-	"os"
-	"path/filepath"
 	"t-shaped.nl/sushitrain/v2/desktoptray"
+	"t-shaped.nl/sushitrain/v2/linuxdesktop"
 )
 
 var activeApplication *adw.Application
@@ -139,17 +141,7 @@ func (d *desktopUI) desktopSettings() {
 				return
 			}
 		}
-		if startup.Active() {
-			err = os.MkdirAll(filepath.Dir(file), 0700)
-			if err == nil {
-				err = os.WriteFile(file, []byte("[Desktop Entry]\nType=Application\nName=Synctrain\nExec=synctrain --background\nIcon=com.gordonbyrnes.Synctrain\nX-GNOME-Autostart-enabled=true\n"), 0600)
-			}
-		} else {
-			err = os.Remove(file)
-			if os.IsNotExist(err) {
-				err = nil
-			}
-		}
+		err = linuxdesktop.Autostart(startup.Active())
 		if err != nil {
 			d.error(err)
 		}

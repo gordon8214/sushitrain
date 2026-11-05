@@ -116,4 +116,8 @@ func TestThumbnails(t *testing.T) {
 	if len(ts.thumbnails.queue) != before {
 		t.Fatal("thumbnails that are in the cache were queued again")
 	}
+	if st, err := ts.Storage(); err != nil || st.DownloadedBytes != 0 {
+		t.Fatalf("thumbnails downloaded file content: %+v, %v", st, err)
+	}
+
 }

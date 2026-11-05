@@ -12,6 +12,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"t-shaped.nl/sushitrain/v2/adminsock"
@@ -37,6 +38,7 @@ func decode[T any](params json.RawMessage) (T, error) {
 
 // registerAdmin registers the daemon's methods. foldersChanged is called after a folder is added or removed.
 func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersChanged func()) {
+	registerItems(a, s, mount)
 	registerBrowser(a, s, mount)
 	a.Register("status", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		gateways, err := s.Gateways()
@@ -49,14 +51,39 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 		}
 		return files.Status{Version: versionString(), Mount: mount, Gateways: gateways, Folders: folders}, nil
 	})
+	var pairingMu sync.Mutex
+	pairings := map[string]context.CancelFunc{}
+	a.Register("pair.cancel", func(_ context.Context, data json.RawMessage) (any, error) {
+		p, err := decode[struct{ ID string }](data)
+		if err != nil {
+			return nil, err
+		}
+		pairingMu.Lock()
+		stop := pairings[p.ID]
+		pairingMu.Unlock()
+		if stop != nil {
+			stop()
+		}
+		return nil, nil
+	})
 	a.Register("pair", func(ctx context.Context, params json.RawMessage) (any, error) {
-		p, err := decode[struct{ Link string }](params)
+		p, err := decode[struct{ Link, ID string }](params)
 		if err != nil {
 			return nil, err
 		}
 		// Long enough for someone to approve it on the gateway; the pairing code itself lasts ten minutes
 		ctx, cancel := context.WithTimeout(ctx, 11*time.Minute)
 		defer cancel()
+		if p.ID != "" {
+			pairingMu.Lock()
+			if pairings[p.ID] != nil {
+				pairingMu.Unlock()
+				return nil, errors.New("this pairing request is already running")
+			}
+			pairings[p.ID] = cancel
+			pairingMu.Unlock()
+			defer func() { pairingMu.Lock(); delete(pairings, p.ID); pairingMu.Unlock() }()
+		}
 		return s.Pair(ctx, p.Link, nil)
 	})
 	a.Register("gateways.forget", func(ctx context.Context, params json.RawMessage) (any, error) {

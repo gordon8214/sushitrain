@@ -707,6 +707,15 @@ func (fld *Folder) deleteLocalFile(path string) error {
 	return nil
 }
 
+// IsPathSelected checks the cached ignore rules even for paths absent from the index.
+func (fld *Folder) IsPathSelected(path string) (bool, error) {
+	matcher, err := fld.loadIgnores()
+	if err != nil {
+		return false, err
+	}
+	return !matcher.Match(path).IsIgnored(), nil
+}
+
 func (fld *Folder) IgnoreLines() (*ListOfStrings, error) {
 	// Load ignores from file
 	ignores, err := fld.loadIgnores()

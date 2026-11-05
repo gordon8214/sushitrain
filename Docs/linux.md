@@ -1,13 +1,14 @@
 # Synctrain for Linux
 
-Synctrain for Linux targets Fedora Workstation with GNOME. As on the Mac, a machine runs Synctrain in one of two modes:
+Synctrain for Linux supports Fedora with GNOME or KDE Plasma, with a native interface for each desktop. As on the Mac, a machine runs Synctrain in one of two modes:
 
 - **Synchronize**: it runs Syncthing, and every folder syncs all of its contents. Phones and machines in Files mode can
   reach its folders through the remote file service, once it is turned on.
 - **Files**: it runs no Syncthing. The folders of a gateway on another system, which has all their files, appear in
   `~/Synctrain`, and files are fetched from the gateway as they are read.
 
-Three programs make it up: `synctrain` is the window, `synctrain-gateway` runs Syncthing in Synchronize mode
+The `synctrain` launcher opens the native window for the current desktop. `synctrain-desktop` shares setup and service
+management between the windows; `synctrain-gateway` runs Syncthing in Synchronize mode
 ([gateway.md](gateway.md)), and `synctrain-files` is the daemon of Files mode. Each daemon is a systemd user service,
 and only the service for the machine's mode is enabled. They run without the window. The window uses private Unix
 sockets to manage the existing engine and Files service. The mode is in `~/.config/synctrain/mode`; desktop preview,
@@ -19,23 +20,39 @@ On a Fedora host with Go (the release in `SushitrainCore/go.mod`, newer than Fed
 
 ```bash
 Linux/build/build-rpm.sh
-sudo dnf install SushitrainCore/build/rpm/$(rpm --eval '%{_arch}')/synctrain-*.rpm
+# KDE Plasma (the common package supplies services and the launcher)
+sudo dnf install SushitrainCore/build/rpm/$(rpm --eval '%{_arch}')/synctrain-common-*.rpm \
+  SushitrainCore/build/rpm/$(rpm --eval '%{_arch}')/synctrain-kde-*.rpm
+# GNOME: install synctrain-common and synctrain (without the -kde suffix).
 ```
 
 The package supports x86-64 and ARM64 (`LINUX_ARCH=amd64` or `arm64`, built on the target architecture).
-The window links GTK 4 and libadwaita 1.9 or newer. Without `gtk4-devel` and `libadwaita-devel` installed, the script builds it in a
-rootless podman container (`Linux/build/build-window.sh`, Fedora with those packages, using the host's Go and module
-cache). Use `SYNCTRAIN_CONTAINER_BUILD=1` to target Fedora 44 from a newer Fedora host; the container has a separate
-Go build cache so native GTK libraries cannot leak into the baseline build. The package needs `fuse3`, Poppler, and
-GStreamer base plugins and the native Nautilus extensions library, and recommends `ffmpeg-free` and
-`poppler-utils` (video and PDF thumbnails for phones). The names Sushitrain and Synctrain and the logo aren't under the
-MPL (README, License), so the package is for your own machines.
+The `synctrain-common` RPM contains the shared daemons, services, lifecycle helper, launcher,
+and desktop entry. `synctrain` contains the GTK/libadwaita window and Nautilus module;
+`synctrain-kde` contains the Qt 6/Kirigami window and Dolphin plugins. Both frontends can be
+installed together. Installing KDE alone does not require GTK or Nautilus.
 
-To build the programs only: `make -C SushitrainCore linux` (the two daemons, statically linked) and
-`make -C SushitrainCore linux-window` (the window, with GTK's development packages).
-Build the native Nautilus module with `make -C SushitrainCore linux-nautilus`; it needs `nautilus-devel` and
-`json-glib-devel`. Without those packages, `Linux/build/build-window.sh linux-nautilus` uses the Fedora 44 container.
-Run its native tests with `make -C SushitrainCore linux-nautilus-test` (normally under five seconds, limited to 20).
+The `synctrain` command selects Qt in a KDE session and GTK elsewhere, falling back to the
+installed frontend. `synctrain-kde` and `synctrain-gtk` select explicitly; `SYNCTRAIN_DESKTOP=kde`
+or `gnome` changes the launcher's preference. Pairing links, `--background`, and `versions <path>`
+are forwarded unchanged. KDE also accepts `open <path>` and `status <path>`.
+
+The Go release must match `SushitrainCore/go.mod`. KDE builds need CMake, Ninja, a C++20 compiler,
+Qt 6 Base/Declarative/Multimedia/PDF development packages, Extra CMake Modules, and KDE Frameworks
+Kirigami, I18n, CoreAddons, DBusAddons, KIO, Notifications, StatusNotifierItem, and Prison.
+On Fedora these are the matching `qt6-*-devel`, `kf6-*-devel`, and `extra-cmake-modules` packages
+listed in `Linux/build/Containerfile.kde`. GTK builds require `gtk4-devel` and `libadwaita-devel`;
+Nautilus requires `nautilus-devel` and `json-glib-devel`.
+
+`Linux/build/build-rpm.sh` builds both interfaces by default. Set `SYNCTRAIN_DESKTOPS=kde` or
+`gnome` to build only one. Missing development libraries, or `SYNCTRAIN_CONTAINER_BUILD=1`,
+use the Fedora 44 Podman build containers. The runtime package supports x86-64 and ARM64;
+build desktop components on the target architecture. The names and logo retain the README's
+licensing restrictions.
+
+Build individual components with `make -C SushitrainCore linux`, `linux-window`, `linux-kde`,
+or `linux-nautilus`. `linux-kde-test` runs the Qt transport and Dolphin tests, normally around
+six seconds and bounded to 60 seconds. `linux-nautilus-test` runs the native Nautilus tests.
 
 Removing the package leaves `syncthing.service` masked if Synctrain took it over: `systemctl --user unmask
 syncthing.service` gives it back (with a Syncthing at least as new as Synctrain's engine).
@@ -62,7 +79,7 @@ Syncthing itself, or it competes for the home at the next login. A Syncthing run
 least as new as Synctrain's engine: stop Synctrain (switch to Files mode, or `systemctl --user disable --now
 synctrain-gateway`), unmask `syncthing.service` and start it.
 
-In Synchronize mode, native GTK pages manage folders, devices, sharing, encryption passwords, ignores, failed and
+In Synchronize mode, native pages manage folders, devices, sharing, encryption passwords, ignores, failed and
 deleted files, scanning, pause/resume, and all supported engine settings. Common settings have dedicated controls;
 Advanced Settings exposes the complete engine schema, including defaults. Editors keep drafts until Save, show
 validation errors, and ask before discarding changes. The web GUI and REST API are optional and can stay disabled.
@@ -78,7 +95,7 @@ are outside this disposable cache.
 history and independent results from paired gateways by Syncthing folder ID and path. A source failure does not hide
 other results. Preview and Save a Copy bind the download to the selected archive. Restoring checks the destination
 again after downloading and preserves its current content. Files mode refuses replacement over pending local edits.
-Nautilus's Previous Versions command opens this same browser. History credentials use Secret Service when available,
+The Nautilus and Dolphin Previous Versions commands open the corresponding native browser. History credentials use Secret Service when available,
 with a private credential-file fallback when no keyring service is available.
 
 **Automatic Pause** observes NetworkManager's metered/cellular status and the desktop's Power Saver profile. Each
@@ -255,6 +272,32 @@ sudo install -Dm755 SushitrainCore/build/linux-$(go env GOARCH)/libsynctrain-nau
 nautilus -q
 ```
 
+### KDE Plasma and Dolphin
+
+The Qt window provides both modes and uses the same private admin sockets, configuration,
+credentials, and engine as the GNOME window. Native previews use Qt, and the tray is a Plasma
+StatusNotifierItem. Closing the window leaves services running; Quit and Stop explicitly stops them.
+
+The KDE package installs two native Dolphin plugins: Synctrain context-menu actions and status
+overlays. Enable **Synctrain** under Dolphin's **Configure Dolphin → Context Menu**, and enable
+icon overlays if disabled. Close and reopen Dolphin after installation or upgrade; `kquitapp6 dolphin`
+closes its current windows. No Python extension is required.
+
+Managed items offer Open in Synctrain and View Sync Status. Single files also offer Previous
+Versions. Synchronized items offer Rescan, and Files-mode items offer Keep on This Device and
+Stop Keeping. Compatible multiple selections are supported. Status badges report synchronization and
+local availability; View Sync Status distinguishes cached from retained files. Unknown status never
+shows a success badge. Status discovery is asynchronous, so a newly opened view may briefly have no badges.
+
+Synctrain-owned Places bookmarks follow mounted folders even without an open window. User-created
+bookmarks are preserved. Gateway thumbnails use the shared freedesktop thumbnail cache. Baloo and
+KDE thumbnail workers cannot fetch remote content merely to index or preview a directory; normal
+KIO file copies and explicit opens remain available.
+
+If integration is absent, check `rpm -q synctrain-common synctrain-kde`, restart Dolphin, and
+inspect `journalctl --user -u synctrain-files -u synctrain-gateway`. Verify that the selected mode's
+service is running. `synctrain-kde status <absolute-path>` uses the same metadata as the badges.
+
 ## Limitations so far
 
 - Symbolic links on the gateway are not shown in Files mode.
@@ -265,7 +308,8 @@ nautilus -q
 The Go code is in `SushitrainCore`: `remoteapi` (the remote file API's types, shared with the gateway), `remoteclient`
 (a client of a gateway), `files` (the index, sync and cache of Files mode) and `files/fusefs` (the mount), with the
 daemon in `cmd/synctrain-files`; `gatewayadmin` (what the gateway's admin socket answers) and `cmd/synctrain-gateway`;
-and the window in `cmd/synctrain` (gotk4 and libadwaita, Linux only). `remoteclient` and `files` are tested against a
+the shared desktop lifecycle in `linuxdesktop` and `cmd/synctrain-desktop`; and the windows in
+`cmd/synctrain` (gotk4/libadwaita) and `Linux/kde` (C++20/Qt 6/Kirigami). `remoteclient` and `files` are tested against a
 real gateway in-process (`gateway/gatewaytest`), also on macOS; the FUSE tests run on Linux with `/dev/fuse`:
 
 ```bash
@@ -274,6 +318,20 @@ go test -tags noassets ./remoteapi ./adminsock ./remoteclient ./files/... ./gate
     ./cmd/synctrain-gateway ./cmd/synctrain-files
 make linux-test   # test executables to run on another Linux host
 ```
+
+The focused desktop regression subset takes about a minute on the Fedora KDE ARM64 VM.
+Run it with a six-minute outer budget and a five-minute per-package deadline:
+
+```bash
+cd SushitrainCore
+timeout 360 go test -tags noassets ./linuxdesktop ./desktopapi ./desktopsettings ./enginecontrol \
+    ./linuxpolicy ./history ./safecopy ./previewcache ./adminsock ./files ./files/fusefs \
+    ./cmd/synctrain-files ./cmd/synctrain-gateway ./cmd/synctrain-desktop -count=1 -timeout 300s
+```
+
+Bound RPM builds with `timeout 1800 Linux/build/build-rpm.sh`. The CI matrix builds GNOME
+and KDE components and packages on Fedora 44 for ARM64 and x86-64. Fedora 45 KDE acceptance
+results and remaining qualification gaps are in [linux-kde-acceptance.md](linux-kde-acceptance.md).
 
 `Linux/test/e2e-files.sh` runs a scratch gateway and Files daemon on one machine, in `/tmp`, without touching the
 session's own. The window can be checked without a desktop through GTK's Broadway backend (`gtk4-broadwayd :5`, then

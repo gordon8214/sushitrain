@@ -66,6 +66,7 @@ func Strings(list *core.ListOfStrings) []string {
 	return out
 }
 func (c *Control) Register(a *adminsock.Server) {
+	desktopapi.RegisterItems(a, c.itemStatus)
 	for _, name := range []string{"engine.diagnostics", "engine.differences", "engine.snapshots", "engine.exportSnapshot", "engine.inspect", "engine.read", "engine.replace", "engine.mkdir", "engine.import", "engine.rename", "engine.move", "engine.status", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.browsePage", "engine.thumbnail", "engine.search", "engine.pending", "engine.pendingFolders", "engine.ignored", "engine.stats", "engine.logs", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "engine.previewVersion", "engine.exportCurrent", "engine.resolvePath", "engine.captureRestore", "engine.restoreDownloaded", "settings.get", "settings.save", "settings.close", "configuration.export"} {
 		a.Register(name, func(ctx context.Context, params json.RawMessage) (any, error) {
 			var p Request

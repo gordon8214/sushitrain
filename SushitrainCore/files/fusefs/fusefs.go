@@ -55,6 +55,7 @@ var readerNames = []string{
 	"evince-thumbnailer", "papers-thumbnailer", "atril-thumbnailer", "xreader-thumbnailer", "gnome-thumbnail-font",
 	"gsf-office-thumbnailer", "gnome-epub-thumbnailer", "gnome-mobi-thumbnailer", "tumblerd", "localsearch-extractor",
 	"tracker-extract", "tracker-miner-fs", "localsearch-3",
+	"baloo_file", "baloo_file_extractor", "balooctl",
 }
 
 // Options of the mount
@@ -882,10 +883,27 @@ func (m *Mount) bulkReader(ctx context.Context) (string, bool) {
 		return "", false
 	}
 	name := filepath.Base(strings.TrimSuffix(exe, " (deleted)"))
+	// KIO uses the same executable for copying files and making thumbnails.
+	// Only its thumbnail protocol worker is a bulk reader.
+	if name == "kioworker" || name == "kioslave5" {
+		args, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", caller.Pid))
+		if err == nil && thumbnailWorker(strings.Split(string(args), "\x00")) {
+			return name + " (thumbnail)", true
+		}
+	}
 	for _, prefix := range readerNames {
 		if strings.HasPrefix(name, prefix) {
 			return name, true
 		}
 	}
 	return name, false
+}
+
+func thumbnailWorker(args []string) bool {
+	for _, arg := range args[1:] {
+		if arg == "thumbnail" || filepath.Base(arg) == "thumbnail.so" {
+			return true
+		}
+	}
+	return false
 }
