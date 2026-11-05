@@ -958,6 +958,12 @@ to two hours. If it fails, the archive is still there: fix the cause and run the
 None of these files belong in the repository, and Git ignores the certificate and key types. The workflow keeps them in a
 temporary keychain and folder, which it removes after the build.
 
+The signing job runs only for pushes of `v*` tags. The `mac-release` environment must also restrict deployments to
+tags matching `v*`; leave branch deployments disabled. The job checks for missing secrets before using the signing
+assets and creates credential files with owner-only permissions. It allows 150 minutes for the signed build and Apple's
+notary service; the prerequisite build and package checks have a separate 30-minute limit. Branch and pull request
+builds do not receive the release credentials.
+
 ### Releasing
 
 1. Raise `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in all targets, and commit.

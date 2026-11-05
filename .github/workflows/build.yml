@@ -17,6 +17,7 @@ jobs:
     # See https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md
     # and https://github.com/actions/runner-images#available-images
     runs-on: xcode-27
+    timeout-minutes: 30
     steps:
       - name: Check Xcode version
         run: |
@@ -174,9 +175,10 @@ jobs:
     name: Sign and notarize the Mac app
     # Tags only, in an environment of its own: this repository is public, and the Developer ID certificate and the
     # notary key must stay out of branch and pull request builds. See Docs/macos.md for the secrets.
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: xcode-27
+    timeout-minutes: 150
     environment: mac-release
     steps:
       - name: Check Xcode version
@@ -204,6 +206,14 @@ jobs:
           PROFILE_FILE_PROVIDER: ${{ secrets.DEVELOPER_ID_PROFILE_FILE_PROVIDER }}
           PROFILE_FILE_PROVIDER_UI: ${{ secrets.DEVELOPER_ID_PROFILE_FILE_PROVIDER_UI }}
         run: |
+          set -euo pipefail
+          umask 077
+          for name in DEVELOPER_ID_P12 DEVELOPER_ID_P12_PASSWORD NOTARY_KEY_P8 PROFILE_APP PROFILE_FILE_PROVIDER PROFILE_FILE_PROVIDER_UI; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing mac-release environment secret: $name"
+              exit 1
+            fi
+          done
           keychain="$RUNNER_TEMP/signing.keychain-db"
           keychain_password=$(uuidgen)
           echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
@@ -228,6 +238,13 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: |
+          set -euo pipefail
+          for name in NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing mac-release environment secret: $name"
+              exit 1
+            fi
+          done
           make mac-release
 
       - name: Remove signing credentials
