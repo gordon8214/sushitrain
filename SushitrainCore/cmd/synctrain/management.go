@@ -46,6 +46,7 @@ func (d *desktopUI) folders() {
 			}{
 				{"General", func() { d.edit("basic/folder/"+f.ID, "Folder Settings") }},
 				{"Synchronization", func() { d.edit("folder/"+f.ID, "Synchronization Settings") }},
+				{"Reset Synchronization Settings…", func() { d.edit("reset/folder/"+f.ID, "Reset Synchronization Settings") }},
 				{"Versioning", func() { d.edit("versioning/"+f.ID, "Versioning") }},
 				{"Sharing", func() { d.share(f) }},
 				{"Ignore Patterns", func() { d.ignores(f.ID) }},

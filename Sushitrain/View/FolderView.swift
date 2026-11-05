@@ -1096,6 +1096,7 @@ private struct AdvancedFolderSettingsView: View {
 	@State private var showThumbnailsSettingsSheet: Bool = false
 	@State private var showVersioningSettingsSheet: Bool = false
 	@State private var showExternalSharingSettingsSheet: Bool = false
+	@State private var showResetSettingsSheet = false
 	@State private var showSyncSettingsSheet: Bool = false
 	@State private var showMetadataSettingsSheet: Bool = false
 
@@ -1132,6 +1133,14 @@ private struct AdvancedFolderSettingsView: View {
 				NavigationStack {
 					FolderMetadataSettingsView(folder: folder)
 				}
+			}
+			.buttonStyle(.link)
+
+			Button("Reset Synchronization Settings…", systemImage: "arrow.counterclockwise") {
+				showResetSettingsSheet = true
+			}
+			.sheet(isPresented: $showResetSettingsSheet) {
+				NavigationStack { FolderSyncResetSettingsView(folder: folder) }
 			}
 			.buttonStyle(.link)
 

@@ -24,3 +24,18 @@ func TestFolderEditorSections(t *testing.T) {
 		}
 	}
 }
+
+func TestResetEditorOnlyExposesSynchronizationFields(t *testing.T) {
+	for _, section := range []string{"reset/folder/test", "reset/defaults/folder"} {
+		for _, field := range []string{"copiers", "rescanIntervalS", "syncXattrs", "minDiskFree.value", "xattrFilter.entries", "junctionsAsDirs"} {
+			if !visibleFolderEditorField(section, field) {
+				t.Errorf("reset lost %s", field)
+			}
+		}
+		for _, field := range []string{"id", "path", "type", "markerName", "paused", "devices", "versioning.params", "filesystemType", "futureOption"} {
+			if visibleFolderEditorField(section, field) {
+				t.Errorf("reset exposed protected or unclassified field %s", field)
+			}
+		}
+	}
+}

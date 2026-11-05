@@ -79,8 +79,11 @@ func (c *Control) getSettings(section string) (Editor, error) {
 		baseline := *v
 		d.value = v
 		d.save = func() error { return cl.SetProxySettings(mergeSettings(cl.ProxySettings(), &baseline, v)) }
-	case section == "defaults/folder":
+	case section == "defaults/folder" || section == "reset/defaults/folder":
 		v := cl.DefaultFolderSettings()
+		if strings.HasPrefix(section, "reset/") {
+			v = cl.DefaultFolderResetSettingsPreview()
+		}
 		d.value = v
 		d.save = func() error { return cl.SetDefaultFolderSettings(v) }
 	case section == "defaults/device":
@@ -95,12 +98,15 @@ func (c *Control) getSettings(section string) (Editor, error) {
 		v := &struct{ Patterns string }{cl.DefaultIgnoreLines()}
 		d.value = v
 		d.save = func() error { return cl.SetDefaultIgnoreLines(v.Patterns) }
-	case strings.HasPrefix(section, "folder/"):
-		f := cl.FolderWithID(strings.TrimPrefix(section, "folder/"))
+	case strings.HasPrefix(section, "folder/") || strings.HasPrefix(section, "reset/folder/"):
+		f := cl.FolderWithID(strings.TrimPrefix(strings.TrimPrefix(section, "reset/"), "folder/"))
 		if f == nil || !f.Exists() {
 			return Editor{}, errors.New("folder no longer exists")
 		}
 		v := f.Settings()
+		if strings.HasPrefix(section, "reset/") {
+			v = f.ResetSettingsPreview()
+		}
 		d.value = v
 		d.save = func() error { return f.SetSettings(v) }
 	case strings.HasPrefix(section, "versioning/"):
@@ -153,7 +159,7 @@ func (c *Control) getSettings(section string) (Editor, error) {
 		t := v.Type()
 		for i := 0; i < v.NumField(); i++ {
 			sf := t.Field(i)
-			if !sf.IsExported() {
+			if !sf.IsExported() || strings.HasPrefix(section, "reset/") && !core.IsFolderSyncResetField(sf.Name) {
 				continue
 			}
 			f := Field{Path: sf.Name, Label: label(sf.Name), Kind: "string", Value: fmt.Sprint(v.Field(i).Interface()), IsAdvanced: desktopapi.FolderFieldAdvanced(section, sf.Name)}

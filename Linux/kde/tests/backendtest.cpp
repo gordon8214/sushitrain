@@ -305,6 +305,50 @@ private slots:
     QCOMPARE(values["Copiers"].toString(), QString("9"));
     QCOMPARE(values["MinDiskFree"].toString(), QString("2"));
   }
+  void resetPreviewRoutesAndCancel() {
+    Fixture f;
+    f.handler = [](QString m, auto) {
+      if (m == "engine.folders")
+        return result(QJsonArray{QJsonObject{{"ID", "test"}, {"Label", "Test Folder"}}});
+      if (m == "settings.get")
+        return result(QJsonObject{{"Token", "reset-editor"}, {"Fields", QJsonArray{
+            QJsonObject{{"Path", "SyncXattrs"}, {"Kind", "bool"}, {"Label", "Synchronize extended attributes"}, {"Value", "true"}},
+            QJsonObject{{"Path", "Copiers"}, {"Kind", "string"}, {"Label", "Copiers"}, {"Value", "0"}, {"IsAdvanced", true}}}}});
+      return result(QJsonObject{});
+    };
+    Backend b;
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty("backend", &b);
+    QQmlComponent component(&engine, QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> window(component.create());
+    QVERIFY2(window, qPrintable(component.errorString()));
+    QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Overview"), 1000);
+    b.navigate("Folders");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(b, "Test Folder", "Reset Synchronization Settings…").isEmpty(), 1000);
+    b.activate(rowAction(b, "Test Folder", "Reset Synchronization Settings…"));
+    auto *editor = window->findChild<QObject *>("settingsEditor");
+    auto *advanced = window->findChild<QQuickItem *>("editorAdvancedForm");
+    QVERIFY(editor && advanced);
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    QCOMPARE(f.parameters.at(f.calls.lastIndexOf("settings.get"))["Section"].toString(), QString("reset/folder/test"));
+    QCOMPARE(editor->property("draft").toMap()["Copiers"].toString(), QString("0"));
+    QVERIFY(!advanced->isVisible());
+    const auto fields = b.dialog()["fields"].toList();
+    QVERIFY(!fields.isEmpty());
+    QCOMPARE(fields.first().toMap()["Kind"].toString(), QString("notice"));
+    QVERIFY(fields.first().toMap()["Label"].toString().contains("then choose Save"));
+    b.cancelDialog();
+    QTRY_VERIFY_WITH_TIMEOUT(b.dialog().isEmpty(), 1000);
+    QTRY_COMPARE_WITH_TIMEOUT(f.calls.count("settings.close"), 1, 1000);
+    QCOMPARE(f.calls.count("settings.save"), 0);
+    b.navigate("Settings");
+    b.activate(rowAction(b, "Reset New Folder Defaults…", "Edit"));
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    QCOMPARE(f.parameters.at(f.calls.lastIndexOf("settings.get"))["Section"].toString(), QString("reset/defaults/folder"));
+    QVERIFY(!advanced->isVisible());
+    b.cancelDialog();
+    QCOMPARE(f.calls.count("settings.save"), 0);
+  }
   void qmlSidebarTracksNavigation() {
     Fixture f;
     f.handler = [](QString m, auto) {

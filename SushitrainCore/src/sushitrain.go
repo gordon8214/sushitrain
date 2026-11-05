@@ -892,9 +892,7 @@ func loadEngineConfig(cfgFile string, cert tls.Certificate, logger events.Logger
 		}
 		applyAppDefaults(conf, ios)
 		// Seed these only for a new configuration, so saved defaults survive every startup.
-		conf.Defaults.Folder.BlockIndexing = true
-		conf.Defaults.Folder.SendXattrs = true
-		conf.Defaults.Folder.SyncXattrs = true
+		conf.Defaults.Folder = builtInFolderDefaults(ios)
 	})
 	if err != nil {
 		return nil, "", err

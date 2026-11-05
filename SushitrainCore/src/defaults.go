@@ -53,6 +53,9 @@ func (clt *Client) SetDefaultFolderSettings(settings *FolderSettings) error {
 	if settings.saved == nil {
 		settings.saved = newFolderSettings(wrapper.DefaultFolder())
 	}
+	if settings.Equal(settings.saved) {
+		return nil
+	}
 	return clt.changeDefaults(func(defaults *config.Defaults) error {
 		return settings.applyDefaultsTo(&defaults.Folder)
 	})

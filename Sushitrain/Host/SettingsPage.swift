@@ -19,6 +19,8 @@
 		/// For a page in a sheet: saving closes it, next to a button that closes it without saving
 		var isSheet = false
 		let load: () -> Settings?
+		/// A separate pending preview; load remains the saved baseline for dirty checking.
+		var loadPreview: (() -> Settings?)? = nil
 		let isEqual: (Settings, Settings) -> Bool
 		let save: @Sendable (Settings) throws -> Void
 		/// What to ask before saving these settings, when there is something to ask
@@ -146,7 +148,12 @@
 
 		private func reload() {
 			saved = load()
-			draft = load().map(Draft.init)
+			if let loadPreview {
+				draft = loadPreview().map(Draft.init)
+			}
+			else {
+				draft = load().map(Draft.init)
+			}
 		}
 	}
 

@@ -179,7 +179,7 @@ func (h *Host) engineCall(ctx context.Context, method string, p request) (any, e
 		delete(h.editors, p.Token)
 		return nil, nil
 	case "settings.get":
-		sectionID := p.Section
+		sectionID := strings.TrimPrefix(p.Section, "reset/")
 		if strings.HasPrefix(sectionID, "basic/folder/") {
 			sectionID = strings.TrimPrefix(sectionID, "basic/")
 		} else if strings.HasPrefix(sectionID, "versioning/") {
@@ -187,7 +187,13 @@ func (h *Host) engineCall(ctx context.Context, method string, p request) (any, e
 		} else if sectionID == "defaults/versioning" {
 			sectionID = "defaults/folder"
 		}
-		section, err := c.AdvancedSection(sectionID)
+		var section *core.AdvancedSection
+		var err error
+		if strings.HasPrefix(p.Section, "reset/") {
+			section, err = c.ResetFolderSyncSection(sectionID)
+		} else {
+			section, err = c.AdvancedSection(sectionID)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -206,9 +212,9 @@ func (h *Host) engineCall(ctx context.Context, method string, p request) (any, e
 				continue
 			}
 			label := f.Label
-			if (strings.HasPrefix(p.Section, "folder/") || p.Section == "defaults/folder") && f.Path == "minDiskFree.value" {
+			if (strings.HasPrefix(sectionID, "folder/") || sectionID == "defaults/folder") && f.Path == "minDiskFree.value" {
 				label = "Minimum free disk space"
-			} else if (strings.HasPrefix(p.Section, "folder/") || p.Section == "defaults/folder") && f.Path == "minDiskFree.unit" {
+			} else if (strings.HasPrefix(sectionID, "folder/") || sectionID == "defaults/folder") && f.Path == "minDiskFree.unit" {
 				label = "Free space unit"
 			}
 			fields = append(fields, editorField{Path: f.Path, Label: label, Group: f.Group, Kind: f.Kind, Value: f.Value,
@@ -326,6 +332,9 @@ func (h *Host) importHome(source string) error {
 // General and versioning reuse the raw folder draft without dropping any fields
 // from the full synchronization editor.
 func visibleFolderEditorField(section, field string) bool {
+	if strings.HasPrefix(section, "reset/") {
+		return core.IsFolderSyncResetField(field)
+	}
 	if strings.HasPrefix(section, "basic/folder/") {
 		switch field {
 		case "id", "label", "path", "type", "rescanIntervalS", "fsWatcherEnabled", "fsWatcherDelayS", "maxConflicts", "blockIndexing":

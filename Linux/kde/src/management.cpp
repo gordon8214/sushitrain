@@ -46,6 +46,7 @@ void Backend::folders() {
            }},
           {"General", [this, id] { edit("basic/folder/" + id); }},
           {"Synchronization", [this, id] { edit("folder/" + id); }},
+          {"Reset Synchronization Settings…", [this, id] { edit("reset/folder/" + id); }},
           {"Versioning", [this, id] { edit("versioning/" + id); }},
           {"Sharing", [this, f] { share(f); }},
           {"Ignore Patterns",
@@ -288,7 +289,10 @@ void Backend::edit(const QString &section) {
     }
     preferenceEditor = isPreference;
     editorToken = str(editor, "Token");
-    form("Settings — " + section, editor["Fields"].toArray(),
+    auto fields = editor["Fields"].toArray();
+    if (section.startsWith("reset/"))
+      fields.prepend(field("resetNotice", "Restore built-in synchronization defaults. Folder location, direction, sharing, ignore patterns, and versioning stay unchanged. Review the settings, then choose Save.", {}, "notice"));
+    form(section.startsWith("reset/") ? "Reset Synchronization Settings" : "Settings — " + section, fields,
          [this, token = editorToken, isPreference](QJsonObject values) {
            QJsonObject strings;
            for (auto it = values.constBegin(); it != values.constEnd(); ++it)
@@ -375,6 +379,7 @@ void Backend::settings() {
       {"Bandwidth", "bandwidth"},
       {"Engine", "engine"},
       {"New Folder Defaults", "defaults/folder"},
+      {"Reset New Folder Defaults…", "reset/defaults/folder"},
       {"New Device Defaults", "defaults/device"},
       {"Default Versioning", "defaults/versioning"},
       {"Default Ignore Patterns", "defaults/ignores"},

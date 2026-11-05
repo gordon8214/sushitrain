@@ -54,10 +54,9 @@ var (
 	errMarkerIsFolder        = errors.New("marker name: enter a name inside the folder: the folder itself can't tell that it is there")
 )
 
-// FolderSettings are a folder's settings that have no control of their own in the app, which it shows and saves together
-// so that the folder restarts once. Numbers are text, as they were entered, for SetSettings to check. The last group is
-// for the defaults of new folders, as a folder has its own controls for those. Type and MarkerName are there for a folder
-// too: the first to tell what applies to it, the second as it has no other control.
+// FolderSettings is a pending synchronization draft. Numbers remain text until
+// validation on Save. Type and Path are editable only for new-folder defaults;
+// existing folders use their dedicated direction and relocation operations.
 type FolderSettings struct {
 	Order                 string
 	MinDiskFree           string
@@ -232,22 +231,31 @@ func (s *FolderSettings) applyTo(folder *config.FolderConfiguration) error {
 	return s.checkMetadata(folder)
 }
 
-// applyDefaultsTo also sets what only new folders take from the defaults, on top of applyTo. Not the marker name: the
-// engine only creates a marker of the default name, so another would stop every new folder.
-func (s *FolderSettings) applyDefaultsTo(folder *config.FolderConfiguration) error {
+// applyScanSettingsTo is shared by individual folders and new-folder defaults.
+func (s *FolderSettings) applyScanSettingsTo(folder *config.FolderConfiguration) error {
 	saved := s.saved
 	if err := errors.Join(
-		setChoiceOption("folder type", s.Type, saved.Type, defaultFolderTypes, &folder.Type),
-		setNumberOption("rescan interval", s.RescanIntervalS, saved.RescanIntervalS, &folder.RescanIntervalS,
-			0, config.MaxRescanIntervalS),
+		setNumberOption("rescan interval", s.RescanIntervalS, saved.RescanIntervalS, &folder.RescanIntervalS, 0, config.MaxRescanIntervalS),
 		setSecondsOption("watcher delay", s.FSWatcherDelayS, saved.FSWatcherDelayS, &folder.FSWatcherDelayS, minWatcherDelayS),
 		setNumberOption("maximum conflicts", s.MaxConflicts, saved.MaxConflicts, &folder.MaxConflicts, -1, math.MaxInt32),
-		s.applyDefaultPath(folder),
 	); err != nil {
 		return err
 	}
 	setBoolOption(s.FSWatcherEnabled, saved.FSWatcherEnabled, &folder.FSWatcherEnabled)
 	setBoolOption(s.BlockIndexing, saved.BlockIndexing, &folder.BlockIndexing)
+	return nil
+}
+
+// applyDefaultsTo also sets the location and direction of new folders. The marker
+// stays unchanged: new folders are only created with the standard marker.
+func (s *FolderSettings) applyDefaultsTo(folder *config.FolderConfiguration) error {
+	if err := errors.Join(
+		setChoiceOption("folder type", s.Type, s.saved.Type, defaultFolderTypes, &folder.Type),
+		s.applyDefaultPath(folder),
+		s.applyScanSettingsTo(folder),
+	); err != nil {
+		return err
+	}
 	return s.applyTo(folder)
 }
 
@@ -437,12 +445,18 @@ func (fld *Folder) SetSettings(settings *FolderSettings) error {
 	if settings.saved == nil {
 		settings.saved = newFolderSettings(*current)
 	}
+	if settings.Equal(settings.saved) {
+		return nil
+	}
 	if err := settings.checkMarker(*current); err != nil {
 		return err
 	}
 	return fld.changeFolderCopy(func(folder *config.FolderConfiguration) error {
 		if settings.MarkerName != settings.saved.MarkerName {
 			folder.MarkerName = markerName(settings.MarkerName)
+		}
+		if err := settings.applyScanSettingsTo(folder); err != nil {
+			return err
 		}
 		return settings.applyTo(folder)
 	})

@@ -40,7 +40,7 @@ func TestNavigation(t *testing.T) {
 		if err := json.Unmarshal(raw, &request); err != nil {
 			return nil, err
 		}
-		if request.Section == "folder/advanced-fixture" {
+		if request.Section == "folder/advanced-fixture" || request.Section == "reset/defaults/folder" || request.Section == "reset/folder/test" {
 			return desktopapi.Editor{Token: "fixture", Fields: []desktopapi.Field{
 				{Path: "test", Label: "Test setting", Kind: "bool"},
 				{Path: "Copiers", Label: "Copiers", Kind: "string", Value: "7", IsAdvanced: true},
@@ -202,6 +202,30 @@ func TestNavigation(t *testing.T) {
 		t.Fatal("returning to an interrupted parent did not reload it")
 	}
 	d.goBack()
+	for _, section := range []string{"reset/defaults/folder", "reset/folder/test"} {
+		d.edit(section, "Reset Synchronization Settings")
+		waitNavigationUI(t, func() bool { return d.editor != "" })
+		if d.dirty {
+			t.Fatal("preview started with unrelated dirty state")
+		}
+		var notice bool
+		var visit func(gtk.Widgetter)
+		visit = func(widget gtk.Widgetter) {
+			w := gtk.BaseWidget(widget)
+			if label, ok := w.Cast().(*gtk.Label); ok && label.Text() == desktopapi.FolderResetDescription {
+				notice = true
+			}
+			for child := w.FirstChild(); child != nil; child = gtk.BaseWidget(child).NextSibling() {
+				visit(child)
+			}
+		}
+		visit(d.body)
+		if !notice {
+			t.Fatal("reset preview does not explain Save/Cancel scope")
+		}
+		d.goBack()
+		waitNavigationUI(t, func() bool { return d.editor == "" })
+	}
 	testFolderAdvanced(t, d, &rejectSave, &savedValues)
 	testManagementNavigation(t, d)
 	testBrowserNavigation(t, d)

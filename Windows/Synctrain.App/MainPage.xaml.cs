@@ -177,7 +177,7 @@ public sealed partial class MainPage : Page
         {
             var id = S(folder, "ID");
             Row(S(folder, "Label") is { Length: > 0 } label ? label : id, S(folder, "Path") + "\n" + S(folder, "State") + " " + S(folder, "Error"),
-                ActionButton("Browse", () => BrowseSync(id, "")), ActionButton("General", () => EditSettings("basic/folder/" + id)), ActionButton("Synchronization", () => EditSettings("folder/" + id)), ActionButton("Versioning", () => EditSettings("versioning/" + id)), ActionButton("Share…",()=>ShareFolder(id)), ActionButton("Ignore patterns",()=>Ignores(id)), ActionButton("Deleted files",()=>DeletedFiles(id)), ActionButton("Errors",()=>FolderErrors(id)),
+                ActionButton("Browse", () => BrowseSync(id, "")), ActionButton("General", () => EditSettings("basic/folder/" + id)), ActionButton("Synchronization", () => EditSettings("folder/" + id)), ActionButton("Reset Synchronization Settings…", () => EditSettings("reset/folder/" + id)), ActionButton("Versioning", () => EditSettings("versioning/" + id)), ActionButton("Share…",()=>ShareFolder(id)), ActionButton("Ignore patterns",()=>Ignores(id)), ActionButton("Deleted files",()=>DeletedFiles(id)), ActionButton("Errors",()=>FolderErrors(id)),
                 ActionButton(B(folder, "Paused") ? "Resume" : "Pause", () => EngineAction(B(folder, "Paused") ? "resume" : "pause", id)),
                 ActionButton("Rescan", () => EngineAction("rescan", id)),
                 ActionButton("Open folder",()=>OpenPath(S(folder,"Path"))),
@@ -209,6 +209,11 @@ public sealed partial class MainPage : Page
         await CloseEditor();
         var editor = await Call("settings.get", new { Section = section }); ShowBody(); Body.Children.Clear(); Commands.PrimaryCommands.Clear(); Heading.Text = "Settings";
         editorToken=S(editor,"token");
+        if (section.StartsWith("reset/", StringComparison.Ordinal))
+        {
+            Heading.Text = "Reset Synchronization Settings";
+            Text("Restore built-in synchronization defaults. Folder location, direction, sharing, ignore patterns, and versioning stay unchanged. Review the settings, then choose Save.");
+        }
         var values = new Dictionary<string, Func<string>>();
         var advancedFields = new StackPanel { Spacing = 12 };
         var advanced = new Expander
@@ -513,7 +518,7 @@ public sealed partial class MainPage : Page
         var toggle = new ToggleSwitch { Header = "Start at login", IsOn = startup.State == StartupTaskState.Enabled };
         toggle.Toggled += async (_, _) => await Run(async () => { if (toggle.IsOn) { var result = await startup.RequestEnableAsync(); if (result != StartupTaskState.Enabled) throw new InvalidOperationException("Windows has disabled startup for Synctrain. Enable it in Settings → Apps → Startup."); } else startup.Disable(); }); Body.Children.Add(toggle);
         if(mode=="synchronize")Body.Children.Add(ActionButton("Choose Explorer location…",ChooseLocation));
-        if (mode == "synchronize") foreach (var section in new[] { "options", "gui", "ldap", "defaults/folder", "defaults/versioning", "defaults/device", "defaults/ignores" }) Body.Children.Add(ActionButton(section switch { "options" => "Engine options", "gui" => "Web GUI and REST API", "ldap" => "LDAP", "defaults/folder" => "New folder defaults", "defaults/versioning" => "Default versioning", "defaults/device" => "New device defaults", _ => "Default ignore patterns" }, () => EditSettings(section)));
+        if (mode == "synchronize") foreach (var section in new[] { "options", "gui", "ldap", "defaults/folder", "reset/defaults/folder", "defaults/versioning", "defaults/device", "defaults/ignores" }) Body.Children.Add(ActionButton(section switch { "options" => "Engine options", "gui" => "Web GUI and REST API", "ldap" => "LDAP", "defaults/folder" => "New folder defaults", "reset/defaults/folder" => "Reset New Folder Defaults…", "defaults/versioning" => "Default versioning", "defaults/device" => "New device defaults", _ => "Default ignore patterns" }, () => EditSettings(section)));
         else
         {
             var storage = await Call("files.storage"); Text($"Download cache: {N(storage,"used") / 1048576.0:N1} MiB of {N(storage,"budget") / 1048576.0:N0} MiB");

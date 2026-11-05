@@ -135,6 +135,8 @@ func (f *AdvancedField) Options() *ListOfStrings {
 type AdvancedSection struct {
 	ID     string
 	fields []*AdvancedField
+	// Reset previews use the same synchronization validation as typed editors.
+	folderSyncBaseline *FolderSettings
 }
 
 func (s *AdvancedSection) FieldCount() int {
@@ -150,6 +152,11 @@ func (s *AdvancedSection) Equal(other *AdvancedSection) bool {
 	return s.ID == other.ID && slices.EqualFunc(s.fields, other.fields, func(a, b *AdvancedField) bool {
 		return a.Path == b.Path && a.saved == b.saved
 	})
+}
+
+// HasChanges reports whether this draft differs from its original configuration.
+func (s *AdvancedSection) HasChanges() bool {
+	return slices.ContainsFunc(s.fields, func(f *AdvancedField) bool { return f.Value != f.saved })
 }
 
 // advancedTarget is the struct of a configuration that a section edits, as a pointer
@@ -567,6 +574,15 @@ func (s *AdvancedSection) applyTo(conf *config.Configuration, ios bool) error {
 			return fmt.Errorf("%s: %w", field.Path, err)
 		}
 	}
+	if s.folderSyncBaseline != nil {
+		folder := target.(*config.FolderConfiguration)
+		settings := newFolderSettings(*folder)
+		settings.saved = s.folderSyncBaseline
+		if err := settings.applyScanSettingsTo(folder); err != nil {
+			return err
+		}
+		return settings.applyTo(folder)
+	}
 	return nil
 }
 
@@ -617,6 +633,9 @@ func (clt *Client) SaveAdvancedSection(section *AdvancedSection) error {
 	r := clt.currentRun()
 	if r == nil {
 		return ErrStillLoading
+	}
+	if !section.HasChanges() {
+		return nil
 	}
 	var invalid error
 	moved := false

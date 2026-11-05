@@ -9,11 +9,18 @@
 
 	/// What new folders and devices start with
 	struct DefaultsSettingsView: View {
+		@State private var showResetSettings = false
 		var body: some View {
 			Form {
 				Section {
 					NavigationLink("New folders") {
 						DefaultFolderSettingsView()
+					}
+					Button("Reset New Folder Defaults…", systemImage: "arrow.counterclockwise") {
+						showResetSettings = true
+					}
+					.sheet(isPresented: $showResetSettings) {
+						NavigationStack { FolderSyncResetSettingsView() }
 					}
 					NavigationLink("Metadata of new folders") {
 						DefaultFolderMetadataView()

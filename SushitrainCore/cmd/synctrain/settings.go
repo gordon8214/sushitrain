@@ -33,6 +33,7 @@ func (d *desktopUI) settings() {
 		{"Bandwidth", "Sending, receiving and LAN limits", "bandwidth"},
 		{"Engine", "Resource use, database and reporting", "engine"},
 		{"New Folder Defaults", "Defaults used when adding folders", "defaults/folder"},
+		{"Reset New Folder Defaults…", "Review built-in synchronization defaults before saving", "reset/defaults/folder"},
 		{"New Device Defaults", "Defaults used when adding devices", "defaults/device"},
 		{"Default Versioning", "Versioning for new folders", "defaults/versioning"},
 		{"Default Ignore Patterns", "One pattern per line", "defaults/ignores"},
@@ -106,6 +107,9 @@ func (d *desktopUI) editPage(section, title string) {
 				})
 				group.Add(r)
 			})
+		}
+		if strings.HasPrefix(section, "reset/") {
+			d.text(desktopapi.FolderResetDescription)
 		}
 		getters := map[string]func() string{}
 		g := d.group(title)

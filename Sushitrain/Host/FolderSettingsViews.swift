@@ -589,6 +589,73 @@
 		}
 	}
 
+	/// A whole-folder reset is reviewed separately from the normal partial editors.
+	struct FolderSyncResetSettingsView: View {
+		@Environment(AppState.self) private var appState
+		var folder: SushitrainFolder? = nil
+
+		var body: some View {
+			SettingsPage(
+				title: "Reset Synchronization Settings", isSheet: true,
+				load: {
+					if let folder { return folder.settings() }
+					return appState.client.defaultFolderSettings()
+				},
+				loadPreview: {
+					if let folder { return folder.resetSettingsPreview() }
+					return appState.client.defaultFolderResetSettingsPreview()
+				},
+				isEqual: { $0.equal($1) },
+				save: { [folder, client = appState.client] settings in
+					if let folder {
+						try folder.setSettings(settings)
+					}
+					else {
+						try client.setDefaultFolderSettings(settings)
+					}
+				},
+				content: { draft in
+					Section {
+						Text(
+							"Restore built-in synchronization defaults. Folder location, direction, sharing, ignore patterns, and versioning stay unchanged. Review the settings, then choose Save."
+						)
+					}
+					if folder != nil {
+						AdvancedFolderRestartNotice()
+					}
+					else {
+						Text("New Folder Defaults apply only to folders created in the future.")
+							.foregroundStyle(.secondary)
+					}
+					FolderResetScanSection(draft: draft)
+					FolderDiskSection(draft: draft)
+					FolderXattrSection(draft: draft)
+					FolderOwnershipSection(draft: draft)
+					FolderPermissionsSection(draft: draft)
+					FolderAdvancedSection {
+						FolderDefaultTuningSection(draft: draft)
+						FolderFilesSection(draft: draft)
+						FolderFileSystemSection(draft: draft, isDefaults: true)
+						FolderScanSection(draft: draft)
+						FolderTransferSection(draft: draft)
+						FolderXattrFilterSection(draft: draft)
+					}
+				}
+			)
+		}
+	}
+
+	private struct FolderResetScanSection: View {
+		@Binding var draft: SettingsDraft<SushitrainFolderSettings>
+
+		var body: some View {
+			Section("Change detection") {
+				SettingsNumberField(title: "Rescan interval", unit: "seconds", text: $draft.rescanIntervalS)
+				Toggle("Watch for changes", isOn: $draft.fsWatcherEnabled)
+			}
+		}
+	}
+
 	struct FolderVersioningSettingsView: View {
 		let folder: SushitrainFolder
 

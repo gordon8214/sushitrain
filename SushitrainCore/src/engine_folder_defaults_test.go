@@ -152,3 +152,11 @@ func TestEngineAcceptedSharesUseMetadataDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestResetDefaultsMatchFreshInstallation(t *testing.T) {
+	fresh := freshFolderDefaults(t)
+	preview := newFolderResetPreview(fresh)
+	if !preview.Equal(newFolderSettings(fresh)) {
+		t.Fatal("reset defaults differ from the actual fresh-install configuration")
+	}
+}
