@@ -16,8 +16,8 @@
 				GatewayStatusSection(showPairing: $showPairing)
 
 				if controller.isEnabled {
-					GatewayExportsSection()
-					GatewayClientsSection()
+					GatewayExportsSection().settingsAnchor("gateway.exports")
+					GatewayClientsSection().settingsAnchor("gateway.clients")
 					GatewayPendingOperationsSection()
 				}
 
@@ -54,7 +54,8 @@
 			Section {
 				Toggle(
 					"Remote file service",
-					isOn: Binding(get: { controller.isEnabled }, set: { controller.setEnabled($0) }))
+					isOn: Binding(get: { controller.isEnabled }, set: { controller.setEnabled($0) })
+				).settingsAnchor("gateway.enabled")
 
 				if controller.isEnabled {
 					LabeledContent("Status") {

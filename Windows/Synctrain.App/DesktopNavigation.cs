@@ -29,6 +29,7 @@ public sealed partial class MainPage
         try
         {
             var settings = page.StartsWith("settings:", StringComparison.Ordinal);
+            SettingsSearchBox.Visibility = settings ? Visibility.Visible : Visibility.Collapsed;
             var oldFiles = Navigation.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(item => item.Tag?.ToString() == "files");
             var expanded = oldFiles?.IsExpanded ?? true;
             Navigation.MenuItems.Clear();

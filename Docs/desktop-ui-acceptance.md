@@ -187,3 +187,97 @@ were unchanged. The previous app and configuration are backed up under
 This installation includes uncommitted settings-stack changes on top of `fa4aa99`; installation logs and source
 provenance are under `build/desktop-ui/deploy-settings-stack`. Native navigation interaction was checked in the isolated
 local fixtures; the remote installation check verified signing, launch, identity, and backend health.
+
+## Settings search
+
+Settings search now follows each frontend's native settings pattern: SwiftUI sidebar search on macOS, searchable
+navigation on iPhone and iPad, WinUI `NavigationView.AutoSuggestBox`, a GNOME header search button and `GtkSearchBar`,
+and a Kirigami search field above the KDE settings categories. Windows, GNOME, and KDE support Ctrl+F. Search results
+show the setting and its location. Empty queries restore the category list or mobile settings form.
+
+The index includes individual app preferences, all reflected engine configuration fields, default folder/device
+configuration, and each configured folder and device. Known fields open their existing dedicated editor; other fields
+open the existing expert editor with its warning. Results reveal the matching control and expand advanced fields when
+needed. Selecting a result never changes the setting. Search text changes preserve drafts; leaving an editor uses the
+existing Save, Back, and discard protections. Unavailable mode-specific results explain their requirement.
+
+`desktopui/catalog.json` owns static search descriptors and mappings from engine fields to their native destinations.
+Descriptors have stable IDs, titles, breadcrumbs, keywords, capability/platform filters, and action/section/field/anchor
+identities. Section mappings are templates, including `folder/*` and `device/*`; they are expanded from the current
+configuration. When adding a native preference, add its descriptor and a matching control anchor. Unmapped engine
+fields automatically remain searchable through the expert editor.
+
+`Client.SettingsSearchIndex`, internal `settings.index`, and Windows `desktop.settings.index` return metadata snapshots.
+They contain field names and owner labels, never current configuration values, secrets, drafts, or editor/save tokens.
+The native endpoints work with external MCP disabled. Matching is local, case/diacritic insensitive, requires every
+query word, and ranks exact and prefix title matches before keyword matches. Typing does not open editors or issue an
+RPC per keystroke. Snapshot refresh rejects results from a previous endpoint or mode.
+
+Verification for this change used bounded runs and isolated fixtures:
+
+| Target | Result |
+|---|---|
+| Apple builds | Universal macOS Go framework, macOS Debug app/extensions, and iOS Simulator Debug app built successfully |
+| Swift | 96 HostKit tests passed, including search matching, ranking, platform filtering, and snapshot replacement |
+| Go | `desktopui`, `src`, `enginecontrol`, and `hostbridge` passed; metadata tests check unique identities, real field mappings, unchanged configuration, and absence of values/tokens |
+| Windows | ARM64 and x64 Release MSIX packages and the ARM64 Debug app built with zero warnings/errors; native search tests passed with MCP disabled, including 65 index reads followed by opening an editor |
+| GNOME | Native `TestNavigation` passed in 1.46 seconds with `G_DEBUG=fatal-criticals`, covering metadata-only lookup, result navigation, invalid draft retention, discard cancellation, and query clearing |
+| KDE | All three Qt suites passed, including native QML search, advanced-field expansion, metadata-only lookup, and draft protection |
+| Linux packages | ARM64 common, GNOME, and KDE RPMs built successfully |
+| Source checks | Changed Swift files passed strict Swift formatting; Go files are gofmt formatted; `git diff --check` passed |
+
+Native macOS checks passed in isolated Files and Synchronize apps: locating cache settings, opening the exact
+connection-limit control, keyboard selection, retaining invalid text while searching, Keep Editing, retrying the same
+canceled result, and Discard. The retry check caught and fixed a sidebar selection issue. iPhone and iPad Simulator
+checks passed for result navigation, matching control identity, and Back retaining the query. iPhone checks also
+covered no results and clearing search. These checks did not save engine changes or use production identities.
+
+Windows guest input still fails with `noWindowsAvailable`; a preexisting `winhost.test` firewall prompt covers the
+guest. No firewall access was granted. The final isolated Debug app launched as the guest's interactive user and
+showed a responsive top-level window titled Synctrain. Interactive search remains unverified. Windows and Linux manual interaction, spoken accessibility, Windows x64
+execution, Linux x86-64 execution, and Intel Mac execution remain open. Native widget/QML tests and package builds
+do not establish those acceptance results.
+
+Mac fixture apps were stopped and the two disposable search simulators were removed. The isolated Windows Debug
+window and its test host remain running for review; existing installed Windows app instances were preserved.
+
+Local ignored evidence is under `build/settings-search/`: `core-build.log`, `mac-build.log`, `ios-build.log`,
+`swift-tests.log`, `go-tests.log`, `windows-build.log`, `windows-final-ui.log`, `windows-interactive-launch.log`,
+`windows-window-check.log`, `gtk-tests.log`, `qt-tests.log`, and
+`linux-packages.log`. Production installations and configuration were not changed by this search implementation.
+
+### Review and fix verification
+
+A subsequent code-quality review identified ten P2 findings and one P3 finding. All eleven were fixed in the working
+tree:
+
+- Three folder-field mappings now use the existing basic folder editor, which exposes and validates their controls.
+  A Linux native engine contract test expands the index and checks each mapped destination for its field or anchor.
+- GTK search always replaces the previous result's detail stack after the departure guard. Back cannot restore widgets
+  tied to a closed editor token. Metadata reads capture the resolved endpoint and release their loading ownership.
+  Native tests cover accepted same-category replacement, Back followed by a fresh Save, and initial socket resolution.
+- Mac GUI results open their actual editor. Conditional fields that the dedicated form omits use the expert editor
+  with the original field path. Both Finder location results open the location form. The LAN toggle and startup toggle
+  have their missing anchors, and section containers no longer mask their children's accessibility identifiers.
+- Mac index reads follow configuration generation and engine startup/restart state, with one read in flight and
+  coalesced invalidations. Ordinary synchronization events no longer rebuild the index. Tests cover overlapping reads,
+  cancellation, reset, and dedicated versus expert routing decisions.
+- Windows index loading is independent of parent rendering. Clearing a visible results page restores its category;
+  clearing while editing retains the draft. Visible results also follow metadata/query updates.
+- KDE Escape changes the backend query without removing the search field's binding. A native QML key-event test
+  verifies both Escape handlers, subsequent backend updates, and navigation away and back.
+
+Verification passed: 99 HostKit tests; focused Go suites on macOS and Linux ARM64; GTK navigation with fatal criticals
+in 0.76 seconds; all three Qt suites in 10.39 seconds; universal Mac Go framework; macOS app/extensions; iOS Simulator
+app; and Windows ARM64/x64 Release MSIX plus ARM64 Debug builds. Windows builds reported zero warnings/errors. Initial
+test-compilation errors in the new Swift refresh handler and Go fixture setup were corrected before these passing runs.
+Strict changed-file Swift formatting, gofmt, and `git diff --check` also passed.
+
+Isolated native Mac checks confirmed direct GUI navigation, an inactive LDAP field's expert fallback and focus,
+the startup control identity, and the Finder repair destination. The repaired Windows Debug app was relaunched with
+its isolated test host. Manual Windows/Linux search interaction and automated WinUI interaction regressions remain
+unverified; the existing guest-input blocker is unchanged.
+
+Review logs are under `build/settings-search/review/`, including `swift-tests.log`, `go-tests.log`,
+`linux-go-tests.log`, `gtk-tests.log`, `qt-tests.log`, `core-build.log`, `mac-build.log`, `ios-build.log`,
+`windows-build.log`, `windows-launch.log`, and `windows-window-check.log`.

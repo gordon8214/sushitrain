@@ -21,6 +21,7 @@ public struct DesktopUICatalog: Decodable, Sendable {
 	public let details: [String: [String]]
 	public let aliases: [String: String]
 	public let detailDescriptors: [String: [Detail]]
+	public let search: [SettingSearchEntry]
 	public struct Detail: Decodable, Identifiable, Sendable {
 		public let id, title, labelKey, capability: String
 	}

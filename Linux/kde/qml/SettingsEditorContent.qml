@@ -7,9 +7,17 @@ import org.kde.kirigami as Kirigami
 ColumnLayout {
  id: form
  property var fields: []
+ property string targetField: ""
+ property string targetAnchor: ""
+ signal revealRequested(Item item)
  property bool busy: false
  property bool expanded: false
  readonly property bool hasAdvanced: fields.some(field => field.IsAdvanced === true)
+ function reveal(loader) {
+  if ((!targetAnchor.length && !targetField.length) || ![targetAnchor.toLowerCase(), targetField.toLowerCase()].includes(String(loader.field.Path).toLowerCase())) return
+  if (loader.field.IsAdvanced && !expanded) expansionRequested(true)
+  Qt.callLater(() => { if (loader.item) { loader.item.forceActiveFocus(); revealRequested(loader.item) } })
+ }
  signal edited(string path, var value)
  signal expansionRequested(bool value)
  spacing: Kirigami.Units.largeSpacing
@@ -37,6 +45,7 @@ ColumnLayout {
   Loader {
    required property var modelData
    property var field: modelData
+   onLoaded: form.reveal(this)
    objectName: "editorField_" + field.Path
    Layout.fillWidth: true; Layout.minimumWidth: 0
    Kirigami.FormData.label: field.Kind === "bool" || field.Kind === "notice" ? "" : field.Label + ":"

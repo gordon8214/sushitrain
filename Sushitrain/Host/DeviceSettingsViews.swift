@@ -24,9 +24,10 @@
 					Text("Metadata only").tag("metadata")
 					Text("All data").tag("always")
 					Text("None").tag("never")
-				}
-				SettingsNumberField(title: "Upload limit", unit: "Mbit/s", text: $draft.maxSendMbits)
-				SettingsNumberField(title: "Download limit", unit: "Mbit/s", text: $draft.maxRecvMbits)
+				}.settingsAnchor("compression")
+				SettingsNumberField(title: "Upload limit", unit: "Mbit/s", text: $draft.maxSendMbits).settingsAnchor("maxSendMbits")
+				SettingsNumberField(title: "Download limit", unit: "Mbit/s", text: $draft.maxRecvMbits).settingsAnchor(
+					"maxRecvMbits")
 			} header: {
 				Text("Transfers")
 			} footer: {
@@ -38,9 +39,10 @@
 
 		private func foldersSection() -> some View {
 			Section {
-				Toggle("Accept folders automatically", isOn: $draft.autoAcceptFolders)
+				Toggle("Accept folders automatically", isOn: $draft.autoAcceptFolders).settingsAnchor("autoAcceptFolders")
 					.disabled(draft.settings.untrusted)
-				Toggle("Keep what an introducer stops sharing", isOn: $draft.skipIntroductionRemovals)
+				Toggle("Keep what an introducer stops sharing", isOn: $draft.skipIntroductionRemovals).settingsAnchor(
+					"skipIntroductionRemovals")
 			} header: {
 				Text("Folders")
 			} footer: {
@@ -52,7 +54,7 @@
 
 		private func networksSection() -> some View {
 			Section {
-				SettingsLinesEditor(title: "Allowed networks", text: $draft.allowedNetworks)
+				SettingsLinesEditor(title: "Allowed networks", text: $draft.allowedNetworks).settingsAnchor("allowedNetworks")
 			} header: {
 				Text("Allowed networks")
 			} footer: {
@@ -64,10 +66,11 @@
 
 		private func advancedSection() -> some View {
 			Section {
-				SettingsNumberField(title: "Connections", unit: "at once", text: $draft.numConnections)
-				SettingsNumberField(title: "Request size", unit: "KiB", text: $draft.maxRequestKiB)
-				TextField("Certificate name", text: $draft.certName, prompt: Text("Default"))
-				TextField("Web GUI port", text: $draft.remoteGUIPort)
+				SettingsNumberField(title: "Connections", unit: "at once", text: $draft.numConnections).settingsAnchor(
+					"numConnections")
+				SettingsNumberField(title: "Request size", unit: "KiB", text: $draft.maxRequestKiB).settingsAnchor("maxRequestKiB")
+				TextField("Certificate name", text: $draft.certName, prompt: Text("Default")).settingsAnchor("certName")
+				TextField("Web GUI port", text: $draft.remoteGUIPort).settingsAnchor("remoteGUIPort")
 			} header: {
 				Text("Advanced")
 			} footer: {

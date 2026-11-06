@@ -133,6 +133,7 @@ func (d *desktopUI) desktopSettings() {
 		d.preferences = next
 	})
 	g.Add(tray)
+	d.revealSetting("Tray", tray)
 	startup := adw.NewSwitchRow()
 	startup.SetTitle("Open the tray at login")
 	file := filepath.Join(configDir(), "autostart", "synctrain.desktop")
@@ -160,6 +161,7 @@ func (d *desktopUI) desktopSettings() {
 		}
 	})
 	g.Add(startup)
+	d.revealSetting("launchAtLogin", startup)
 	// Keep controls reachable even on a desktop without a tray host.
 	open := gtk.NewLabel("Closing this window leaves the background service running. Use Background Service controls or the tray’s Quit and Stop command to stop it.")
 	open.SetWrap(true)

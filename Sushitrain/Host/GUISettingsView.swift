@@ -66,9 +66,9 @@
 
 		@ViewBuilder private func connectionSection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				TextField("Address", text: draft.address, prompt: Text(verbatim: "127.0.0.1:8384"))
+				TextField("Address", text: draft.address, prompt: Text(verbatim: "127.0.0.1:8384")).settingsAnchor("address")
 					.disabled(isOverridden)
-				Toggle("Use HTTPS", isOn: draft.useTLS)
+				Toggle("Use HTTPS", isOn: draft.useTLS).settingsAnchor("useTLS")
 					.disabled(isOverridden)
 			} header: {
 				Text("Connection")
@@ -90,23 +90,29 @@
 				Picker("Sign in with", selection: draft.authMode) {
 					Text("User name and password").tag("static")
 					Text("LDAP server").tag("ldap")
-				}
+				}.settingsAnchor("authMode")
 				if usesLDAP {
 					TextField("Server address", text: draft.ldapAddress, prompt: Text(verbatim: "ldap.example.com:636"))
+						.settingsAnchor("ldapAddress")
 					Picker("Transport", selection: draft.ldapTransport) {
 						Text("Unencrypted").tag("plain")
 						Text(verbatim: "TLS").tag("tls")
 						Text(verbatim: "StartTLS").tag("starttls")
-					}
-					Toggle("Skip certificate verification", isOn: draft.ldapInsecureSkipVerify)
-					TextField("Bind DN", text: draft.ldapBindDN, prompt: Text(verbatim: "cn=%s,dc=example,dc=com"))
+					}.settingsAnchor("ldapTransport")
+					Toggle("Skip certificate verification", isOn: draft.ldapInsecureSkipVerify).settingsAnchor(
+						"ldapInsecureSkipVerify")
+					TextField("Bind DN", text: draft.ldapBindDN, prompt: Text(verbatim: "cn=%s,dc=example,dc=com")).settingsAnchor(
+						"ldapBindDN")
 					TextField("Search base DN", text: draft.ldapSearchBaseDN, prompt: Text(verbatim: "dc=example,dc=com"))
-					TextField("Search filter", text: draft.ldapSearchFilter, prompt: Text(verbatim: "(uid=%s)"))
+						.settingsAnchor("ldapSearchBaseDN")
+					TextField("Search filter", text: draft.ldapSearchFilter, prompt: Text(verbatim: "(uid=%s)")).settingsAnchor(
+						"ldapSearchFilter")
 				}
 				else {
-					TextField("User name", text: draft.user)
+					TextField("User name", text: draft.user).settingsAnchor("user")
 					SecureField(
-						"New password", text: draft.password, prompt: draft.wrappedValue.hasPassword ? Text("Unchanged") : nil)
+						"New password", text: draft.password, prompt: draft.wrappedValue.hasPassword ? Text("Unchanged") : nil
+					).settingsAnchor("password")
 				}
 				if draft.wrappedValue.settings.isExposed() {
 					Label(
@@ -145,16 +151,17 @@
 					if !Self.themes.contains(theme) {
 						Text(verbatim: theme).tag(theme)
 					}
-				}
-				Toggle("Use the browser's sign-in prompt", isOn: draft.sendBasicAuthPrompt)
-				Toggle("Allow metrics without signing in", isOn: draft.metricsWithoutAuth)
-				TextField("Session cookie lifetime (seconds)", text: $sessionCookieDuration)
+				}.settingsAnchor("theme")
+				Toggle("Use the browser's sign-in prompt", isOn: draft.sendBasicAuthPrompt).settingsAnchor("sendBasicAuthPrompt")
+				Toggle("Allow metrics without signing in", isOn: draft.metricsWithoutAuth).settingsAnchor("metricsWithoutAuth")
+				TextField("Session cookie lifetime (seconds)", text: $sessionCookieDuration).settingsAnchor("sessionCookieDuration")
 					.onChange(of: sessionCookieDuration) {
 						if let seconds = Int(sessionCookieDuration) {
 							draft.wrappedValue.sessionCookieDurationS = seconds
 						}
 					}
-				TextField("Session cookie path", text: draft.sessionCookiePath, prompt: Text(verbatim: "/"))
+				TextField("Session cookie path", text: draft.sessionCookiePath, prompt: Text(verbatim: "/")).settingsAnchor(
+					"sessionCookiePath")
 			} header: {
 				Text("Web GUI")
 			} footer: {
@@ -164,15 +171,15 @@
 
 		@ViewBuilder private func insecureSection(_ draft: Binding<Draft>) -> some View {
 			Section("Insecure settings") {
-				Toggle("Insecure admin access", isOn: draft.insecureAdminAccess)
+				Toggle("Insecure admin access", isOn: draft.insecureAdminAccess).settingsAnchor("insecureAdminAccess")
 				if draft.wrappedValue.insecureAdminAccess {
 					self.warning("The web GUI no longer warns when others can reach it without signing in.")
 				}
-				Toggle("Skip host check", isOn: draft.insecureSkipHostCheck)
+				Toggle("Skip host check", isOn: draft.insecureSkipHostCheck).settingsAnchor("insecureSkipHostCheck")
 				if draft.wrappedValue.insecureSkipHostCheck {
 					self.warning("Websites you visit can reach the web GUI on a local address through DNS rebinding.")
 				}
-				Toggle("Allow loading in frames", isOn: draft.insecureAllowFrameLoading)
+				Toggle("Allow loading in frames", isOn: draft.insecureAllowFrameLoading).settingsAnchor("insecureAllowFrameLoading")
 				if draft.wrappedValue.insecureAllowFrameLoading {
 					self.warning("Other websites can show the web GUI in a frame, and trick you into clicking in it.")
 				}

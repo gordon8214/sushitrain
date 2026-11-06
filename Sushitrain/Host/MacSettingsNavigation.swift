@@ -46,6 +46,8 @@
 		@ObservationIgnored private var pages: [MacSettingsRoute: (title: Text, content: AnyView)] = [:]
 		var isConfirmingDiscard = false
 		var editorRevision = 0
+		private(set) var searchTarget: SettingSearchEntry?
+		@ObservationIgnored private var pendingSearchNavigation: (() -> Void)?
 		@ObservationIgnored private let selectionKey: String
 
 		init(mode: MacSettingsMode) {
@@ -61,12 +63,45 @@
 		var isSaving: Bool { editors.values.contains { $0.state.isSaving } }
 		var hasChanges: Bool { editors.values.contains { $0.state.hasChanges } }
 		func discardForClosing() {
+			pendingSearchNavigation = nil
 			editors.removeAll()
 			resetStack()
 			editorRevision += 1
 		}
 
+		func requestSearch(_ entry: SettingSearchEntry?) {
+			guard entry?.id != searchTarget?.id else { return }
+			guardedSearchNavigation {
+				if let category = entry.flatMap({ MacSettingsCategory(rawValue: $0.category) }) {
+					self.policy.request(category, hasUnsavedChanges: false, isSaving: false)
+				}
+				self.searchTarget = entry
+				self.didNavigate()
+				self.editorRevision += 1
+			}
+		}
+
+		private func guardedSearchNavigation(_ action: @escaping () -> Void) {
+			guard !isSaving else { return }
+			if hasChanges {
+				pendingSearchNavigation = action
+				isConfirmingDiscard = true
+			}
+			else {
+				action()
+			}
+		}
+
 		func request(_ category: MacSettingsCategory) {
+			if searchTarget != nil {
+				guardedSearchNavigation {
+					self.searchTarget = nil
+					self.policy.request(category, hasUnsavedChanges: false, isSaving: false)
+					self.didNavigate()
+					self.editorRevision += 1
+				}
+				return
+			}
 			if policy.request(category, hasUnsavedChanges: hasChanges, isSaving: isSaving) {
 				self.didNavigate()
 			}
@@ -90,10 +125,21 @@
 			if stack.request(next, dirtyPages: dirty, isSaving: isSaving) { removeDepartedEditors() }
 			isConfirmingDiscard = stack.pendingPath != nil || policy.pendingSelection != nil
 		}
-		func requestBack() { if !path.isEmpty { requestPath(Array(path.dropLast())) } }
+		func requestBack() {
+			if !path.isEmpty {
+				requestPath(Array(path.dropLast()))
+			}
+			else if searchTarget != nil {
+				requestSearch(nil)
+			}
+		}
 
 		func discardChanges() {
-			if stack.pendingPath != nil {
+			if let action = pendingSearchNavigation {
+				pendingSearchNavigation = nil
+				action()
+			}
+			else if stack.pendingPath != nil {
 				if stack.discardChanges(isSaving: isSaving) { removeDepartedEditors() }
 			}
 			else if policy.discardChanges(isSaving: isSaving) {
@@ -103,6 +149,7 @@
 		}
 
 		func keepEditing() {
+			pendingSearchNavigation = nil
 			policy.keepEditing()
 			stack.keepEditing()
 			isConfirmingDiscard = false

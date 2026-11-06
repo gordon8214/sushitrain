@@ -67,18 +67,18 @@
 			Section {
 				LabeledContent("Minimum free disk space") {
 					HStack {
-						TextField("Minimum free disk space", text: draft.minHomeDiskFree)
+						TextField("Minimum free disk space", text: draft.minHomeDiskFree).settingsAnchor("minHomeDiskFree")
 							.labelsHidden()
 						Picker("Unit", selection: draft.minHomeDiskFreeUnit) {
 							ForEach(draft.wrappedValue.settings.minHomeDiskFreeUnits()?.asArray() ?? [], id: \.self) { unit in
 								Text(verbatim: unit).tag(unit)
 							}
-						}
-						.labelsHidden()
-						.fixedSize()
+						}.settingsAnchor("minHomeDiskFreeUnit")
+							.labelsHidden()
+							.fixedSize()
 					}
 				}
-				TextField("Keep temporary files (hours)", text: draft.keepTemporariesH)
+				TextField("Keep temporary files (hours)", text: draft.keepTemporariesH).settingsAnchor("keepTemporariesH")
 			} header: {
 				Text("Disk space")
 			} footer: {
@@ -96,7 +96,7 @@
 				EngineLimitField(
 					title: "Data for incoming requests", automaticTitle: "256 MiB", valueTitle: "Limit (KiB)",
 					customValue: "524288", text: draft.maxIncomingRequestKiB)
-				Toggle("Run at low priority", isOn: draft.lowPriority)
+				Toggle("Run at low priority", isOn: draft.lowPriority).settingsAnchor("lowPriority")
 			} header: {
 				Text("Performance")
 			} footer: {
@@ -108,8 +108,10 @@
 
 		private func indexSection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				TextField("Minimum blocks for a temporary index", text: draft.tempIndexMinBlocks)
-				Toggle("Send the full index after an upgrade", isOn: draft.sendFullIndexOnUpgrade)
+				TextField("Minimum blocks for a temporary index", text: draft.tempIndexMinBlocks).settingsAnchor(
+					"tempIndexMinBlocks")
+				Toggle("Send the full index after an upgrade", isOn: draft.sendFullIndexOnUpgrade).settingsAnchor(
+					"sendFullIndexOnUpgrade")
 			} header: {
 				Text("Indexes")
 			} footer: {
@@ -121,8 +123,9 @@
 
 		private func auditSection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				Toggle("Keep an audit log", isOn: draft.auditEnabled)
-				TextField("Audit log file", text: draft.auditFile, prompt: Text("A new file for each start"))
+				Toggle("Keep an audit log", isOn: draft.auditEnabled).settingsAnchor("auditEnabled")
+				TextField("Audit log file", text: draft.auditFile, prompt: Text("A new file for each start")).settingsAnchor(
+					"auditFile")
 			} header: {
 				Text("Audit log")
 			} footer: {
@@ -154,8 +157,8 @@
 
 		private func reportingSection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				Toggle("Send anonymous usage reports", isOn: draft.usageReporting)
-				Toggle("Send crash reports", isOn: draft.crashReporting)
+				Toggle("Send anonymous usage reports", isOn: draft.usageReporting).settingsAnchor("usageReporting")
+				Toggle("Send crash reports", isOn: draft.crashReporting).settingsAnchor("crashReporting")
 			} header: {
 				Text("Reporting")
 			} footer: {

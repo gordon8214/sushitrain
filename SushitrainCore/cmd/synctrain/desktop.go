@@ -21,6 +21,16 @@ import (
 )
 
 type desktopUI struct {
+	settingsSearchBar                                          *gtk.SearchBar
+	settingsSearchButton                                       *gtk.ToggleButton
+	settingsSearchEntry                                        *gtk.SearchEntry
+	settingsSearchStack                                        *gtk.Stack
+	settingsSearchResults                                      *gtk.ListBox
+	settingsSearchIndex                                        []desktopui.SearchEntry
+	settingsSearchError, searchTargetAnchor, searchTargetField string
+	settingsSearchLoading                                      bool
+	settingsSearchGeneration                                   uint64
+
 	resolveOnce                            sync.Once
 	resolveErr                             error
 	deviceID                               string
@@ -87,7 +97,7 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 	scroll := gtk.NewScrolledWindow()
 	scroll.SetVExpand(true)
 	scroll.SetChild(d.sidebar)
-	column.Append(scroll)
+	d.installSettingsSearch(h, column, scroll)
 	d.sidebarSettings = textButton("Settings", func() { d.guard(func() { d.navigate("Settings") }) })
 	column.Append(d.sidebarSettings)
 	side.SetContent(column)
@@ -124,6 +134,9 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 			return false
 		}
 		next := readPreferences()
+		if strings.HasPrefix(d.route, "settings:") && d.settingsSearchBar.SearchMode() && !d.saving {
+			d.loadSettingsSearch()
+		}
 		if next.Preferences != d.preferences.Preferences && !d.saving && !d.dirty {
 			d.preferences = next
 			_ = configureTray(next.Tray)
@@ -260,18 +273,24 @@ func (d *desktopUI) openFilesAt(folder, directory string, parent int64) {
 	}
 }
 
-func (d *desktopUI) request(ctx context.Context, method string, p, result any) error {
-	if d.mode == modeSynchronize {
+func (d *desktopUI) requestEndpoint(mode string) (string, error) {
+	if mode == modeSynchronize {
 		d.resolveOnce.Do(func() { home, err := describeHome(); d.socket = home.Socket; d.resolveErr = err })
 		if d.resolveErr != nil {
-			return d.resolveErr
+			return "", d.resolveErr
 		}
 	}
-	socket := d.socket
-	if d.mode == modeFiles {
-		socket = filesSocket()
+	if mode == modeFiles {
+		return filesSocket(), nil
 	}
+	return d.socket, nil
+}
 
+func (d *desktopUI) request(ctx context.Context, method string, p, result any) error {
+	socket, err := d.requestEndpoint(d.mode)
+	if err != nil {
+		return err
+	}
 	limit := 2 * time.Minute
 	if method == "history.pair" || method == "pair" {
 		limit = 11 * time.Minute
@@ -338,6 +357,7 @@ func (d *desktopUI) runWithFailure(method string, p any, done func(json.RawMessa
 		}
 
 		d.filesCacheInvalid = true
+		d.invalidateSettingsSearch()
 		if done != nil {
 			done(out)
 		} else {

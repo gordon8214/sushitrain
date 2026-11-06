@@ -27,6 +27,8 @@ Backend::Backend(QObject *parent) : QObject(parent), client(this) {
   auto *timer = new QTimer(this);
   timer->setInterval(2000);
   connect(timer, &QTimer::timeout, this, [this] {
+    if (m_page.startsWith("settings:") && !searchQuery.trimmed().isEmpty() && !m_busy)
+      loadSettingsIndex();
     if (m_page == "Overview" && m_title == "Overview" && activeReads == 0 &&
         !m_busy && m_dialog.isEmpty())
       refresh();
@@ -195,6 +197,7 @@ void Backend::inspect() {
         if (!configured.isEmpty())
           m_socket = configured;
         if(oldMode!=m_mode || oldSocket!=m_socket) {
+          ++searchGeneration;searchLoading=false;searchIndex={};searchError.clear();emit settingsSearchChanged();
           browserSnapshot.valid=false;browserSearch.clear();m_folder.clear();m_directory.clear();parentItem=0;parents.clear();
         }
         if (m_mode.isEmpty()) {
@@ -305,6 +308,10 @@ void Backend::cancelDialog() {
   emit dialogChanged();
   emit changed();
   if (closePending) { closePending = false; QTimer::singleShot(0, this, &Backend::closeReady); }
+  else if (!pendingSearchEntry.isEmpty()) {
+    const auto target = std::exchange(pendingSearchEntry,QJsonObject{});
+    QTimer::singleShot(0,this,[this,target]{openSettingsResult(target.toVariantMap());});
+  }
   else if (!pendingNavigation.isEmpty()) {
     const auto target = std::exchange(pendingNavigation, QString{});
     QTimer::singleShot(0, this, [this, target] { navigate(target); });
@@ -341,6 +348,7 @@ void Backend::navigate(const QString &page) {
     else { m_folder = target.mid(7); m_directory.clear(); }
     target = "Files";
   }
+  if(!target.startsWith("settings:")) { searchIndex={};searchQuery.clear();searchError.clear();emit settingsSearchChanged(); }
   if(target.startsWith("settings:") && !m_page.startsWith("settings:"))lastAppPage=m_page;
   m_page = target;
   emit navigationChanged();
@@ -622,6 +630,7 @@ void Backend::keepEditing() {
   if (!m_dialog.value("discard").toBool()) return;
   closePending = false;
   pendingNavigation.clear();
+  pendingSearchEntry={};
   m_dialog.remove("discard");
   m_dirty = true;
   emit dialogChanged(); emit changed();

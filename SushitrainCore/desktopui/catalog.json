@@ -285,7 +285,7 @@
         },
         {
           "id": "resetDefaults",
-          "title": "Reset Synchronization Defaults\u2026",
+          "title": "Reset Synchronization Defaults…",
           "capability": "synchronize",
           "action": "reset/defaults/folder",
           "labelKey": "desktop.settings.defaults.resetDefaults"
@@ -539,5 +539,2737 @@
         "capability": "always"
       }
     ]
-  }
+  },
+  "search": [
+    {
+      "id": "launchAtLogin",
+      "title": "Launch at login",
+      "breadcrumb": "General",
+      "category": "general",
+      "action": "startup",
+      "anchor": "launchAtLogin",
+      "capability": "always",
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ],
+      "keywords": [
+        "startup",
+        "autostart",
+        "login"
+      ]
+    },
+    {
+      "id": "menuFolderAction",
+      "title": "Folder access from menu",
+      "breadcrumb": "Integrations",
+      "category": "integrations",
+      "action": "menuAccess",
+      "anchor": "menuFolderAction",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "Finder",
+        "folders",
+        "menu bar"
+      ]
+    },
+    {
+      "id": "mcp",
+      "title": "Enable MCP",
+      "breadcrumb": "Integrations",
+      "category": "integrations",
+      "action": "mcp",
+      "anchor": "mcp",
+      "capability": "always",
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ],
+      "keywords": [
+        "assistant",
+        "model context protocol"
+      ]
+    },
+    {
+      "id": "cacheLimit",
+      "title": "Cache budget",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "storage",
+      "anchor": "cacheLimit",
+      "capability": "files",
+      "platforms": [
+        "macOS",
+        "ios",
+        "windows",
+        "gnome",
+        "kde"
+      ],
+      "keywords": [
+        "downloaded files",
+        "offline",
+        "storage",
+        "keep up to"
+      ]
+    },
+    {
+      "id": "hideDotFiles",
+      "title": "Hide dotfiles",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "previews",
+      "anchor": "hideDotFiles",
+      "capability": "always",
+      "platforms": [
+        "macOS",
+        "ios",
+        "gnome",
+        "kde"
+      ],
+      "keywords": [
+        "hidden files",
+        "display"
+      ]
+    },
+    {
+      "id": "viewerSort",
+      "title": "Sort by",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "previews",
+      "anchor": "viewerSort",
+      "capability": "files",
+      "platforms": [
+        "ios"
+      ],
+      "keywords": [
+        "display",
+        "name",
+        "date",
+        "size"
+      ]
+    },
+    {
+      "id": "deviceName",
+      "title": "Device name",
+      "breadcrumb": "General",
+      "category": "general",
+      "action": "name",
+      "anchor": "deviceName",
+      "capability": "files",
+      "platforms": [
+        "ios"
+      ],
+      "keywords": [
+        "identity",
+        "pairing"
+      ]
+    },
+    {
+      "id": "clearDownloads",
+      "title": "Clear Downloaded Files",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "storage",
+      "anchor": "clearDownloads",
+      "capability": "files",
+      "platforms": [
+        "ios"
+      ],
+      "keywords": [
+        "cache",
+        "storage"
+      ]
+    },
+    {
+      "id": "gateways",
+      "title": "Gateways",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "gateways",
+      "anchor": "gateways",
+      "capability": "files",
+      "platforms": [
+        "macOS",
+        "ios",
+        "windows",
+        "gnome",
+        "kde"
+      ],
+      "keywords": [
+        "pair",
+        "server",
+        "remote access"
+      ]
+    },
+    {
+      "id": "chooseFolders",
+      "title": "Choose Folders",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "chooseFolders",
+      "anchor": "chooseFolders",
+      "capability": "files",
+      "platforms": [
+        "ios"
+      ],
+      "keywords": [
+        "gateway",
+        "add",
+        "remove"
+      ]
+    },
+    {
+      "id": "historySources",
+      "title": "History Sources",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "historySources",
+      "anchor": "historySources",
+      "capability": "always",
+      "platforms": [
+        "macOS",
+        "ios",
+        "windows",
+        "gnome",
+        "kde"
+      ],
+      "keywords": [
+        "versions",
+        "gateway",
+        "pair",
+        "restore"
+      ]
+    },
+    {
+      "id": "filesLocation",
+      "title": "Files location",
+      "breadcrumb": "Integrations",
+      "category": "integrations",
+      "action": "fileManager",
+      "anchor": "filesLocation",
+      "capability": "files",
+      "platforms": [
+        "macOS",
+        "ios"
+      ],
+      "keywords": [
+        "Finder",
+        "Files app",
+        "rebuild",
+        "enable"
+      ]
+    },
+    {
+      "id": "engine.options.connectionLimitMax",
+      "title": "Maximum connections",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "connectionLimitMax",
+      "capability": "always",
+      "keywords": [
+        "connectionLimitMax"
+      ],
+      "section": "options",
+      "field": "connectionLimitMax"
+    },
+    {
+      "id": "engine.options.connectionPriorityTcpLan",
+      "title": "TCP on the local network",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "priorityTCPLAN",
+      "capability": "always",
+      "keywords": [
+        "priorityTCPLAN"
+      ],
+      "section": "options",
+      "field": "connectionPriorityTcpLan"
+    },
+    {
+      "id": "engine.options.connectionPriorityQuicLan",
+      "title": "QUIC on the local network",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "priorityQUICLAN",
+      "capability": "always",
+      "keywords": [
+        "priorityQUICLAN"
+      ],
+      "section": "options",
+      "field": "connectionPriorityQuicLan"
+    },
+    {
+      "id": "engine.options.connectionPriorityTcpWan",
+      "title": "TCP over the internet",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "priorityTCPWAN",
+      "capability": "always",
+      "keywords": [
+        "priorityTCPWAN"
+      ],
+      "section": "options",
+      "field": "connectionPriorityTcpWan"
+    },
+    {
+      "id": "engine.options.connectionPriorityQuicWan",
+      "title": "QUIC over the internet",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "priorityQUICWAN",
+      "capability": "always",
+      "keywords": [
+        "priorityQUICWAN"
+      ],
+      "section": "options",
+      "field": "connectionPriorityQuicWan"
+    },
+    {
+      "id": "engine.options.connectionPriorityRelay",
+      "title": "Relays",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "priorityRelay",
+      "capability": "always",
+      "keywords": [
+        "priorityRelay"
+      ],
+      "section": "options",
+      "field": "connectionPriorityRelay"
+    },
+    {
+      "id": "engine.options.connectionPriorityUpgradeThreshold",
+      "title": "Upgrade threshold",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "priorityUpgradeThreshold",
+      "capability": "always",
+      "keywords": [
+        "priorityUpgradeThreshold"
+      ],
+      "section": "options",
+      "field": "connectionPriorityUpgradeThreshold"
+    },
+    {
+      "id": "engine.options.reconnectionIntervalS",
+      "title": "Reconnection interval",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "reconnectionIntervalS",
+      "capability": "always",
+      "keywords": [
+        "reconnectionIntervalS"
+      ],
+      "section": "options",
+      "field": "reconnectionIntervalS"
+    },
+    {
+      "id": "engine.options.relayReconnectIntervalM",
+      "title": "Relay reconnection interval",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "relayReconnectIntervalM",
+      "capability": "always",
+      "keywords": [
+        "relayReconnectIntervalM"
+      ],
+      "section": "options",
+      "field": "relayReconnectIntervalM"
+    },
+    {
+      "id": "engine.options.localAnnouncePort",
+      "title": "Local announcement port",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "localAnnouncePort",
+      "capability": "always",
+      "keywords": [
+        "localAnnouncePort"
+      ],
+      "section": "options",
+      "field": "localAnnouncePort"
+    },
+    {
+      "id": "engine.options.localAnnounceMCAddr",
+      "title": "Local announcement address",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "localAnnounceMCAddr",
+      "capability": "always",
+      "keywords": [
+        "localAnnounceMCAddr"
+      ],
+      "section": "options",
+      "field": "localAnnounceMCAddr"
+    },
+    {
+      "id": "engine.options.natLeaseMinutes",
+      "title": "Port mapping lease",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "natLeaseMinutes",
+      "capability": "always",
+      "keywords": [
+        "natLeaseMinutes"
+      ],
+      "section": "options",
+      "field": "natLeaseMinutes"
+    },
+    {
+      "id": "engine.options.natRenewalMinutes",
+      "title": "Port mapping renewal",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "natRenewalMinutes",
+      "capability": "always",
+      "keywords": [
+        "natRenewalMinutes"
+      ],
+      "section": "options",
+      "field": "natRenewalMinutes"
+    },
+    {
+      "id": "engine.options.natTimeoutSeconds",
+      "title": "Port mapping timeout",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "natTimeoutSeconds",
+      "capability": "always",
+      "keywords": [
+        "natTimeoutSeconds"
+      ],
+      "section": "options",
+      "field": "natTimeoutSeconds"
+    },
+    {
+      "id": "engine.options.stunKeepaliveStartS",
+      "title": "STUN keepalive",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "stunKeepaliveStartS",
+      "capability": "always",
+      "keywords": [
+        "stunKeepaliveStartS"
+      ],
+      "section": "options",
+      "field": "stunKeepaliveStartS"
+    },
+    {
+      "id": "engine.options.alwaysLocalNets",
+      "title": "Always local networks",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "alwaysLocalNets",
+      "capability": "always",
+      "keywords": [
+        "alwaysLocalNets"
+      ],
+      "section": "options",
+      "field": "alwaysLocalNets"
+    },
+    {
+      "id": "engine.options.overwriteRemoteDeviceNamesOnConnect",
+      "title": "Use the names devices give themselves",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "connections",
+      "anchor": "overwriteRemoteDeviceNames",
+      "capability": "always",
+      "keywords": [
+        "overwriteRemoteDeviceNames"
+      ],
+      "section": "options",
+      "field": "overwriteRemoteDeviceNamesOnConnect"
+    },
+    {
+      "id": "engine.options.minHomeDiskFree.value",
+      "title": "Minimum free disk space",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "minHomeDiskFree",
+      "capability": "always",
+      "keywords": [
+        "minHomeDiskFree"
+      ],
+      "section": "options",
+      "field": "minHomeDiskFree.value"
+    },
+    {
+      "id": "engine.options.minHomeDiskFree.unit",
+      "title": "Unit",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "minHomeDiskFreeUnit",
+      "capability": "always",
+      "keywords": [
+        "minHomeDiskFreeUnit"
+      ],
+      "section": "options",
+      "field": "minHomeDiskFree.unit"
+    },
+    {
+      "id": "engine.options.keepTemporariesH",
+      "title": "Keep temporary files (hours)",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "keepTemporariesH",
+      "capability": "always",
+      "keywords": [
+        "keepTemporariesH"
+      ],
+      "section": "options",
+      "field": "keepTemporariesH"
+    },
+    {
+      "id": "engine.options.setLowPriority",
+      "title": "Run at low priority",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "lowPriority",
+      "capability": "always",
+      "keywords": [
+        "lowPriority"
+      ],
+      "section": "options",
+      "field": "setLowPriority"
+    },
+    {
+      "id": "engine.options.tempIndexMinBlocks",
+      "title": "Minimum blocks for a temporary index",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "tempIndexMinBlocks",
+      "capability": "always",
+      "keywords": [
+        "tempIndexMinBlocks"
+      ],
+      "section": "options",
+      "field": "tempIndexMinBlocks"
+    },
+    {
+      "id": "engine.options.sendFullIndexOnUpgrade",
+      "title": "Send the full index after an upgrade",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "sendFullIndexOnUpgrade",
+      "capability": "always",
+      "keywords": [
+        "sendFullIndexOnUpgrade"
+      ],
+      "section": "options",
+      "field": "sendFullIndexOnUpgrade"
+    },
+    {
+      "id": "engine.options.auditEnabled",
+      "title": "Keep an audit log",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "auditEnabled",
+      "capability": "always",
+      "keywords": [
+        "auditEnabled"
+      ],
+      "section": "options",
+      "field": "auditEnabled"
+    },
+    {
+      "id": "engine.options.auditFile",
+      "title": "Audit log file",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "auditFile",
+      "capability": "always",
+      "keywords": [
+        "auditFile"
+      ],
+      "section": "options",
+      "field": "auditFile"
+    },
+    {
+      "id": "engine.options.urAccepted",
+      "title": "Send anonymous usage reports",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "usageReporting",
+      "capability": "always",
+      "keywords": [
+        "usageReporting"
+      ],
+      "section": "options",
+      "field": "urAccepted"
+    },
+    {
+      "id": "engine.options.crashReportingEnabled",
+      "title": "Send crash reports",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "engine",
+      "anchor": "crashReporting",
+      "capability": "always",
+      "keywords": [
+        "crashReporting"
+      ],
+      "section": "options",
+      "field": "crashReportingEnabled"
+    },
+    {
+      "id": "engine.gui.address",
+      "title": "Address",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "address",
+      "capability": "always",
+      "keywords": [
+        "address"
+      ],
+      "section": "gui",
+      "field": "address"
+    },
+    {
+      "id": "engine.gui.useTLS",
+      "title": "Use HTTPS",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "useTLS",
+      "capability": "always",
+      "keywords": [
+        "useTLS"
+      ],
+      "section": "gui",
+      "field": "useTLS"
+    },
+    {
+      "id": "engine.gui.authMode",
+      "title": "Sign in with",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "authMode",
+      "capability": "always",
+      "keywords": [
+        "authMode"
+      ],
+      "section": "gui",
+      "field": "authMode"
+    },
+    {
+      "id": "engine.ldap.address",
+      "title": "Server address",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "ldapAddress",
+      "capability": "always",
+      "keywords": [
+        "ldapAddress"
+      ],
+      "section": "ldap",
+      "field": "address"
+    },
+    {
+      "id": "engine.ldap.transport",
+      "title": "Transport",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "ldapTransport",
+      "capability": "always",
+      "keywords": [
+        "ldapTransport"
+      ],
+      "section": "ldap",
+      "field": "transport"
+    },
+    {
+      "id": "engine.ldap.insecureSkipVerify",
+      "title": "Skip certificate verification",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "ldapInsecureSkipVerify",
+      "capability": "always",
+      "keywords": [
+        "ldapInsecureSkipVerify"
+      ],
+      "section": "ldap",
+      "field": "insecureSkipVerify"
+    },
+    {
+      "id": "engine.ldap.bindDN",
+      "title": "Bind DN",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "ldapBindDN",
+      "capability": "always",
+      "keywords": [
+        "ldapBindDN"
+      ],
+      "section": "ldap",
+      "field": "bindDN"
+    },
+    {
+      "id": "engine.ldap.searchBaseDN",
+      "title": "Search base DN",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "ldapSearchBaseDN",
+      "capability": "always",
+      "keywords": [
+        "ldapSearchBaseDN"
+      ],
+      "section": "ldap",
+      "field": "searchBaseDN"
+    },
+    {
+      "id": "engine.ldap.searchFilter",
+      "title": "Search filter",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "ldapSearchFilter",
+      "capability": "always",
+      "keywords": [
+        "ldapSearchFilter"
+      ],
+      "section": "ldap",
+      "field": "searchFilter"
+    },
+    {
+      "id": "engine.gui.user",
+      "title": "User name",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "user",
+      "capability": "always",
+      "keywords": [
+        "user"
+      ],
+      "section": "gui",
+      "field": "user"
+    },
+    {
+      "id": "engine.gui.theme",
+      "title": "Theme",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "theme",
+      "capability": "always",
+      "keywords": [
+        "theme"
+      ],
+      "section": "gui",
+      "field": "theme"
+    },
+    {
+      "id": "engine.gui.sendBasicAuthPrompt",
+      "title": "Use the browser's sign-in prompt",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "sendBasicAuthPrompt",
+      "capability": "always",
+      "keywords": [
+        "sendBasicAuthPrompt"
+      ],
+      "section": "gui",
+      "field": "sendBasicAuthPrompt"
+    },
+    {
+      "id": "engine.gui.metricsWithoutAuth",
+      "title": "Allow metrics without signing in",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "metricsWithoutAuth",
+      "capability": "always",
+      "keywords": [
+        "metricsWithoutAuth"
+      ],
+      "section": "gui",
+      "field": "metricsWithoutAuth"
+    },
+    {
+      "id": "engine.gui.sessionCookiePath",
+      "title": "Session cookie path",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "sessionCookiePath",
+      "capability": "always",
+      "keywords": [
+        "sessionCookiePath"
+      ],
+      "section": "gui",
+      "field": "sessionCookiePath"
+    },
+    {
+      "id": "engine.gui.insecureAdminAccess",
+      "title": "Insecure admin access",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "insecureAdminAccess",
+      "capability": "always",
+      "keywords": [
+        "insecureAdminAccess"
+      ],
+      "section": "gui",
+      "field": "insecureAdminAccess"
+    },
+    {
+      "id": "engine.gui.insecureSkipHostcheck",
+      "title": "Skip host check",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "insecureSkipHostCheck",
+      "capability": "always",
+      "keywords": [
+        "insecureSkipHostCheck"
+      ],
+      "section": "gui",
+      "field": "insecureSkipHostcheck"
+    },
+    {
+      "id": "engine.gui.insecureAllowFrameLoading",
+      "title": "Allow loading in frames",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "gui",
+      "anchor": "insecureAllowFrameLoading",
+      "capability": "always",
+      "keywords": [
+        "insecureAllowFrameLoading"
+      ],
+      "section": "gui",
+      "field": "insecureAllowFrameLoading"
+    },
+    {
+      "id": "engine.options.proxyEnabled",
+      "title": "Use a proxy",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "proxy",
+      "anchor": "enabled",
+      "capability": "synchronize",
+      "keywords": [
+        "enabled"
+      ],
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ]
+    },
+    {
+      "id": "engine.options.proxyUrl",
+      "title": "Proxy address",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "proxy",
+      "anchor": "url",
+      "capability": "synchronize",
+      "keywords": [
+        "url"
+      ],
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ]
+    },
+    {
+      "id": "engine.options.proxyUser",
+      "title": "User name",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "proxy",
+      "anchor": "user",
+      "capability": "synchronize",
+      "keywords": [
+        "user"
+      ],
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ]
+    },
+    {
+      "id": "engine.options.proxyPassword",
+      "title": "Password",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "proxy",
+      "anchor": "password",
+      "capability": "synchronize",
+      "keywords": [
+        "password"
+      ],
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ]
+    },
+    {
+      "id": "engine.options.proxyBypass",
+      "title": "Connect directly",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "proxy",
+      "anchor": "bypass",
+      "capability": "synchronize",
+      "keywords": [
+        "bypass"
+      ],
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ]
+    },
+    {
+      "id": "previewVideos",
+      "title": "Show video previews",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "previews",
+      "anchor": "previewVideos",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "previewVideos"
+      ]
+    },
+    {
+      "id": "tapFileToPreview",
+      "title": "Preview files on tap",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "previews",
+      "anchor": "tapFileToPreview",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "tapFileToPreview"
+      ]
+    },
+    {
+      "id": "automaticallySwitchViewStyle",
+      "title": "Automatically switch to grid view",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "previews",
+      "anchor": "automaticallySwitchViewStyle",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "automaticallySwitchViewStyle"
+      ]
+    },
+    {
+      "id": "automaticallyShowWebpages",
+      "title": "Automatically display web pages",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "previews",
+      "anchor": "automaticallyShowWebpages",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "automaticallyShowWebpages"
+      ]
+    },
+    {
+      "id": "cacheThumbnailsToDisk",
+      "title": "Cache thumbnails on disk",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "previews",
+      "anchor": "cacheThumbnailsToDisk",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "size",
+        "limit",
+        "thumbnail"
+      ]
+    },
+    {
+      "id": "cacheThumbnailsToFolderID",
+      "title": "Thumbnail cache location",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "previews",
+      "anchor": "cacheThumbnailsToFolderID",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "size",
+        "limit",
+        "thumbnail"
+      ]
+    },
+    {
+      "id": "linux.PreviewImages",
+      "title": "Preview images",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "app",
+      "anchor": "PreviewImages",
+      "capability": "always",
+      "platforms": [
+        "gnome",
+        "kde"
+      ],
+      "keywords": [
+        "preview",
+        "thumbnail"
+      ]
+    },
+    {
+      "id": "linux.PreviewMedia",
+      "title": "Preview audio and video",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "app",
+      "anchor": "PreviewMedia",
+      "capability": "always",
+      "platforms": [
+        "gnome",
+        "kde"
+      ],
+      "keywords": [
+        "preview",
+        "thumbnail"
+      ]
+    },
+    {
+      "id": "linux.ImageLimitMiB",
+      "title": "Maximum image preview size",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "app",
+      "anchor": "ImageLimitMiB",
+      "capability": "always",
+      "platforms": [
+        "gnome",
+        "kde"
+      ]
+    },
+    {
+      "id": "linux.Tray",
+      "title": "Show tray icon",
+      "breadcrumb": "General",
+      "category": "general",
+      "action": "app",
+      "anchor": "Tray",
+      "capability": "always",
+      "platforms": [
+        "gnome",
+        "kde"
+      ]
+    },
+    {
+      "id": "linux.Grid",
+      "title": "Grid view",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "app",
+      "anchor": "Grid",
+      "capability": "always",
+      "platforms": [
+        "gnome",
+        "kde"
+      ]
+    },
+    {
+      "id": "engine.options.listenAddresses",
+      "title": "Listening addresses",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "basic/options",
+      "anchor": "listenAddresses",
+      "capability": "always",
+      "keywords": [
+        "listenAddresses",
+        "listen",
+        "incoming",
+        "connections"
+      ],
+      "section": "options",
+      "field": "listenAddresses"
+    },
+    {
+      "id": "engine.options.globalAnnounceEnabled",
+      "title": "Global discovery",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "basic/options",
+      "anchor": "globalAnnounceEnabled",
+      "capability": "always",
+      "keywords": [
+        "globalAnnounceEnabled",
+        "discovery",
+        "announce globally"
+      ],
+      "section": "options",
+      "field": "globalAnnounceEnabled"
+    },
+    {
+      "id": "engine.options.globalAnnounceServers",
+      "title": "Global announce servers",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "basic/options",
+      "anchor": "globalAnnounceServers",
+      "capability": "always",
+      "keywords": [
+        "globalAnnounceServers",
+        "discovery",
+        "servers"
+      ],
+      "section": "options",
+      "field": "globalAnnounceServers"
+    },
+    {
+      "id": "engine.options.localAnnounceEnabled",
+      "title": "Local discovery",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "basic/options",
+      "anchor": "localAnnounceEnabled",
+      "capability": "always",
+      "keywords": [
+        "localAnnounceEnabled",
+        "discovery",
+        "announce on local networks"
+      ],
+      "section": "options",
+      "field": "localAnnounceEnabled"
+    },
+    {
+      "id": "engine.options.announceLANAddresses",
+      "title": "Announce LAN addresses",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "basic/options",
+      "anchor": "announceLANAddresses",
+      "capability": "always",
+      "keywords": [
+        "announceLANAddresses",
+        "discovery",
+        "LAN"
+      ],
+      "section": "options",
+      "field": "announceLANAddresses"
+    },
+    {
+      "id": "engine.options.relaysEnabled",
+      "title": "Enable relays",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "basic/options",
+      "anchor": "relaysEnabled",
+      "capability": "always",
+      "keywords": [
+        "relaysEnabled",
+        "relaying",
+        "relay"
+      ],
+      "section": "options",
+      "field": "relaysEnabled"
+    },
+    {
+      "id": "engine.options.natEnabled",
+      "title": "NAT traversal",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "basic/options",
+      "anchor": "natEnabled",
+      "capability": "always",
+      "keywords": [
+        "natEnabled",
+        "router",
+        "port mapping",
+        "UPnP",
+        "NAT-PMP"
+      ],
+      "section": "options",
+      "field": "natEnabled"
+    },
+    {
+      "id": "engine.options.stunServers",
+      "title": "STUN servers",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "basic/options",
+      "anchor": "stunServers",
+      "capability": "always",
+      "keywords": [
+        "stunServers",
+        "STUN",
+        "traversal"
+      ],
+      "section": "options",
+      "field": "stunServers"
+    },
+    {
+      "id": "engine.options.connectionLimitEnough",
+      "title": "Enough connections",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "basic/options",
+      "anchor": "enoughConnections",
+      "capability": "always",
+      "keywords": [
+        "connectionLimitEnough",
+        "one connection is enough"
+      ],
+      "section": "options",
+      "field": "connectionLimitEnough"
+    },
+    {
+      "id": "engine.options.maxRecvKbps",
+      "title": "Download limit",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "bandwidth",
+      "anchor": "maxRecvKbps",
+      "capability": "always",
+      "keywords": [
+        "bandwidth",
+        "speed",
+        "streaming",
+        "network"
+      ],
+      "section": "options",
+      "field": "maxRecvKbps"
+    },
+    {
+      "id": "engine.options.maxSendKbps",
+      "title": "Upload limit",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "bandwidth",
+      "anchor": "maxSendKbps",
+      "capability": "always",
+      "keywords": [
+        "bandwidth",
+        "speed",
+        "streaming",
+        "network"
+      ],
+      "section": "options",
+      "field": "maxSendKbps"
+    },
+    {
+      "id": "engine.options.limitBandwidthInLan",
+      "title": "Limit bandwidth on LAN",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "bandwidth",
+      "anchor": "limitBandwidthInLan",
+      "capability": "always",
+      "keywords": [
+        "bandwidth",
+        "speed",
+        "streaming",
+        "network"
+      ],
+      "section": "options",
+      "field": "limitBandwidthInLan"
+    },
+    {
+      "id": "engine.options.trafficClass",
+      "title": "Low priority traffic",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "bandwidth",
+      "anchor": "trafficClass",
+      "capability": "always",
+      "keywords": [
+        "bandwidth",
+        "speed",
+        "streaming",
+        "network"
+      ],
+      "section": "options",
+      "field": "trafficClass"
+    },
+    {
+      "id": "disableDevicesOnMetered",
+      "title": "On metered networks",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "policy",
+      "anchor": "disableDevicesOnMetered",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "automatic pausing",
+        "battery",
+        "power"
+      ]
+    },
+    {
+      "id": "disableDevicesOnCellular",
+      "title": "On cellular networks",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "policy",
+      "anchor": "disableDevicesOnCellular",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "automatic pausing",
+        "battery",
+        "power"
+      ]
+    },
+    {
+      "id": "disableDevicesInLowPowerMode",
+      "title": "In low power mode",
+      "breadcrumb": "Synchronization",
+      "category": "synchronization",
+      "action": "policy",
+      "anchor": "disableDevicesInLowPowerMode",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "automatic pausing",
+        "battery",
+        "power"
+      ]
+    },
+    {
+      "id": "inMenuBar",
+      "title": "Show in menu bar",
+      "breadcrumb": "General",
+      "category": "general",
+      "action": "presence",
+      "anchor": "inMenuBar",
+      "capability": "always",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "background",
+        "presence"
+      ]
+    },
+    {
+      "id": "inDock",
+      "title": "Show in Dock",
+      "breadcrumb": "General",
+      "category": "general",
+      "action": "presence",
+      "anchor": "inDock",
+      "capability": "always",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "background",
+        "presence"
+      ]
+    },
+    {
+      "id": "streamingLimitMbitsPerSec",
+      "title": "Limit streaming bandwidth",
+      "breadcrumb": "Network",
+      "category": "network",
+      "action": "bandwidth",
+      "anchor": "streamingLimitMbitsPerSec",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "speed",
+        "network"
+      ]
+    },
+    {
+      "id": "maxBytesForPreview",
+      "title": "Show image previews",
+      "breadcrumb": "Files & Storage",
+      "category": "filesAndStorage",
+      "action": "previews",
+      "anchor": "maxBytesForPreview",
+      "capability": "synchronize",
+      "platforms": [
+        "macOS"
+      ],
+      "keywords": [
+        "size",
+        "limit",
+        "thumbnail"
+      ]
+    },
+    {
+      "id": "filesRebuild",
+      "title": "Rebuild Synctrain location",
+      "breadcrumb": "Integrations",
+      "category": "integrations",
+      "action": "fileManager",
+      "anchor": "filesRebuild",
+      "capability": "files",
+      "platforms": [
+        "macOS",
+        "ios"
+      ],
+      "keywords": [
+        "Finder",
+        "Files app",
+        "repair"
+      ]
+    },
+    {
+      "id": "engine.folder/*.fsWatcherDelayS",
+      "title": "Watcher delay",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "basic/folder/$id",
+      "anchor": "fsWatcherDelayS",
+      "capability": "synchronize",
+      "keywords": [
+        "fsWatcherDelayS"
+      ],
+      "section": "folder/*",
+      "field": "fsWatcherDelayS"
+    },
+    {
+      "id": "engine.defaults/folder.fsWatcherDelayS",
+      "title": "Watcher delay",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "fsWatcherDelayS",
+      "capability": "synchronize",
+      "keywords": [
+        "fsWatcherDelayS"
+      ],
+      "section": "defaults/folder",
+      "field": "fsWatcherDelayS"
+    },
+    {
+      "id": "engine.folder/*.maxConflicts",
+      "title": "Maximum conflict copies",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "basic/folder/$id",
+      "anchor": "maxConflicts",
+      "capability": "synchronize",
+      "keywords": [
+        "maxConflicts"
+      ],
+      "section": "folder/*",
+      "field": "maxConflicts"
+    },
+    {
+      "id": "engine.defaults/folder.maxConflicts",
+      "title": "Maximum conflict copies",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "maxConflicts",
+      "capability": "synchronize",
+      "keywords": [
+        "maxConflicts"
+      ],
+      "section": "defaults/folder",
+      "field": "maxConflicts"
+    },
+    {
+      "id": "engine.folder/*.blockIndexing",
+      "title": "Block indexing",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "basic/folder/$id",
+      "anchor": "blockIndexing",
+      "capability": "synchronize",
+      "keywords": [
+        "blockIndexing"
+      ],
+      "section": "folder/*",
+      "field": "blockIndexing"
+    },
+    {
+      "id": "engine.defaults/folder.blockIndexing",
+      "title": "Block indexing",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "blockIndexing",
+      "capability": "synchronize",
+      "keywords": [
+        "blockIndexing"
+      ],
+      "section": "defaults/folder",
+      "field": "blockIndexing"
+    },
+    {
+      "id": "engine.folder/*.order",
+      "title": "File pull order",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "order",
+      "capability": "synchronize",
+      "keywords": [
+        "order"
+      ],
+      "section": "folder/*",
+      "field": "order"
+    },
+    {
+      "id": "engine.defaults/folder.order",
+      "title": "File pull order",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "order",
+      "capability": "synchronize",
+      "keywords": [
+        "order"
+      ],
+      "section": "defaults/folder",
+      "field": "order"
+    },
+    {
+      "id": "engine.folder/*.ignoreDelete",
+      "title": "Ignore deletions from other devices",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "ignoreDelete",
+      "capability": "synchronize",
+      "keywords": [
+        "ignoreDelete"
+      ],
+      "section": "folder/*",
+      "field": "ignoreDelete"
+    },
+    {
+      "id": "engine.defaults/folder.ignoreDelete",
+      "title": "Ignore deletions from other devices",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "ignoreDelete",
+      "capability": "synchronize",
+      "keywords": [
+        "ignoreDelete"
+      ],
+      "section": "defaults/folder",
+      "field": "ignoreDelete"
+    },
+    {
+      "id": "engine.folder/*.caseSensitiveFS",
+      "title": "Case-sensitive file names",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "caseSensitiveFS",
+      "capability": "synchronize",
+      "keywords": [
+        "caseSensitiveFS"
+      ],
+      "section": "folder/*",
+      "field": "caseSensitiveFS"
+    },
+    {
+      "id": "engine.defaults/folder.caseSensitiveFS",
+      "title": "Case-sensitive file names",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "caseSensitiveFS",
+      "capability": "synchronize",
+      "keywords": [
+        "caseSensitiveFS"
+      ],
+      "section": "defaults/folder",
+      "field": "caseSensitiveFS"
+    },
+    {
+      "id": "engine.folder/*.autoNormalize",
+      "title": "Normalize file names",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "autoNormalize",
+      "capability": "synchronize",
+      "keywords": [
+        "autoNormalize"
+      ],
+      "section": "folder/*",
+      "field": "autoNormalize"
+    },
+    {
+      "id": "engine.defaults/folder.autoNormalize",
+      "title": "Normalize file names",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "autoNormalize",
+      "capability": "synchronize",
+      "keywords": [
+        "autoNormalize"
+      ],
+      "section": "defaults/folder",
+      "field": "autoNormalize"
+    },
+    {
+      "id": "engine.folder/*.disableSparseFiles",
+      "title": "No sparse files",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "disableSparseFiles",
+      "capability": "synchronize",
+      "keywords": [
+        "disableSparseFiles"
+      ],
+      "section": "folder/*",
+      "field": "disableSparseFiles"
+    },
+    {
+      "id": "engine.defaults/folder.disableSparseFiles",
+      "title": "No sparse files",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "disableSparseFiles",
+      "capability": "synchronize",
+      "keywords": [
+        "disableSparseFiles"
+      ],
+      "section": "defaults/folder",
+      "field": "disableSparseFiles"
+    },
+    {
+      "id": "engine.folder/*.disableFsync",
+      "title": "Don't wait for writes to reach the disk",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "disableFsync",
+      "capability": "synchronize",
+      "keywords": [
+        "disableFsync"
+      ],
+      "section": "folder/*",
+      "field": "disableFsync"
+    },
+    {
+      "id": "engine.defaults/folder.disableFsync",
+      "title": "Don't wait for writes to reach the disk",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "disableFsync",
+      "capability": "synchronize",
+      "keywords": [
+        "disableFsync"
+      ],
+      "section": "defaults/folder",
+      "field": "disableFsync"
+    },
+    {
+      "id": "engine.folder/*.modTimeWindowS",
+      "title": "Modification time window",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "modTimeWindowS",
+      "capability": "synchronize",
+      "keywords": [
+        "modTimeWindowS"
+      ],
+      "section": "folder/*",
+      "field": "modTimeWindowS"
+    },
+    {
+      "id": "engine.defaults/folder.modTimeWindowS",
+      "title": "Modification time window",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "modTimeWindowS",
+      "capability": "synchronize",
+      "keywords": [
+        "modTimeWindowS"
+      ],
+      "section": "defaults/folder",
+      "field": "modTimeWindowS"
+    },
+    {
+      "id": "engine.folder/*.markerName",
+      "title": "Folder marker",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "markerName",
+      "capability": "synchronize",
+      "keywords": [
+        "markerName"
+      ],
+      "section": "folder/*",
+      "field": "markerName"
+    },
+    {
+      "id": "engine.defaults/folder.markerName",
+      "title": "Folder marker",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "markerName",
+      "capability": "synchronize",
+      "keywords": [
+        "markerName"
+      ],
+      "section": "defaults/folder",
+      "field": "markerName"
+    },
+    {
+      "id": "engine.folder/*.fsWatcherTimeoutS",
+      "title": "Watcher timeout",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "fsWatcherTimeoutS",
+      "capability": "synchronize",
+      "keywords": [
+        "fsWatcherTimeoutS"
+      ],
+      "section": "folder/*",
+      "field": "fsWatcherTimeoutS"
+    },
+    {
+      "id": "engine.defaults/folder.fsWatcherTimeoutS",
+      "title": "Watcher timeout",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "fsWatcherTimeoutS",
+      "capability": "synchronize",
+      "keywords": [
+        "fsWatcherTimeoutS"
+      ],
+      "section": "defaults/folder",
+      "field": "fsWatcherTimeoutS"
+    },
+    {
+      "id": "engine.folder/*.scanProgressIntervalS",
+      "title": "Scan progress interval",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "scanProgressIntervalS",
+      "capability": "synchronize",
+      "keywords": [
+        "scanProgressIntervalS"
+      ],
+      "section": "folder/*",
+      "field": "scanProgressIntervalS"
+    },
+    {
+      "id": "engine.defaults/folder.scanProgressIntervalS",
+      "title": "Scan progress interval",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "scanProgressIntervalS",
+      "capability": "synchronize",
+      "keywords": [
+        "scanProgressIntervalS"
+      ],
+      "section": "defaults/folder",
+      "field": "scanProgressIntervalS"
+    },
+    {
+      "id": "engine.folder/*.copiers",
+      "title": "Copiers",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "copiers",
+      "capability": "synchronize",
+      "keywords": [
+        "copiers"
+      ],
+      "section": "folder/*",
+      "field": "copiers"
+    },
+    {
+      "id": "engine.defaults/folder.copiers",
+      "title": "Copiers",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "copiers",
+      "capability": "synchronize",
+      "keywords": [
+        "copiers"
+      ],
+      "section": "defaults/folder",
+      "field": "copiers"
+    },
+    {
+      "id": "engine.folder/*.hashers",
+      "title": "Hashers",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "hashers",
+      "capability": "synchronize",
+      "keywords": [
+        "hashers"
+      ],
+      "section": "folder/*",
+      "field": "hashers"
+    },
+    {
+      "id": "engine.defaults/folder.hashers",
+      "title": "Hashers",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "hashers",
+      "capability": "synchronize",
+      "keywords": [
+        "hashers"
+      ],
+      "section": "defaults/folder",
+      "field": "hashers"
+    },
+    {
+      "id": "engine.folder/*.maxConcurrentWrites",
+      "title": "Files written at once",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "maxConcurrentWrites",
+      "capability": "synchronize",
+      "keywords": [
+        "maxConcurrentWrites"
+      ],
+      "section": "folder/*",
+      "field": "maxConcurrentWrites"
+    },
+    {
+      "id": "engine.defaults/folder.maxConcurrentWrites",
+      "title": "Files written at once",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "maxConcurrentWrites",
+      "capability": "synchronize",
+      "keywords": [
+        "maxConcurrentWrites"
+      ],
+      "section": "defaults/folder",
+      "field": "maxConcurrentWrites"
+    },
+    {
+      "id": "engine.folder/*.pullerMaxPendingKiB",
+      "title": "Pending data",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "pullerMaxPendingKiB",
+      "capability": "synchronize",
+      "keywords": [
+        "pullerMaxPendingKiB"
+      ],
+      "section": "folder/*",
+      "field": "pullerMaxPendingKiB"
+    },
+    {
+      "id": "engine.defaults/folder.pullerMaxPendingKiB",
+      "title": "Pending data",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "pullerMaxPendingKiB",
+      "capability": "synchronize",
+      "keywords": [
+        "pullerMaxPendingKiB"
+      ],
+      "section": "defaults/folder",
+      "field": "pullerMaxPendingKiB"
+    },
+    {
+      "id": "engine.folder/*.pullerDelayS",
+      "title": "Delay before pulling",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "pullerDelayS",
+      "capability": "synchronize",
+      "keywords": [
+        "pullerDelayS"
+      ],
+      "section": "folder/*",
+      "field": "pullerDelayS"
+    },
+    {
+      "id": "engine.defaults/folder.pullerDelayS",
+      "title": "Delay before pulling",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "pullerDelayS",
+      "capability": "synchronize",
+      "keywords": [
+        "pullerDelayS"
+      ],
+      "section": "defaults/folder",
+      "field": "pullerDelayS"
+    },
+    {
+      "id": "engine.folder/*.pullerPauseS",
+      "title": "Pause after a failure",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "pullerPauseS",
+      "capability": "synchronize",
+      "keywords": [
+        "pullerPauseS"
+      ],
+      "section": "folder/*",
+      "field": "pullerPauseS"
+    },
+    {
+      "id": "engine.defaults/folder.pullerPauseS",
+      "title": "Pause after a failure",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "pullerPauseS",
+      "capability": "synchronize",
+      "keywords": [
+        "pullerPauseS"
+      ],
+      "section": "defaults/folder",
+      "field": "pullerPauseS"
+    },
+    {
+      "id": "engine.folder/*.blockPullOrder",
+      "title": "Block pull order",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "blockPullOrder",
+      "capability": "synchronize",
+      "keywords": [
+        "blockPullOrder"
+      ],
+      "section": "folder/*",
+      "field": "blockPullOrder"
+    },
+    {
+      "id": "engine.defaults/folder.blockPullOrder",
+      "title": "Block pull order",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "blockPullOrder",
+      "capability": "synchronize",
+      "keywords": [
+        "blockPullOrder"
+      ],
+      "section": "defaults/folder",
+      "field": "blockPullOrder"
+    },
+    {
+      "id": "engine.folder/*.copyRangeMethod",
+      "title": "Copy method",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "blockCopyMethod",
+      "capability": "synchronize",
+      "keywords": [
+        "blockCopyMethod"
+      ],
+      "section": "folder/*",
+      "field": "copyRangeMethod"
+    },
+    {
+      "id": "engine.defaults/folder.copyRangeMethod",
+      "title": "Copy method",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "blockCopyMethod",
+      "capability": "synchronize",
+      "keywords": [
+        "blockCopyMethod"
+      ],
+      "section": "defaults/folder",
+      "field": "copyRangeMethod"
+    },
+    {
+      "id": "engine.folder/*.syncXattrs",
+      "title": "Synchronize extended attributes",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "syncXattrs",
+      "capability": "synchronize",
+      "keywords": [
+        "syncXattrs"
+      ],
+      "section": "folder/*",
+      "field": "syncXattrs"
+    },
+    {
+      "id": "engine.defaults/folder.syncXattrs",
+      "title": "Synchronize extended attributes",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "syncXattrs",
+      "capability": "synchronize",
+      "keywords": [
+        "syncXattrs"
+      ],
+      "section": "defaults/folder",
+      "field": "syncXattrs"
+    },
+    {
+      "id": "engine.folder/*.xattrFilter.macOSMode",
+      "title": "Attributes on macOS",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "xattrMode",
+      "capability": "synchronize",
+      "keywords": [
+        "xattrMode"
+      ],
+      "section": "folder/*",
+      "field": "xattrFilter.macOSMode"
+    },
+    {
+      "id": "engine.defaults/folder.xattrFilter.macOSMode",
+      "title": "Attributes on macOS",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "xattrMode",
+      "capability": "synchronize",
+      "keywords": [
+        "xattrMode"
+      ],
+      "section": "defaults/folder",
+      "field": "xattrFilter.macOSMode"
+    },
+    {
+      "id": "engine.folder/*.xattrFilter.maxSingleEntrySize",
+      "title": "Largest attribute",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "xattrMaxSingleEntrySize",
+      "capability": "synchronize",
+      "keywords": [
+        "xattrMaxSingleEntrySize"
+      ],
+      "section": "folder/*",
+      "field": "xattrFilter.maxSingleEntrySize"
+    },
+    {
+      "id": "engine.defaults/folder.xattrFilter.maxSingleEntrySize",
+      "title": "Largest attribute",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "xattrMaxSingleEntrySize",
+      "capability": "synchronize",
+      "keywords": [
+        "xattrMaxSingleEntrySize"
+      ],
+      "section": "defaults/folder",
+      "field": "xattrFilter.maxSingleEntrySize"
+    },
+    {
+      "id": "engine.folder/*.xattrFilter.maxTotalSize",
+      "title": "Attributes per file",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "xattrMaxTotalSize",
+      "capability": "synchronize",
+      "keywords": [
+        "xattrMaxTotalSize"
+      ],
+      "section": "folder/*",
+      "field": "xattrFilter.maxTotalSize"
+    },
+    {
+      "id": "engine.defaults/folder.xattrFilter.maxTotalSize",
+      "title": "Attributes per file",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "xattrMaxTotalSize",
+      "capability": "synchronize",
+      "keywords": [
+        "xattrMaxTotalSize"
+      ],
+      "section": "defaults/folder",
+      "field": "xattrFilter.maxTotalSize"
+    },
+    {
+      "id": "engine.folder/*.syncOwnership",
+      "title": "Synchronize ownership",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "syncOwnership",
+      "capability": "synchronize",
+      "keywords": [
+        "syncOwnership"
+      ],
+      "section": "folder/*",
+      "field": "syncOwnership"
+    },
+    {
+      "id": "engine.defaults/folder.syncOwnership",
+      "title": "Synchronize ownership",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "syncOwnership",
+      "capability": "synchronize",
+      "keywords": [
+        "syncOwnership"
+      ],
+      "section": "defaults/folder",
+      "field": "syncOwnership"
+    },
+    {
+      "id": "engine.folder/*.copyOwnershipFromParent",
+      "title": "Copy ownership from the parent directory",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "copyOwnershipFromParent",
+      "capability": "synchronize",
+      "keywords": [
+        "copyOwnershipFromParent"
+      ],
+      "section": "folder/*",
+      "field": "copyOwnershipFromParent"
+    },
+    {
+      "id": "engine.defaults/folder.copyOwnershipFromParent",
+      "title": "Copy ownership from the parent directory",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "copyOwnershipFromParent",
+      "capability": "synchronize",
+      "keywords": [
+        "copyOwnershipFromParent"
+      ],
+      "section": "defaults/folder",
+      "field": "copyOwnershipFromParent"
+    },
+    {
+      "id": "engine.folder/*.ignorePerms",
+      "title": "Ignore permissions",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "folder/$id",
+      "anchor": "ignorePerms",
+      "capability": "synchronize",
+      "keywords": [
+        "ignorePerms"
+      ],
+      "section": "folder/*",
+      "field": "ignorePerms"
+    },
+    {
+      "id": "engine.defaults/folder.ignorePerms",
+      "title": "Ignore permissions",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "ignorePerms",
+      "capability": "synchronize",
+      "keywords": [
+        "ignorePerms"
+      ],
+      "section": "defaults/folder",
+      "field": "ignorePerms"
+    },
+    {
+      "id": "engine.device/*.compression",
+      "title": "Compression",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "compression",
+      "capability": "synchronize",
+      "keywords": [
+        "compression"
+      ],
+      "section": "device/*",
+      "field": "compression"
+    },
+    {
+      "id": "engine.defaults/device.compression",
+      "title": "Compression",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "compression",
+      "capability": "synchronize",
+      "keywords": [
+        "compression"
+      ],
+      "section": "defaults/device",
+      "field": "compression"
+    },
+    {
+      "id": "engine.device/*.maxSendKbps",
+      "title": "Upload limit",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "maxSendMbits",
+      "capability": "synchronize",
+      "keywords": [
+        "maxSendMbits"
+      ],
+      "section": "device/*",
+      "field": "maxSendKbps"
+    },
+    {
+      "id": "engine.defaults/device.maxSendKbps",
+      "title": "Upload limit",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "maxSendMbits",
+      "capability": "synchronize",
+      "keywords": [
+        "maxSendMbits"
+      ],
+      "section": "defaults/device",
+      "field": "maxSendKbps"
+    },
+    {
+      "id": "engine.device/*.maxRecvKbps",
+      "title": "Download limit",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "maxRecvMbits",
+      "capability": "synchronize",
+      "keywords": [
+        "maxRecvMbits"
+      ],
+      "section": "device/*",
+      "field": "maxRecvKbps"
+    },
+    {
+      "id": "engine.defaults/device.maxRecvKbps",
+      "title": "Download limit",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "maxRecvMbits",
+      "capability": "synchronize",
+      "keywords": [
+        "maxRecvMbits"
+      ],
+      "section": "defaults/device",
+      "field": "maxRecvKbps"
+    },
+    {
+      "id": "engine.device/*.autoAcceptFolders",
+      "title": "Accept folders automatically",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "autoAcceptFolders",
+      "capability": "synchronize",
+      "keywords": [
+        "autoAcceptFolders"
+      ],
+      "section": "device/*",
+      "field": "autoAcceptFolders"
+    },
+    {
+      "id": "engine.defaults/device.autoAcceptFolders",
+      "title": "Accept folders automatically",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "autoAcceptFolders",
+      "capability": "synchronize",
+      "keywords": [
+        "autoAcceptFolders"
+      ],
+      "section": "defaults/device",
+      "field": "autoAcceptFolders"
+    },
+    {
+      "id": "engine.device/*.skipIntroductionRemovals",
+      "title": "Keep what an introducer stops sharing",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "skipIntroductionRemovals",
+      "capability": "synchronize",
+      "keywords": [
+        "skipIntroductionRemovals"
+      ],
+      "section": "device/*",
+      "field": "skipIntroductionRemovals"
+    },
+    {
+      "id": "engine.defaults/device.skipIntroductionRemovals",
+      "title": "Keep what an introducer stops sharing",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "skipIntroductionRemovals",
+      "capability": "synchronize",
+      "keywords": [
+        "skipIntroductionRemovals"
+      ],
+      "section": "defaults/device",
+      "field": "skipIntroductionRemovals"
+    },
+    {
+      "id": "engine.device/*.allowedNetworks",
+      "title": "Allowed networks",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "allowedNetworks",
+      "capability": "synchronize",
+      "keywords": [
+        "allowedNetworks"
+      ],
+      "section": "device/*",
+      "field": "allowedNetworks"
+    },
+    {
+      "id": "engine.defaults/device.allowedNetworks",
+      "title": "Allowed networks",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "allowedNetworks",
+      "capability": "synchronize",
+      "keywords": [
+        "allowedNetworks"
+      ],
+      "section": "defaults/device",
+      "field": "allowedNetworks"
+    },
+    {
+      "id": "engine.device/*.numConnections",
+      "title": "Connections",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "numConnections",
+      "capability": "synchronize",
+      "keywords": [
+        "numConnections"
+      ],
+      "section": "device/*",
+      "field": "numConnections"
+    },
+    {
+      "id": "engine.defaults/device.numConnections",
+      "title": "Connections",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "numConnections",
+      "capability": "synchronize",
+      "keywords": [
+        "numConnections"
+      ],
+      "section": "defaults/device",
+      "field": "numConnections"
+    },
+    {
+      "id": "engine.device/*.maxRequestKiB",
+      "title": "Request size",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "maxRequestKiB",
+      "capability": "synchronize",
+      "keywords": [
+        "maxRequestKiB"
+      ],
+      "section": "device/*",
+      "field": "maxRequestKiB"
+    },
+    {
+      "id": "engine.defaults/device.maxRequestKiB",
+      "title": "Request size",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "maxRequestKiB",
+      "capability": "synchronize",
+      "keywords": [
+        "maxRequestKiB"
+      ],
+      "section": "defaults/device",
+      "field": "maxRequestKiB"
+    },
+    {
+      "id": "engine.device/*.certName",
+      "title": "Certificate name",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "certName",
+      "capability": "synchronize",
+      "keywords": [
+        "certName"
+      ],
+      "section": "device/*",
+      "field": "certName"
+    },
+    {
+      "id": "engine.defaults/device.certName",
+      "title": "Certificate name",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "certName",
+      "capability": "synchronize",
+      "keywords": [
+        "certName"
+      ],
+      "section": "defaults/device",
+      "field": "certName"
+    },
+    {
+      "id": "engine.device/*.remoteGUIPort",
+      "title": "Web GUI port",
+      "breadcrumb": "Advanced",
+      "category": "advanced",
+      "action": "device/$id",
+      "anchor": "remoteGUIPort",
+      "capability": "synchronize",
+      "keywords": [
+        "remoteGUIPort"
+      ],
+      "section": "device/*",
+      "field": "remoteGUIPort"
+    },
+    {
+      "id": "engine.defaults/device.remoteGUIPort",
+      "title": "Web GUI port",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/device",
+      "anchor": "remoteGUIPort",
+      "capability": "synchronize",
+      "keywords": [
+        "remoteGUIPort"
+      ],
+      "section": "defaults/device",
+      "field": "remoteGUIPort"
+    },
+    {
+      "id": "engine.defaults/folder.path",
+      "title": "Location",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "path",
+      "capability": "synchronize",
+      "keywords": [
+        "path"
+      ],
+      "section": "defaults/folder",
+      "field": "path"
+    },
+    {
+      "id": "engine.defaults/folder.type",
+      "title": "Folder type",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "type",
+      "capability": "synchronize",
+      "keywords": [
+        "type"
+      ],
+      "section": "defaults/folder",
+      "field": "type"
+    },
+    {
+      "id": "engine.defaults/folder.rescanIntervalS",
+      "title": "Rescan interval",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "rescanIntervalS",
+      "capability": "synchronize",
+      "keywords": [
+        "rescanIntervalS"
+      ],
+      "section": "defaults/folder",
+      "field": "rescanIntervalS"
+    },
+    {
+      "id": "engine.defaults/folder.fsWatcherEnabled",
+      "title": "Watch for changes",
+      "breadcrumb": "Defaults",
+      "category": "defaults",
+      "action": "defaults/folder",
+      "anchor": "fsWatcherEnabled",
+      "capability": "synchronize",
+      "keywords": [
+        "fsWatcherEnabled"
+      ],
+      "section": "defaults/folder",
+      "field": "fsWatcherEnabled"
+    },
+    {
+      "id": "gateway.enabled",
+      "title": "Remote file service",
+      "breadcrumb": "Remote Access",
+      "category": "network",
+      "action": "remoteService",
+      "anchor": "gateway.enabled",
+      "field": "enabled",
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ],
+      "capability": "synchronize",
+      "keywords": [
+        "gateway",
+        "serve",
+        "enable",
+        "remote access"
+      ]
+    },
+    {
+      "id": "gateway.port",
+      "title": "Remote service port",
+      "breadcrumb": "Remote Access",
+      "category": "network",
+      "action": "remoteService",
+      "anchor": "gateway.port",
+      "field": "publicPort",
+      "platforms": [
+        "macOS",
+        "gnome",
+        "kde"
+      ],
+      "capability": "synchronize",
+      "keywords": [
+        "gateway",
+        "public port",
+        "connection"
+      ]
+    },
+    {
+      "id": "gateway.host",
+      "title": "Remote service host name",
+      "breadcrumb": "Remote Access",
+      "category": "network",
+      "action": "remoteService",
+      "anchor": "gateway.host",
+      "field": "publicHost",
+      "platforms": [
+        "macOS",
+        "gnome",
+        "kde"
+      ],
+      "capability": "synchronize",
+      "keywords": [
+        "gateway",
+        "address",
+        "server",
+        "connection"
+      ]
+    },
+    {
+      "id": "gateway.name",
+      "title": "Service name",
+      "breadcrumb": "Remote Access",
+      "category": "network",
+      "action": "remoteService",
+      "anchor": "gateway.name",
+      "field": "serviceName",
+      "platforms": [
+        "macOS"
+      ],
+      "capability": "synchronize",
+      "keywords": [
+        "gateway",
+        "device name"
+      ]
+    },
+    {
+      "id": "gateway.cache",
+      "title": "Content cache",
+      "breadcrumb": "Remote Access",
+      "category": "network",
+      "action": "remoteService",
+      "anchor": "gateway.cache",
+      "field": "contentCacheMiB",
+      "platforms": [
+        "macOS"
+      ],
+      "capability": "synchronize",
+      "keywords": [
+        "gateway",
+        "storage",
+        "size"
+      ]
+    },
+    {
+      "id": "gateway.certificate",
+      "title": "Certificate",
+      "breadcrumb": "Remote Access",
+      "category": "network",
+      "action": "remoteService",
+      "anchor": "gateway.certificate",
+      "field": "certificateMode",
+      "platforms": [
+        "macOS"
+      ],
+      "capability": "synchronize",
+      "keywords": [
+        "gateway",
+        "TLS",
+        "HTTPS",
+        "PEM",
+        "private key"
+      ]
+    },
+    {
+      "id": "gateway.exports",
+      "title": "Shared folders",
+      "breadcrumb": "Remote Access",
+      "category": "network",
+      "action": "remoteService",
+      "anchor": "gateway.exports",
+      "field": "",
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ],
+      "capability": "synchronize",
+      "keywords": [
+        "gateway",
+        "permissions",
+        "exports",
+        "read only",
+        "read and write"
+      ]
+    },
+    {
+      "id": "gateway.clients",
+      "title": "Paired clients",
+      "breadcrumb": "Remote Access",
+      "category": "network",
+      "action": "remoteService",
+      "anchor": "gateway.clients",
+      "field": "",
+      "platforms": [
+        "macOS",
+        "windows",
+        "gnome",
+        "kde"
+      ],
+      "capability": "synchronize",
+      "keywords": [
+        "gateway",
+        "permissions",
+        "revoke",
+        "pair"
+      ]
+    }
+  ]
 }

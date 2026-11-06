@@ -117,6 +117,73 @@ static QQuickItem *editorItem(QObject *window, const QString &name) {
 class BackendTest : public QObject {
   Q_OBJECT
 private slots:
+  void settingsEscapeKeepsQueryBinding() {
+    Fixture fixture;
+    Backend backend;
+    QQmlEngine engine; engine.rootContext()->setContextProperty("backend", &backend);
+    QQmlComponent component(&engine, QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> object(component.create());
+    QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.data());
+    QVERIFY(window);
+    window->show(); window->requestActivate();
+    QTRY_COMPARE(backend.mode(), QString("synchronize"));
+    backend.navigate("Settings");
+    auto *search = object->findChild<QQuickItem *>("settingsSearch");
+    auto *results = object->findChild<QQuickItem *>("settingsResults");
+    QVERIFY(search); QVERIFY(results);
+    for (auto *focus : {search, results}) {
+      backend.setSettingsQuery("launch at login");
+      QTRY_COMPARE(search->property("text").toString(), backend.settingsQuery());
+      focus->forceActiveFocus();
+      QTRY_VERIFY(focus->hasActiveFocus());
+      QTest::keyClick(window, Qt::Key_Escape);
+      QTRY_VERIFY(backend.settingsQuery().isEmpty());
+      backend.setSettingsQuery("cache");
+      QTRY_COMPARE(search->property("text").toString(), QString("cache"));
+      backend.navigate("Files"); backend.navigate("Settings");
+      QTRY_VERIFY(search->property("text").toString().isEmpty());
+    }
+  }
+  void settingsSearchFindsControlsAndProtectsDrafts() {
+    Fixture fixture;
+    const QJsonObject entry{{"id","engine.folder/docs.copiers"},{"title","Copiers"},{"breadcrumb","Folders › Documents"},
+      {"category","advanced"},{"capability","synchronize"},{"action","folder/docs"},{"section","folder/docs"},{"field","copiers"},{"anchor","Copiers"}};
+    fixture.handler=[entry](QString method,auto) {
+      if(method=="settings.index") return result(QJsonArray{entry});
+      if(method=="settings.get") return result(QJsonObject{{"Token","search-editor"},{"Fields",QJsonArray{QJsonObject{{"Path","Copiers"},{"Label","Copiers"},{"Value","7"},{"Kind","string"},{"IsAdvanced",true}}}}});
+      return result(QJsonObject{});
+    };
+    Backend backend;
+    QQmlEngine engine; engine.rootContext()->setContextProperty("backend",&backend);
+    QQmlComponent component(&engine,QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> window(component.create());
+    QVERIFY2(window,qPrintable(component.errorString()));
+    QTRY_COMPARE(backend.mode(),QString("synchronize"));
+    backend.navigate("Settings");
+    QTRY_VERIFY(fixture.calls.contains("settings.index"));
+    backend.setSettingsQuery("DOCUMENTS copiers");
+    QTRY_COMPARE(backend.settingsResults().size(),1);
+    QCOMPARE(fixture.calls.count("settings.get"),0);
+    backend.openSettingsResult(backend.settingsResults().first().toMap());
+    QTRY_VERIFY(backend.dialog().value("page").toBool());
+    auto *editor=window->findChild<QObject *>("settingsEditor");
+    QVERIFY(editor);
+    QTRY_VERIFY(editor->property("advancedExpanded").toBool());
+    backend.fieldChanged();
+    backend.setSettingsQuery("launch at login");
+    QVERIFY(backend.dirty());
+    QVERIFY(!backend.dialog().contains("discard"));
+    QVERIFY(!backend.settingsResults().isEmpty());
+    backend.openSettingsResult(backend.settingsResults().first().toMap());
+    QTRY_VERIFY(backend.dialog().value("discard").toBool());
+    backend.keepEditing();
+    QVERIFY(backend.dirty());
+    QCOMPARE(fixture.calls.count("settings.get"),1);
+    backend.setSettingsQuery("");
+    QVERIFY(backend.settingsResults().isEmpty());
+    QVERIFY(backend.dirty());
+  }
   void qmlDialogLayout_data() {
     QTest::addColumn<bool>("longForm");
     QTest::addColumn<bool>("noticeOnly");
@@ -502,7 +569,7 @@ private slots:
     b.arguments({"synctrain-kde", "status", "/sync/a"});
     QTRY_COMPARE_WITH_TIMEOUT(b.title(), QString("Sync Status"), 1000);
     QVERIFY(b.gridView());
-    QVERIFY(f.calls.contains("mcp.preferences.close"));
+    QTRY_VERIFY(f.calls.contains("mcp.preferences.close"));
     QTRY_COMPARE_WITH_TIMEOUT(f.calls.count("desktop.items"), 1, 1000);
   }
   void settingsLoadsSerializeAndRestartPromptUsesWireKey() {

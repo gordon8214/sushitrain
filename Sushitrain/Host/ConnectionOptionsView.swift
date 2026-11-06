@@ -33,7 +33,8 @@
 
 		private func limitsSection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				SettingsNumberField(title: "Maximum connections", unit: "in total", text: draft.connectionLimitMax)
+				SettingsNumberField(title: "Maximum connections", unit: "in total", text: draft.connectionLimitMax).settingsAnchor(
+					"connectionLimitMax")
 			} header: {
 				Text("Limits")
 			} footer: {
@@ -43,12 +44,12 @@
 
 		private func prioritySection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				TextField("TCP on the local network", text: draft.priorityTCPLAN)
-				TextField("QUIC on the local network", text: draft.priorityQUICLAN)
-				TextField("TCP over the internet", text: draft.priorityTCPWAN)
-				TextField("QUIC over the internet", text: draft.priorityQUICWAN)
-				TextField("Relays", text: draft.priorityRelay)
-				TextField("Upgrade threshold", text: draft.priorityUpgradeThreshold)
+				TextField("TCP on the local network", text: draft.priorityTCPLAN).settingsAnchor("priorityTCPLAN")
+				TextField("QUIC on the local network", text: draft.priorityQUICLAN).settingsAnchor("priorityQUICLAN")
+				TextField("TCP over the internet", text: draft.priorityTCPWAN).settingsAnchor("priorityTCPWAN")
+				TextField("QUIC over the internet", text: draft.priorityQUICWAN).settingsAnchor("priorityQUICWAN")
+				TextField("Relays", text: draft.priorityRelay).settingsAnchor("priorityRelay")
+				TextField("Upgrade threshold", text: draft.priorityUpgradeThreshold).settingsAnchor("priorityUpgradeThreshold")
 			} header: {
 				Text("Priorities")
 			} footer: {
@@ -61,7 +62,9 @@
 		private func reconnectionSection(_ draft: Binding<Draft>) -> some View {
 			Section {
 				SettingsNumberField(title: "Reconnection interval", unit: "seconds", text: draft.reconnectionIntervalS)
+					.settingsAnchor("reconnectionIntervalS")
 				SettingsNumberField(title: "Relay reconnection interval", unit: "minutes", text: draft.relayReconnectIntervalM)
+					.settingsAnchor("relayReconnectIntervalM")
 			} header: {
 				Text("Reconnecting")
 			} footer: {
@@ -73,8 +76,8 @@
 
 		private func localDiscoverySection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				TextField("Local announcement port", text: draft.localAnnouncePort)
-				TextField("Local announcement address", text: draft.localAnnounceMCAddr)
+				TextField("Local announcement port", text: draft.localAnnouncePort).settingsAnchor("localAnnouncePort")
+				TextField("Local announcement address", text: draft.localAnnounceMCAddr).settingsAnchor("localAnnounceMCAddr")
 			} header: {
 				Text("Local discovery")
 			} footer: {
@@ -86,10 +89,14 @@
 
 		private func natSection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				SettingsNumberField(title: "Port mapping lease", unit: "minutes", text: draft.natLeaseMinutes)
-				SettingsNumberField(title: "Port mapping renewal", unit: "minutes", text: draft.natRenewalMinutes)
-				SettingsNumberField(title: "Port mapping timeout", unit: "seconds", text: draft.natTimeoutSeconds)
-				SettingsNumberField(title: "STUN keepalive", unit: "seconds", text: draft.stunKeepaliveStartS)
+				SettingsNumberField(title: "Port mapping lease", unit: "minutes", text: draft.natLeaseMinutes).settingsAnchor(
+					"natLeaseMinutes")
+				SettingsNumberField(title: "Port mapping renewal", unit: "minutes", text: draft.natRenewalMinutes).settingsAnchor(
+					"natRenewalMinutes")
+				SettingsNumberField(title: "Port mapping timeout", unit: "seconds", text: draft.natTimeoutSeconds).settingsAnchor(
+					"natTimeoutSeconds")
+				SettingsNumberField(title: "STUN keepalive", unit: "seconds", text: draft.stunKeepaliveStartS).settingsAnchor(
+					"stunKeepaliveStartS")
 			} header: {
 				Text("Port mapping and STUN")
 			} footer: {
@@ -101,7 +108,7 @@
 
 		private func networksSection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				SettingsLinesEditor(title: "Always local networks", text: draft.alwaysLocalNets)
+				SettingsLinesEditor(title: "Always local networks", text: draft.alwaysLocalNets).settingsAnchor("alwaysLocalNets")
 			} header: {
 				Text("Always local networks")
 			} footer: {
@@ -113,7 +120,8 @@
 
 		private func namesSection(_ draft: Binding<Draft>) -> some View {
 			Section {
-				Toggle("Use the names devices give themselves", isOn: draft.overwriteRemoteDeviceNames)
+				Toggle("Use the names devices give themselves", isOn: draft.overwriteRemoteDeviceNames).settingsAnchor(
+					"overwriteRemoteDeviceNames")
 			} header: {
 				Text("Device names")
 			} footer: {

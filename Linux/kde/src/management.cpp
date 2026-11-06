@@ -298,6 +298,7 @@ void Backend::edit(const QString &section) {
     preferenceEditor = isPreference;
     editorToken = str(editor, "Token");
     auto fields = editor["Fields"].toArray();
+    if (section.startsWith("advanced/")) fields.prepend(field("expertNotice", "These are expert settings. Incorrect values may damage your folder contents and stop synchronization.", {}, "notice"));
     if (section.startsWith("reset/"))
       fields.prepend(field("resetNotice", "Restore built-in synchronization defaults. Folder location, direction, sharing, ignore patterns, and versioning stay unchanged. Review the settings, then choose Save.", {}, "notice"));
     form(section.startsWith("reset/") ? "Reset Synchronization Settings" : "Settings — " + section, fields,
@@ -337,6 +338,7 @@ QVariantList Backend::navigation() const {
   return list;
 }
 void Backend::settings() {
+  loadSettingsIndex();
   for (auto value : catalog["settings"].toArray()) {
     auto category = value.toObject();
     if ("settings:" + str(category, "id") != m_page) continue;

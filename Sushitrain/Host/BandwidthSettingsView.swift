@@ -44,7 +44,8 @@ struct BandwidthSettingsView: View {
 							return self.downLimitMbitsPerSec > 0
 						},
 						set: { self.downLimitMbitsPerSec = $0 ? 10 : 0 }
-					))
+					)
+				).settingsAnchor("maxRecvKbps")
 
 				if downLimitMbitsPerSec > 0 {
 					Stepper(
@@ -60,7 +61,8 @@ struct BandwidthSettingsView: View {
 							return self.upLimitMbitsPerSec > 0
 						},
 						set: { self.upLimitMbitsPerSec = $0 ? 10 : 0 }
-					))
+					)
+				).settingsAnchor("maxSendKbps")
 
 				if upLimitMbitsPerSec > 0 {
 					Stepper(
@@ -78,7 +80,8 @@ struct BandwidthSettingsView: View {
 							},
 							set: { nv in
 								try? appState.client.setBandwidthLimitedInLAN(nv)
-							}))
+							})
+					).settingsAnchor("limitBandwidthInLan")
 				}
 			}.task {
 				self.update()
@@ -101,7 +104,8 @@ struct BandwidthSettingsView: View {
 							else {
 								userSettings.streamingLimitMbitsPerSec = 0
 							}
-						}))
+						})
+				).settingsAnchor("streamingLimitMbitsPerSec")
 
 				if userSettings.streamingLimitMbitsPerSec > 0 {
 					Stepper(
@@ -111,7 +115,9 @@ struct BandwidthSettingsView: View {
 			}
 
 			Section {
-				Toggle("Low priority traffic", isOn: $isNetworkTrafficLowPriority).onChange(of: self.isNetworkTrafficLowPriority) {
+				Toggle("Low priority traffic", isOn: $isNetworkTrafficLowPriority).settingsAnchor("trafficClass").onChange(
+					of: self.isNetworkTrafficLowPriority
+				) {
 					_, _ in
 					self.save()
 				}

@@ -28,11 +28,12 @@
 					let isOff = !draft.wrappedValue.enabled
 					AdvancedRestartSection()
 					Section {
-						Toggle("Use a proxy", isOn: draft.enabled)
+						Toggle("Use a proxy", isOn: draft.enabled).settingsAnchor("enabled")
 						Group {
-							TextField("Proxy address", text: draft.url, prompt: Text(verbatim: "socks5://127.0.0.1:1080"))
-							TextField("User name", text: draft.user)
-							SecureField("Password", text: draft.password)
+							TextField("Proxy address", text: draft.url, prompt: Text(verbatim: "socks5://127.0.0.1:1080")).settingsAnchor(
+								"url")
+							TextField("User name", text: draft.user).settingsAnchor("user")
+							SecureField("Password", text: draft.password).settingsAnchor("password")
 						}
 						.disabled(isOff)
 						if draft.wrappedValue.settings.sendsPasswordUnencrypted() {
@@ -44,7 +45,7 @@
 						)
 					}
 					Section {
-						SettingsLinesEditor(title: "Connect directly", text: draft.bypass)
+						SettingsLinesEditor(title: "Connect directly", text: draft.bypass).settingsAnchor("bypass")
 							.disabled(isOff)
 					} header: {
 						Text("Connect directly")

@@ -289,6 +289,7 @@ struct AutoStartToggleView: View {
 		Toggle(isOn: Binding(get: { status == .enabled }, set: { self.set($0) })) {
 			Label("Launch at login", systemImage: "autostartstop")
 		}
+		.settingsAnchor("launchAtLogin")
 		.onAppear {
 			self.update()
 		}

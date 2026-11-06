@@ -47,10 +47,10 @@
 		var body: some View {
 			Toggle(isOn: $presence.inMenuBar) {
 				Label("Show in menu bar", systemImage: "menubar.rectangle")
-			}
+			}.settingsAnchor("inMenuBar")
 			Toggle(isOn: $presence.inDock) {
 				Label("Show in Dock", systemImage: "dock.rectangle")
-			}
+			}.settingsAnchor("inDock")
 		}
 	}
 #endif

@@ -14,6 +14,9 @@
 			MacSettingsView(mode: .filesInFinder) { category in
 				FilesSettingsDetail(category: category, presence: $presence)
 			}
+			.searchContext { entry in
+				DesktopSettingsSearchDestination(entry: entry, mode: .filesInFinder, presence: $presence, appState: nil)
+			}
 			.task { await RemoteCoordinator.shared.refresh() }
 		}
 	}

@@ -43,7 +43,8 @@ private struct PreviewSettingsSections: View {
 							else {
 								userSettings.maxBytesForPreview = 0
 							}
-						}))
+						})
+				).settingsAnchor("maxBytesForPreview")
 
 				if userSettings.maxBytesForPreview > 0 {
 					Stepper(
@@ -59,7 +60,7 @@ private struct PreviewSettingsSections: View {
 			}
 
 			Section {
-				Toggle("Show video previews", isOn: userSettings.$previewVideos)
+				Toggle("Show video previews", isOn: userSettings.$previewVideos).settingsAnchor("previewVideos")
 			}
 
 		}
@@ -72,23 +73,25 @@ private struct BrowsingSettingsSections: View {
 	var body: some View {
 		Group {
 			Section {
-				Toggle("Preview files on tap", isOn: userSettings.$tapFileToPreview)
+				Toggle("Preview files on tap", isOn: userSettings.$tapFileToPreview).settingsAnchor("tapFileToPreview")
 			}
 
 			Section {
-				Toggle("Automatically switch to grid view", isOn: userSettings.$automaticallySwitchViewStyle)
+				Toggle("Automatically switch to grid view", isOn: userSettings.$automaticallySwitchViewStyle).settingsAnchor(
+					"automaticallySwitchViewStyle")
 			} footer: {
 				Text("When a folder contains only images, it will automatically be shown as a grid instead of a list.")
 			}
 
 			Section {
-				Toggle("Automatically display web pages", isOn: userSettings.$automaticallyShowWebpages)
+				Toggle("Automatically display web pages", isOn: userSettings.$automaticallyShowWebpages).settingsAnchor(
+					"automaticallyShowWebpages")
 			} footer: {
 				Text("When a folder contains a file named 'index.html', it will automatically be shown as a web page.")
 			}
 
 			Section {
-				Toggle("Hide dotfiles", isOn: userSettings.$dotFilesHidden)
+				Toggle("Hide dotfiles", isOn: userSettings.$dotFilesHidden).settingsAnchor("hideDotFiles")
 			} footer: {
 				Text(
 					"When enabled, files and directories whose name start with a dot will not be shown when browsing a folder. These files and directories will remain visible in search results."
@@ -107,7 +110,7 @@ private struct ThumbnailCacheSettingsSection: View {
 
 	var body: some View {
 		Section {
-			Toggle("Cache thumbnails on disk", isOn: userSettings.$cacheThumbnailsToDisk)
+			Toggle("Cache thumbnails on disk", isOn: userSettings.$cacheThumbnailsToDisk).settingsAnchor("cacheThumbnailsToDisk")
 
 			// Select thumbnail folder
 			Picker("Cache location", selection: userSettings.$cacheThumbnailsToFolderID) {
@@ -120,8 +123,8 @@ private struct ThumbnailCacheSettingsSection: View {
 				}) {
 					Text(userSettings.cacheThumbnailsToFolderID).disabled(true)
 				}
-			}
-			.pickerStyle(.menu).disabled(!userSettings.cacheThumbnailsToDisk)
+			}.settingsAnchor("cacheThumbnailsToFolderID")
+				.pickerStyle(.menu).disabled(!userSettings.cacheThumbnailsToDisk)
 
 			// Clear thumbnail cache button
 			if userSettings.cacheThumbnailsToFolderID == "" {

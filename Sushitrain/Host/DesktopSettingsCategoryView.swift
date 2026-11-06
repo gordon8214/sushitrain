@@ -53,6 +53,7 @@
 					}
 				}
 			}
+			.id(section.action)
 			.settingsEditor(hasChanges: section.action == "name" && name != savedName)
 			.errorAlert($error)
 		}
@@ -74,7 +75,7 @@
 				case "name":
 					if let appState {
 						HStack {
-							TextField("Device name", text: $name)
+							TextField("Device name", text: $name).settingsAnchor("name")
 							Button("Save") {
 								do {
 									try appState.client.setName(name)
@@ -135,6 +136,106 @@
 		}
 	}
 
+	struct DesktopSettingsSearchDestination: View {
+		let entry: SettingSearchEntry
+		let mode: MacSettingsMode
+		@Binding var presence: AppPresence
+		let appState: AppState?
+		private var destination: SettingSearchEntry.MacDestination {
+			entry.macDestination(
+				usesLDAP: entry.action == "gui" && appState?.client.guiSettings()?.authMode == "ldap",
+				hasTransferLimit: entry.field != "limitBandwidthInLan"
+					|| (appState?.client.getBandwidthLimitDownMbitsPerSec() ?? 0) > 0
+					|| (appState?.client.getBandwidthLimitUpMbitsPerSec() ?? 0) > 0)
+		}
+		var body: some View {
+			Group {
+				if !entry.isAvailable(mode: mode.capabilityMode) {
+					ContentUnavailableView(
+						entry.localizedTitle, systemImage: "gearshape",
+						description: Text("Available in \(entry.capability) mode. Change the operating mode in General."))
+				}
+				else if let section = entry.section, destination == .expertEditor {
+					AdvancedSectionView(section: section, title: Text(entry.localizedTitle))
+						.environment(\.settingsSearchAnchor, entry.field)
+				}
+				else if destination == .guiEditor {
+					GUISettingsView()
+				}
+				else if destination == .filesLocation {
+					Form { FilesLocationSettingsView() }
+				}
+				else if let section = entry.section, let appState {
+					if section.hasPrefix("folder/"), !entry.action.hasPrefix("advanced/") {
+						let folder = appState.client.folder(withID: String(section.dropFirst(7)))
+						if let folder, folder.exists() {
+							if [
+								"syncXattrs", "sendXattrs", "syncOwnership", "sendOwnership", "copyOwnershipFromParent", "ignorePerms",
+								"xattrFilter",
+							].contains(where: { entry.field?.hasPrefix($0) == true }) {
+								FolderMetadataSettingsView(folder: folder)
+							}
+							else {
+								FolderSyncSettingsView(folder: folder)
+							}
+						}
+						else {
+							ContentUnavailableView("This folder no longer exists", systemImage: "folder")
+						}
+					}
+					else if section.hasPrefix("device/"), !entry.action.hasPrefix("advanced/") {
+						let id = String(section.dropFirst(7))
+						if let device = appState.client.peer(withID: id), appState.client.peers()?.asArray().contains(id) == true {
+							DeviceSettingsView(device: device)
+						}
+						else {
+							ContentUnavailableView("This device no longer exists", systemImage: "externaldrive")
+						}
+					}
+					else if section == "defaults/folder",
+						[
+							"syncXattrs", "sendXattrs", "syncOwnership", "sendOwnership", "copyOwnershipFromParent", "ignorePerms",
+							"xattrFilter",
+						].contains(where: { entry.field?.hasPrefix($0) == true })
+					{
+						DefaultFolderMetadataView()
+					}
+					else {
+						DesktopSettingsEditor(action: entry.action, appState: appState)
+					}
+				}
+				else if entry.action == "remoteService" {
+					GatewaySettingsView()
+				}
+				else if entry.action == "gateways" {
+					RemoteFoldersSettingsView()
+				}
+				else if entry.action == "historySources" {
+					HistorySourcesView()
+				}
+				else if let category = MacSettingsCategory(rawValue: entry.category) {
+					if [
+						"previews", "storage", "basic/options", "connections", "proxy", "bandwidth", "policy", "resources", "engine",
+						"gui", "configuration", "advanced", "logs", "mcp",
+					].contains(entry.action)
+						|| entry.action.hasPrefix("defaults/") || entry.action.hasPrefix("reset/")
+					{
+						if entry.action == "mcp" {
+							MCPSettingsView()
+						}
+						else {
+							DesktopSettingsEditor(action: entry.action, appState: appState)
+						}
+					}
+					else {
+						DesktopSettingsCategoryView(category: category, mode: mode, presence: $presence, appState: appState)
+					}
+				}
+			}
+			.navigationTitle(entry.localizedTitle)
+		}
+	}
+
 	private struct DesktopMenuAccessView: View {
 		@ObservedObject var userSettings: AppUserSettings
 		var body: some View {
@@ -142,7 +243,7 @@
 				Text("Do not show folders").tag(MenuFolderAction.hide)
 				Text("Open in Finder").tag(MenuFolderAction.finder)
 				Text("Open in the app").tag(MenuFolderAction.browser)
-			}
+			}.settingsAnchor("menuFolderAction")
 		}
 	}
 
@@ -189,9 +290,13 @@
 		@ObservedObject var userSettings: AppUserSettings
 		var body: some View {
 			Form {
-				Toggle("On metered networks", isOn: userSettings.$disableDevicesOnMetered)
-				if deviceHasCellularCapability() { Toggle("On cellular networks", isOn: userSettings.$disableDevicesOnCellular) }
-				Toggle("In low power mode", isOn: userSettings.$disableDevicesInLowPowerMode)
+				Toggle("On metered networks", isOn: userSettings.$disableDevicesOnMetered).settingsAnchor("disableDevicesOnMetered")
+				if deviceHasCellularCapability() {
+					Toggle("On cellular networks", isOn: userSettings.$disableDevicesOnCellular).settingsAnchor(
+						"disableDevicesOnCellular")
+				}
+				Toggle("In low power mode", isOn: userSettings.$disableDevicesInLowPowerMode).settingsAnchor(
+					"disableDevicesInLowPowerMode")
 			}
 			.navigationTitle("Automatic Pausing")
 		}
@@ -202,7 +307,7 @@
 		@AppStorage(CacheSettings.storageKey) private var limit = CacheSettings.defaultLimit
 		var body: some View {
 			Form {
-				Section("Browsing") { Toggle("Hide dotfiles", isOn: $hideDotFiles) }
+				Section("Browsing") { Toggle("Hide dotfiles", isOn: $hideDotFiles).settingsAnchor("hideDotFiles") }
 				Section("Previews and Thumbnails") {
 					Text(
 						"Finder and Quick Look provide previews and thumbnails using the system’s file types. Previewing a file can download its contents."
@@ -211,7 +316,7 @@
 				Section("Download Cache") {
 					Picker("Cache budget", selection: $limit) {
 						ForEach(CacheSettings.choices, id: \.self) { Text(Int64($0), format: .byteCount(style: .file)).tag($0) }
-					}
+					}.settingsAnchor("cacheLimit")
 					Text("Kept files and pending edits are retained independently of the disposable cache.")
 				}
 			}

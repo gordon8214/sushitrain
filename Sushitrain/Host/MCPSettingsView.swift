@@ -9,6 +9,7 @@
 			Form {
 				Section {
 					Toggle("Enable MCP", isOn: Binding(get: { integration.enabled }, set: { integration.setEnabled($0) }))
+						.settingsAnchor("mcp")
 						.accessibilityIdentifier("settings.mcp.enabled")
 					Text(
 						"Connected assistants can inspect settings, manage synchronization, "

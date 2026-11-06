@@ -93,7 +93,7 @@ struct AdvancedRestartSection: View {
 
 /// One section of the configuration, whose fields are saved together: each change can make the engine restart a folder
 /// or a service, and the web GUI's fields depend on each other.
-private struct AdvancedSectionView: View {
+struct AdvancedSectionView: View {
 	let section: String
 	let title: Text
 
@@ -144,6 +144,11 @@ private struct AdvancedSectionView: View {
 
 	private var form: some View {
 		Form {
+			Section {
+				Label(
+					"These are expert settings. Incorrect values may damage your folder contents and stop synchronization.",
+					systemImage: "exclamationmark.triangle")
+			}
 			AdvancedRestartSection()
 			self.guiWarning
 			ForEach(self.groups, id: \.self) { group in
@@ -196,6 +201,7 @@ private struct AdvancedSectionView: View {
 		Section {
 			ForEach(fields.filter { $0.group == group }, id: \.path) { field in
 				AdvancedFieldView(field: field, value: self.value(of: field))
+					.settingsAnchor(field.path)
 			}
 		} header: {
 			if !group.isEmpty {

@@ -28,6 +28,7 @@ type Catalog struct {
 	Settings          []Category
 	Details           map[string][]string
 	Aliases           map[string]string
+	Search            []SearchEntry
 }
 
 // Read returns an independent copy, so adapters cannot change another window's catalog.

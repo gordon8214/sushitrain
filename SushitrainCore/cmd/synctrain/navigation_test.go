@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -36,6 +38,9 @@ func TestNavigation(t *testing.T) {
 	server := adminsock.NewServer()
 	defer server.Close()
 	server.Register("mcp.settings", func(context.Context, json.RawMessage) (any, error) { return map[string]bool{"Enabled": false}, nil })
+	server.Register("settings.index", func(context.Context, json.RawMessage) (any, error) {
+		return []desktopui.SearchEntry{{ID: "test-search", Title: "Test setting", Breadcrumb: "Folders › Documents", Category: "advanced", Action: "advanced/options", Section: "options", Field: "test", Anchor: "test", Capability: "synchronize"}}, nil
+	})
 	var savedValues atomic.Value
 	server.Register("settings.get", func(_ context.Context, raw json.RawMessage) (any, error) {
 		var request desktopapi.Request
@@ -103,9 +108,20 @@ func TestNavigation(t *testing.T) {
 	d.sidebar = gtk.NewListBox()
 	d.sidebarBack, d.sidebarSettings = gtk.NewButton(), gtk.NewButton()
 	d.root = adw.NewNavigationSplitView()
+	side := adw.NewToolbarView()
+	header := adw.NewHeaderBar()
+	side.AddTopBar(header)
+	searchColumn := gtk.NewBox(gtk.OrientationVertical, 0)
+	sidebarScroll := gtk.NewScrolledWindow()
+	sidebarScroll.SetChild(d.sidebar)
+	d.installSettingsSearch(header, searchColumn, sidebarScroll)
+	side.SetContent(searchColumn)
+	d.root.SetSidebar(adw.NewNavigationPage(side, "Settings"))
 	d.navigation.SetAnimateTransitions(false)
 	d.navigation.ConnectPopped(func(*adw.NavigationPage) { d.pagePopped() })
-	w.toasts.SetChild(d.navigation)
+	d.root.SetContent(adw.NewNavigationPage(d.navigation, "Settings"))
+	w.toasts.SetChild(d.root)
+
 	d.showRoute()
 	rootBody := d.body
 	for _, mode := range []string{modeFiles, modeSynchronize} {
@@ -269,6 +285,79 @@ func TestNavigation(t *testing.T) {
 	d.navigate("Settings")
 	if d.route != "settings:general" || d.sidebar.SelectedRow().Index() != 0 || len(d.sidebarRoutes) != 8 {
 		t.Fatal("opening Settings with a shortcut did not show its category sidebar")
+	}
+
+	d.mode = modeSynchronize
+	d.settingsSearchButton.SetActive(true)
+	waitNavigationUI(t, func() bool { return len(d.settingsSearchIndex) == 1 })
+	d.settingsSearchEntry.SetText("documents test")
+	d.showSettingsSearch()
+	if d.settingsSearchStack.VisibleChildName() != "results" || d.editor != "" {
+		t.Fatal("search did not show results independently of editors")
+	}
+	d.openSettingsSearch(d.settingsSearchIndex[0])
+	waitNavigationUI(t, func() bool { return d.editor != "" })
+	navigationTestSwitch(d.body).SetActive(true)
+	d.settingsSearchEntry.SetText("MCP")
+	d.showSettingsSearch()
+	if !d.dirty || d.editor != "fixture" || w.win.VisibleDialog() != nil {
+		t.Fatal("typing in search discarded or interrupted draft")
+	}
+	d.guard(func() { d.openSettingsSearch(desktopui.SearchEntry{Title: "MCP", Action: "mcp", Capability: "always"}) })
+	waitNavigationUI(t, func() bool { return w.win.VisibleDialog() != nil })
+	dialog = w.win.VisibleDialog()
+	dialog.Emit("response", "cancel")
+	dialog.ForceClose()
+	if !d.dirty || d.editor != "fixture" {
+		t.Fatal("canceled search departure lost the draft")
+	}
+	d.settingsSearchEntry.SetText("")
+	d.showSettingsSearch()
+	if d.settingsSearchStack.VisibleChildName() != "categories" || !d.dirty {
+		t.Fatal("clearing search lost categories or draft")
+	}
+
+	// An accepted result replaces the previous editor even within one category.
+	second := d.settingsSearchIndex[0]
+	second.ID, second.Title, second.Action = "second-search", "Second setting", "advanced/gui"
+	d.guard(func() { d.openSettingsSearch(second) })
+	waitNavigationUI(t, func() bool { return w.win.VisibleDialog() != nil })
+	dialog = w.win.VisibleDialog()
+	dialog.Emit("response", "go")
+	dialog.ForceClose()
+	waitNavigationUI(t, func() bool { return d.editor != "" && d.navigation.VisiblePage().Title() == "Second setting" })
+	if len(d.pages) != 2 {
+		t.Fatal("search retained a discarded editor in the Back stack")
+	}
+	d.goBack()
+	if len(d.pages) != 1 || d.editor != "" {
+		t.Fatal("Back restored a closed search editor")
+	}
+	d.openSettingsSearch(d.settingsSearchIndex[0])
+	waitNavigationUI(t, func() bool { return d.editor != "" })
+	navigationTestSwitch(d.body).SetActive(true)
+	navigationButton(d.commands, "Save").Emit("clicked")
+	waitNavigationUI(t, func() bool { return !d.saving })
+	if len(d.pages) != 1 || d.dirty || d.banner.Revealed() {
+		t.Fatal("fresh search editor could not save after Back")
+	}
+
+	// The first metadata request resolves its own endpoint without stranding loading.
+	helperDir := t.TempDir()
+	home, err := json.Marshal(map[string]string{"socket": socket})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helper := "#!/bin/sh\nprintf '%s\\n' '" + strings.ReplaceAll(string(home), "'", "'\\''") + "'\n"
+	if err := os.WriteFile(filepath.Join(helperDir, "synctrain-gateway"), []byte(helper), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", helperDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	unresolved := &desktopUI{mode: modeSynchronize}
+	unresolved.loadSettingsSearch()
+	waitNavigationUI(t, func() bool { return !unresolved.settingsSearchLoading })
+	if unresolved.socket != socket || len(unresolved.settingsSearchIndex) != 1 {
+		t.Fatal("first resolved search snapshot was discarded")
 	}
 }
 

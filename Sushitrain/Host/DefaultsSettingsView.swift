@@ -57,14 +57,15 @@
 				save: { try client.setDefaultFolderSettings($0) },
 				content: { draft in
 					Section {
-						TextField("Location", text: draft.path, prompt: Text(verbatim: "~/Sync"))
+						TextField("Location", text: draft.path, prompt: Text(verbatim: "~/Sync")).settingsAnchor("path")
 						Picker("Folder type", selection: draft.type) {
 							Text("Send and receive").tag("sendreceive")
 							Text("Send only").tag("sendonly")
 							Text("Receive only").tag("receiveonly")
-						}
-						SettingsNumberField(title: "Rescan interval", unit: "seconds", text: draft.rescanIntervalS)
-						Toggle("Watch for changes", isOn: draft.fsWatcherEnabled)
+						}.settingsAnchor("type")
+						SettingsNumberField(title: "Rescan interval", unit: "seconds", text: draft.rescanIntervalS).settingsAnchor(
+							"rescanIntervalS")
+						Toggle("Watch for changes", isOn: draft.fsWatcherEnabled).settingsAnchor("fsWatcherEnabled")
 					} header: {
 						Text("New folders")
 					} footer: {

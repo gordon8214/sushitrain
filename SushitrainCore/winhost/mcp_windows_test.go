@@ -27,6 +27,21 @@ func TestNativeDesktopSettingsUseSharedEditorsWithoutMCP(t *testing.T) {
 	server := adminsock.NewServer()
 	h.Register(server)
 	defer server.Close()
+	// Repeated native search must remain available with MCP disabled, without
+	// consuming the 64 editor slots or returning configuration values.
+	for range 65 {
+		index, indexErr := server.Invoke(t.Context(), "desktop.settings.index", json.RawMessage(`{}`))
+		if indexErr != nil {
+			t.Fatal(indexErr)
+		}
+		data, marshalErr := json.Marshal(index)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if !strings.Contains(string(data), "globalAnnounceEnabled") || strings.Contains(string(data), `"value"`) || strings.Contains(string(data), `"token"`) {
+			t.Fatal("invalid native search metadata")
+		}
+	}
 	data, err := server.Invoke(t.Context(), "desktop.settings.get", json.RawMessage(`{"Section":"connections"}`))
 	if err != nil {
 		t.Fatal(err)

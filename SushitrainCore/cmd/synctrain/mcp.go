@@ -21,6 +21,7 @@ func (d *desktopUI) mcpSettingsPage() {
 	row.SetSubtitle("Local stdio · Full management access")
 	row.SetSensitive(false)
 	group.Add(row)
+	d.revealSetting("mcp", row)
 	d.load("mcp.settings", nil, func(data json.RawMessage) {
 		var settings mcpcontrol.Settings
 		if err := json.Unmarshal(data, &settings); err != nil {

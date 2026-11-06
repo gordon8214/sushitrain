@@ -49,6 +49,11 @@ func (d *desktopUI) rebuildSidebar() {
 	d.folderShortcuts = nil
 	settings := strings.HasPrefix(d.route, "settings:")
 	d.sidebarBack.SetVisible(settings)
+	if d.settingsSearchButton != nil {
+		d.settingsSearchButton.SetVisible(settings)
+		d.settingsSearchBar.SetVisible(settings)
+	}
+	d.showSettingsSearch()
 	d.sidebarSettings.SetVisible(!settings)
 	add := func(title, route string) {
 		r := gtk.NewListBoxRow()
@@ -97,6 +102,7 @@ func (d *desktopUI) settingsCategory(id string) {
 			continue
 		}
 		d.reset(c.Title)
+		d.loadSettingsSearch()
 		for _, section := range c.Sections {
 			g := d.group(section.Title)
 			if !desktopui.Available(section.Capability, d.mode) {
@@ -104,7 +110,9 @@ func (d *desktopUI) settingsCategory(id string) {
 				continue
 			}
 			s := section
-			g.Add(choiceRow(s.Title, "", func() { d.openCatalogSetting(s.Action, s.Title) }))
+			r := choiceRow(s.Title, "", func() { d.openCatalogSetting(s.Action, s.Title) })
+			g.Add(r)
+			d.revealSetting(s.Action, r)
 		}
 		return
 	}

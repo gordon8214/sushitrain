@@ -77,6 +77,8 @@ func (d *desktopUI) previewSettingsPage() {
 			}
 		})
 		g.Add(r)
+		anchor := map[string]string{"Hide dotfiles": "hideDotFiles", "Preview images": "PreviewImages", "Preview audio and video": "PreviewMedia", "Use grid view": "Grid"}[s.title]
+		d.revealSetting(anchor, r)
 	}
 	limit := adw.NewSpinRowWithRange(1, 100, 1)
 	limit.SetTitle("Maximum image preview size (MiB)")
@@ -91,6 +93,7 @@ func (d *desktopUI) previewSettingsPage() {
 		}
 	})
 	g.Add(limit)
+	d.revealSetting("ImageLimitMiB", limit)
 }
 func (d *desktopUI) exportConfiguration() {
 	d.pickSave("config.xml", func(dest string) {

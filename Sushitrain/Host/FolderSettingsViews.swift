@@ -10,6 +10,7 @@
 	/// Expansion belongs to the editor, while every value stays in its shared draft.
 	struct FolderAdvancedSection<Content: View>: View {
 		@Environment(\.settingsSaveFailure) private var saveFailure
+		@Environment(\.settingsSearchAnchor) private var searchAnchor
 		@State private var isExpanded = false
 		@ViewBuilder let content: () -> Content
 
@@ -19,6 +20,7 @@
 					self.content()
 				}
 			}
+			.onChange(of: searchAnchor, initial: true) { _, anchor in if anchor != nil { isExpanded = true } }
 			.onChange(of: saveFailure) {
 				isExpanded = true
 			}
@@ -49,9 +51,10 @@
 
 		var body: some View {
 			Section {
-				SettingsNumberField(title: "Watcher delay", unit: "seconds", text: $draft.fsWatcherDelayS)
-				TextField("Maximum conflict copies", text: $draft.maxConflicts)
-				Toggle("Block indexing", isOn: $draft.blockIndexing)
+				SettingsNumberField(title: "Watcher delay", unit: "seconds", text: $draft.fsWatcherDelayS).settingsAnchor(
+					"fsWatcherDelayS")
+				TextField("Maximum conflict copies", text: $draft.maxConflicts).settingsAnchor("maxConflicts")
+				Toggle("Block indexing", isOn: $draft.blockIndexing).settingsAnchor("blockIndexing")
 			} footer: {
 				Text("For conflict copies, -1 keeps every copy and 0 keeps none.")
 			}
@@ -70,8 +73,8 @@
 					Text("Largest first").tag("largestFirst")
 					Text("Oldest first").tag("oldestFirst")
 					Text("Newest first").tag("newestFirst")
-				}
-				Toggle("Ignore deletions from other devices", isOn: $draft.ignoreDelete)
+				}.settingsAnchor("order")
+				Toggle("Ignore deletions from other devices", isOn: $draft.ignoreDelete).settingsAnchor("ignoreDelete")
 				if draft.settings.ignoreDelete {
 					SettingsWarning(text: "With this on, this folder never stays in step with other devices.")
 				}
@@ -111,23 +114,25 @@
 
 		var body: some View {
 			Section {
-				Toggle("Case-sensitive file names", isOn: $draft.caseSensitiveFS)
+				Toggle("Case-sensitive file names", isOn: $draft.caseSensitiveFS).settingsAnchor("caseSensitiveFS")
 				if draft.settings.caseSensitiveFS {
 					SettingsWarning(
 						text: "On a disk that isn't case-sensitive, files whose names differ only by case can overwrite each other.")
 				}
-				Toggle("Normalize file names", isOn: $draft.autoNormalize)
+				Toggle("Normalize file names", isOn: $draft.autoNormalize).settingsAnchor("autoNormalize")
 				if !draft.settings.autoNormalize {
 					SettingsWarning(text: "Files with wrongly encoded names will show as failed instead of being corrected.")
 				}
-				Toggle("No sparse files", isOn: $draft.disableSparseFiles)
-				Toggle("Don't wait for writes to reach the disk", isOn: $draft.disableFsync)
+				Toggle("No sparse files", isOn: $draft.disableSparseFiles).settingsAnchor("disableSparseFiles")
+				Toggle("Don't wait for writes to reach the disk", isOn: $draft.disableFsync).settingsAnchor("disableFsync")
 				if draft.settings.disableFsync {
 					SettingsWarning(text: "A crash or power failure can damage files that were being written.")
 				}
-				SettingsNumberField(title: "Modification time window", unit: "seconds", text: $draft.modTimeWindowS)
+				SettingsNumberField(title: "Modification time window", unit: "seconds", text: $draft.modTimeWindowS).settingsAnchor(
+					"modTimeWindowS")
 				if !isDefaults {
-					TextField("Folder marker", text: $draft.markerName, prompt: Text(verbatim: ".stfolder"))
+					TextField("Folder marker", text: $draft.markerName, prompt: Text(verbatim: ".stfolder")).settingsAnchor(
+						"markerName")
 				}
 			} header: {
 				Text("File system")
@@ -152,8 +157,10 @@
 
 		var body: some View {
 			Section {
-				SettingsNumberField(title: "Watcher timeout", unit: "seconds", text: $draft.fsWatcherTimeoutS)
+				SettingsNumberField(title: "Watcher timeout", unit: "seconds", text: $draft.fsWatcherTimeoutS).settingsAnchor(
+					"fsWatcherTimeoutS")
 				SettingsNumberField(title: "Scan progress interval", unit: "seconds", text: $draft.scanProgressIntervalS)
+					.settingsAnchor("scanProgressIntervalS")
 			} header: {
 				Text("Scanning")
 			} footer: {
@@ -170,22 +177,26 @@
 
 		var body: some View {
 			Section {
-				SettingsNumberField(title: "Copiers", unit: "per file", text: $draft.copiers)
-				SettingsNumberField(title: "Hashers", unit: "at once", text: $draft.hashers)
-				SettingsNumberField(title: "Files written at once", unit: "files", text: $draft.maxConcurrentWrites)
-				SettingsNumberField(title: "Pending data", unit: "KiB", text: $draft.pullerMaxPendingKiB)
-				SettingsNumberField(title: "Delay before pulling", unit: "seconds", text: $draft.pullerDelayS)
-				SettingsNumberField(title: "Pause after a failure", unit: "seconds", text: $draft.pullerPauseS)
+				SettingsNumberField(title: "Copiers", unit: "per file", text: $draft.copiers).settingsAnchor("copiers")
+				SettingsNumberField(title: "Hashers", unit: "at once", text: $draft.hashers).settingsAnchor("hashers")
+				SettingsNumberField(title: "Files written at once", unit: "files", text: $draft.maxConcurrentWrites).settingsAnchor(
+					"maxConcurrentWrites")
+				SettingsNumberField(title: "Pending data", unit: "KiB", text: $draft.pullerMaxPendingKiB).settingsAnchor(
+					"pullerMaxPendingKiB")
+				SettingsNumberField(title: "Delay before pulling", unit: "seconds", text: $draft.pullerDelayS).settingsAnchor(
+					"pullerDelayS")
+				SettingsNumberField(title: "Pause after a failure", unit: "seconds", text: $draft.pullerPauseS).settingsAnchor(
+					"pullerPauseS")
 				Picker("Block pull order", selection: $draft.blockPullOrder) {
 					Text("Standard").tag("standard")
 					Text("Random").tag("random")
 					Text("In order").tag("inOrder")
-				}
+				}.settingsAnchor("blockPullOrder")
 				Picker("Copy method", selection: $draft.blockCopyMethod) {
 					ForEach(draft.settings.blockCopyMethods()?.asArray() ?? [], id: \.self) { method in
 						Text(Self.copyMethodTitle(method)).tag(method)
 					}
-				}
+				}.settingsAnchor("blockCopyMethod")
 			} header: {
 				Text("Transfers")
 			} footer: {
@@ -226,9 +237,10 @@
 
 		var body: some View {
 			Section {
-				Toggle("Synchronize extended attributes", isOn: $draft.syncXattrs)
+				Toggle("Synchronize extended attributes", isOn: $draft.syncXattrs).settingsAnchor("syncXattrs")
 					.disabled(cantApply)
 				Toggle("Send extended attributes", isOn: self.sendBinding(\.sendXattrs, syncing: draft.settings.syncXattrs))
+					.settingsAnchor("settings")
 					.disabled(cantSend || draft.settings.syncXattrs)
 
 			} header: {
@@ -259,10 +271,12 @@
 				Picker("Attributes on macOS", selection: $draft.xattrMode) {
 					Text("Those that belong to the file").tag("syncable")
 					Text("All").tag("all")
-				}
+				}.settingsAnchor("xattrMode")
 				XattrFilterEditor(text: $draft.xattrFilterEntries)
-				SettingsNumberField(title: "Largest attribute", unit: "bytes", text: $draft.xattrMaxSingleEntrySize)
-				SettingsNumberField(title: "Attributes per file", unit: "bytes", text: $draft.xattrMaxTotalSize)
+				SettingsNumberField(title: "Largest attribute", unit: "bytes", text: $draft.xattrMaxSingleEntrySize).settingsAnchor(
+					"xattrMaxSingleEntrySize")
+				SettingsNumberField(title: "Attributes per file", unit: "bytes", text: $draft.xattrMaxTotalSize).settingsAnchor(
+					"xattrMaxTotalSize")
 			} header: {
 				Text("Attribute filter")
 			} footer: {
@@ -283,13 +297,16 @@
 
 		var body: some View {
 			Section {
-				Toggle("Synchronize ownership", isOn: $draft.syncOwnership)
+				Toggle("Synchronize ownership", isOn: $draft.syncOwnership).settingsAnchor("syncOwnership")
 					.disabled(cantApply)
 				Toggle("Send ownership", isOn: self.sendBinding(\.sendOwnership, syncing: draft.settings.syncOwnership))
+					.settingsAnchor("settings")
 					.disabled(cantSend || draft.settings.syncOwnership)
-				Toggle("Copy ownership from the parent directory", isOn: $draft.copyOwnershipFromParent)
-					// It has to stay possible to turn this off, as both together can't be saved
-					.disabled(draft.settings.syncOwnership && !draft.settings.copyOwnershipFromParent)
+				Toggle("Copy ownership from the parent directory", isOn: $draft.copyOwnershipFromParent).settingsAnchor(
+					"copyOwnershipFromParent"
+				)
+				// It has to stay possible to turn this off, as both together can't be saved
+				.disabled(draft.settings.syncOwnership && !draft.settings.copyOwnershipFromParent)
 			} header: {
 				Text("Ownership")
 			} footer: {
@@ -317,7 +334,7 @@
 
 		var body: some View {
 			Section {
-				Toggle("Ignore permissions", isOn: $draft.ignorePerms)
+				Toggle("Ignore permissions", isOn: $draft.ignorePerms).settingsAnchor("ignorePerms")
 					.disabled(type == "receiveencrypted")
 			} header: {
 				Text("Permissions")
@@ -451,30 +468,30 @@
 					Text("Trash can").tag(SushitrainVersioningTypeTrashcan)
 					Text("Staggered").tag(SushitrainVersioningTypeStaggered)
 					Text("External").tag(SushitrainVersioningTypeExternal)
-				}
-				.pickerStyle(.menu)
+				}.settingsAnchor("type")
+					.pickerStyle(.menu)
 			} footer: {
 				Text(self.typeDescription)
 			}
 
 			if type == SushitrainVersioningTypeSimple {
 				Section {
-					SettingsNumberField(title: "Versions to keep", unit: "per file", text: $draft.keep)
-					SettingsNumberField(title: "Maximum age", unit: "days", text: $draft.cleanoutDays)
+					SettingsNumberField(title: "Versions to keep", unit: "per file", text: $draft.keep).settingsAnchor("keep")
+					SettingsNumberField(title: "Maximum age", unit: "days", text: $draft.cleanoutDays).settingsAnchor("cleanoutDays")
 				} footer: {
 					Text("Set maximum age to 0 to keep versions regardless of age.")
 				}
 			}
 			else if type == SushitrainVersioningTypeTrashcan {
 				Section {
-					SettingsNumberField(title: "Maximum age", unit: "days", text: $draft.cleanoutDays)
+					SettingsNumberField(title: "Maximum age", unit: "days", text: $draft.cleanoutDays).settingsAnchor("cleanoutDays")
 				} footer: {
 					Text("Set maximum age to 0 to keep deleted files until you remove them manually.")
 				}
 			}
 			else if type == SushitrainVersioningTypeStaggered {
 				Section {
-					SettingsNumberField(title: "Maximum age", unit: "days", text: $draft.maxAgeDays)
+					SettingsNumberField(title: "Maximum age", unit: "days", text: $draft.maxAgeDays).settingsAnchor("maxAgeDays")
 				} footer: {
 					Text("Set maximum age to 0 to keep versions regardless of age.")
 				}
@@ -483,8 +500,8 @@
 				Section {
 					TextField(
 						"Command", text: $draft.command, prompt: Text(verbatim: "/usr/local/bin/archive %FOLDER_PATH% %FILE_PATH%")
-					)
-					.font(.body.monospaced())
+					).settingsAnchor("command")
+						.font(.body.monospaced())
 				} footer: {
 					Text(
 						"Runs this command for each file about to be replaced or deleted, which is the command's to move elsewhere. %FOLDER_PATH% and %FILE_PATH% stand for the folder and the file within it. The engine doesn't know where it puts files, so this app can't list or restore them."
@@ -499,12 +516,13 @@
 
 		private func storageSection() -> some View {
 			Section {
-				SettingsNumberField(title: "Cleanup interval", unit: "minutes", text: $draft.cleanupIntervalMinutes)
+				SettingsNumberField(title: "Cleanup interval", unit: "minutes", text: $draft.cleanupIntervalMinutes).settingsAnchor(
+					"cleanupIntervalMinutes")
 				// New folders would all keep their versions in the same place
 				if !isDefaults {
 					LabeledContent("Versions path") {
 						HStack {
-							TextField("Versions path", text: $draft.path, prompt: Text(verbatim: ".stversions"))
+							TextField("Versions path", text: $draft.path, prompt: Text(verbatim: ".stversions")).settingsAnchor("path")
 								.labelsHidden()
 							Button("Choose...") {
 								self.chooseVersionsPath()
@@ -513,7 +531,7 @@
 					}
 				}
 				if type == SushitrainVersioningTypeStaggered && !draft.settings.hasCustomPath() {
-					Toggle("Keep platform history", isOn: $draft.keepPlatformHistory)
+					Toggle("Keep platform history", isOn: $draft.keepPlatformHistory).settingsAnchor("keepPlatformHistory")
 				}
 			} footer: {
 				Text(
@@ -650,8 +668,9 @@
 
 		var body: some View {
 			Section("Change detection") {
-				SettingsNumberField(title: "Rescan interval", unit: "seconds", text: $draft.rescanIntervalS)
-				Toggle("Watch for changes", isOn: $draft.fsWatcherEnabled)
+				SettingsNumberField(title: "Rescan interval", unit: "seconds", text: $draft.rescanIntervalS).settingsAnchor(
+					"rescanIntervalS")
+				Toggle("Watch for changes", isOn: $draft.fsWatcherEnabled).settingsAnchor("fsWatcherEnabled")
 			}
 		}
 	}

@@ -25,7 +25,7 @@
     },
   ],
   "files": [
-    { "path": "SushitrainCore/desktopui/catalog.json", "target-membership": [ "Synctrain/resources" ] },
+    { "path": "SushitrainCore/desktopui/catalog.json", "target-membership": [ "Synctrain/resources", "SynctrainMobile/resources" ] },
     {
       "path": "Localizable.xcstrings",
       "target-membership": [
@@ -381,6 +381,9 @@
       "package-product-members": [
         {
           "product-name": "SynctrainFileProviderKit",
+          "build-phase": { "build-phase": "frameworks" },
+        }, {
+          "product-name": "SynctrainHostKit",
           "build-phase": { "build-phase": "frameworks" },
         },
       ],

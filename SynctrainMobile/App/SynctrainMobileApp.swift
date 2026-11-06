@@ -8,6 +8,10 @@ import SwiftUI
 @main @MainActor enum MobileEntry {
 	static func main() {
 		#if DEBUG
+			if ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_SETTINGS_SEARCH"] == "1" {
+				SettingsSearchFixtureApp.main()
+				return
+			}
 			if ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_HISTORY_FIXTURE"] == "1" {
 				HistoryFixtureApp.main()
 				return
@@ -44,3 +48,9 @@ struct SynctrainMobileApp: App {
 		}
 	}
 }
+
+#if DEBUG
+	private struct SettingsSearchFixtureApp: App {
+		var body: some Scene { WindowGroup { SettingsView() } }
+	}
+#endif

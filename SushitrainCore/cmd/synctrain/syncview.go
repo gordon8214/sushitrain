@@ -247,6 +247,11 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 	stack.AddTitledWithIcon(remotePage, "remote", "Remote Files", "network-server-symbolic")
 	stack.SetVisibleChildName("remote")
 	toolbar.SetContent(stack)
+	if w.desk != nil {
+		w.desk.revealSetting("gateway.enabled", v.service)
+		w.desk.revealSetting("gateway.port", v.port)
+		w.desk.revealSetting("gateway.host", v.host)
+	}
 
 	background(describeHome, func(h gatewayadmin.Home, err error) {
 		if err != nil {

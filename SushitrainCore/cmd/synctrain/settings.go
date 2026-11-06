@@ -28,6 +28,9 @@ func (d *desktopUI) editPage(section, title string) {
 		}
 		d.editor = editor.Token
 		d.reset(title)
+		if strings.HasPrefix(section, "advanced/") {
+			d.text("These are expert settings. Incorrect values may damage your folder contents and stop synchronization.")
+		}
 		d.setDirty(false)
 		if section == "gui" {
 			d.load("engine.status", nil, func(b json.RawMessage) {
@@ -66,10 +69,16 @@ func (d *desktopUI) editPage(section, title string) {
 		hasAdvanced := false
 		for _, field := range editor.Fields {
 			f := field
-			add := func(row gtk.Widgetter) { g.Add(row) }
+			add := func(row gtk.Widgetter) { g.Add(row); d.revealSetting(f.Path, row) }
 			if f.IsAdvanced {
 				hasAdvanced = true
-				add = func(row gtk.Widgetter) { advanced.AddRow(row) }
+				add = func(row gtk.Widgetter) {
+					advanced.AddRow(row)
+					if d.matchesSettingsAnchor(f.Path) {
+						advanced.SetExpanded(true)
+					}
+					d.revealSetting(f.Path, row)
+				}
 			}
 			switch {
 			case f.Kind == "bool":

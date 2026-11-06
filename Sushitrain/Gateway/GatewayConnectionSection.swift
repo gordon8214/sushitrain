@@ -25,7 +25,7 @@
 		var body: some View {
 			Group {
 				Section {
-					TextField("Port", text: $portText)
+					TextField("Port", text: $portText).settingsAnchor("gateway.port")
 						.onChange(of: portText) { _, value in
 							if let port = Int(value) { draft.port = port }
 						}
@@ -34,14 +34,16 @@
 							.foregroundStyle(.red)
 					}
 					TextField(
-						"Host name", text: $draft.publicHost, prompt: Text(verbatim: GatewaySettings.localHostName))
+						"Host name", text: $draft.publicHost, prompt: Text(verbatim: GatewaySettings.localHostName)
+					).settingsAnchor("gateway.host")
 					TextField(
-						"Service name", text: $draft.serviceName, prompt: Text(verbatim: GatewaySettings.computerName))
+						"Service name", text: $draft.serviceName, prompt: Text(verbatim: GatewaySettings.computerName)
+					).settingsAnchor("gateway.name")
 					Picker("Content cache", selection: $draft.contentCacheMiB) {
 						ForEach(cacheSizes, id: \.self) { size in
 							Text((Int64(size) << 20).formatted(.byteCount(style: .memory))).tag(size)
 						}
-					}
+					}.settingsAnchor("gateway.cache")
 				} header: {
 					Text("Connection")
 				} footer: {
@@ -54,7 +56,7 @@
 					Picker("Certificate", selection: $draft.certificateMode) {
 						Text("Self-signed").tag(GatewaySettings.CertificateMode.selfSigned)
 						Text("Certificate files").tag(GatewaySettings.CertificateMode.files)
-					}
+					}.settingsAnchor("gateway.certificate")
 					if draft.certificateMode == .files {
 						LabeledContent("Certificate and private key") {
 							HStack {

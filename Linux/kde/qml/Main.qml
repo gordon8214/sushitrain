@@ -17,6 +17,51 @@ Kirigami.ApplicationWindow {
   collapsible: false; collapseButtonVisible: false
   preferredSize: Kirigami.Units.gridUnit * 14
   id: drawer
+  header: ColumnLayout {
+   visible: backend.page.startsWith("settings:")
+   spacing: Kirigami.Units.smallSpacing
+   Kirigami.SearchField {
+    id: settingsSearch
+    objectName: "settingsSearch"
+    Layout.fillWidth: true
+    placeholderText: "Search Settings"
+    autoAccept: false
+    onAccepted: { if (backend.settingsResults.length > 0) backend.openSettingsResult(backend.settingsResults[0]) }
+    text: backend.settingsQuery
+    onTextChanged: backend.settingsQuery = text
+    Keys.onEscapePressed: backend.settingsQuery = ""
+    Keys.onDownPressed: settingsResults.forceActiveFocus()
+   }
+   QQC2.Label { visible: backend.settingsSearchError.length > 0; text: backend.settingsSearchError; wrapMode: Text.Wrap; Layout.fillWidth: true }
+   QQC2.Label { visible: settingsSearch.text.trim().length > 0 && backend.settingsResults.length === 0; text: "No Results"; Layout.fillWidth: true }
+   ListView {
+    id: settingsResults
+    objectName: "settingsResults"
+    visible: settingsSearch.text.trim().length > 0
+    Layout.fillWidth: true
+    Layout.preferredHeight: Math.min(contentHeight, root.height * 0.7)
+    clip: true
+    model: backend.settingsResults
+    activeFocusOnTab: true
+    keyNavigationWraps: true
+    QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+    delegate: QQC2.ItemDelegate {
+     required property var modelData
+     width: ListView.view.width
+     objectName: "settingsResult_" + modelData.id
+     highlighted: ListView.isCurrentItem
+     contentItem: ColumnLayout {
+      QQC2.Label { text: modelData.title; wrapMode: Text.Wrap; Layout.fillWidth: true }
+      QQC2.Label { text: modelData.breadcrumb; wrapMode: Text.Wrap; opacity: 0.7; font: Kirigami.Theme.smallFont; Layout.fillWidth: true }
+     }
+     onClicked: backend.openSettingsResult(modelData)
+     Keys.onReturnPressed: clicked()
+     Keys.onEnterPressed: clicked()
+     Accessible.name: modelData.title + ", " + modelData.breadcrumb
+    }
+    Keys.onEscapePressed: { backend.settingsQuery = ""; settingsSearch.forceActiveFocus() }
+   }
+  }
   footer: QQC2.ToolButton {
    objectName: "settingsNavigation"
    visible: !backend.page.startsWith("settings:")
@@ -31,6 +76,7 @@ Kirigami.ApplicationWindow {
   else { const back = backend.commands.find(command => command.label === "Back"); if (back) backend.activate(back.key) }
  }
  Shortcut { sequences: [StandardKey.Back]; enabled: root.hasSettingsBack && !backend.busy; onActivated: root.goSettingsBack() }
+ Shortcut { sequences: [StandardKey.Find]; enabled: backend.page.startsWith("settings:"); onActivated: { drawer.drawerOpen = true; settingsSearch.forceActiveFocus() } }
  property var pageScrollPositions: ({})
  property string previousPage: "Overview"
  property var navigationObjects: ({})
@@ -50,7 +96,7 @@ Kirigami.ApplicationWindow {
   let wanted = new Set()
   function visit(action) { wanted.add(action.route); for (let child of action.children) visit(child) }
   for (let action of next) visit(action)
-  drawer.actions = next
+  drawer.actions = backend.page.startsWith("settings:") && backend.settingsQuery.trim().length > 0 ? [] : next
   for (let route of Object.keys(navigationObjects)) {
    if (route.startsWith("folder:") && !wanted.has(route)) {
     navigationObjects[route].destroy()
@@ -70,7 +116,7 @@ Kirigami.ApplicationWindow {
    onTriggered: backend.navigate(route)
   }
  }
- Connections { target: backend; function onNavigationChanged() {
+ Connections { target: backend; function onSettingsSearchChanged() { root.updateNavigation() } function onNavigationChanged() {
   if (root.pageStack.currentItem && root.pageStack.currentItem.flickable) root.pageScrollPositions[root.previousPage] = root.pageStack.currentItem.flickable.contentY
   root.previousPage = backend.page
   root.updateNavigation()
@@ -189,6 +235,13 @@ Kirigami.ApplicationWindow {
   id: editorBody
   SettingsEditorContent {
    fields: editor.fields; busy: backend.busy; expanded: editor.advancedExpanded
+   targetAnchor: backend.settingsAnchor; targetField: backend.settingsField
+   onRevealRequested: item => Qt.callLater(() => {
+    if (editor.isPage && mainPage.flickable) {
+     const position = item.mapToItem(mainPage.flickable.contentItem, 0, 0)
+     mainPage.flickable.contentY = Math.max(0, Math.min(mainPage.flickable.contentHeight - mainPage.flickable.height, position.y - mainPage.flickable.height / 2))
+    }
+   })
    onExpansionRequested: value => editor.advancedExpanded = value
    onEdited: (path, value) => { editor.draft[path] = value; backend.fieldChanged() }
   }

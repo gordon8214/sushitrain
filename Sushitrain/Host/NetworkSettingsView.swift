@@ -36,20 +36,20 @@ struct NetworkSettingsView: View {
 				// Listening addresses popup sheet
 				Button("Listening addresses...", systemImage: "envelope.front") {
 					showListeningAddresses = true
-				}
-				.disabled(!appState.client.isListening())
-				.buttonStyle(.link)
-				.sheet(isPresented: $showListeningAddresses) {
-					NavigationStack {
-						AsyncAddressesView(addressType: .listening)
-							.navigationTitle("Listening addresses")
-							.toolbar {
-								SheetButton(role: .save) {
-									showListeningAddresses = false
+				}.settingsAnchor("listenAddresses")
+					.disabled(!appState.client.isListening())
+					.buttonStyle(.link)
+					.sheet(isPresented: $showListeningAddresses) {
+						NavigationStack {
+							AsyncAddressesView(addressType: .listening)
+								.navigationTitle("Listening addresses")
+								.toolbar {
+									SheetButton(role: .save) {
+										showListeningAddresses = false
+									}
 								}
-							}
+						}
 					}
-				}
 			} header: {
 				Text("Connectivity")
 			} footer: {
@@ -81,7 +81,8 @@ struct NetworkSettingsView: View {
 								errorMessage = ErrorMessage(error)
 								updateCounter += 1
 							}
-						}))
+						})
+				).settingsAnchor("enoughConnections")
 			} footer: {
 				Text(
 					"When this setting is enabled, the app will not attempt to connect to more devices after one connection has been established."
@@ -99,7 +100,8 @@ struct NetworkSettingsView: View {
 							do { try appState.client.setLocalAnnounceEnabled(nv) }
 							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
-						}))
+						})
+				).settingsAnchor("localAnnounceEnabled")
 
 				Toggle(
 					"Announce LAN addresses",
@@ -111,7 +113,8 @@ struct NetworkSettingsView: View {
 							do { try appState.client.setAnnounceLANAddresses(nv) }
 							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
-						}))
+						})
+				).settingsAnchor("announceLANAddresses")
 
 				Toggle(
 					"Announce globally",
@@ -123,25 +126,26 @@ struct NetworkSettingsView: View {
 							do { try appState.client.setGlobalAnnounceEnabled(nv) }
 							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
-						}))
+						})
+				).settingsAnchor("globalAnnounceEnabled")
 
 				// Global announce addresses popup sheet
 				Button("Global announce servers...", systemImage: "megaphone.fill") {
 					showDiscoveryAddresses = true
-				}
-				.sheet(isPresented: $showDiscoveryAddresses) {
-					NavigationStack {
-						AsyncAddressesView(addressType: .discovery)
-							.navigationTitle("Global announce servers")
-							.toolbar {
-								SheetButton(role: .save) {
-									showDiscoveryAddresses = false
+				}.settingsAnchor("globalAnnounceServers")
+					.sheet(isPresented: $showDiscoveryAddresses) {
+						NavigationStack {
+							AsyncAddressesView(addressType: .discovery)
+								.navigationTitle("Global announce servers")
+								.toolbar {
+									SheetButton(role: .save) {
+										showDiscoveryAddresses = false
+									}
 								}
-							}
+						}
 					}
-				}
-				.disabled(!appState.client.isGlobalAnnounceEnabled())
-				.buttonStyle(.link)
+					.disabled(!appState.client.isGlobalAnnounceEnabled())
+					.buttonStyle(.link)
 			}
 
 			Section("Network traversal") {
@@ -155,7 +159,8 @@ struct NetworkSettingsView: View {
 							do { try appState.client.setRelaysEnabled(nv) }
 							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
-						}))
+						})
+				).settingsAnchor("relaysEnabled")
 
 				Toggle(
 					"Enable NAT-PMP / UPnP",
@@ -167,7 +172,8 @@ struct NetworkSettingsView: View {
 							do { try appState.client.setNATEnabled(nv) }
 							catch { errorMessage = ErrorMessage(error) }
 							self.updateCounter += 1
-						}))
+						})
+				).settingsAnchor("natEnabled")
 
 				Toggle(
 					"Enable STUN",
@@ -184,20 +190,20 @@ struct NetworkSettingsView: View {
 				// STUN server addresses popup sheet
 				Button("STUN Servers...", systemImage: "arrow.trianglehead.swap") {
 					showSTUNAddresses = true
-				}
-				.sheet(isPresented: $showSTUNAddresses) {
-					NavigationStack {
-						AsyncAddressesView(addressType: .stun)
-							.navigationTitle("STUN servers")
-							.toolbar {
-								SheetButton(role: .save) {
-									showSTUNAddresses = false
+				}.settingsAnchor("stunServers")
+					.sheet(isPresented: $showSTUNAddresses) {
+						NavigationStack {
+							AsyncAddressesView(addressType: .stun)
+								.navigationTitle("STUN servers")
+								.toolbar {
+									SheetButton(role: .save) {
+										showSTUNAddresses = false
+									}
 								}
-							}
+						}
 					}
-				}
-				.disabled(!appState.client.isSTUNEnabled())
-				.buttonStyle(.link)
+					.disabled(!appState.client.isSTUNEnabled())
+					.buttonStyle(.link)
 			}
 
 			Section {

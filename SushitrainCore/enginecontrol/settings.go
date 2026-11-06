@@ -316,7 +316,7 @@ func visibleBasic(section, path string) bool {
 	case strings.HasPrefix(section, "basic/device/"):
 		fields = " name addresses introducer untrusted "
 	case section == "basic/options":
-		fields = " listenAddresses globalAnnounceEnabled globalAnnounceServers localAnnounceEnabled announceLANAddresses relaysEnabled natEnabled stunServers enoughConnections "
+		fields = " listenAddresses globalAnnounceEnabled globalAnnounceServers localAnnounceEnabled announceLANAddresses relaysEnabled natEnabled stunServers connectionLimitEnough "
 	case section == "bandwidth":
 		fields = " maxRecvKbps maxSendKbps limitBandwidthInLan trafficClass "
 	default:

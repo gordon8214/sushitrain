@@ -11,6 +11,11 @@
 // and integer timestamps remain in C++ QJsonValue objects without JS rounding.
 class Backend : public QObject {
   Q_OBJECT
+  Q_PROPERTY(QString settingsQuery READ settingsQuery WRITE setSettingsQuery NOTIFY settingsSearchChanged)
+  Q_PROPERTY(QVariantList settingsResults READ settingsResults NOTIFY settingsSearchChanged)
+  Q_PROPERTY(QString settingsSearchError READ settingsSearchError NOTIFY settingsSearchChanged)
+  Q_PROPERTY(QString settingsField READ settingsField NOTIFY dialogChanged)
+  Q_PROPERTY(QString settingsAnchor READ settingsAnchor NOTIFY dialogChanged)
   Q_PROPERTY(QVariantList navigation READ navigation NOTIFY navigationChanged)
   Q_PROPERTY(QString mode READ mode NOTIFY changed)
   Q_PROPERTY(QString title READ title NOTIFY changed)
@@ -26,6 +31,13 @@ class Backend : public QObject {
 public:
   explicit Backend(QObject *parent = nullptr);
   QVariantList navigation() const;
+  QString settingsQuery() const { return searchQuery; }
+  QString settingsSearchError() const { return searchError; }
+  QString settingsField() const { return searchTargetField; }
+  QString settingsAnchor() const { return searchTargetAnchor; }
+  QVariantList settingsResults() const;
+  void setSettingsQuery(const QString &value);
+  Q_INVOKABLE void openSettingsResult(const QVariantMap &entry);
   QString mode() const { return m_mode; }
   QString title() const { return m_title; }
   QString page() const { return m_page; }
@@ -49,6 +61,7 @@ public:
   void arguments(const QStringList &args);
   void inspect();
 signals:
+  void settingsSearchChanged();
   void changed();
   void navigationChanged();
   void closeReady();
@@ -60,6 +73,12 @@ signals:
 
 private:
   ServiceClient client;
+  QString searchQuery, searchTargetAnchor, searchTargetField, searchError;
+  QJsonArray searchIndex;
+  QJsonObject pendingSearchEntry;
+  bool searchLoading = false;
+  quint64 searchGeneration = 0;
+  void loadSettingsIndex();
   QString m_mode, m_socket, m_title = "Synctrain", m_error, m_page = "Overview",
                             m_folder, m_directory;
   QVariantList m_rows, m_commands, folderShortcuts;

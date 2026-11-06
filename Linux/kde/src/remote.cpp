@@ -187,6 +187,10 @@ void Backend::remote() {
                        [this](auto, auto) { refresh(); }, true);
                  });
           }}});
+    if (m_page.startsWith("settings:") && searchTargetAnchor.startsWith("gateway.") && !searchTargetField.isEmpty()) {
+      const auto buttons=m_rows.last().toMap()["actions"].toList();
+      if (!buttons.isEmpty()) activate(buttons.first().toMap()["key"].toString());
+    }
     if (!s["enabled"].toBool())
       return;
     call("exports.list", {}, [this](QJsonValue exports, QString) {

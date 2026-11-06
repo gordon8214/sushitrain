@@ -43,8 +43,8 @@ struct FilesLocationSettingsView: View {
 				else {
 					showRebuildConfirmation = true
 				}
-			}
-			.disabled(domain.isRebuilding)
+			}.settingsAnchor("filesRebuild")
+				.disabled(domain.isRebuilding)
 		} header: {
 			#if os(macOS)
 				Text("Finder")

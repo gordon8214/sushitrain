@@ -44,7 +44,7 @@ ENGINE_TAGS = noupgrade
 # The app's MACOSX_DEPLOYMENT_TARGET. Without it the objects take the SDK's version, and the linker warns about each one.
 MACOS_VERSION = 27.0
 
-build/SushitrainCore.xcframework: src/*.go hostbridge/*.go mcpapi/*.go mcpcontrol/*.go enginecontrol/*.go desktopapi/*.go gateway/*.go versionsnapshot/*.go sthome/*.go remoteapi/*.go remoteclient/*.go adminsock/*.go gatewayadmin/*.go files/*.go sharedfile/*.go sqlitefile/*.go previewcache/*.go Makefile go.mod go.sum notices.html
+build/SushitrainCore.xcframework: src/*.go desktopui/*.go desktopui/catalog.json hostbridge/*.go mcpapi/*.go mcpcontrol/*.go enginecontrol/*.go desktopapi/*.go gateway/*.go versionsnapshot/*.go sthome/*.go remoteapi/*.go remoteclient/*.go adminsock/*.go gatewayadmin/*.go files/*.go sharedfile/*.go sqlitefile/*.go previewcache/*.go Makefile go.mod go.sum notices.html
 	# gomobile replaces CGO_CFLAGS, dropping Go's default -O2. CPPFLAGS reaches every C/C++ compile unchanged,
 	# so restore optimization here, particularly for SQLite's amalgamation.
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS) -O2" go tool gomobile bind -target macos -macosversion $(MACOS_VERSION) -tags $(ENGINE_TAGS) -trimpath \

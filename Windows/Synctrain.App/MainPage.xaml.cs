@@ -47,6 +47,7 @@ public sealed partial class MainPage : Page
         InitializeComponent();
         BuildNavigation();
         updates.Tick+=async(_,_)=>{
+            if (activeOperations==0 && settingsQuery.Trim().Length>0) await LoadSettingsIndex(force:true);
             if(activeOperations!=0 || editorToken is not null || status is null) return;
             await Run(async()=>{ var next=await Call("status"); if(S(next,"revision")!=S(status,"revision") || S(next,"mode")!=S(status,"mode")) await Refresh(); },clearError:false);
         };
@@ -98,7 +99,7 @@ public sealed partial class MainPage : Page
         await Run(async () => {
             if (!await MayLeaveEditor()) { BuildNavigation(); return; }
             await CloseEditor();
-            detailRoute = null; detailParents.Clear();
+            detailRoute = null; detailParents.Clear(); settingsResultsPage=false;
             if (next.StartsWith("folder:", StringComparison.Ordinal)) {
                 if (S(status, "mode") == "files") { parent = long.Parse(next[7..]); parents.Clear(); parents.Push(0); }
                 else { syncFolder = next[7..]; syncPath = ""; }
@@ -167,7 +168,14 @@ public sealed partial class MainPage : Page
         }
         try { if(statusFailure is null) await LoadFolderShortcuts(mode); } catch (OperationCanceledException) { throw; } catch (Exception error) { ShowError(error.Message); }
         BuildNavigation();
-        if (page.StartsWith("settings:", StringComparison.Ordinal)) { await SettingsCategory(page[9..], mode); return; }
+        if (page.StartsWith("settings:", StringComparison.Ordinal)) {
+            var category = page[9..];
+            // Search metadata owns its cache, independently of this page render.
+            _ = LoadSettingsIndex();
+            if (current != generation) return;
+            if (settingsResultsPage) ShowSettingsResults(); else await SettingsCategory(category, mode);
+            return;
+        }
         if(statusFailure is not null) { Text("Start the background service, then choose Refresh. Settings remains available."); return; }
         switch (page)
         {
@@ -230,7 +238,7 @@ public sealed partial class MainPage : Page
         // The user already chose Cancel or explicitly confirmed discarding the draft.
         editorToken=null; editorChanged=null;
     }
-    private async Task EditSettings(string section)
+    private async Task EditSettings(string section, string? searchAnchor = null, string? searchField = null)
     {
         if (loadingEditor || !await MayLeaveEditor()) return;
         loadingEditor = true;
@@ -251,6 +259,8 @@ public sealed partial class MainPage : Page
             Heading.Text = "Reset Synchronization Settings";
             Text("Restore built-in synchronization defaults. Folder location, direction, sharing, ignore patterns, and versioning stay unchanged. Review the settings, then choose Save.");
         }
+        if (section.StartsWith("advanced/",StringComparison.Ordinal)) Text("These are expert settings. Incorrect values may damage your folder contents and stop synchronization.");
+        FrameworkElement? searchControl = null;
         var values = new Dictionary<string, Func<string>>();
         var advancedFields = new StackPanel { Spacing = 12 };
         var advanced = new Expander
@@ -267,8 +277,13 @@ public sealed partial class MainPage : Page
             else if (B(field, "IsSecret")) { var password = new PasswordBox { Header = label, IsEnabled = enabled }; container.Children.Add(password); values[key] = () => password.Password; }
             else if (S(field, "Kind") == "enum") { var options = field?["Options"]?.AsArray().Select(option => option!.ToString()).ToArray() ?? []; var combo = new ComboBox { Header = label, ItemsSource = options, SelectedItem = value, IsEnabled = enabled }; container.Children.Add(combo); values[key] = () => combo.SelectedItem?.ToString() ?? value; }
             else { var box = new TextBox { Header = label, Text = value, IsReadOnly = !enabled, AcceptsReturn = S(field, "Kind") is "list" or "json", TextWrapping = TextWrapping.Wrap }; container.Children.Add(box); values[key] = () => box.Text; }
+            var control = (FrameworkElement)container.Children.Last();
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(control,"settings.control." + key);
+            if (string.Equals(key,searchAnchor,StringComparison.OrdinalIgnoreCase) || string.Equals(key,searchField,StringComparison.OrdinalIgnoreCase)) { searchControl=control; if (container==advancedFields) advanced.IsExpanded=true; }
+
         }
         if (advancedFields.Children.Count > 0) Body.Children.Add(advanced);
+        if (searchControl is FrameworkElement target) DispatcherQueue.TryEnqueue(() => { target.StartBringIntoView(); if (target is Control control) control.Focus(FocusState.Programmatic); });
         var baseline = values.ToDictionary(pair => pair.Key, pair => pair.Value());
         editorChanged = () => values.Any(pair => pair.Value() != baseline[pair.Key]);
         Command("Save", Symbol.Save, async () =>
@@ -296,7 +311,7 @@ public sealed partial class MainPage : Page
         if(FileBrowser.Visibility!=Visibility.Visible || fileFilterScope.Length==0)return;
         fileStates[fileFilterScope]=new(FileFilter.Text,(FileList.SelectedItem as FileRow)?.Identity,FindScroll(FileList)?.VerticalOffset??0,FileFilter.FocusState!=FocusState.Unfocused);
     }
-    private void ShowBody() { RememberFileState(); BodyScroll.Visibility=Visibility.Visible; FileBrowser.Visibility=Visibility.Collapsed; }
+    private void ShowBody() { showingSettingsResults=false; RememberFileState(); BodyScroll.Visibility=Visibility.Visible; FileBrowser.Visibility=Visibility.Collapsed; }
     private void ShowFiles(List<FileRow> rows,string scope)
     {
         RememberFileState();
@@ -504,11 +519,19 @@ public sealed partial class MainPage : Page
                 ActionButton("Restore",async()=>{if(await Confirm("Restore this version?","The gateway writes this version as a new change.")) await Call("files.restore",new { Item=item,ID=id });}));
         }
     }
-    private async Task Gateway()
+    private async Task Gateway(string? searchAnchor = null)
     {
-        var enabled = B(status, "gatewayEnabled"); Body.Children.Add(ActionButton(enabled ? "Turn off remote file service" : "Turn on remote file service", async () => { await Call("gateway.enable", new { Enabled = !enabled }); await Refresh(); })); if (S(status,"gatewayError").Length>0) Text(S(status,"gatewayError")); if (!enabled || !B(status,"gatewayRunning")) return;
+        var enabled = B(status, "gatewayEnabled");
+        var serviceButton = ActionButton(enabled ? "Turn off remote file service" : "Turn on remote file service", async () => { await Call("gateway.enable", new { Enabled = !enabled }); await Refresh(); });
+        Body.Children.Add(serviceButton);
+        FrameworkElement searchControl = serviceButton;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(serviceButton,"settings.control.gateway.enabled");
+        void Reveal() => DispatcherQueue.TryEnqueue(() => { searchControl.StartBringIntoView(); if (searchControl is Control control) control.Focus(FocusState.Programmatic); });
+        if (S(status,"gatewayError").Length>0) Text(S(status,"gatewayError"));
+        if (!enabled || !B(status,"gatewayRunning")) { if (searchAnchor is not null) Reveal(); return; }
         Command("Pair a client", Symbol.Add, async () => { var pairing = await Call("gateway.pair"); var box = new TextBox { Text = S(pairing, "url"), IsReadOnly = true, TextWrapping = TextWrapping.Wrap, MinWidth = 420 }; await new ContentDialog { XamlRoot = XamlRoot, Title = "Pair with this PC", Content = box, CloseButtonText = "Done" }.ShowAsync(); });
         Text("Shared folders", true);
+        if (searchAnchor == "gateway.exports") searchControl = (FrameworkElement)Body.Children.Last();
         foreach (var folder in (await Call("engine.folders"))?.AsArray() ?? [])
         {
             var id = S(folder, "ID"); Row(S(folder, "Label"), id,
@@ -534,7 +557,9 @@ public sealed partial class MainPage : Page
                 }), ActionButton("Deny",async()=>{ await Call("gateway.deny",new { ID=id }); await Refresh(); }));
         }
         Text("Paired clients", true);
+        if (searchAnchor == "gateway.clients") searchControl = (FrameworkElement)Body.Children.Last();
         foreach (var client in (await Call("gateway.clients"))?.AsArray() ?? []) { var id = S(client, "clientID"); Row(S(client, "name"), S(client, "platform"), ActionButton("Permissions…",()=>ClientPermissions(client!)), ActionButton("Revoke", async () => { if (await Confirm("Revoke this client?", "Its gateway access stops immediately.")) { await Call("gateway.revoke", new { ID = id }); await Refresh(); } })); }
+        if (searchAnchor is not null) Reveal();
     }
     private async Task ClientPermissions(JsonNode client)
     {

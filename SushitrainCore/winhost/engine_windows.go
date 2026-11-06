@@ -178,6 +178,9 @@ func (h *Host) engineCall(ctx context.Context, method string, p request) (any, e
 	case "settings.close":
 		delete(h.editors, p.Token)
 		return nil, nil
+	case "settings.index":
+		data, err := c.SettingsSearchIndex()
+		return json.RawMessage(data), err
 	case "settings.get":
 		sectionID := strings.TrimPrefix(p.Section, "reset/")
 		if strings.HasPrefix(sectionID, "basic/folder/") {

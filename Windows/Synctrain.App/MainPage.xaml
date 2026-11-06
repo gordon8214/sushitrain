@@ -1,5 +1,11 @@
 <Page x:Class="Synctrain_App.MainPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <Page.KeyboardAccelerators><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="FocusSettingsSearch"/></Page.KeyboardAccelerators>
  <NavigationView x:Name="Navigation" SelectionChanged="Navigate" IsBackButtonVisible="Collapsed" PaneDisplayMode="Auto">
+  <NavigationView.AutoSuggestBox>
+   <AutoSuggestBox x:Name="SettingsSearchBox" PlaceholderText="Search Settings" QueryIcon="Find" TextMemberPath="Title" TextChanged="SettingsSearchChanged" QuerySubmitted="SettingsQuerySubmitted" AutomationProperties.Name="Search Settings">
+    <AutoSuggestBox.ItemTemplate><DataTemplate><StackPanel Padding="4" Spacing="2"><TextBlock Text="{Binding Title}"/><TextBlock Text="{Binding Breadcrumb}" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/></StackPanel></DataTemplate></AutoSuggestBox.ItemTemplate>
+   </AutoSuggestBox>
+  </NavigationView.AutoSuggestBox>
   <Grid Padding="24" RowSpacing="16">
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
    <TextBlock x:Name="Heading" Style="{StaticResource TitleTextBlockStyle}"/>

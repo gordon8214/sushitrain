@@ -67,7 +67,7 @@ func Strings(list *core.ListOfStrings) []string {
 }
 func (c *Control) Register(a *adminsock.Server) {
 	desktopapi.RegisterItems(a, c.itemStatus)
-	for _, name := range []string{"engine.diagnostics", "engine.differences", "engine.snapshots", "engine.exportSnapshot", "engine.inspect", "engine.read", "engine.replace", "engine.mkdir", "engine.import", "engine.rename", "engine.move", "engine.status", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.browsePage", "engine.thumbnail", "engine.search", "engine.pending", "engine.pendingFolders", "engine.ignored", "engine.stats", "engine.logs", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "engine.previewVersion", "engine.exportCurrent", "engine.resolvePath", "engine.captureRestore", "engine.restoreDownloaded", "settings.get", "settings.save", "settings.close", "configuration.export"} {
+	for _, name := range []string{"engine.diagnostics", "engine.differences", "engine.snapshots", "engine.exportSnapshot", "engine.inspect", "engine.read", "engine.replace", "engine.mkdir", "engine.import", "engine.rename", "engine.move", "engine.status", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.browsePage", "engine.thumbnail", "engine.search", "engine.pending", "engine.pendingFolders", "engine.ignored", "engine.stats", "engine.logs", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "engine.previewVersion", "engine.exportCurrent", "engine.resolvePath", "engine.captureRestore", "engine.restoreDownloaded", "settings.index", "settings.get", "settings.save", "settings.close", "configuration.export"} {
 		a.Register(name, func(ctx context.Context, params json.RawMessage) (any, error) {
 			var p Request
 			if len(params) > 0 {
@@ -80,7 +80,7 @@ func (c *Control) Register(a *adminsock.Server) {
 	}
 }
 func (c *Control) Call(ctx context.Context, method string, p Request) (any, error) {
-	if strings.HasPrefix(method, "settings.") {
+	if strings.HasPrefix(method, "settings.") && method != "settings.index" {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 	} else {
@@ -349,6 +349,9 @@ func (c *Control) Call(ctx context.Context, method string, p Request) (any, erro
 		}
 		return nil, dest.Commit()
 
+	case "settings.index":
+		data, err := cl.SettingsSearchIndex()
+		return json.RawMessage(data), err
 	case "settings.get":
 		return c.getSettings(p.Section)
 	case "settings.save":
