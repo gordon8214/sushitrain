@@ -17,15 +17,19 @@ import (
 )
 
 func canonicalRoute(route string) string {
-	if route == "Settings" {
-		return "settings:general"
-	}
 	c := desktopui.Read()
-	if id, ok := c.Aliases[route]; ok {
-		for _, d := range c.Destinations {
-			if d.ID == id {
-				return d.Title
-			}
+	id := strings.TrimPrefix(route, "settings:")
+	if alias, ok := c.Aliases[id]; ok {
+		id = alias
+	}
+	for _, d := range c.Destinations {
+		if d.ID == id || d.Title == route {
+			return (desktopui.NavigationItem{ID: d.ID, Title: d.Title, Route: d.ID}).NativeRoute()
+		}
+	}
+	for _, category := range c.Settings {
+		if category.ID == id {
+			return "settings:" + id
 		}
 	}
 	return route
@@ -47,45 +51,44 @@ func (d *desktopUI) rebuildSidebar() {
 	}
 	d.sidebarRoutes = nil
 	d.folderShortcuts = nil
-	settings := strings.HasPrefix(d.route, "settings:")
-	d.sidebarBack.SetVisible(settings)
+	d.sidebarBack.SetVisible(false)
+	d.sidebarSettings.SetVisible(false)
 	if d.settingsSearchButton != nil {
-		d.settingsSearchButton.SetVisible(settings)
-		d.settingsSearchBar.SetVisible(settings)
+		d.settingsSearchButton.SetVisible(true)
+		d.settingsSearchBar.SetVisible(true)
 	}
 	d.showSettingsSearch()
-	d.sidebarSettings.SetVisible(!settings)
-	add := func(title, route string) {
-		r := gtk.NewListBoxRow()
-		l := gtk.NewLabel(title)
-		l.SetXAlign(0)
-		l.SetMarginTop(12)
-		l.SetMarginBottom(12)
-		l.SetMarginStart(12)
-		r.SetChild(l)
-		d.sidebar.Append(r)
-		d.sidebarRoutes = append(d.sidebarRoutes, route)
-	}
-	if settings {
-		for _, c := range desktopui.Read().Settings {
-			add(c.Title, "settings:"+c.ID)
-		}
-	} else {
-		for _, item := range desktopui.Read().Destinations {
-			if item.ID == "settings" {
-				continue
-			}
+	for _, group := range desktopui.Read().Navigation("gnome", d.mode) {
+		header := gtk.NewListBoxRow()
+		header.SetSelectable(false)
+		header.SetActivatable(false)
+		label := gtk.NewLabel(group.Title)
+		label.SetXAlign(0)
+		label.AddCSSClass("heading")
+		label.SetMarginTop(16)
+		label.SetMarginStart(12)
+		header.SetChild(label)
+		d.sidebar.Append(header)
+		d.sidebarRoutes = append(d.sidebarRoutes, "")
+		for _, item := range group.Items {
 			if item.ID == "files" {
 				r := adw.NewExpanderRow()
 				r.SetExpanded(d.shortcutsExpanded)
 				r.SetTitle(item.Title)
 				r.AddSuffix(textButton("Browse", func() { d.guard(func() { d.navigate("Files") }) }))
 				d.sidebar.Append(r)
-				d.sidebarRoutes = append(d.sidebarRoutes, "Files")
 				d.folderShortcuts = r
 			} else {
-				add(item.Title, item.Title)
+				r := gtk.NewListBoxRow()
+				l := gtk.NewLabel(item.Title)
+				l.SetXAlign(0)
+				l.SetMarginTop(12)
+				l.SetMarginBottom(12)
+				l.SetMarginStart(12)
+				r.SetChild(l)
+				d.sidebar.Append(r)
 			}
+			d.sidebarRoutes = append(d.sidebarRoutes, item.NativeRoute())
 		}
 	}
 	for i, route := range d.sidebarRoutes {
@@ -104,11 +107,10 @@ func (d *desktopUI) settingsCategory(id string) {
 		d.reset(c.Title)
 		d.loadSettingsSearch()
 		for _, section := range c.Sections {
-			g := d.group(section.Title)
-			if !desktopui.Available(section.Capability, d.mode) {
-				g.Add(row("Available in "+section.Capability+" mode", "Change the operating mode in General."))
+			if !section.Available("gnome", d.mode) {
 				continue
 			}
+			g := d.group(section.Title)
 			s := section
 			title, subtitle := s.Title, ""
 			if s.Action == "mode" {

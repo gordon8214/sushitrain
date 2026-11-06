@@ -47,46 +47,54 @@ enum ViewerSort: String, CaseIterable, Identifiable {
 /// Lists a directory from the index, which also works offline. It follows changes as the index gets them.
 struct DirectoryView: View {
 	let directory: ViewedDirectory
+	private let navigation: MobileBrowserNavigation?
+	private let selectHistory: Bool
 	private var files = FilesDomain.shared
 	private var coordinator = RemoteCoordinator.shared
 	@AppStorage("viewerSort") private var sort = ViewerSort.name
 	@AppStorage("hideDotFiles") private var hideDotFiles = true
 	private struct HistorySelection: Identifiable { let id: Int64 }
 	@State private var historyItem: HistorySelection?
-	@State private var items: [IndexItem]? = nil
-	@State private var loadError: String? = nil
+	@State private var state: MobileDirectoryState
 	@State private var viewer = FileViewer()
 	@State private var filesError: String? = nil
 
-	init(directory: ViewedDirectory) {
+	init(
+		directory: ViewedDirectory, navigation: MobileBrowserNavigation? = nil, selectHistory: Bool = false
+	) {
 		self.directory = directory
+		self.navigation = navigation
+		self.selectHistory = selectHistory
+		_state = State(initialValue: navigation?.directory(directory.itemID) ?? MobileDirectoryState())
 	}
 
 	private struct LoadKey: Hashable {
 		var revision: Int
 		var folders: Int
+		var listingRevision: Int
 	}
 
 	private var shown: [IndexItem] {
-		let visible = (items ?? []).filter { !hideDotFiles || !$0.name.hasPrefix(".") }
+		let visible = (state.items ?? []).filter { !hideDotFiles || !$0.name.hasPrefix(".") }
 		return visible.sorted(by: sort.areInOrder)
 	}
 
 	var body: some View {
 		List {
 			FolderStatusBanner(folderID: directory.folderID)
-			if let loadError {
+			if let loadError = state.error {
 				Text(loadError).foregroundStyle(.red)
 			}
 			ForEach(shown, id: \.id) { item in
-				row(item)
+				row(item).id(item.id)
 			}
 		}
+		.scrollPosition(id: $state.scrollItem)
 		.overlay {
-			if items == nil, loadError == nil {
+			if state.items == nil, state.error == nil {
 				ProgressView()
 			}
-			else if shown.isEmpty, loadError == nil {
+			else if shown.isEmpty, state.error == nil {
 				ContentUnavailableView("No files", systemImage: "folder")
 			}
 		}
@@ -114,7 +122,11 @@ struct DirectoryView: View {
 		.refreshable {
 			await coordinator.refresh()
 		}
-		.task(id: LoadKey(revision: files.indexRevision, folders: coordinator.bindings.count)) {
+		.task(
+			id: LoadKey(
+				revision: files.indexRevision, folders: coordinator.bindings.count,
+				listingRevision: navigation?.listingRevision ?? 0)
+		) {
 			await load()
 		}
 	}
@@ -128,7 +140,12 @@ struct DirectoryView: View {
 			}
 			else {
 				Button {
-					viewer.open(item)
+					if selectHistory {
+						historyItem = HistorySelection(id: item.id)
+					}
+					else {
+						viewer.open(item)
+					}
 				} label: {
 					ItemRow(item: item)
 				}
@@ -165,12 +182,14 @@ struct DirectoryView: View {
 				return .failure(error)
 			}
 		}.value
+		guard !Task.isCancelled else { return }
 		switch result {
 		case .success(let loaded):
-			items = loaded
-			loadError = nil
+			state.items = loaded
+			navigation?.retainListing(for: directory.itemID)
+			state.error = nil
 		case .failure(let error):
-			loadError = error.userDescription
+			state.error = error.userDescription
 		}
 	}
 

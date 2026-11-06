@@ -4,6 +4,7 @@ package desktopapi
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,16 +12,17 @@ import (
 )
 
 func TestRelative(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sync")
 	for _, tc := range []struct {
 		root, path, want string
 		allowed          bool
 	}{
-		{"/data/sync", "/data/sync", "", true},
-		{"/data/sync", "/data/sync/space #/café.txt", "space #/café.txt", true},
-		{"/data/sync", "/data/sync-other/a", "", false},
-		{"/data/sync", "/data/sync/../private", "", false},
-		{"/data/sync", "file:///data/sync/a", "", false},
-		{"/data/sync", "a", "", false},
+		{root, root, "", true},
+		{root, filepath.Join(root, "space #", "café.txt"), "space #/café.txt", true},
+		{root, filepath.Join(root+"-other", "a"), "", false},
+		{root, filepath.Join(root, "..", "private"), "", false},
+		{root, "file://" + filepath.ToSlash(root) + "/a", "", false},
+		{root, "a", "", false},
 	} {
 		got, err := Relative(tc.root, tc.path)
 		if (err == nil) != tc.allowed || got != tc.want {

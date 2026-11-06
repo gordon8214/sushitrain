@@ -11,6 +11,7 @@ struct ChooseFoldersView: View {
 
 	var body: some View {
 		Form {
+			if coordinator.gateways.isEmpty { RemoteGatewaysSection() }
 			ForEach(coordinator.gateways) { status in
 				RemoteGatewayFoldersSection(serviceID: status.id)
 			}

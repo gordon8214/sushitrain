@@ -10,7 +10,7 @@ import Testing
 		data: Data(contentsOf: root.appending(path: "SushitrainCore/desktopui/catalog.json")))
 	#expect(
 		catalog.destinations.map(\.id) == [
-			"overview", "folders", "devices", "files", "remoteAccess", "history", "activity", "settings",
+			"overview", "folders", "devices", "files", "remoteAccess", "history", "activity",
 		])
 	#expect(
 		catalog.settings.map(\.id) == [
@@ -50,4 +50,23 @@ import Testing
 	}
 	#expect(DesktopRouteURL.destinationID(from: URL(string: "sushitrain:folders")!) == nil)
 	#expect(DesktopRouteURL.destinationID(from: URL(string: "https://example.com/desktop")!) == nil)
+}
+
+@Test func unifiedNavigationFiltersUnsupportedPages() throws {
+	let root = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+		.deletingLastPathComponent()
+	let catalog = try DesktopUICatalog(
+		data: Data(contentsOf: root.appending(path: "SushitrainCore/desktopui/catalog.json")))
+	for platform in ["macOS", "windows", "gnome", "kde", "ios"] {
+		let groups = catalog.navigation(platform: platform, mode: "files")
+		#expect(groups.map(\.id) == ["manage", "preferences", "tools"])
+		let ids = groups.flatMap(\.items).map(\.id)
+		#expect(Set(ids).count == ids.count)
+		#expect(
+			ids == [
+				"overview", "folders", "remoteAccess", "activity", "general", "filesAndStorage", "integrations", "files", "history",
+				"about",
+			])
+	}
+	#expect(catalog.navigation(platform: "macOS", mode: "synchronize").flatMap(\.items).contains { $0.id == "network" })
 }

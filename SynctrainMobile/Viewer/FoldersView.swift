@@ -8,44 +8,59 @@ import SynctrainFileProviderKit
 
 /// The folders chosen from the paired gateways: the app's main screen
 struct FoldersView: View {
-	private var coordinator = RemoteCoordinator.shared
-	@State private var path: [ViewedDirectory] = []
-
+	@State private var navigation: MobileBrowserNavigation
+	var isPresentedModally = false
+	var selectHistory = false
+	init(
+		navigation: MobileBrowserNavigation = MobileBrowserNavigation(), isPresentedModally: Bool = false,
+		selectHistory: Bool = false
+	) {
+		_navigation = State(initialValue: navigation)
+		self.isPresentedModally = isPresentedModally
+		self.selectHistory = selectHistory
+	}
 	var body: some View {
-		NavigationStack(path: $path) {
-			List {
-				ForEach(coordinator.folders, id: \.folderID) { folder in
-					NavigationLink(
-						value: ViewedDirectory(folderID: folder.folderID, itemID: folder.rootItemID, title: folder.label)
-					) {
-						row(folder)
-					}
-				}
-				NavigationLink {
-					ChooseFoldersView()
-				} label: {
-					Label("Choose Folders…", systemImage: "plus")
-				}
-			}
-			.navigationTitle("Folders")
-			.navigationDestination(for: ViewedDirectory.self) { directory in
-				DirectoryView(directory: directory)
-			}
-			.refreshable {
-				await coordinator.refresh()
-			}
+		NavigationStack(path: $navigation.path) {
+			MobileFolderList(navigation: navigation, isPresentedModally: isPresentedModally, selectHistory: selectHistory)
 		}
 	}
+}
 
-	@ViewBuilder private func row(_ folder: IndexFolder) -> some View {
-		let binding = coordinator.binding(folderID: folder.folderID)
-		let status = binding.flatMap { coordinator.status(serviceID: $0.serviceID) }
-		VStack(alignment: .leading, spacing: 2) {
-			Label(folder.label, systemImage: "folder.fill")
-			if let status {
-				Text(status.displayName).font(.caption).foregroundStyle(.secondary)
+struct MobileFolderList: View {
+	@Bindable var navigation: MobileBrowserNavigation
+	var isPresentedModally = false
+	var selectHistory = false
+	@Environment(\.dismiss) private var dismiss
+	private var coordinator = RemoteCoordinator.shared
+	@State private var showSearch = false
+	var body: some View {
+		List {
+			ForEach(coordinator.folders, id: \.folderID) { folder in
+				NavigationLink(value: ViewedDirectory(folderID: folder.folderID, itemID: folder.rootItemID, title: folder.label)) {
+					Label(folder.label, systemImage: "folder.fill")
+				}.id(folder.folderID)
+			}
+			NavigationLink {
+				ChooseFoldersView()
+			} label: {
+				Label("Choose Folders…", systemImage: "plus")
 			}
 		}
+		.scrollPosition(id: $navigation.folderScrollID)
+		.navigationTitle("Browse Files")
+		.sheet(isPresented: $showSearch) {
+			SearchView(navigation: navigation, isPresentedModally: true, selectHistory: selectHistory)
+		}
+		.toolbar {
+			ToolbarItem(placement: .primaryAction) {
+				Button("Search Files", systemImage: "magnifyingglass") { showSearch = true }
+			}
+			if isPresentedModally { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+		}
+		.navigationDestination(for: ViewedDirectory.self) { directory in
+			DirectoryView(directory: directory, navigation: navigation, selectHistory: selectHistory)
+		}
+		.refreshable { await coordinator.refresh() }
 	}
 }
 

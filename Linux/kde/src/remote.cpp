@@ -163,8 +163,8 @@ void Backend::historySources() {
     }
   });
 }
-void Backend::remote() {
-  call("service.status", {}, [this](QJsonValue v, QString) {
+void Backend::remote(bool revealSettings) {
+  call("service.status", {}, [this, revealSettings](QJsonValue v, QString) {
     auto s = v.toObject();
     row("Remote File Service",
         s["running"].toBool() ? "Running" : str(s, "error"),
@@ -187,7 +187,7 @@ void Backend::remote() {
                        [this](auto, auto) { refresh(); }, true);
                  });
           }}});
-    if (m_page.startsWith("settings:") && searchTargetAnchor.startsWith("gateway.") && !searchTargetField.isEmpty()) {
+    if (revealSettings && searchTargetAnchor.startsWith("gateway.") && !searchTargetField.isEmpty()) {
       const auto buttons=m_rows.last().toMap()["actions"].toList();
       if (!buttons.isEmpty()) activate(buttons.first().toMap()["key"].toString());
     }

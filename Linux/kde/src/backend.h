@@ -132,7 +132,7 @@ private:
   void historyPage();
   void activityPage();
   void edit(const QString &section);
-  void remote();
+  void remote(bool revealSettings = false);
   void filesService();
   void historySources();
   void pending();

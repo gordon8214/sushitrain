@@ -81,6 +81,17 @@
 			}
 		}
 
+		func requestDeparture(_ action: @escaping () -> Void) {
+			let rebuildEditor = hasChanges
+			guardedSearchNavigation {
+				self.searchTarget = nil
+				self.editors.removeAll()
+				self.resetStack()
+				if rebuildEditor { self.editorRevision += 1 }
+				action()
+			}
+		}
+
 		private func guardedSearchNavigation(_ action: @escaping () -> Void) {
 			guard !isSaving else { return }
 			if hasChanges {

@@ -92,7 +92,7 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 	h.SetTitleWidget(gtk.NewLabel(""))
 	side.AddTopBar(h)
 	column := gtk.NewBox(gtk.OrientationVertical, 0)
-	d.sidebarBack = textButton("Back to App", func() { d.guard(func() { d.navigate(d.appDestination()) }) })
+	d.sidebarBack = textButton("", func() { d.guard(func() { d.navigate(d.appDestination()) }) })
 	column.Append(d.sidebarBack)
 	scroll := gtk.NewScrolledWindow()
 	scroll.SetVExpand(true)
@@ -111,7 +111,7 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 		}
 	})
 	d.sidebar.ConnectRowSelected(func(r *gtk.ListBoxRow) {
-		if r == nil || d.updatingSidebar || r.Index() >= len(d.sidebarRoutes) {
+		if r == nil || d.updatingSidebar || r.Index() >= len(d.sidebarRoutes) || d.sidebarRoutes[r.Index()] == "" {
 			return
 		}
 		next := d.sidebarRoutes[r.Index()]
@@ -127,14 +127,14 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 		d.guard(func() { d.navigate(next) })
 	})
 	d.rebuildSidebar()
-	d.sidebar.SelectRow(d.sidebar.RowAtIndex(0))
+	d.sidebar.SelectRow(d.sidebar.RowAtIndex(1))
 	d.showRoute()
 	d.timer = coreglib.TimeoutSecondsAdd(2, func() bool {
 		if d.closed {
 			return false
 		}
 		next := readPreferences()
-		if strings.HasPrefix(d.route, "settings:") && d.settingsSearchBar.SearchMode() && !d.saving {
+		if d.settingsSearchBar.SearchMode() && !d.saving {
 			d.loadSettingsSearch()
 		}
 		if next.Preferences != d.preferences.Preferences && !d.saving && !d.dirty {
@@ -198,6 +198,18 @@ func (d *desktopUI) appDestination() string {
 
 func (d *desktopUI) navigate(route string) {
 	route = canonicalRoute(route)
+	available := false
+	for _, group := range desktopui.Read().Navigation("gnome", d.mode) {
+		for _, item := range group.Items {
+			if item.NativeRoute() == route {
+				available = true
+			}
+		}
+	}
+	unavailable := !available && d.mode != ""
+	if unavailable {
+		route = "Overview"
+	}
 	if route == "Files" && d.route == route && len(d.pages) > 0 {
 		d.root.SetShowContent(true)
 		return
@@ -225,6 +237,10 @@ func (d *desktopUI) navigate(route string) {
 		d.appRoute = d.route
 	}
 	d.route = route
+	if unavailable {
+		d.searchTargetAnchor = ""
+		d.searchTargetField = ""
+	}
 	d.rebuildSidebar()
 	d.root.SetShowContent(true)
 	d.dirty = false
@@ -260,6 +276,9 @@ func (d *desktopUI) navigate(route string) {
 		return
 	}
 	d.showRoute()
+	if unavailable {
+		d.text("The requested page is unavailable in this mode. Overview is shown instead.")
+	}
 }
 
 // Explicit folder targets supersede a retained browser location.
@@ -502,6 +521,27 @@ func (d *desktopUI) overview() {
 	identity.SetWrap(true)
 	identity.SetXAlign(0)
 	groups["status"].Add(identity)
+	mountPath := ""
+	openMount := textButton("Open in File Manager", func() {
+		if mountPath != "" {
+			d.w.openPath(mountPath)
+		}
+	})
+	openMount.SetVisible(d.mode == modeFiles)
+	groups["status"].Add(openMount)
+	if d.mode == modeSynchronize {
+		d.load("engine.folders", nil, func(data json.RawMessage) {
+			var folders []desktopapi.Folder
+			if err := json.Unmarshal(data, &folders); err != nil {
+				d.error(err)
+				return
+			}
+			for _, folder := range folders {
+				folder := folder
+				groups["summary"].Add(choiceRow(folder.Label, folder.Path, func() { d.w.openPath(folder.Path) }))
+			}
+		})
+	}
 	reason := gtk.NewLabel("")
 	reason.SetXAlign(0)
 	reason.SetWrap(true)
@@ -592,6 +632,8 @@ func (d *desktopUI) overview() {
 			if d.mode == modeFiles {
 				heading.SetText("Files mode — folders are fetched as you open them")
 				identity.SetText(s.Status.Mount)
+				mountPath = s.Status.Mount
+				openMount.SetSensitive(mountPath != "")
 				gatewaySummary.SetText(fmt.Sprintf("%d folders available", len(s.Status.Folders)))
 				summary.SetText(fmt.Sprintf("Cached: %s · Kept: %s · Cache budget: %s", humanBytes(s.Storage.Used), humanBytes(s.Storage.Kept), humanBytes(s.Storage.Budget)))
 				reason.SetText("Gateway connection and pending-edit problems are shown in Remote Access and Activity.")

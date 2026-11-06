@@ -75,6 +75,7 @@ public struct SettingSearchEntry: Codable, Hashable, Identifiable, Sendable {
 
 @Observable @MainActor public final class SettingsSearch {
 	public var query = ""
+	public var mode: String?
 	public var error: String?
 	public private(set) var entries: [SettingSearchEntry]
 	private let localEntries: [SettingSearchEntry]
@@ -88,17 +89,18 @@ public struct SettingSearchEntry: Codable, Hashable, Identifiable, Sendable {
 				category.sections.map { section in
 					SettingSearchEntry(
 						id: category.id + "." + section.id, title: section.title, breadcrumb: category.title,
-						category: category.id, action: section.action, capability: section.capability)
+						category: category.id, action: section.action, capability: section.capability, platforms: section.platforms)
 				}
 			}
 		}
 		entries += catalog.search.filter { $0.section == nil && ($0.platforms?.contains(platform) ?? true) }
-		localEntries = entries
-		self.entries = entries
+		localEntries = entries.filter { $0.platforms?.contains(platform) ?? true }
+		self.entries = localEntries
 	}
 
 	public var results: [SettingSearchEntry] {
 		let matches: [(entry: SettingSearchEntry, score: Int)] = entries.compactMap { entry in
+			guard mode.map({ entry.isAvailable(mode: $0) }) ?? true else { return nil }
 			guard let score = entry.score(query: query) else { return nil }
 			return (entry, score)
 		}

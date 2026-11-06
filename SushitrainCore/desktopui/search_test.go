@@ -37,3 +37,25 @@ func TestSettingsSearchCatalog(t *testing.T) {
 		t.Fatal(matches)
 	}
 }
+
+func TestApplicableSearchResultsReachVisiblePages(t *testing.T) {
+	c := Read()
+	for _, platform := range []string{"macOS", "windows", "gnome", "kde", "ios"} {
+		for _, mode := range []string{"files", "synchronize"} {
+			if platform == "ios" && mode != "files" {
+				continue
+			}
+			visible := map[string]bool{}
+			for _, group := range c.Navigation(platform, mode) {
+				for _, item := range group.Items {
+					visible[item.ID] = true
+				}
+			}
+			for _, entry := range SearchEntries(platform) {
+				if Available(entry.Capability, mode) && !visible[entry.Category] {
+					t.Errorf("%s/%s search %s targets hidden %s", platform, mode, entry.ID, entry.Category)
+				}
+			}
+		}
+	}
+}

@@ -11,7 +11,7 @@ func TestNavigationContract(t *testing.T) {
 	if c.Version != 1 {
 		t.Fatal("unsupported catalog version")
 	}
-	want := []string{"Overview", "Folders", "Devices", "Files", "Remote Access", "History", "Activity", "Settings"}
+	want := []string{"Overview", "Folders", "Devices", "Browse Files", "Remote Access", "History", "Activity"}
 	if !reflect.DeepEqual(MainTitles(), want) {
 		t.Fatal(MainTitles())
 	}
@@ -64,8 +64,8 @@ func TestAvailabilityAndIsolation(t *testing.T) {
 func TestSectionAndDetailContract(t *testing.T) {
 	c := Read()
 	want := [][]string{
-		{"identity", "mode", "startup", "presence"},
-		{"browsing", "previews", "storage", "locations"},
+		{"identity", "mobileIdentity", "mode", "startup", "presence"},
+		{"browsing", "previews", "storage", "locations", "mobileDisplay"},
 		{"connectivity", "connections", "proxy", "bandwidth"},
 		{"pausing", "resources", "engine", "reporting"},
 		{"fileManager", "menuAccess", "mcp"},
@@ -95,5 +95,41 @@ func TestSectionAndDetailContract(t *testing.T) {
 		if !reflect.DeepEqual(titles, c.Details[kind]) {
 			t.Errorf("%s labels differ", kind)
 		}
+	}
+}
+
+func TestUnifiedNavigationVisibility(t *testing.T) {
+	c := Read()
+	for _, platform := range []string{"macOS", "windows", "gnome", "kde", "ios"} {
+		for _, mode := range []string{"files", "synchronize"} {
+			if platform == "ios" && mode != "files" {
+				continue
+			}
+			groups := c.Navigation(platform, mode)
+			if len(groups) != 3 || groups[0].ID != "manage" || groups[1].ID != "preferences" || groups[2].ID != "tools" {
+				t.Fatal(groups)
+			}
+			seen := map[string]bool{}
+			for _, group := range groups {
+				for _, item := range group.Items {
+					if seen[item.ID] || item.ID == "settings" {
+						t.Fatal(item)
+					}
+					seen[item.ID] = true
+				}
+			}
+			if !seen["overview"] || !seen["folders"] || !seen["files"] || !seen["general"] || !seen["about"] {
+				t.Fatal(seen)
+			}
+			if mode == "files" && (seen["devices"] || seen["network"] || seen["synchronization"] || seen["defaults"] || seen["advanced"]) {
+				t.Fatal(seen)
+			}
+			if platform == "ios" && mode == "files" && (!seen["integrations"] || !seen["filesAndStorage"]) {
+				t.Fatal(seen)
+			}
+		}
+	}
+	if c.Aliases["Settings"] != "general" {
+		t.Fatal("legacy Settings route")
 	}
 }

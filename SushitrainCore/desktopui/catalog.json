@@ -12,7 +12,8 @@
         "summary",
         "storage"
       ],
-      "labelKey": "desktop.destinations.overview"
+      "labelKey": "desktop.destinations.overview",
+      "capability": "always"
     },
     {
       "id": "folders",
@@ -22,7 +23,8 @@
       "sections": [
         "folders"
       ],
-      "labelKey": "desktop.destinations.folders"
+      "labelKey": "desktop.destinations.folders",
+      "capability": "always"
     },
     {
       "id": "devices",
@@ -33,17 +35,19 @@
         "requests",
         "devices"
       ],
-      "labelKey": "desktop.destinations.devices"
+      "labelKey": "desktop.destinations.devices",
+      "capability": "synchronize"
     },
     {
       "id": "files",
-      "title": "Files",
+      "title": "Browse Files",
       "symbol": "doc",
       "icon": "folder",
       "sections": [
         "browser"
       ],
-      "labelKey": "desktop.destinations.files"
+      "labelKey": "desktop.destinations.files",
+      "capability": "always"
     },
     {
       "id": "remoteAccess",
@@ -54,7 +58,8 @@
         "service",
         "gateways"
       ],
-      "labelKey": "desktop.destinations.remoteAccess"
+      "labelKey": "desktop.destinations.remoteAccess",
+      "capability": "always"
     },
     {
       "id": "history",
@@ -66,7 +71,8 @@
         "deletedFiles",
         "historySources"
       ],
-      "labelKey": "desktop.destinations.history"
+      "labelKey": "desktop.destinations.history",
+      "capability": "always"
     },
     {
       "id": "activity",
@@ -80,15 +86,8 @@
         "recovery",
         "activityLog"
       ],
-      "labelKey": "desktop.destinations.activity"
-    },
-    {
-      "id": "settings",
-      "title": "Settings",
-      "symbol": "gearshape",
-      "icon": "configure",
-      "sections": [],
-      "labelKey": "desktop.destinations.settings"
+      "labelKey": "desktop.destinations.activity",
+      "capability": "always"
     }
   ],
   "settings": [
@@ -103,28 +102,62 @@
           "title": "Device Identity",
           "capability": "synchronize",
           "action": "name",
-          "labelKey": "desktop.settings.general.identity"
+          "labelKey": "desktop.settings.general.identity",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
+        },
+        {
+          "id": "mobileIdentity",
+          "title": "Device name",
+          "capability": "files",
+          "action": "deviceName",
+          "labelKey": "settings.general.deviceName",
+          "platforms": [
+            "ios"
+          ]
         },
         {
           "id": "mode",
           "title": "Operating Mode",
           "capability": "always",
           "action": "mode",
-          "labelKey": "desktop.settings.general.mode"
+          "labelKey": "desktop.settings.general.mode",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "startup",
           "title": "Startup",
           "capability": "always",
           "action": "startup",
-          "labelKey": "desktop.settings.general.startup"
+          "labelKey": "desktop.settings.general.startup",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "presence",
           "title": "Background and Window Presence",
           "capability": "always",
           "action": "presence",
-          "labelKey": "desktop.settings.general.presence"
+          "labelKey": "desktop.settings.general.presence",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         }
       ],
       "labelKey": "desktop.settings.general"
@@ -140,28 +173,63 @@
           "title": "Browsing",
           "capability": "always",
           "action": "previews",
-          "labelKey": "desktop.settings.filesAndStorage.browsing"
+          "labelKey": "desktop.settings.filesAndStorage.browsing",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "previews",
           "title": "Previews and Thumbnails",
           "capability": "always",
           "action": "previews",
-          "labelKey": "desktop.settings.filesAndStorage.previews"
+          "labelKey": "desktop.settings.filesAndStorage.previews",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "storage",
           "title": "Download Cache and Offline Storage",
           "capability": "files",
           "action": "storage",
-          "labelKey": "desktop.settings.filesAndStorage.storage"
+          "labelKey": "desktop.settings.filesAndStorage.storage",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde",
+            "ios"
+          ]
         },
         {
           "id": "locations",
           "title": "Folder Locations",
           "capability": "always",
           "action": "locations",
-          "labelKey": "desktop.settings.filesAndStorage.locations"
+          "labelKey": "desktop.settings.filesAndStorage.locations",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
+        },
+        {
+          "id": "mobileDisplay",
+          "title": "Display",
+          "capability": "files",
+          "action": "mobileDisplay",
+          "labelKey": "settings.filesAndStorage.display",
+          "platforms": [
+            "ios"
+          ]
         }
       ],
       "labelKey": "desktop.settings.filesAndStorage"
@@ -177,28 +245,52 @@
           "title": "Connectivity, Discovery, and Relays",
           "capability": "synchronize",
           "action": "basic/options",
-          "labelKey": "desktop.settings.network.connectivity"
+          "labelKey": "desktop.settings.network.connectivity",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "connections",
           "title": "Connection Options",
           "capability": "synchronize",
           "action": "connections",
-          "labelKey": "desktop.settings.network.connections"
+          "labelKey": "desktop.settings.network.connections",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "proxy",
           "title": "Proxy",
           "capability": "synchronize",
           "action": "proxy",
-          "labelKey": "desktop.settings.network.proxy"
+          "labelKey": "desktop.settings.network.proxy",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "bandwidth",
           "title": "Bandwidth and Streaming",
           "capability": "synchronize",
           "action": "bandwidth",
-          "labelKey": "desktop.settings.network.bandwidth"
+          "labelKey": "desktop.settings.network.bandwidth",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         }
       ],
       "labelKey": "desktop.settings.network"
@@ -214,28 +306,52 @@
           "title": "Automatic Pausing",
           "capability": "synchronize",
           "action": "policy",
-          "labelKey": "desktop.settings.synchronization.pausing"
+          "labelKey": "desktop.settings.synchronization.pausing",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "resources",
           "title": "Resource Priority",
           "capability": "synchronize",
           "action": "resources",
-          "labelKey": "desktop.settings.synchronization.resources"
+          "labelKey": "desktop.settings.synchronization.resources",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "engine",
           "title": "Scanning, Database, and Performance",
           "capability": "synchronize",
           "action": "engine",
-          "labelKey": "desktop.settings.synchronization.engine"
+          "labelKey": "desktop.settings.synchronization.engine",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "reporting",
           "title": "Reporting",
           "capability": "synchronize",
           "action": "engine",
-          "labelKey": "desktop.settings.synchronization.reporting"
+          "labelKey": "desktop.settings.synchronization.reporting",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         }
       ],
       "labelKey": "desktop.settings.synchronization"
@@ -251,21 +367,40 @@
           "title": "File Manager Integration",
           "capability": "always",
           "action": "fileManager",
-          "labelKey": "desktop.settings.integrations.fileManager"
+          "labelKey": "desktop.settings.integrations.fileManager",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde",
+            "ios"
+          ]
         },
         {
           "id": "menuAccess",
           "title": "Menu and Tray Folder Access",
           "capability": "always",
           "action": "menuAccess",
-          "labelKey": "desktop.settings.integrations.menuAccess"
+          "labelKey": "desktop.settings.integrations.menuAccess",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "mcp",
           "title": "MCP",
           "capability": "always",
           "action": "mcp",
-          "labelKey": "desktop.settings.integrations.mcp"
+          "labelKey": "desktop.settings.integrations.mcp",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         }
       ],
       "labelKey": "desktop.settings.integrations"
@@ -281,35 +416,65 @@
           "title": "New Folders",
           "capability": "synchronize",
           "action": "defaults/folder",
-          "labelKey": "desktop.settings.defaults.newFolders"
+          "labelKey": "desktop.settings.defaults.newFolders",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "resetDefaults",
           "title": "Reset Synchronization Defaults…",
           "capability": "synchronize",
           "action": "reset/defaults/folder",
-          "labelKey": "desktop.settings.defaults.resetDefaults"
+          "labelKey": "desktop.settings.defaults.resetDefaults",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "versioning",
           "title": "Versioning",
           "capability": "synchronize",
           "action": "defaults/versioning",
-          "labelKey": "desktop.settings.defaults.versioning"
+          "labelKey": "desktop.settings.defaults.versioning",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "newDevices",
           "title": "New Devices",
           "capability": "synchronize",
           "action": "defaults/device",
-          "labelKey": "desktop.settings.defaults.newDevices"
+          "labelKey": "desktop.settings.defaults.newDevices",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "ignores",
           "title": "Ignore Patterns",
           "capability": "synchronize",
           "action": "defaults/ignores",
-          "labelKey": "desktop.settings.defaults.ignores"
+          "labelKey": "desktop.settings.defaults.ignores",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         }
       ],
       "labelKey": "desktop.settings.defaults"
@@ -325,28 +490,52 @@
           "title": "Web GUI and REST API",
           "capability": "synchronize",
           "action": "gui",
-          "labelKey": "desktop.settings.advanced.engineAccess"
+          "labelKey": "desktop.settings.advanced.engineAccess",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "configuration",
           "title": "Configuration",
           "capability": "synchronize",
           "action": "configuration",
-          "labelKey": "desktop.settings.advanced.configuration"
+          "labelKey": "desktop.settings.advanced.configuration",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "expert",
           "title": "Expert Configuration",
           "capability": "synchronize",
           "action": "advanced",
-          "labelKey": "desktop.settings.advanced.expert"
+          "labelKey": "desktop.settings.advanced.expert",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         },
         {
           "id": "diagnostics",
           "title": "Diagnostic Logging and Maintenance",
           "capability": "synchronize",
           "action": "logs",
-          "labelKey": "desktop.settings.advanced.diagnostics"
+          "labelKey": "desktop.settings.advanced.diagnostics",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde"
+          ]
         }
       ],
       "labelKey": "desktop.settings.advanced"
@@ -362,21 +551,42 @@
           "title": "App and Engine Versions",
           "capability": "always",
           "action": "versions",
-          "labelKey": "desktop.settings.about.versions"
+          "labelKey": "desktop.settings.about.versions",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde",
+            "ios"
+          ]
         },
         {
           "id": "support",
           "title": "Support",
           "capability": "always",
           "action": "support",
-          "labelKey": "desktop.settings.about.support"
+          "labelKey": "desktop.settings.about.support",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde",
+            "ios"
+          ]
         },
         {
           "id": "licenses",
           "title": "Licenses and Notices",
           "capability": "always",
           "action": "licenses",
-          "labelKey": "desktop.settings.about.licenses"
+          "labelKey": "desktop.settings.about.licenses",
+          "platforms": [
+            "macOS",
+            "windows",
+            "gnome",
+            "kde",
+            "ios"
+          ]
         }
       ],
       "labelKey": "desktop.settings.about"
@@ -428,7 +638,11 @@
     "historySources": "history",
     "pendingEdits": "activity",
     "general": "general",
-    "remoteFileService": "remoteAccess"
+    "remoteFileService": "remoteAccess",
+    "Settings": "general",
+    "settings": "general",
+    "Browse Files": "files",
+    "Files": "files"
   },
   "detailDescriptors": {
     "folder": [
@@ -691,8 +905,8 @@
     {
       "id": "gateways",
       "title": "Gateways",
-      "breadcrumb": "Network",
-      "category": "network",
+      "breadcrumb": "Remote Access",
+      "category": "remoteAccess",
       "action": "gateways",
       "anchor": "gateways",
       "capability": "files",
@@ -712,8 +926,8 @@
     {
       "id": "chooseFolders",
       "title": "Choose Folders",
-      "breadcrumb": "Files & Storage",
-      "category": "filesAndStorage",
+      "breadcrumb": "Folders",
+      "category": "folders",
       "action": "chooseFolders",
       "anchor": "chooseFolders",
       "capability": "files",
@@ -729,8 +943,8 @@
     {
       "id": "historySources",
       "title": "History Sources",
-      "breadcrumb": "Advanced",
-      "category": "advanced",
+      "breadcrumb": "History",
+      "category": "history",
       "action": "historySources",
       "anchor": "historySources",
       "capability": "always",
@@ -3112,7 +3326,7 @@
       "id": "gateway.enabled",
       "title": "Remote file service",
       "breadcrumb": "Remote Access",
-      "category": "network",
+      "category": "remoteAccess",
       "action": "remoteService",
       "anchor": "gateway.enabled",
       "field": "enabled",
@@ -3134,7 +3348,7 @@
       "id": "gateway.port",
       "title": "Remote service port",
       "breadcrumb": "Remote Access",
-      "category": "network",
+      "category": "remoteAccess",
       "action": "remoteService",
       "anchor": "gateway.port",
       "field": "publicPort",
@@ -3154,7 +3368,7 @@
       "id": "gateway.host",
       "title": "Remote service host name",
       "breadcrumb": "Remote Access",
-      "category": "network",
+      "category": "remoteAccess",
       "action": "remoteService",
       "anchor": "gateway.host",
       "field": "publicHost",
@@ -3175,7 +3389,7 @@
       "id": "gateway.name",
       "title": "Service name",
       "breadcrumb": "Remote Access",
-      "category": "network",
+      "category": "remoteAccess",
       "action": "remoteService",
       "anchor": "gateway.name",
       "field": "serviceName",
@@ -3192,7 +3406,7 @@
       "id": "gateway.cache",
       "title": "Content cache",
       "breadcrumb": "Remote Access",
-      "category": "network",
+      "category": "remoteAccess",
       "action": "remoteService",
       "anchor": "gateway.cache",
       "field": "contentCacheMiB",
@@ -3210,7 +3424,7 @@
       "id": "gateway.certificate",
       "title": "Certificate",
       "breadcrumb": "Remote Access",
-      "category": "network",
+      "category": "remoteAccess",
       "action": "remoteService",
       "anchor": "gateway.certificate",
       "field": "certificateMode",
@@ -3230,7 +3444,7 @@
       "id": "gateway.exports",
       "title": "Shared folders",
       "breadcrumb": "Remote Access",
-      "category": "network",
+      "category": "remoteAccess",
       "action": "remoteService",
       "anchor": "gateway.exports",
       "field": "",
@@ -3253,7 +3467,7 @@
       "id": "gateway.clients",
       "title": "Paired clients",
       "breadcrumb": "Remote Access",
-      "category": "network",
+      "category": "remoteAccess",
       "action": "remoteService",
       "anchor": "gateway.clients",
       "field": "",
@@ -3269,6 +3483,44 @@
         "permissions",
         "revoke",
         "pair"
+      ]
+    }
+  ],
+  "navigationGroups": [
+    {
+      "id": "manage",
+      "title": "Manage",
+      "labelKey": "navigation.groups.manage",
+      "items": [
+        "overview",
+        "folders",
+        "devices",
+        "remoteAccess",
+        "activity"
+      ]
+    },
+    {
+      "id": "preferences",
+      "title": "Preferences",
+      "labelKey": "navigation.groups.preferences",
+      "items": [
+        "general",
+        "filesAndStorage",
+        "network",
+        "synchronization",
+        "integrations",
+        "defaults",
+        "advanced"
+      ]
+    },
+    {
+      "id": "tools",
+      "title": "Tools",
+      "labelKey": "navigation.groups.tools",
+      "items": [
+        "files",
+        "history",
+        "about"
       ]
     }
   ]

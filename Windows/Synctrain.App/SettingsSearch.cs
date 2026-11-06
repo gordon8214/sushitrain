@@ -29,6 +29,7 @@ public sealed partial class MainPage
         foreach (var category in catalog["settings"]!.AsArray())
             foreach (var section in category!["sections"]!.AsArray())
             {
+                if (!AvailableSection(section)) continue;
                 var entry = section!.DeepClone().AsObject();
                 entry["id"] = S(category,"id") + "." + S(section,"id");
                 entry["category"] = S(category,"id"); entry["breadcrumb"] = S(category,"title");
@@ -40,7 +41,7 @@ public sealed partial class MainPage
         var normalized = NormalizeSettingsSearch(query).Trim();
         if (normalized.Length == 0) return [];
         var words = normalized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        return entries.Select(entry => {
+        return entries.Where(AvailableSection).Select(entry => {
             var title = S(entry,"title"); var label = NormalizeSettingsSearch(title);
             var corpus = NormalizeSettingsSearch(title + " " + S(entry,"breadcrumb") + " " + S(entry,"field") + " " + string.Join(" ",entry["keywords"]?.AsArray().Select(value => value?.ToString()) ?? []));
             if (!words.All(corpus.Contains)) return null;
@@ -53,13 +54,13 @@ public sealed partial class MainPage
     {
         var mode = S(status,"mode"); var revision = S(status,"revision");
         if (mode != settingsIndexMode) { settingsIndex = []; settingsIndexRevision = ""; settingsIndexMode = mode; settingsIndexError=""; UpdateSettingsSuggestions(); }
-        if (!page.StartsWith("settings:",StringComparison.Ordinal) || mode != "synchronize" || settingsIndexLoading || !force && settingsIndexRevision == revision && settingsIndexRevision.Length > 0) return;
+        if (mode != "synchronize" || settingsIndexLoading || !force && settingsIndexRevision == revision && settingsIndexRevision.Length > 0) return;
         settingsIndexLoading = true;
         var previousIndex = settingsIndex.ToJsonString(); var previousError = settingsIndexError;
         try
         {
             var index = await host.Call("desktop.settings.index",timeoutSeconds:15);
-            if (S(status,"mode") != mode || S(status,"revision") != revision || !page.StartsWith("settings:",StringComparison.Ordinal)) return;
+            if (S(status,"mode") != mode || S(status,"revision") != revision) return;
             settingsIndex = index?.AsArray() ?? []; settingsIndexRevision = revision; settingsIndexError = "";
         }
         catch (Exception error) { if (S(status,"mode") == mode) settingsIndexError = error.Message; }
@@ -78,7 +79,6 @@ public sealed partial class MainPage
 
     private void FocusSettingsSearch(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (!page.StartsWith("settings:",StringComparison.Ordinal)) return;
         Navigation.IsPaneOpen=true; SettingsSearchBox.Focus(FocusState.Programmatic); args.Handled=true;
     }
 
@@ -123,9 +123,11 @@ public sealed partial class MainPage
     private async Task OpenSettingsResult(JsonObject entry)
     {
         if (loadingEditor || !await MayLeaveEditor()) return;
-        await CloseEditor(); detailRoute = null; detailParents.Clear();
+        await CloseEditor(); detailRoute = null; detailParents.Clear(); settingsResultsPage = false;
         SetRenderGeneration(++generation);
-        page="settings:"+S(entry,"category"); BuildNavigation();
+        var categoryID=S(entry,"category");
+        page=catalog["destinations"]!.AsArray().Any(item=>S(item,"id")==categoryID) ? categoryID : "settings:"+categoryID;
+        BuildNavigation();
         var capability = S(entry,"capability"); var mode = S(status,"mode");
         if (capability != "always" && capability != mode) {
             ShowBody(); Body.Children.Clear(); Commands.PrimaryCommands.Clear(); Heading.Text = S(entry,"title");

@@ -332,13 +332,6 @@ struct SushitrainApp: App {
 			.restorationBehavior(.disabled)
 			.windowResizability(.contentSize)
 
-			// About window
-			Window("About Synctrain", id: "about") {
-				AboutView().environment(appState)
-			}
-			.windowResizability(.contentSize)
-			.restoredOnlyWithDockIcon(in: presence)
-
 			// Support window
 			Window("Questions, support & feedback", id: "support") {
 				NavigationStack {
@@ -400,7 +393,7 @@ struct SushitrainApp: App {
 
 			CommandGroup(replacing: .appSettings) {
 				Button("Settings…") {
-					openWindow(id: "appSettings")
+					MacManagementCommands.show("general", openWindow: openWindow)
 					NSApp.activate()
 				}
 				.keyboardShortcut(",", modifiers: .command)
@@ -415,7 +408,7 @@ struct SushitrainApp: App {
 			CommandGroup(replacing: CommandGroupPlacement.appInfo) {
 				Button("About Synctrain") {
 					// Open the "about" window
-					openWindow(id: "about")
+					MacManagementCommands.show("about", openWindow: openWindow)
 				}
 
 				Button("Statistics...") {
@@ -473,16 +466,6 @@ struct SushitrainApp: App {
 		@State private var folders: [SushitrainFolder] = []
 
 		var body: some Scene {
-			Window("Settings", id: "appSettings") {
-				SynchronizeSettingsView(presence: $presence)
-			}
-			.windowToolbarStyle(.unified)
-			.defaultLaunchBehavior(.suppressed)
-			.defaultSize(width: 1000, height: 720)
-			.windowResizability(.contentMinSize)
-			.environment(appState)
-			.restoredOnlyWithDockIcon(in: presence)
-
 			MenuBarExtra("Synctrain", systemImage: appState.engineStatus.symbol, isInserted: $presence.inMenuBar) {
 				Text(verbatim: appState.engineStatus.menuLine)
 				CrashNoticeMenuItems()
@@ -496,7 +479,7 @@ struct SushitrainApp: App {
 							await self.update()
 						}
 
-					Button("Open file browser...", systemImage: "macwindow") {
+					Button("Open Synctrain", systemImage: "macwindow") {
 						AppWindowPresentation.open {
 							openWindow(id: "singleMain")
 						}
@@ -533,7 +516,7 @@ struct SushitrainApp: App {
 				if appState.startupState == .started {
 					Button("Settings", systemImage: "gear") {
 						AppWindowPresentation.open {
-							openWindow(id: "appSettings")
+							MacManagementCommands.show("general", openWindow: openWindow)
 						}
 					}
 
@@ -547,7 +530,7 @@ struct SushitrainApp: App {
 				Button("About...", systemImage: "info.circle") {
 					// Open the "about" window
 					AppWindowPresentation.open {
-						openWindow(id: "about")
+						MacManagementCommands.show("about", openWindow: openWindow)
 					}
 				}
 

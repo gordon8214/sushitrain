@@ -398,6 +398,11 @@ struct StartView: View {
 				maintenanceIssuesSection()
 			case "summary":
 				Section("Synchronization") {
+					ForEach(folders ?? [], id: \.folderID) { folder in
+						if let url = folder.localNativeURL {
+							Button("Open \(folder.displayName) in Finder", systemImage: "folder") { openURLInSystemFilesApp(url: url) }
+						}
+					}
 					Text("\(folders?.count ?? 0) folders · \(peers?.filter { !$0.isSelf() }.count ?? 0) devices")
 					NavigationLink("Downloads") { DownloadsView() }
 					NavigationLink("Uploads") { UploadsView() }

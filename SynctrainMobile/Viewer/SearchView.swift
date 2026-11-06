@@ -9,22 +9,42 @@ import SynctrainFileProviderKit
 /// Finds files by name in the folders on this device
 struct SearchView: View {
 	private var coordinator = RemoteCoordinator.shared
-	@State private var text = ""
-	@State private var results: [IndexItem] = []
-	@State private var searched = ""
+	@Environment(\.dismiss) private var dismiss
+	private let isPresentedModally: Bool
+	@State private var navigation: MobileBrowserNavigation
 	@State private var viewer = FileViewer()
-	@State private var path: [ViewedDirectory] = []
+	private struct HistorySelection: Identifiable { let id: Int64 }
+	@State private var historyItem: HistorySelection?
+	private let selectHistory: Bool
+	init(
+		navigation: MobileBrowserNavigation = MobileBrowserNavigation(), isPresentedModally: Bool = false,
+		selectHistory: Bool = false
+	) {
+		_navigation = State(initialValue: navigation)
+		self.isPresentedModally = isPresentedModally
+		self.selectHistory = selectHistory
+	}
+	private var text: String { navigation.query }
+	private var results: [IndexItem] {
+		get { navigation.results }
+		nonmutating set { navigation.results = newValue }
+	}
+	private var searched: String {
+		get { navigation.searched }
+		nonmutating set { navigation.searched = newValue }
+	}
 
 	/// More results than this are left out: the search should be narrowed
 	private static let limit = 200
 
 	var body: some View {
-		NavigationStack(path: $path) {
+		NavigationStack(path: $navigation.searchPath) {
 			List {
 				ForEach(results, id: \.id) { item in
-					row(item)
+					row(item).id(item.id)
 				}
 			}
+			.scrollPosition(id: $navigation.searchScrollID)
 			.overlay {
 				if text.isEmpty {
 					ContentUnavailableView(
@@ -35,16 +55,21 @@ struct SearchView: View {
 					ContentUnavailableView.search(text: text)
 				}
 			}
-			.navigationTitle("Search")
-			.navigationDestination(for: ViewedDirectory.self) { directory in
-				DirectoryView(directory: directory)
+			.navigationTitle("Search Files")
+			.toolbar {
+				if isPresentedModally { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
 			}
-			.searchable(text: $text)
+			.navigationDestination(for: ViewedDirectory.self) { directory in
+				DirectoryView(directory: directory, navigation: navigation, selectHistory: selectHistory)
+			}
+			.searchable(text: $navigation.query)
 			.modifier(FileViewerPresentation(viewer: viewer))
+			.sheet(item: $historyItem) { item in GatewayHistoryView(itemID: item.id) { historyItem = nil } }
 			.task(id: text) {
 				await search()
 			}
 		}
+		.onDisappear { viewer.cancel() }
 	}
 
 	@ViewBuilder private func row(_ item: IndexItem) -> some View {
@@ -56,7 +81,12 @@ struct SearchView: View {
 		}
 		else {
 			Button {
-				viewer.open(item)
+				if selectHistory {
+					historyItem = HistorySelection(id: item.id)
+				}
+				else {
+					viewer.open(item)
+				}
 			} label: {
 				ItemRow(item: item, detail: detail)
 			}

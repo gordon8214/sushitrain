@@ -50,7 +50,7 @@ func (d *desktopUI) installSettingsSearch(header *adw.HeaderBar, column *gtk.Box
 	column.Append(d.settingsSearchStack)
 	d.settingsSearchEntry.ConnectSearchChanged(d.showSettingsSearch)
 	d.settingsSearchEntry.ConnectActivate(func() {
-		matches := desktopui.Search(append(desktopui.SearchEntries("gnome"), d.settingsSearchIndex...), d.settingsSearchEntry.Text())
+		matches := desktopui.Search(d.availableSearchEntries(), d.settingsSearchEntry.Text())
 		if len(matches) > 0 {
 			d.guard(func() { d.openSettingsSearch(matches[0]) })
 		}
@@ -58,9 +58,7 @@ func (d *desktopUI) installSettingsSearch(header *adw.HeaderBar, column *gtk.Box
 	d.settingsSearchEntry.ConnectStopSearch(func() { d.settingsSearchEntry.SetText(""); d.settingsSearchBar.SetSearchMode(false) })
 	action := gio.NewSimpleAction("settings-search", nil)
 	action.ConnectActivate(func(_ *glib.Variant) {
-		if strings.HasPrefix(d.route, "settings:") {
-			d.settingsSearchButton.SetActive(!d.settingsSearchButton.Active())
-		}
+		d.settingsSearchButton.SetActive(!d.settingsSearchButton.Active())
 	})
 	d.w.win.AddAction(action)
 	d.w.app.SetAccelsForAction("win.settings-search", []string{"<Control>f"})
@@ -71,14 +69,14 @@ func (d *desktopUI) showSettingsSearch() {
 		return
 	}
 	query := d.settingsSearchEntry.Text()
-	if !strings.HasPrefix(d.route, "settings:") || !d.settingsSearchBar.SearchMode() || strings.TrimSpace(query) == "" {
+	if !d.settingsSearchBar.SearchMode() || strings.TrimSpace(query) == "" {
 		d.settingsSearchStack.SetVisibleChildName("categories")
 		return
 	}
 	for child := d.settingsSearchResults.FirstChild(); child != nil; child = d.settingsSearchResults.FirstChild() {
 		d.settingsSearchResults.Remove(child)
 	}
-	entries := append(desktopui.SearchEntries("gnome"), d.settingsSearchIndex...)
+	entries := d.availableSearchEntries()
 	matches := desktopui.Search(entries, query)
 	if d.settingsSearchError != "" {
 		d.settingsSearchResults.Append(row("Some settings could not be loaded", d.settingsSearchError))
@@ -223,4 +221,14 @@ func (d *desktopUI) revealSetting(anchor string, widget gtk.Widgetter) {
 
 func (d *desktopUI) matchesSettingsAnchor(anchor string) bool {
 	return anchor != "" && (strings.EqualFold(d.searchTargetAnchor, anchor) || strings.EqualFold(d.searchTargetField, anchor))
+}
+
+func (d *desktopUI) availableSearchEntries() []desktopui.SearchEntry {
+	var entries []desktopui.SearchEntry
+	for _, e := range append(desktopui.SearchEntries("gnome"), d.settingsSearchIndex...) {
+		if desktopui.Available(e.Capability, d.mode) {
+			entries = append(entries, e)
+		}
+	}
+	return entries
 }

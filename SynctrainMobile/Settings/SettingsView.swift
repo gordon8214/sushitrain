@@ -7,7 +7,7 @@ import SwiftUI
 import SynctrainHostKit
 
 struct MobileSettingsForm: View {
-	private var coordinator = RemoteCoordinator.shared
+	var category: String? = nil
 	@AppStorage(DeviceName.storageKey) private var deviceName = ""
 	@AppStorage(CacheSettings.storageKey) private var cacheLimit = CacheSettings.defaultLimit
 	@AppStorage("viewerSort") private var sort = ViewerSort.name
@@ -16,57 +16,52 @@ struct MobileSettingsForm: View {
 
 	var body: some View {
 		Form {
-			Section {
-				NavigationLink(destination: RemoteFoldersSettingsView()) {
-					Text("Gateways").badge(coordinator.gateways.count)
-				}
-				NavigationLink(destination: ChooseFoldersView()) {
-					Text("Folders").badge(coordinator.folders.count)
-				}
-				NavigationLink("History Sources", destination: HistorySourcesView()).settingsAnchor("historySources")
-				LabeledContent("Device name") {
-					TextField(DeviceName.systemName, text: $deviceName).settingsAnchor("deviceName")
-						.multilineTextAlignment(.trailing)
-				}
-			} footer: {
-				Text("Gateways list this device under its name. It applies the next time you pair.")
-			}
-
-			Section {
-				Picker("Keep up to", selection: $cacheLimit) {
-					ForEach(CacheSettings.choices, id: \.self) { limit in
-						Text(Int64(limit).formatted(.byteCount(style: .memory))).tag(limit)
+			if category == nil || category == "general" {
+				Section {
+					LabeledContent("Device name") {
+						TextField(DeviceName.systemName, text: $deviceName).settingsAnchor("deviceName")
+							.multilineTextAlignment(.trailing)
 					}
-				}.settingsAnchor("cacheLimit")
-				LabeledContent("In use") {
-					if let cacheSize {
-						Text(cacheSize.formatted(.byteCount(style: .file)))
-					}
-					else {
-						ProgressView()
-					}
+				} footer: {
+					Text("Gateways list this device under its name. It applies the next time you pair.")
 				}
-				Button("Clear Downloaded Files", role: .destructive) {
-					trim(to: 0)
-				}.settingsAnchor("clearDownloads")
-			} header: {
-				Text("Downloaded files")
-			} footer: {
-				Text(
-					"Files you open are kept on this device for a while, up to this size. Files you chose to keep in the Files app are not affected."
-				)
-			}
 
-			Section("Display") {
-				Picker("Sort by", selection: $sort) {
-					ForEach(ViewerSort.allCases) { Text($0.label).tag($0) }
-				}.settingsAnchor("viewerSort")
-				Toggle("Hide Files Starting with a Dot", isOn: $hideDotFiles).settingsAnchor("hideDotFiles")
 			}
+			if category == nil || category == "filesAndStorage" {
+				Section {
+					Picker("Keep up to", selection: $cacheLimit) {
+						ForEach(CacheSettings.choices, id: \.self) { limit in
+							Text(Int64(limit).formatted(.byteCount(style: .memory))).tag(limit)
+						}
+					}.settingsAnchor("cacheLimit")
+					LabeledContent("In use") {
+						if let cacheSize {
+							Text(cacheSize.formatted(.byteCount(style: .file)))
+						}
+						else {
+							ProgressView()
+						}
+					}
+					Button("Clear Downloaded Files", role: .destructive) {
+						trim(to: 0)
+					}.settingsAnchor("clearDownloads")
+				} header: {
+					Text("Downloaded files")
+				} footer: {
+					Text(
+						"Files you open are kept on this device for a while, up to this size. Files you chose to keep in the Files app are not affected."
+					)
+				}
 
-			Section {
-				NavigationLink("About Synctrain", destination: AboutView())
+				Section("Display") {
+					Picker("Sort by", selection: $sort) {
+						ForEach(ViewerSort.allCases) { Text($0.label).tag($0) }
+					}.settingsAnchor("viewerSort")
+					Toggle("Hide Files Starting with a Dot", isOn: $hideDotFiles).settingsAnchor("hideDotFiles")
+				}
+
 			}
+			if category == "integrations" { FilesLocationSettingsView() }
 		}
 		.task {
 			await measureCache()
@@ -122,7 +117,7 @@ struct SettingsView: View {
 	}
 }
 
-private struct MobileSettingsSearchDestination: View {
+struct MobileSettingsSearchDestination: View {
 	let entry: SettingSearchEntry
 	var body: some View {
 		SettingsSearchReveal(anchor: entry.anchor) {
@@ -131,7 +126,7 @@ private struct MobileSettingsSearchDestination: View {
 			case "chooseFolders": ChooseFoldersView()
 			case "historySources": HistorySourcesView()
 			case "fileManager": Form { FilesLocationSettingsView() }
-			default: MobileSettingsForm()
+			default: MobileSettingsForm(category: entry.category)
 			}
 		}
 		.navigationTitle(entry.localizedTitle)

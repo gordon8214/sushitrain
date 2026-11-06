@@ -14,6 +14,12 @@ and only the service for the machine's mode is enabled. They run without the win
 sockets to manage the existing engine and Files service. The mode is in `~/.config/synctrain/mode`; desktop preview,
 list/grid, hidden-file, and tray preferences are in `~/.config/synctrain/desktop.json`.
 
+## Management interface
+
+The app opens Overview and keeps one navigation list while switching between management and preferences. Manage contains Overview, Folders, Devices, Remote Access, and Activity; Preferences contains General, Files & Storage, Network, Synchronization, Integrations, Defaults, and Advanced; Tools contains Browse Files, History, and About. Files mode hides engine-only pages and controls. Settings shortcuts select General, and there is no separate Settings navigation mode or Back to App action.
+
+Folders manages synchronized or mounted folders. Browse Files remains an optional in-app tool; Overview provides system file-manager access. Settings search is available from every page and shows applicable results. Existing unsaved-draft and Save protections apply when moving between management and preference pages. See [the shared UI acceptance record](desktop-ui-acceptance.md) for verification and remaining platform limits.
+
 ## Installing
 
 On a Fedora host with Go (the release in `SushitrainCore/go.mod`, newer than Fedora's) and `rpm-build`:

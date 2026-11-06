@@ -7,18 +7,31 @@
 
 	struct DesktopEngineSidebar: View {
 		@Binding var selection: Route?
+		let navigation: MacSettingsNavigation
+		@Bindable var search: SettingsSearch
 		@Environment(AppState.self) private var appState
 		@State private var folders: [SushitrainFolder] = []
 		@SceneStorage("desktop.files.expanded") private var expanded = true
 
 		var body: some View {
 			List(selection: $selection) {
-				ForEach(DesktopUICatalog.desktop.destinations.filter { $0.id != "settings" }) { item in
-					DesktopEngineSidebarRow(item: item, folders: folders, expanded: $expanded, userSettings: appState.userSettings)
+				if !search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+					ManagementSearchResults(search: search, navigation: navigation)
+				}
+				else {
+					ForEach(DesktopUICatalog.desktop.navigation(platform: "macOS", mode: "synchronize")) { group in
+						Section(group.localizedTitle) {
+							ForEach(group.items) { item in
+								DesktopEngineSidebarRow(item: item, folders: folders, expanded: $expanded, userSettings: appState.userSettings)
+							}
+						}
+					}
 				}
 			}
 			.listStyle(.sidebar)
-			.safeAreaInset(edge: .bottom) { DesktopSettingsButton() }
+			.searchable(text: $search.query, placement: .sidebar, prompt: "Search Settings")
+			.task { search.mode = "synchronize" }
+
 			.navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
 			.task(id: appState.eventCounter) {
 				folders = await appState.folders().sorted {
@@ -30,7 +43,7 @@
 	}
 
 	private struct DesktopEngineSidebarRow: View {
-		let item: DesktopUICatalog.Destination
+		let item: DesktopUICatalog.NavigationItem
 		let folders: [SushitrainFolder]
 		@Binding var expanded: Bool
 		@ObservedObject var userSettings: AppUserSettings
@@ -56,27 +69,14 @@
 							}
 						}
 					} label: {
-						NavigationLink(value: route) { Label(item.title, systemImage: item.symbol) }
+						NavigationLink(value: route) { Label(item.localizedTitle, systemImage: item.symbol) }
 					}
 				}
 				else {
-					NavigationLink(value: route) { Label(item.title, systemImage: item.symbol) }
+					NavigationLink(value: route) { Label(item.localizedTitle, systemImage: item.symbol) }
 				}
 			}
 			.accessibilityIdentifier("desktop.destination.\(item.id)")
-		}
-	}
-
-	struct DesktopSettingsButton: View {
-		@Environment(\.openWindow) private var openWindow
-		var body: some View {
-			Button("Settings", systemImage: "gearshape") {
-				AppWindowPresentation.open { openWindow(id: "appSettings") }
-			}
-			.buttonStyle(.plain)
-			.frame(maxWidth: .infinity, alignment: .leading)
-			.padding()
-			.accessibilityIdentifier("desktop.destination.settings")
 		}
 	}
 
@@ -121,7 +121,12 @@
 	}
 
 	struct DesktopFilesWindow: View {
-		@SceneStorage("desktop.files.selection") private var selection = "overview"
+		@State private var selection = "overview"
+		@State private var navigationNotice: String?
+		@State private var lastBrowserSelection = "files"
+		@State private var editors = MacSettingsNavigation(mode: .filesInFinder)
+		@State private var search = SettingsSearch(catalog: .desktop, platform: "macOS")
+		@AppStorage(AppPresence.storageKey) private var presence = AppPresence.standard
 		@State private var navigation: DesktopFilesNavigation
 		init(environment: RemoteEnvironment? = .shared) {
 			_navigation = State(initialValue: DesktopFilesNavigation(environment: environment))
@@ -130,55 +135,108 @@
 		private var coordinator = RemoteCoordinator.shared
 		var body: some View {
 			NavigationSplitView {
-				List(selection: $selection) {
-					ForEach(DesktopUICatalog.desktop.destinations.filter { $0.id != "settings" }) { item in
-						Group {
-							if item.id == "files" {
-								DisclosureGroup(isExpanded: $expanded) {
-									ForEach(
-										coordinator.folders.sorted {
-											$0.label.lowercased() == $1.label.lowercased()
-												? $0.folderID < $1.folderID : $0.label.lowercased() < $1.label.lowercased()
-										},
-										id: \.folderID
-									) { folder in
-										Button {
-											selection = "folder:" + folder.folderID
-										} label: {
-											Label(folder.label, systemImage: "folder")
-										}.buttonStyle(.plain).tag("folder:" + folder.folderID)
+				List(
+					selection: Binding(
+						get: { selection },
+						set: { next in editors.requestDeparture { selection = next == "files" ? lastBrowserSelection : next } })
+				) {
+					if !search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+						ManagementSearchResults(search: search, navigation: editors)
+					}
+					else {
+						ForEach(DesktopUICatalog.desktop.navigation(platform: "macOS", mode: "files")) { group in
+							Section(group.localizedTitle) {
+								ForEach(group.items) { item in
+									Group {
+										if item.id == "files" {
+											DisclosureGroup(isExpanded: $expanded) {
+												ForEach(
+													coordinator.folders.sorted {
+														$0.label.lowercased() == $1.label.lowercased()
+															? $0.folderID < $1.folderID : $0.label.lowercased() < $1.label.lowercased()
+													},
+													id: \.folderID
+												) { folder in
+													Button {
+														editors.requestDeparture { selection = "folder:" + folder.folderID }
+													} label: {
+														Label(folder.label, systemImage: "folder")
+													}.buttonStyle(.plain).tag("folder:" + folder.folderID)
+												}
+											} label: {
+												Label(item.localizedTitle, systemImage: item.symbol).tag(item.id)
+											}
+										}
+										else {
+											Label(item.localizedTitle, systemImage: item.symbol).tag(item.id)
+										}
 									}
-								} label: {
-									Label(item.title, systemImage: item.symbol).tag(item.id)
+									.tag(item.id)
+									.accessibilityIdentifier("desktop.destination.\(item.id)")
 								}
 							}
-							else {
-								Label(item.title, systemImage: item.symbol).tag(item.id)
-							}
 						}
-						.tag(item.id)
-						.accessibilityIdentifier("desktop.destination.\(item.id)")
 					}
 				}
 				.listStyle(.sidebar)
-				.safeAreaInset(edge: .bottom) { DesktopSettingsButton() }
+				.searchable(text: $search.query, placement: .sidebar, prompt: "Search Settings")
 				.navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
 			} detail: {
-				NavigationStack(
-					path: Binding(get: { navigation.paths[selection] ?? [] }, set: { navigation.paths[selection] = $0 })
-				) {
-					DesktopFilesPage(destination: selection)
-						.navigationDestination(for: DesktopFilesDirectory.self) { directory in
-							if let folder = coordinator.folders.first(where: { $0.folderID == directory.folderID }) {
-								DesktopFilesBrowser(folder: folder, parentID: directory.parentID, title: directory.title)
+				if MacSettingsCategory(rawValue: selection) != nil || editors.searchTarget != nil {
+					MacManagementDetail(destination: selection, mode: .filesInFinder, navigation: editors, presence: $presence)
+				}
+				else {
+					NavigationStack(
+						path: Binding(get: { navigation.paths[selection] ?? [] }, set: { navigation.paths[selection] = $0 })
+					) {
+						DesktopFilesPage(destination: selection)
+							.navigationDestination(for: DesktopFilesDirectory.self) { directory in
+								if let folder = coordinator.folders.first(where: { $0.folderID == directory.folderID }) {
+									DesktopFilesBrowser(folder: folder, parentID: directory.parentID, title: directory.title)
+								}
+								else {
+									ContentUnavailableView("Folder unavailable", systemImage: "folder")
+								}
 							}
-							else {
-								ContentUnavailableView("Folder unavailable", systemImage: "folder")
-							}
-						}
-				}.id(selection)
+					}.id(selection)
+				}
+			}
+			.safeAreaInset(edge: .top) {
+				if let navigationNotice {
+					HStack {
+						Text(navigationNotice)
+						Spacer()
+						Button("Dismiss") { self.navigationNotice = nil }
+					}.padding()
+				}
 			}
 			.environment(navigation)
+			.environment(\.settingsNavigation, editors)
+			.background(SettingsWindowCloseGuard(navigation: editors))
+			.managementDiscardAlert(navigation: editors)
+			.onChange(of: selection) { _, next in
+				if next.hasPrefix("folder:") || next == "files" { lastBrowserSelection = next }
+			}
+			.onChange(of: editors.searchTarget?.id) { _, _ in
+				if let entry = editors.searchTarget { selection = entry.category }
+			}
+			.task {
+				search.mode = "files"
+				if let id = MacManagementCommands.takePending() {
+					editors.requestDeparture {
+						selection = id
+						navigationNotice = MacManagementCommands.takeExplanation()
+					}
+				}
+			}
+			.onReceive(NotificationCenter.default.publisher(for: MacManagementCommands.request)) { note in
+				if let id = MacManagementCommands.takePending() ?? note.object as? String {
+					editors.requestDeparture {
+						selection = id
+						navigationNotice = MacManagementCommands.takeExplanation()
+					}
+				}
+			}
 			.frame(minWidth: 800, minHeight: 560)
 		}
 	}
@@ -195,7 +253,8 @@
 				}
 				else {
 					switch destination {
-					case "folders", "files": DesktopRemoteFolderList()
+					case "folders": ChooseFoldersView()
+					case "files": DesktopRemoteFolderList()
 					case "remoteAccess": Form { RemoteGatewaysSection() }
 					case "history":
 						Form {
@@ -210,6 +269,11 @@
 					default:
 						Form {
 							Section("Status") {
+								Button("Show in Finder", systemImage: "folder") {
+									Task {
+										if let url = await FilesDomain.shared.locationURL() { ClientLifecycle.show(url) }
+									}
+								}
 								Text("Files mode")
 								Text("\(coordinator.folders.count) folders from \(coordinator.gateways.count) gateways")
 							}

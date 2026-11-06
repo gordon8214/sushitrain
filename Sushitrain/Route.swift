@@ -38,7 +38,7 @@ enum Route: Hashable, Equatable {
 		}
 
 		if let id = DesktopRouteURL.destinationID(from: url) {
-			self = .desktop(id)
+			self = .desktop(DesktopUICatalog.desktop.aliases[id] ?? id)
 			return
 		}
 

@@ -146,3 +146,18 @@ private enum SearchWaitError: Error { case didNotStart }
 	await loading.value
 	#expect(!search.entries.contains { $0.id == "stopped-engine" })
 }
+
+@Test @MainActor func applicableSearchTargetsStayInUnifiedNavigation() throws {
+	let root = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+		.deletingLastPathComponent()
+	let catalog = try DesktopUICatalog(
+		data: Data(contentsOf: root.appending(path: "SushitrainCore/desktopui/catalog.json")))
+	for platform in ["macOS", "windows", "gnome", "kde", "ios"] {
+		for mode in ["files", "synchronize"] where platform != "ios" || mode == "files" {
+			let visible = Set(catalog.navigation(platform: platform, mode: mode).flatMap(\.items).map(\.id))
+			let search = SettingsSearch(catalog: catalog, platform: platform)
+			search.mode = mode
+			for entry in search.entries where entry.isAvailable(mode: mode) { #expect(visible.contains(entry.category)) }
+		}
+	}
+}

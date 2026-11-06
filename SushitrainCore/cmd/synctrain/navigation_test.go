@@ -262,17 +262,30 @@ func TestNavigation(t *testing.T) {
 	for _, mode := range []string{modeFiles, modeSynchronize} {
 		d.mode = mode
 		for _, category := range desktopui.Read().Settings {
+			var sections []desktopui.Section
+			for _, section := range category.Sections {
+				if section.Available("gnome", mode) {
+					sections = append(sections, section)
+				}
+			}
+			if len(sections) == 0 {
+				continue
+			}
 			d.navigate("settings:" + category.ID)
-			if len(d.sidebarRoutes) != 8 {
-				t.Fatal("category count differs by mode")
+			expected := 18
+			if mode == modeFiles {
+				expected = 13
+			}
+			if len(d.sidebarRoutes) != expected {
+				t.Fatal("unified navigation missing", d.sidebarRoutes)
 			}
 			i := 0
 			for child := d.body.FirstChild(); child != nil; child = gtk.BaseWidget(child).NextSibling() {
 				if group, ok := gtk.BaseWidget(child).Cast().(*adw.PreferencesGroup); ok {
-					if i >= len(category.Sections) || group.Title() != category.Sections[i].Title {
+					if i >= len(sections) || group.Title() != sections[i].Title {
 						t.Fatalf("%s section order differs", category.ID)
 					}
-					if category.Sections[i].Action == "mode" {
+					if sections[i].Action == "mode" {
 						current, target := "Synchronize", "Files"
 						if mode == modeFiles {
 							current, target = "Files", "Synchronize"
@@ -288,7 +301,7 @@ func TestNavigation(t *testing.T) {
 					i++
 				}
 			}
-			if i != len(category.Sections) {
+			if i != len(sections) {
 				t.Fatalf("%s missing sections", category.ID)
 			}
 		}
@@ -296,8 +309,8 @@ func TestNavigation(t *testing.T) {
 
 	d.route = "Overview"
 	d.navigate("Settings")
-	if d.route != "settings:general" || d.sidebar.SelectedRow().Index() != 0 || len(d.sidebarRoutes) != 8 {
-		t.Fatal("opening Settings with a shortcut did not show its category sidebar")
+	if d.route != "settings:general" || d.sidebar.SelectedRow().Index() != 7 || len(d.sidebarRoutes) != 18 {
+		t.Fatal("Settings shortcut did not select General in the unified sidebar")
 	}
 
 	d.mode = modeSynchronize

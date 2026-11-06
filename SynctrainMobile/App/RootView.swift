@@ -27,57 +27,8 @@ struct RootView: View {
 					Task { await model.start() }
 				}
 			}
-		case .needsGateway:
-			GatewayPromptView()
-		case .needsFolders:
-			NavigationStack {
-				ChooseFoldersView()
-					.toolbar {
-						ToolbarItem(placement: .primaryAction) {
-							NavigationLink {
-								RemoteFoldersSettingsView()
-							} label: {
-								Label("Gateways", systemImage: "externaldrive.connected.to.line.below")
-							}
-						}
-					}
-			}
-		case .ready:
-			TabView {
-				Tab("Folders", systemImage: "folder") {
-					FoldersView()
-				}
-				Tab("Settings", systemImage: "gear") {
-					SettingsView()
-				}
-				Tab(role: .search) {
-					SearchView()
-				}
-			}
-			.tabViewStyle(.sidebarAdaptable)
-		}
-	}
-}
-
-/// The first thing a new user sees: Synctrain shows the folders of a gateway, so it needs one
-private struct GatewayPromptView: View {
-	@State private var showPairing = false
-
-	var body: some View {
-		ContentUnavailableView {
-			Label("Pair with a Gateway", systemImage: "externaldrive.connected.to.line.below")
-		} description: {
-			Text(
-				"Synctrain opens your folders through a gateway: a Mac running Synctrain, or a server running synctrain-gateway."
-			)
-		} actions: {
-			Button("Pair with a Gateway…") {
-				showPairing = true
-			}
-			.buttonStyle(.borderedProminent)
-		}
-		.sheet(isPresented: $showPairing) {
-			RemotePairingView()
+		case .needsGateway, .needsFolders, .ready:
+			MobileManagementView()
 		}
 	}
 }

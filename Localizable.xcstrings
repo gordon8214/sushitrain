@@ -1,6 +1,54 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Manage" : {
+      "comment" : "Group of management pages in app navigation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage"
+          }
+        }
+      }
+    },
+    "Preferences" : {
+      "comment" : "Group of app preference pages in unified navigation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preferences"
+          }
+        }
+      }
+    },
+    "Tools" : {
+      "comment" : "Group of optional file browsing and history tools.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tools"
+          }
+        }
+      }
+    },
+    "Browse Files" : {
+      "comment" : "Optional in-app file browser navigation destination.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Browse Files"
+          }
+        }
+      }
+    },
     "" : {
       "localizations" : {
         "de" : {

@@ -9,10 +9,14 @@ import QuickLook
 
 struct BrowserTableView: View {
 	let folder: SushitrainFolder
+	let prefix: String
 	let files: [SushitrainEntry]
 	let subdirectories: [SushitrainEntry]
 	let viewStyle: BrowserViewStyle
 
+	@State private var updateGeneration = 0
+	@State private var scrollItem: SushitrainEntry.ID?
+	@Environment(\.desktopBrowserSession) private var browserSession
 	@State private var selection = Set<SushitrainEntry.ID>()
 	@State private var openedEntry: (SushitrainEntry, Bool)? = nil
 	@State private var sortOrder = [EntryComparator(order: .forward, sortBy: .name)]
@@ -30,6 +34,7 @@ struct BrowserTableView: View {
 	@Environment(AppState.self) private var appState
 
 	@Environment(\.openWindow) private var openWindow
+	@Environment(\.pushBrowserRoute) private var pushBrowserRoute
 
 	private static let formatter = ByteCountFormatter()
 
@@ -124,6 +129,7 @@ struct BrowserTableView: View {
 			await self.update()
 		}
 		.onChange(of: self.sortOrder, initial: false) { _, _ in
+			rememberTableState()
 			Task {
 				await self.update()
 			}
@@ -152,6 +158,17 @@ struct BrowserTableView: View {
 		.sheet(item: $showVersionsFor) { entry in
 			FileVersionsView(folder: self.folder, path: entry.path())
 		}
+		.scrollPosition(id: $scrollItem)
+		.onAppear {
+			if let saved = browserSession?.tables[.folder(folderID: folder.folderID, prefix: prefix)] {
+				selection = saved.selection
+				sortOrder = saved.sort
+				scrollItem = saved.scroll
+			}
+		}
+		.onChange(of: selection) { rememberTableState() }
+		.onChange(of: scrollItem) { rememberTableState() }
+
 		#if os(macOS)
 			.sheet(item: $desktopEdit) { DesktopEntryMutationSheet(edit: $0) }
 			.confirmationDialog(
@@ -172,6 +189,12 @@ struct BrowserTableView: View {
 			.errorAlert($operationError)
 		#endif
 
+	}
+
+	private func rememberTableState() {
+		guard browserSession?.active == true else { return }
+		browserSession?.tables[.folder(folderID: folder.folderID, prefix: prefix)] = DesktopBrowserTableState(
+			selection: selection, sort: sortOrder, scroll: scrollItem)
 	}
 
 	@ViewBuilder private func itemsMenu(items: Set<SushitrainEntry.ID>) -> some View {
@@ -377,18 +400,29 @@ struct BrowserTableView: View {
 					}
 				}
 
-				// Regular case: just open the entry in a next view
-				self.openedEntry = (oe, true)
+				// Directory routes participate in the retained value path.
+				if oe.isDirectory(), let pushBrowserRoute {
+					pushBrowserRoute(.folder(folderID: oe.folder?.folderID ?? folder.folderID, prefix: oe.path() + "/"))
+				}
+				else {
+					self.openedEntry = (oe, true)
+				}
 			}
 		}
 	}
 
 	private func update() async {
-		self.entries = await Task.detached {
-			var a = self.subdirectories + self.files
-			await a.sort(using: self.sortOrder)
-			return a
+		updateGeneration += 1
+		let generation = updateGeneration
+		let values = subdirectories + files
+		let ordering = sortOrder
+		let sorted = await Task.detached {
+			var values = values
+			values.sort(using: ordering)
+			return values
 		}.value
+		guard !Task.isCancelled, updateGeneration == generation else { return }
+		entries = sorted
 	}
 }
 

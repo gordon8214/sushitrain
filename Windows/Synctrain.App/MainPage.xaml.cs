@@ -167,13 +167,20 @@ public sealed partial class MainPage : Page
             Body.Children.Add(ActionButton("Import existing Syncthing configuration…",ImportHome));return;
         }
         try { if(statusFailure is null) await LoadFolderShortcuts(mode); } catch (OperationCanceledException) { throw; } catch (Exception error) { ShowError(error.Message); }
+        if (NavigationEntry(page.StartsWith("settings:",StringComparison.Ordinal) ? page[9..] : page) is null) {
+            page = "overview";
+            Heading.Text = CatalogTitle(page);
+            ShowError("The previous page is unavailable in this mode. Overview is shown instead.");
+        }
         BuildNavigation();
+        _ = LoadSettingsIndex();
+        if (settingsResultsPage) { ShowSettingsResults(); return; }
         if (page.StartsWith("settings:", StringComparison.Ordinal)) {
             var category = page[9..];
             // Search metadata owns its cache, independently of this page render.
             _ = LoadSettingsIndex();
             if (current != generation) return;
-            if (settingsResultsPage) ShowSettingsResults(); else await SettingsCategory(category, mode);
+            await SettingsCategory(category, mode);
             return;
         }
         if(statusFailure is not null) { Text("Start the background service, then choose Refresh. Settings remains available."); return; }

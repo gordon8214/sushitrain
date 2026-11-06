@@ -24,6 +24,9 @@ private struct GridItemView: View {
 }
 
 struct GridScrollView<HeaderContent: View, Content: View>: View {
+	let directory: Route
+	@Environment(\.desktopBrowserSession) private var browserSession
+	@State private var position = ScrollPosition(edge: .top)
 	let minColumns = 1
 	let maxColumns = 9
 
@@ -37,13 +40,22 @@ struct GridScrollView<HeaderContent: View, Content: View>: View {
 	var body: some View {
 		VStack {
 			GeometryReader { reader in
-				TrackingScrollView(offset: $scrollViewOffset) {
+				ScrollView {
 					self.header()
 
 					self.content(userSettings.browserGridColumns)
 						.scaleEffect(magnifyBy, anchor: .top)
 						.offset(x: 0, y: (scrollViewOffset + reader.size.height / 2.0) * (1 - magnifyBy))
 				}
+				.scrollPosition($position)
+				.onScrollGeometryChange(for: CGFloat.self) {
+					$0.contentOffset.y
+				} action: { _, offset in
+					scrollViewOffset = -offset
+					if browserSession?.active == true { browserSession?.gridOffsets[directory] = offset }
+				}
+				.onAppear { if let offset = browserSession?.gridOffsets[directory] { position.scrollTo(y: offset) } }
+
 				.highPriorityGesture(magnification)
 				.accessibilityZoomAction { action in
 					switch action.direction {
@@ -107,10 +119,8 @@ struct GridFilesView: View {
 				// List subdirectories
 				ForEach(subdirectories, id: \.self.id) { (subDirEntry: SushitrainEntry) in
 					GeometryReader { geo in
-						NavigationLink(
-							destination: BrowserView(
-								folder: folder, prefix: "\(self.prefix)\(subDirEntry.fileName())/", userSettings: appState.userSettings
-							)
+						BrowserDirectoryLink(
+							route: Route.folder(folderID: folder.folderID, prefix: "\(self.prefix)\(subDirEntry.fileName())/")
 						) {
 							EntryContextMenuWrapper(
 								appState: appState,
@@ -147,49 +157,5 @@ struct GridFilesView: View {
 			}
 		}
 		.padding(.horizontal, 2)
-	}
-}
-
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-	typealias Value = [CGFloat]
-	static let defaultValue: [CGFloat] = [0]
-
-	static func reduce(value: inout [CGFloat], nextValue: () -> [CGFloat]) {
-		value.append(contentsOf: nextValue())
-	}
-}
-
-// Scroll view that is able to track the vertical position
-// From iOS 18, this should be replaced with ScrollPosition/.scrollPosition as provided in SwiftUI
-// Inspired by https://github.com/maxnatchanon/trackable-scroll-view
-private struct TrackingScrollView<Content: View>: View {
-	@Binding var offset: CGFloat
-	@ViewBuilder let content: () -> Content
-
-	var body: some View {
-		GeometryReader { outsideReader in
-			ScrollView([.vertical], showsIndicators: true) {
-				ZStack(alignment: .top) {
-					GeometryReader { insideReader in
-						Color.clear
-							.preference(
-								key: ScrollOffsetPreferenceKey.self,
-								value: [
-									self.contentOffset(from: outsideReader, to: insideReader)
-								])
-					}
-					VStack {
-						self.content()
-					}
-				}
-			}
-			.onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
-				self.offset = value[0]
-			}
-		}
-	}
-
-	private func contentOffset(from outsideReader: GeometryProxy, to insideReader: GeometryProxy) -> CGFloat {
-		return outsideReader.frame(in: .global).minY - insideReader.frame(in: .global).minY
 	}
 }

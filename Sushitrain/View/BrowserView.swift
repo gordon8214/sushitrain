@@ -87,22 +87,46 @@ struct BrowserView: View {
 
 	@Environment(AppState.self) private var appState
 	@Environment(\.showToast) private var showToast
+	@Environment(\.desktopBrowserSession) private var browserSession
 
 	var folder: SushitrainFolder
 	var prefix: String
 	@ObservedObject var userSettings: AppUserSettings
 
-	@State private var searchText = ""
+	@State private var browserState: DesktopBrowserSettings
+	init(folder: SushitrainFolder, prefix: String, userSettings: AppUserSettings, state: DesktopBrowserSettings? = nil) {
+		self.folder = folder
+		self.prefix = prefix
+		self.userSettings = userSettings
+		_browserState = State(initialValue: state ?? DesktopBrowserSettings())
+	}
+	private var searchText: String {
+		get { browserState.searchText }
+		nonmutating set { if browserSession?.active != false { browserState.searchText = newValue } }
+	}
+	private var viewStyle: BrowserViewStyle? {
+		get { browserState.viewStyle }
+		nonmutating set { if browserSession?.active != false { browserState.viewStyle = newValue } }
+	}
+	private var entriesSort: BrowserViewSort? {
+		get { browserState.sort }
+		nonmutating set { if browserSession?.active != false { browserState.sort = newValue } }
+	}
+	private var recursive: Bool {
+		get { browserState.recursive }
+		nonmutating set { if browserSession?.active != false { browserState.recursive = newValue } }
+	}
+	private var isSearching: Bool {
+		get { browserState.searching }
+		nonmutating set { if browserSession?.active != false { browserState.searching = newValue } }
+	}
 	@State private var localNativeURL: URL? = nil
 	@State private var folderExists = false
 	@State private var webViewAvailable = false
-	@State private var viewStyle: BrowserViewStyle? = nil
-	@State private var entriesSort: BrowserViewSort? = nil
+
 	@State private var showAlert: ShowAlert? = nil
-	@State private var recursive = false
 
 	@State private var showStatusPopover = false
-	@State private var isSearching = false
 
 	private func currentViewStyle() -> Binding<BrowserViewStyle> {
 		return Binding(
@@ -138,16 +162,16 @@ struct BrowserView: View {
 				folder: folder,
 				prefix: prefix,
 				// Note: this binding does *not* set appState.defaultBrowserViewStyle, because this one is primarily set programmatically
-				viewStyle: $viewStyle,
+				viewStyle: Binding(get: { viewStyle }, set: { viewStyle = $0 }),
 				sortOrder: currentSort,
 				recursive: recursive,
-				searchText: $searchText,
+				searchText: Binding(get: { searchText }, set: { searchText = $0 }),
 				showSettings: showSettings
 			)
 
 			.searchable(
-				text: $searchText,
-				isPresented: $isSearching,
+				text: Binding(get: { searchText }, set: { searchText = $0 }),
+				isPresented: Binding(get: { isSearching }, set: { isSearching = $0 }),
 				placement: SearchFieldPlacement.toolbar,
 				prompt: "Search files in this folder..."
 			)
@@ -306,7 +330,9 @@ struct BrowserView: View {
 
 			Toggle("Hide dotfiles", systemImage: "eye.slash", isOn: userSettings.$dotFilesHidden)
 
-			Toggle("Show files in subdirectories", systemImage: "text.insert", isOn: $recursive)
+			Toggle(
+				"Show files in subdirectories", systemImage: "text.insert",
+				isOn: Binding(get: { recursive }, set: { recursive = $0 }))
 
 		} label: {
 			Label("Filter and sort", systemImage: "line.3.horizontal.decrease")
@@ -423,6 +449,7 @@ private struct BrowserItemsView: View {
 	@State private var loadError: String?
 
 	@Environment(AppState.self) private var appState
+	@Environment(\.desktopBrowserSession) private var browserSession
 	let folder: SushitrainFolder
 	let prefix: String
 	@Binding var viewStyle: BrowserViewStyle?
@@ -508,6 +535,20 @@ private struct BrowserItemsView: View {
 		.task(id: reloadIdentity) {
 			await self.reload()
 		}
+		.onAppear {
+			if let saved = browserSession?.items(for: .folder(folderID: folder.folderID, prefix: prefix)) {
+				subdirectories = saved.directories
+				files = saved.files
+				folderExists = saved.exists
+				folderIsPaused = saved.paused
+			}
+		}
+		.onDisappear {
+			browserSession?.retain(
+				DesktopBrowserItems(directories: subdirectories, files: files, exists: folderExists, paused: folderIsPaused),
+				for: .folder(folderID: folder.folderID, prefix: prefix))
+		}
+
 	}
 
 	private var isEmpty: Bool {
@@ -516,6 +557,7 @@ private struct BrowserItemsView: View {
 
 	@ViewBuilder private func gridView() -> some View {
 		GridScrollView(
+			directory: .folder(folderID: folder.folderID, prefix: prefix),
 			userSettings: appState.userSettings,
 			header: {
 				HStack {
@@ -556,6 +598,7 @@ private struct BrowserItemsView: View {
 	@ViewBuilder private func listView() -> some View {
 		BrowserTableView(
 			folder: folder,
+			prefix: prefix,
 			files: files,
 			subdirectories: subdirectories,
 			viewStyle: viewStyle ?? appState.userSettings.defaultBrowserViewStyle

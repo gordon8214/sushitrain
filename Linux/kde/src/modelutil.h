@@ -13,6 +13,12 @@ inline QJsonObject field(QString path, QString label, QJsonValue value = {},
 inline QString str(const QJsonObject &o, const char *name) {
   return o.value(name).toString();
 }
+inline bool catalogAvailable(const QJsonObject &item, const QString &mode) {
+  const auto platforms = item["platforms"].toArray();
+  const auto capability = str(item, "capability");
+  return (platforms.isEmpty() || platforms.contains("kde")) &&
+         (capability.isEmpty() || capability == "always" || capability == mode);
+}
 inline QString display(const QJsonValue &v) {
   if (v.isString())
     return v.toString();

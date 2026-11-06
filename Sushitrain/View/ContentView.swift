@@ -101,8 +101,10 @@ private struct ContentView: View {
 	@Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
 	@State private var desktopEditors = MacSettingsNavigation(mode: .synchronize)
-	@State private var pendingDesktopRoute: Route?
-	@State private var confirmDesktopDiscard = false
+	@State private var browserNavigation = DesktopBrowserNavigation()
+	@State private var lastBrowserRoute: Route?
+	@State private var settingsSearch = SettingsSearch(catalog: .desktop, platform: "macOS")
+	@AppStorage(AppPresence.storageKey) private var presence = AppPresence.standard
 	@State private var showCustomConfigWarning = false
 	@State private var showContainerFolders = false
 	@State var topLevelRoute: Route? = .start
@@ -148,16 +150,30 @@ private struct ContentView: View {
 		NavigationSplitView(
 			columnVisibility: $columnVisibility,
 			sidebar: {
-				DesktopEngineSidebar(selection: Binding(get: { topLevelRoute }, set: { requestDesktopRoute($0) }))
-					.disabled(desktopEditors.isSaving)
-					.contextMenu {
-						FolderMetricPickerView(userSettings: appState.userSettings)
-					}
+				DesktopEngineSidebar(
+					selection: Binding(get: { topLevelRoute }, set: { requestDesktopRoute($0) }), navigation: desktopEditors,
+					search: settingsSearch
+				)
+				.disabled(desktopEditors.isSaving)
+				.contextMenu {
+					FolderMetricPickerView(userSettings: appState.userSettings)
+				}
 			},
 			detail: {
 				switch self.topLevelRoute {
 				case .desktop(let id):
-					NavigationStack { DesktopSynchronizePage(destination: id) }.showsToast()
+					Group {
+						if MacSettingsCategory(rawValue: id) != nil || desktopEditors.searchTarget != nil {
+							MacManagementDetail(
+								destination: id, mode: .synchronize, navigation: desktopEditors, presence: $presence, appState: appState)
+						}
+						else if id == "files", let route = lastBrowserRoute {
+							DesktopRetainedBrowser(route: route, navigation: browserNavigation).id(route)
+						}
+						else {
+							NavigationStack { DesktopSynchronizePage(destination: id) }
+						}
+					}.showsToast()
 				case .start:
 					NavigationStack {
 						StartOrSearchView(topLevelRoute: $topLevelRoute, initialSearchTerm: $initialSearchTerm)
@@ -175,16 +191,13 @@ private struct ContentView: View {
 
 				case .folders:
 					NavigationStack(path: $foldersTabRouteManager.route) {
-						FoldersView()
+						DesktopManagedFolders()
 					}.showsToast()
 
-				case .folder(let folderID, let prefix):
-					NavigationStack(path: $foldersTabRouteManager.route) {
-						RouteView(route: self.topLevelRoute!)
-							.navigationDestination(for: Route.self) { r in
-								RouteView(route: r)
-							}
-					}.id(folderID + ":" + (prefix ?? "")).showsToast()
+				case .folder:
+					if let route = topLevelRoute {
+						DesktopRetainedBrowser(route: route, navigation: browserNavigation).id(route)
+					}
 
 				case .file(let folderID, let path):
 					NavigationStack(path: $foldersTabRouteManager.route) {
@@ -232,7 +245,8 @@ private struct ContentView: View {
 			NSApplication.shared.activate()
 		}
 		// The split view removes the pages of the previous selection among the actions this runs with, and this comes after
-		.onChange(of: topLevelRoute) {
+		.onChange(of: topLevelRoute, initial: true) {
+			if case .folder = topLevelRoute { lastBrowserRoute = topLevelRoute }
 			if let afterSelection {
 				self.afterSelection = nil
 				Task { afterSelection() }
@@ -294,32 +308,38 @@ private struct ContentView: View {
 		}
 		.environment(\.settingsNavigation, desktopEditors)
 		.background(SettingsWindowCloseGuard(navigation: desktopEditors))
-		.alert("Discard unsaved changes?", isPresented: $confirmDesktopDiscard) {
-			Button("Keep Editing", role: .cancel) { pendingDesktopRoute = nil }
-			Button("Discard Changes", role: .destructive) {
-				desktopEditors.discardForClosing()
-				let route = pendingDesktopRoute
-				pendingDesktopRoute = nil
-				if let route {
-					navigate(to: route)
-				}
-				else {
-					topLevelRoute = nil
-				}
+		.managementDiscardAlert(navigation: desktopEditors)
+		.onChange(of: desktopEditors.searchTarget?.id) { _, _ in
+			if let entry = desktopEditors.searchTarget {
+				browserNavigation.deactivate()
+				topLevelRoute = .desktop(entry.category)
 			}
-		} message: {
-			Text("The changes on this page have not been saved.")
 		}
+		.task(id: settingsSearchRevision) {
+			settingsSearch.mode = "synchronize"
+			guard appState.startupState == .started, !appState.isEngineRestarting else {
+				settingsSearch.resetEngine()
+				return
+			}
+			let client = appState.client
+			await settingsSearch.refresh {
+				let data = try await goBlocking { try client.settingsSearchIndex() }
+				return try JSONDecoder().decode([SettingSearchEntry].self, from: data)
+			}
+		}
+		.task { MCPIntegration.shared.start(appState) }
+
 		.environment(\.navigateTo, NavigateToAction(action: { route in self.navigate(to: route) }))
 	}
 
+	private var settingsSearchRevision: String {
+		"\(appState.finderConfigurationGeneration).\(appState.startupState == .started).\(appState.isEngineRestarting)"
+	}
+
 	private func requestDesktopRoute(_ route: Route?) {
-		guard !desktopEditors.isSaving else { return }
-		if desktopEditors.hasChanges {
-			pendingDesktopRoute = route
-			confirmDesktopDiscard = true
-		}
-		else {
+		desktopEditors.requestDeparture {
+			browserNavigation.deactivate()
+			if let route, case .folder = route { browserNavigation.session(for: route).path = [] }
 			topLevelRoute = route
 		}
 	}
@@ -354,18 +374,18 @@ private struct ContentView: View {
 	}
 
 	private func navigate(to route: Route) {
-		guard !desktopEditors.isSaving else { return }
-		if desktopEditors.hasChanges {
-			pendingDesktopRoute = route
-			confirmDesktopDiscard = true
-			return
-		}
+		desktopEditors.requestDeparture { navigateAccepted(to: route) }
+	}
+
+	private func navigateAccepted(to route: Route) {
 		Log.info("Navigate to route=\(route) splitted=\(route.splitted)")
 
 		if !self.exists(route: route) {
 			self.error = String(localized: "The requested item cannot be found on this device.")
 			return
 		}
+
+		browserNavigation.deactivate()
 
 		// The start page has the search field
 		if case .search(for: let searchFor) = route {
@@ -378,7 +398,7 @@ private struct ContentView: View {
 		if case .folder(folderID: _, prefix: _) = route {
 			let splitted = route.splitted
 			self.select(splitted[0]) {
-				self.foldersTabRouteManager.route = Array(splitted.dropFirst())
+				self.browserNavigation.session(for: splitted[0]).path = Array(splitted.dropFirst())
 			}
 		}
 		else {
@@ -413,6 +433,7 @@ private struct ContentView: View {
 
 struct RouteView: View {
 	@Environment(AppState.self) private var appState
+	@Environment(\.desktopBrowserSession) private var browserSession
 	let route: Route
 
 	var body: some View {
@@ -440,11 +461,14 @@ struct RouteView: View {
 		case .folder(let folderID, let prefix):
 			if let folder = self.appState.client.folder(withID: folderID) {
 				if folder.exists() {
-					BrowserView(folder: folder, prefix: prefix ?? "", userSettings: appState.userSettings)
-						#if SYNCTRAIN_BENCHMARK
-							.onAppear { EngineBenchmark.folderIsVisible = true }
-							.onDisappear { EngineBenchmark.folderIsVisible = false }
-						#endif
+					BrowserView(
+						folder: folder, prefix: prefix ?? "", userSettings: appState.userSettings,
+						state: browserSession?.settings(for: .folder(folderID: folderID, prefix: prefix ?? ""))
+					)
+					#if SYNCTRAIN_BENCHMARK
+						.onAppear { EngineBenchmark.folderIsVisible = true }
+						.onDisappear { EngineBenchmark.folderIsVisible = false }
+					#endif
 				}
 				else {
 					ContentUnavailableView(

@@ -18,7 +18,7 @@ Kirigami.ApplicationWindow {
   preferredSize: Kirigami.Units.gridUnit * 14
   id: drawer
   header: ColumnLayout {
-   visible: backend.page.startsWith("settings:")
+   visible: true
    spacing: Kirigami.Units.smallSpacing
    Kirigami.SearchField {
     id: settingsSearch
@@ -62,13 +62,7 @@ Kirigami.ApplicationWindow {
     Keys.onEscapePressed: { backend.settingsQuery = ""; settingsSearch.forceActiveFocus() }
    }
   }
-  footer: QQC2.ToolButton {
-   objectName: "settingsNavigation"
-   visible: !backend.page.startsWith("settings:")
-   text: "Settings"; icon.name: "configure"
-   enabled: !backend.busy && (Object.keys(backend.dialog).length === 0 || backend.dialog.page === true)
-   onClicked: backend.navigate("Settings")
-  }
+
  }
  readonly property bool hasSettingsBack: editor.isPage || backend.commands.some(command => command.label === "Back")
  function goSettingsBack() {
@@ -76,7 +70,7 @@ Kirigami.ApplicationWindow {
   else { const back = backend.commands.find(command => command.label === "Back"); if (back) backend.activate(back.key) }
  }
  Shortcut { sequences: [StandardKey.Back]; enabled: root.hasSettingsBack && !backend.busy; onActivated: root.goSettingsBack() }
- Shortcut { sequences: [StandardKey.Find]; enabled: backend.page.startsWith("settings:"); onActivated: { drawer.drawerOpen = true; settingsSearch.forceActiveFocus() } }
+ Shortcut { sequences: [StandardKey.Find]; enabled: true; onActivated: { drawer.drawerOpen = true; settingsSearch.forceActiveFocus() } }
  property var pageScrollPositions: ({})
  property string previousPage: "Overview"
  property var navigationObjects: ({})
@@ -87,7 +81,7 @@ Kirigami.ApplicationWindow {
    navigationObjects[item.route] = action
   }
   action.text = item.title
-  action.iconName = item.icon
+  action.iconName = item.icon || ""
   action.children = (item.children || []).map(child => actionFor(child))
   return action
  }
@@ -96,7 +90,7 @@ Kirigami.ApplicationWindow {
   let wanted = new Set()
   function visit(action) { wanted.add(action.route); for (let child of action.children) visit(child) }
   for (let action of next) visit(action)
-  drawer.actions = backend.page.startsWith("settings:") && backend.settingsQuery.trim().length > 0 ? [] : next
+  drawer.actions = backend.settingsQuery.trim().length > 0 ? [] : next
   for (let route of Object.keys(navigationObjects)) {
    if (route.startsWith("folder:") && !wanted.has(route)) {
     navigationObjects[route].destroy()
@@ -112,7 +106,7 @@ Kirigami.ApplicationWindow {
    property string iconName
    icon.name: iconName
    checked: backend.page === route
-   enabled: !backend.busy && (Object.keys(backend.dialog).length === 0 || backend.dialog.page === true)
+   enabled: !route.startsWith("group:") && !backend.busy && (Object.keys(backend.dialog).length === 0 || backend.dialog.page === true)
    onTriggered: backend.navigate(route)
   }
  }

@@ -89,8 +89,11 @@ func SearchEntries(platform string) []SearchEntry {
 	if platform != "ios" {
 		for _, category := range c.Settings {
 			for _, section := range category.Sections {
+				if !Supports(section.Platforms, platform) {
+					continue
+				}
 				entries = append(entries, SearchEntry{ID: category.ID + "." + section.ID, Title: section.Title,
-					Breadcrumb: category.Title, Category: category.ID, Action: section.Action, Capability: section.Capability})
+					Breadcrumb: category.Title, Category: category.ID, Action: section.Action, Capability: section.Capability, Platforms: section.Platforms})
 			}
 		}
 	}

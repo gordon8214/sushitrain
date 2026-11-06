@@ -14,13 +14,15 @@
 			Form {
 				if [.filesAndStorage, .network, .synchronization, .defaults, .advanced].contains(category) {
 					Section {
-						ForEach(category.descriptor.sections) { section in
+						ForEach(category.descriptor.sections.filter { $0.isAvailable(platform: "macOS", mode: mode.capabilityMode) }) {
+							section in
 							DesktopSettingsSection(section: section, mode: mode, presence: $presence, appState: appState, grouped: true)
 						}
 					}
 				}
 				else {
-					ForEach(category.descriptor.sections) { section in
+					ForEach(category.descriptor.sections.filter { $0.isAvailable(platform: "macOS", mode: mode.capabilityMode) }) {
+						section in
 						DesktopSettingsSection(section: section, mode: mode, presence: $presence, appState: appState)
 					}
 				}

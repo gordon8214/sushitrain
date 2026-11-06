@@ -24,6 +24,7 @@ QVariantList Backend::settingsResults() const {
     auto category = item.toObject();
     for (auto item : category["sections"].toArray()) {
       auto entry = item.toObject();
+      if (!catalogAvailable(entry, m_mode)) continue;
       entry["id"] = str(category,"id") + "." + str(entry,"id");
       entry["category"] = category["id"];
       entry["breadcrumb"] = category["title"];
@@ -42,6 +43,7 @@ QVariantList Backend::settingsResults() const {
   const auto words = query.split(QRegularExpression("\\s+"),Qt::SkipEmptyParts);
   for (auto item : entries) {
     auto entry = item.toObject();
+    if (!catalogAvailable(entry, m_mode)) continue;
     const auto title = searchText(str(entry,"title"));
     auto corpus = title + " " + searchText(str(entry,"breadcrumb") + " " + str(entry,"field"));
     for (auto keyword : entry["keywords"].toArray()) corpus += " " + searchText(keyword.toString());
@@ -96,7 +98,7 @@ void Backend::openSettingsResult(const QVariantMap &value) {
   if(action=="mode" || action=="name" || action=="configuration") {
     navigate("settings:"+str(entry,"category")); return;
   }
-  if(action=="remoteService") {clear("Remote File Service");command("Back",[this]{refresh();});remote();}
+  if(action=="remoteService") {clear("Remote File Service");command("Back",[this]{refresh();});remote(true);}
   else if(action=="gateways") {clear("Gateways");command("Back",[this]{refresh();});filesService();}
   else if(action=="historySources") {clear("History Sources");command("Back",[this]{refresh();});historySources();}
   else if(action=="app") edit("app");

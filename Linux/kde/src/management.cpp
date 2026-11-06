@@ -325,15 +325,29 @@ void Backend::edit(const QString &section) {
 }
 QVariantList Backend::navigation() const {
   QVariantList list;
-  const bool settings = m_page.startsWith("settings:");
-  if (settings) list.append(QVariantMap{{"title", "Back to App"}, {"route", lastAppPage}, {"icon", "go-previous"}});
-  for (auto value : catalog[settings ? "settings" : "destinations"].toArray()) {
-    auto item = value.toObject();
-    if (!settings && str(item, "id") == "settings") continue;
-    auto route = settings ? "settings:" + str(item, "id") : str(item, "title");
-    QVariantMap nav{{"title", item["title"].toString()}, {"route", route}, {"icon", item["icon"].toString()}};
-    if (!settings && str(item, "id") == "files") nav["children"] = folderShortcuts;
-    list.append(nav);
+  for (auto value : catalog["navigationGroups"].toArray()) {
+    const auto group = value.toObject();
+    QVariantList items;
+    for (auto id : group["items"].toArray()) {
+      QJsonObject item;
+      bool setting = false;
+      for (auto d : catalog["destinations"].toArray())
+        if (d.toObject()["id"] == id && catalogAvailable(d.toObject(), m_mode)) item = d.toObject();
+      for (auto c : catalog["settings"].toArray()) {
+        const auto category = c.toObject();
+        if (category["id"] != id) continue;
+        for (auto section : category["sections"].toArray())
+          if (catalogAvailable(section.toObject(), m_mode)) { item = category; setting = true; break; }
+      }
+      if (item.isEmpty()) continue;
+      const auto route = setting ? "settings:" + id.toString() : id == "files" ? "Files" : str(item,"title");
+      QVariantMap nav{{"title", str(item,"title")}, {"route", route}, {"icon", str(item,"icon")}};
+      if (id == "files") nav["children"] = folderShortcuts;
+      items.append(nav);
+    }
+    if (items.isEmpty()) continue;
+    list.append(QVariantMap{{"title", str(group,"title")}, {"route", "group:"+str(group,"id")}});
+    list.append(items);
   }
   return list;
 }
@@ -345,10 +359,8 @@ void Backend::settings() {
     m_title = str(category, "title");
     for (auto item : category["sections"].toArray()) {
       const auto section = item.toObject();
-      const auto capability = str(section, "capability");
-      if (capability != "always" && capability != m_mode) {
-        row(str(section, "title"), "Available in " + capability + " mode. Change the operating mode in General.");
-      } else if (str(section, "action") == "mode") {
+      if (!catalogAvailable(section, m_mode)) continue;
+      if (str(section, "action") == "mode") {
         const bool files = m_mode == "files";
         row(str(section, "title"), files ? "Current mode: Files" : "Current mode: Synchronize",
             {{files ? "Switch to Synchronize…" : "Switch to Files…", [this] { openSetting("mode", "Operating Mode"); }}});

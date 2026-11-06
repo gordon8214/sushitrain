@@ -48,9 +48,8 @@ struct EntryView: View {
 			if let targetEntry = targetEntry {
 				if targetEntry.isDirectory() {
 					if let targetFolder = targetEntry.folder {
-						NavigationLink(
-							destination: BrowserView(
-								folder: targetFolder, prefix: targetEntry.path() + "/", userSettings: appState.userSettings)
+						BrowserDirectoryLink(
+							route: Route.folder(folderID: targetFolder.folderID, prefix: targetEntry.path() + "/")
 						) { self.entryView(entry: entry) }.contextMenu {
 							NavigationLink(
 								destination: EntryInfoView(entry: targetEntry, showPath: self.folder == nil, siblings: nil)

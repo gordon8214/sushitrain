@@ -15,18 +15,13 @@ reaches the Desktop, Documents and Downloads folders, external disks and network
 is synchronized; places that only Full Disk Access opens (such as other apps' data) are allowed in System Settings,
 under Privacy & Security. Earlier versions were sandboxed; the app tells whether it is by its own entitlement.
 
-## Settings window
+## Unified management window
 
-Both Mac modes use the same main destinations: **Overview**, **Folders**, **Devices**, **Files**, **Remote Access**,
-**History**, **Activity**, and a bottom **Settings** action. Files has expandable folder shortcuts with stable identities.
-Files mode also has a full native browsing window; entering a folder reads indexed metadata without downloading contents.
-Open, Preview, and explicit offline actions use the existing File Provider and transfer services.
+Both operating modes open Overview and use one grouped sidebar: Manage contains Overview, Folders, Devices, Remote Access, and Activity; Preferences contains General, Files & Storage, Network, Synchronization, Integrations, Defaults, and Advanced; Tools contains Browse Files, History, and About. Only applicable categories and controls appear. Files mode hides engine-only destinations.
 
-Settings remains a separate native window, opened through the sidebar, app menu, Command-comma, or menu-bar command.
-It opens at 1000 × 720 points, can be resized down to 800 × 560, and remembers its last category separately for each mode.
-The flat sidebar uses **General**, **Files & Storage**, **Network**, **Synchronization**, **Integrations**, **Defaults**,
-**Advanced**, and **About** in both modes. Unavailable sections explain their operating-mode requirement.
-The authoritative order and section IDs are in `SushitrainCore/desktopui/catalog.json`.
+There is no separate Settings window. The app menu, Command-comma, and menu-bar Settings command activate the main window at General. About shortcuts open the About page. Folders manages the configured folders; Browse Files is the optional in-app browser, with native Finder access available from Overview and folder management. Metadata browsing does not download file contents; Open/Preview/offline actions keep using the existing services.
+
+The authoritative order, stable IDs, and platform/mode availability are in `SushitrainCore/desktopui/catalog.json`. Settings search stays available throughout the shell and opens applicable controls directly.
 
 General contains identity, mode, startup, and app presence. Files & Storage contains browsing, previews, caches, and locations.
 Network includes connectivity, discovery, relays, connection options, proxy, and bandwidth. Synchronization contains
@@ -37,14 +32,14 @@ Remote Access; history sources are under History. Existing contextual shortcuts 
 Simple preferences apply immediately and show persistence errors. Disclosure rows push child pages in the detail
 column, with a native **Back** toolbar action and Command-[. Multi-field editors keep **Save** in the toolbar; Back
 cancels a clean edit and prompts **Discard Changes** or **Keep Editing** for an unsaved draft, including invalid text.
-The same protection applies to category changes and closing Settings. Saving blocks navigation and closing, and failed
+The same protection applies to destination changes and closing the main window. Saving blocks navigation and closing, and failed
 saves retain the draft. Confirmation dialogs, pairing, and system file pickers remain focused tasks. Existing validation
-and restart confirmations remain in their backends. The iOS settings layout stays the same.
+and restart confirmations remain in their backends. iPhone and iPad use the same grouped management structure with native compact Back navigation.
 See [desktop UI acceptance](desktop-ui-acceptance.md) for current build and interaction evidence.
 
-For an isolated native check of the Files-mode settings shell, a Debug build accepts
-`SYNCTRAIN_TEST_SETTINGS_MODE=files` together with `SYNCTRAIN_TEST_ROOT` (and the same scratch path in `HOME`).
-Leave `SYNCTRAIN_TEST_FILE_PROVIDER` unset. This opens the settings fixture directly, without starting the engine,
+For an isolated native check of the Files-mode management shell, a Debug build accepts
+`SYNCTRAIN_TEST_SETTINGS_MODE=files` together with `SYNCTRAIN_TEST_ROOT`.
+Leave `SYNCTRAIN_TEST_FILE_PROVIDER` unset. This opens the management fixture directly, without starting the engine,
 remote shared storage, credentials, or a File Provider domain. It exercises the real category views and their empty
 states. Add `SYNCTRAIN_TEST_SETTINGS_FIXTURE=populated` for a sample offline gateway and a rejected edit; these only
 populate presentation state. Live pairing, edits and File Provider actions still use the normal Files-mode lifecycle.
@@ -394,7 +389,7 @@ intervening edits, and recover interrupted archive/publication transactions befo
 ## Earlier manual settings verification (November 3)
 
 A follow-up comparison with BetterLight on November 3 replaced the dedicated Settings scene with a normal window
-and a unified toolbar. The app menu, Command-comma and menu-bar command now target the same `appSettings` window.
+and a unified toolbar. That earlier standalone Settings window has been replaced by the unified management pages described above.
 Native previews verified flat sidebars in both Mac modes, a leading detail title, the sidebar toggle beside the divider,
 discard protection, and closing/reopening that window. The notarized Release was installed and its corrected layout
 verified in `/Applications/Synctrain.app`, with the original synchronization identity and folders connected.

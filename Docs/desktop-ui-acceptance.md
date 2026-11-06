@@ -13,9 +13,19 @@ Date: November 5, 2026. Branch: `file-provider`. The initial unified UI was comm
 | GNOME | Go embedded resource | libadwaita navigation split view, navigation pages, preferences groups, and dialogs |
 | KDE | Qt resource compiled from the same source JSON | Kirigami drawer, scrollable pages, forms, dialogs, and native overflow menus |
 
-Main destinations are Overview, Folders, Devices, Files, Remote Access, History, Activity, and bottom-anchored Settings. Files has expandable folder shortcuts ordered by case-insensitive label and stable identity. Settings contains General, Files & Storage, Network, Synchronization, Integrations, Defaults, Advanced, and About in both modes. Unsupported sections explain their mode or backend requirement rather than disappearing.
+All native apps now use one management navigation model, including iPhone and iPad. Overview opens first; selecting a preference never replaces the sidebar or opens a separate Settings window.
 
-Mac Settings remains a separate window reached from the sidebar, app menu, menu bar, and Command-comma. Windows and Linux replace app navigation with the eight settings categories and Back to App, which restores the preceding app destination.
+| Group | Ordered destinations |
+|---|---|
+| Manage | Overview, Folders, Devices, Remote Access, Activity |
+| Preferences | General, Files & Storage, Network, Synchronization, Integrations, Defaults, Advanced |
+| Tools | Browse Files, History, About |
+
+Only applicable destinations and sections appear. Files clients hide Devices and engine-only categories; mobile has no engine, startup, desktop-presence, or MCP controls. A stopped backend retains its applicable controls and shows the existing availability errors. Settings search is available throughout navigation and filters results by platform and mode; file-name search remains in Browse Files.
+
+Folders manages synchronized/mounted folders. Browse Files retains the optional metadata browser and folder shortcuts. Overview and folder management offer native file-manager access. Mac Settings commands and Command-comma select General in the main window, and About commands select About. Windows/GNOME/KDE no longer expose Back to App. Compact mobile uses native Back to the grouped navigation list, and wide layouts use sidebars.
+
+The shared catalog retains page/editor IDs and adds ordered navigation groups plus availability metadata. Legacy Settings routes resolve to General. Unavailable legacy destinations fall back to Overview. Existing child-page Back, unsaved-draft, Save, close, and restart protections remain active across management and preference pages.
 
 ## Canonical feature locations
 
@@ -24,19 +34,19 @@ Mac Settings remains a separate window reached from the sidebar, app menu, menu 
 | Overall state, attention, synchronization/gateway summary, storage summary | Overview, in that order |
 | Folder selection and management | Folders; details use Overview, Synchronization, Sharing, Versioning, Ignore Patterns, Advanced |
 | Requests, configured devices, sharing, connection configuration | Devices; details use Overview, Shared Folders, Connection Settings, Advanced |
-| Browsing, search, previews, imports, file mutations | Files; action groups follow Open/Preview, offline availability, rename/move, Previous Versions, information, Delete |
+| Browsing, search, previews, imports, file mutations | Browse Files; action groups follow Open/Preview, offline availability, rename/move, Previous Versions, information, Delete |
 | Service exports, permissions, paired clients | Remote Access in Synchronize mode |
 | Pairing, gateways, available remote folders | Remote Access in Files mode; mounted-folder management remains in Folders |
 | Previous versions, deleted files, archive/history sources | History and contextual Previous Versions shortcuts; existing version APIs, no global history index |
 | Transfers, pending changes, errors, recovery, logs | Activity |
-| Identity, mode, startup, app/window presence | Settings → General |
-| Browsing, previews/thumbnails, cache/offline storage, locations | Settings → Files & Storage |
-| Connectivity/discovery/relays, connection options, proxy, bandwidth | Settings → Network |
-| Pausing, resource priority, scanning/database/performance, reporting | Settings → Synchronization |
-| File manager, menu/tray folder access, MCP | Settings → Integrations |
-| New folders/reset/versioning/devices/ignores | Settings → Defaults |
-| GUI/REST/authentication, configuration, expert settings, diagnostics | Settings → Advanced |
-| Versions, support, licenses | Settings → About |
+| Identity, mode, startup, app/window presence | General |
+| Browsing, previews/thumbnails, cache/offline storage, locations | Files & Storage |
+| Connectivity/discovery/relays, connection options, proxy, bandwidth | Network |
+| Pausing, resource priority, scanning/database/performance, reporting | Synchronization |
+| File manager, menu/tray folder access, MCP | Integrations |
+| New folders/reset/versioning/devices/ignores | Defaults |
+| GUI/REST/authentication, configuration, expert settings, diagnostics | Advanced |
+| Versions, support, licenses | About |
 
 Contextual and shell/tray shortcuts remain available. Legacy routes and remembered Mac settings categories are mapped through catalog aliases. Window navigation does not start or stop the background service or register File Provider domains.
 
@@ -49,6 +59,58 @@ New SwiftUI navigation and browser state use `@Observable`. Browser state is sco
 Simple preferences apply immediately. Controls keep or restore the last confirmed value when persistence fails and show the error. Multi-field settings use Save with Back/Cancel, keep failed drafts, block repeated saves, and retain backend validation and restart prompts. Navigation and window-close guards protect unsaved drafts, including invalid text. Mac and KDE settings editors use child pages with Back; confirmation dialogs and focused tasks retain native modal presentation.
 
 The native Windows settings/engine facade and Mac in-process host accessor expose existing native operations without requiring MCP to be enabled. External MCP authorization and helper/socket restrictions remain in their existing backends. Synchronized-file rename, move, and identity-bearing delete validate the identity captured when the action was selected inside the existing folder coordinator; a replacement file is preserved.
+
+## Unified management verification (November 5, 2026)
+
+Current changes were checked with bounded runs in `build/unified-management`. The records below this section also describe earlier implementations; their separate-settings navigation is superseded by the contract above.
+
+- Universal macOS Go framework and macOS app/extensions built. Native Mac Files-mode checks verified Overview, embedded General, optional browsing, and retained folder filtering. Synchronize-mode checks verified dirty General → Overview → Keep Editing and same-page Command-comma → Discard, including restoration of the confirmed device name. The final Synchronize browser uses a window-owned observable session; native checks verified subdirectory restoration and a retained search query/results after General → Browse Files.
+- The mobile simulator build passed. iPhone 18 Pro and iPad Pro 13-inch fixtures verified Overview, all ten applicable destinations, preference pages, global settings search/reveal, browser search/query retention, History file-picker sheets, and compact Back. Correct titles/toolbars were checked after destination changes, in light/dark and portrait/landscape layouts.
+- HostKit: 101 tests passed, including navigation visibility and applicable-search reachability. Focused Go suites passed for desktop UI, desktop API, settings, engine control, and host bridge.
+- GNOME `TestNavigation` passed on Fedora ARM64 in 0.79 seconds. All three KDE CTest suites passed in 10.71 seconds, including native QML drawer population, persistent navigation, mode filtering, search-query retention, and existing editor guards.
+- Windows ARM64/x64 Release MSIX builds passed with zero warnings/errors. Fedora ARM64 GNOME/common/KDE RPMs built.
+
+The mobile UI checks used an isolated empty-state fixture; live gateway pairing, populated mobile directory restoration, and opening an actual Files domain were not retested. No production File Provider domain was registered or rebuilt. Linux x86-64 runtime qualification remains outside this ARM64 environment. Native Windows ARM64 UI verification passed in the interactive console session: all 15 destinations stayed present in the same window, and a dirty Bandwidth editor supported canceled and accepted departures to Overview. The native Windows desktop UI/API/settings/control/host-bridge/winhost suites also passed (winhost: 45.749 seconds). The relative-path test now uses native absolute paths on both Windows and Unix.
+
+
+### Unified management code-quality fixes
+
+A fresh review found one P1 and nine P2 issues in the unified shell. All ten were fixed:
+
+- Mac grid and directory-symlink links use typed routes inside retained sessions and explicit destinations in ordinary
+  browser hosts. Folder management enters the canonical browser through the window's navigation action.
+- Initially opened folder windows record their browser route immediately. Settings search also resets and reloads
+  engine metadata when startup/restart state changes.
+- Mac and mobile listing metadata share the same tested LRU policy: eight directories or 20,000 items per window.
+  A single larger newest listing remains usable. Navigation, filters, selection, and scroll anchors stay separate from
+  evictable metadata. Mobile releases listings under memory pressure and reloads the visible directory.
+- Mobile History file selection opens previous versions, including files reached through search. Root-folder and
+  search-result scroll anchors live in the browser model. Search owns its file viewer and cancels pending opening
+  work when dismissed, so reopening search cannot present an old completion.
+- Windows global settings results survive revision-driven refresh regardless of the underlying destination. Opening
+  a result clears the results-page state.
+- KDE Overview shortcuts launch the native default application for directory URLs. Explicit gateway search results
+  reveal their requested control; ordinary Remote Access navigation does not reopen a stale search form.
+
+Bounded verification in `build/code-quality-review` passed: 104 HostKit tests, strict formatting of changed Swift files,
+macOS and iOS Simulator builds, Windows ARM64/x64 Release MSIX builds and ARM64 Debug build (zero warnings/errors),
+Fedora ARM64 GNOME/common/KDE RPMs, and all three KDE suites in 10.97 seconds. New tests cover LRU limits, recency,
+replacement costs, memory-pressure release, native directory launching in both modes, and gateway search reveal.
+The first iOS build caught a History selection type mismatch; it was corrected before the passing build. The first
+Windows Debug rebuild encountered a running test-app file lock; stopping that isolated process resolved it.
+
+Native Mac checks passed for Folders → Browse in Synctrain → grid subdirectory, Overview file-search result → grid
+subdirectory, and General → Browse Files restoration. Native Windows checks passed for submitted global search from
+Overview across an actual host revision and timer refresh, opening a result without restoring stale results, persistent
+navigation, and dirty-editor cancel/discard. iPhone/iPad fixtures passed History picker presentation and nested/standalone
+file-search close/reopen. A separate populated history fixture rendered versions on both sizes and opened archived text
+in iPad Quick Look.
+
+Unexecuted checks remain explicit: populated mobile management file selection and scroll restoration, canceled downloads
+against a live gateway, initial folder/bookmark window restoration, engine restart interaction, directory-symlink navigation,
+and Linux x86-64 runtime qualification. The iPhone populated-history action could not be driven because its accessibility
+bridge returned empty/timed-out reads; screenshots and an idle process sample did not indicate an app hang. The possible
+mobile path-binding teardown race was not reproduced and was not changed during this fix pass.
 
 ## Automated verification
 

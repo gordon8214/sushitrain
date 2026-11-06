@@ -10,7 +10,6 @@
 	/// A native window for checking Files-mode settings without starting shared storage, credentials, or File Provider.
 	/// AppEntry admits this only with an isolated test root, before either production app lifecycle starts.
 	struct SettingsFixtureApp: App {
-		@State private var presence = AppPresence.menuBarAndDock
 		private let environment: RemoteEnvironment?
 
 		init() {
@@ -38,20 +37,11 @@
 
 		var body: some Scene {
 			Window("Synctrain Settings Fixture", id: "settingsFixture") {
-				if ProcessInfo.processInfo.environment["SYNCTRAIN_TEST_DESKTOP_FIXTURE"] == "1" {
-					DesktopFilesWindow(environment: environment).preferredColorScheme(Self.colorScheme)
-				}
-				else {
-					FilesSettingsView(presence: $presence)
-				}
+				DesktopFilesWindow(environment: environment).preferredColorScheme(Self.colorScheme)
 			}
 			.defaultSize(width: 1000, height: 720)
 			.windowResizability(.contentMinSize)
 			.restorationBehavior(.disabled)
-			Window("Settings", id: "appSettings") { FilesSettingsView(presence: $presence) }
-				.defaultSize(width: 1000, height: 720)
-				.defaultLaunchBehavior(.suppressed)
-				.restorationBehavior(.disabled)
 
 		}
 	}

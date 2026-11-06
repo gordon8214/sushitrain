@@ -59,11 +59,11 @@
 			.commandsRemoved()
 			.commands {
 				CommandGroup(replacing: .appSettings) {
-					Button("Settings…") { AppWindowPresentation.open { openWindow(id: "appSettings") } }.keyboardShortcut(",")
+					Button("Settings…") { MacManagementCommands.show("general", openWindow: openWindow) }.keyboardShortcut(",")
 				}
 				CommandGroup(replacing: .appInfo) {
 					Button("About Synctrain") {
-						openWindow(id: "about")
+						MacManagementCommands.show("about", openWindow: openWindow)
 					}
 				}
 			}
@@ -80,19 +80,6 @@
 				NSApp.activate()
 			}
 
-			Window("Settings", id: "appSettings") { FilesSettingsView(presence: $presence) }
-				.windowToolbarStyle(.unified)
-				.defaultSize(width: 1000, height: 720)
-				.defaultLaunchBehavior(.suppressed)
-				.restorationBehavior(.disabled)
-
-			Window("About Synctrain", id: "about") {
-				AboutView(showsIntroduction: false)
-			}
-			.windowResizability(.contentSize)
-			.restorationBehavior(.disabled)
-			.defaultLaunchBehavior(.suppressed)
-
 			MenuBarExtra("Synctrain", systemImage: "folder", isInserted: $presence.inMenuBar) {
 				CrashNoticeMenuItems()
 				Button("Open Synctrain", systemImage: "macwindow") {
@@ -100,13 +87,13 @@
 						openWindow(id: Self.window, value: Self.window)
 					}
 				}
-				Button("Settings…", systemImage: "gearshape") { AppWindowPresentation.open { openWindow(id: "appSettings") } }
+				Button("Settings…", systemImage: "gearshape") { MacManagementCommands.show("general", openWindow: openWindow) }
 				Button("Show in Finder", systemImage: "folder") {
 					showLocation()
 				}
 				Button("About...", systemImage: "info.circle") {
 					AppWindowPresentation.open {
-						openWindow(id: "about")
+						MacManagementCommands.show("about", openWindow: openWindow)
 					}
 				}
 				Divider()
@@ -145,6 +132,12 @@
 		}
 
 		func application(_ application: NSApplication, open urls: [URL]) {
+			if let destination = urls.compactMap({ DesktopRouteURL.destinationID(from: $0) }).first {
+				MacManagementCommands.queue(destination)
+				openWindow?()
+				NSApp.activate()
+				return
+			}
 			let alert = NSAlert()
 			alert.messageText = String(localized: "Synctrain cannot import files in Files in Finder mode")
 			alert.informativeText = String(localized: "Put them in a folder in Finder's Synctrain location instead.")

@@ -27,7 +27,7 @@ Backend::Backend(QObject *parent) : QObject(parent), client(this) {
   auto *timer = new QTimer(this);
   timer->setInterval(2000);
   connect(timer, &QTimer::timeout, this, [this] {
-    if (m_page.startsWith("settings:") && !searchQuery.trimmed().isEmpty() && !m_busy)
+    if (!searchQuery.trimmed().isEmpty() && !m_busy)
       loadSettingsIndex();
     if (m_page == "Overview" && m_title == "Overview" && activeReads == 0 &&
         !m_busy && m_dialog.isEmpty())
@@ -198,6 +198,9 @@ void Backend::inspect() {
           m_socket = configured;
         if(oldMode!=m_mode || oldSocket!=m_socket) {
           ++searchGeneration;searchLoading=false;searchIndex={};searchError.clear();emit settingsSearchChanged();
+          bool available=false; for (auto value : navigation()) if (value.toMap()["route"].toString()==m_page) available=true;
+          if (!available) m_page="Overview";
+          emit navigationChanged();
           browserSnapshot.valid=false;browserSearch.clear();m_folder.clear();m_directory.clear();parentItem=0;parents.clear();
         }
         if (m_mode.isEmpty()) {
@@ -339,16 +342,25 @@ void Backend::navigate(const QString &page) {
   closeEditor();
   auto target = page;
   if (target == "Settings") target = "settings:general";
-  const auto alias = catalog["aliases"].toObject()[target].toString();
+  if (target.startsWith("settings:")) {
+    const auto id=target.mid(9);
+    for (auto entry : catalog["destinations"].toArray()) if (str(entry.toObject(),"id")==id) target=id;
+  }
+  auto alias = catalog["aliases"].toObject()[target].toString();
+  if (alias.isEmpty()) alias=target;
   for (auto entry : catalog["destinations"].toArray())
-    if (entry.toObject()["id"].toString() == alias) target = entry.toObject()["title"].toString();
+    if (entry.toObject()["id"].toString() == alias) target = alias == "files" ? "Files" : entry.toObject()["title"].toString();
   if (target.startsWith("folder:")) {
     browserSnapshot.valid = false; browserSearch.clear();
     if (m_mode == "files") { parentItem = target.mid(7).toLongLong(); parents.clear(); }
     else { m_folder = target.mid(7); m_directory.clear(); }
     target = "Files";
   }
-  if(!target.startsWith("settings:")) { searchIndex={};searchQuery.clear();searchError.clear();emit settingsSearchChanged(); }
+  for (auto entry : catalog["settings"].toArray())
+    if (str(entry.toObject(),"id") == alias) target = "settings:"+alias;
+  bool available = false;
+  for (auto value : navigation()) if (value.toMap()["route"].toString() == target) available = true;
+  if (!available) target = "Overview";
   if(target.startsWith("settings:") && !m_page.startsWith("settings:"))lastAppPage=m_page;
   m_page = target;
   emit navigationChanged();
@@ -360,6 +372,7 @@ void Backend::navigate(const QString &page) {
     emit changed(); loadShortcuts(); return;
   }
   refresh();
+  if (!available) fail("The requested page is unavailable in this mode. Overview is shown instead.");
 }
 void Backend::openFiles(const QString &folder) {
   browserSnapshot.valid=false; browserSearch.clear();
@@ -402,13 +415,15 @@ void Backend::refresh() {
     historyPage();
   else if (m_page == "Activity")
     activityPage();
-  if (!m_page.startsWith("settings:")) loadShortcuts();
+  loadShortcuts();
+  loadSettingsIndex();
 }
 void Backend::overview() {
   if (m_mode == "files") {
     call("status", {}, [this](QJsonValue v, QString) {
       auto s = v.toObject();
-      row("Files mode", str(s, "mount"), {}, "status");
+      row("Files mode", str(s, "mount"),
+          {{"Open in File Manager", [this,s] { openDefault(str(s,"mount"),{}); }}}, "status");
       for (auto f : s["folders"].toArray()) {
         auto o = f.toObject();
         row(str(o, "label"), str(o, "state"), {}, "summary");
@@ -439,9 +454,8 @@ void Backend::overview() {
       for (auto f : v.toArray()) {
         auto o = f.toObject();
         row(str(o, "Label"), str(o, "State") + " · " + str(o, "Error"),
-            {{"Browse", [this, o] {
-                openFiles(str(o, "ID"));
-              }}}, "summary");
+            {{"Open in File Manager", [this,o] { openDefault(str(o,"Path"),{}); }},
+             {"Browse in Synctrain", [this, o] { openFiles(str(o, "ID")); }}}, "summary");
       }
     });
     call("engine.stats", {}, [this](QJsonValue v, QString) {

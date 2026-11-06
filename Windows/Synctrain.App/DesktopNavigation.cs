@@ -28,29 +28,45 @@ public sealed partial class MainPage
         buildingNavigation = true;
         try
         {
-            var settings = page.StartsWith("settings:", StringComparison.Ordinal);
-            SettingsSearchBox.Visibility = settings ? Visibility.Visible : Visibility.Collapsed;
+            SettingsSearchBox.Visibility = Visibility.Visible;
             var oldFiles = Navigation.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(item => item.Tag?.ToString() == "files");
             var expanded = oldFiles?.IsExpanded ?? true;
             Navigation.MenuItems.Clear();
-            Navigation.IsSettingsVisible = !settings;
-            if (settings) Navigation.MenuItems.Add(new NavigationViewItem { Content = "Back to App", Tag = appRoute, Icon = new SymbolIcon(Symbol.Back) });
-            foreach (var item in catalog[settings ? "settings" : "destinations"]!.AsArray())
+            Navigation.IsSettingsVisible = false;
+            foreach (var group in catalog["navigationGroups"]!.AsArray())
             {
-                var id = S(item, "id");
-                if (id == "settings") continue;
-                var route = settings ? "settings:" + id : id;
-                var nav = new NavigationViewItem { Content = S(item, "title"), Tag = route };
-                if (id == "files")
+                var items = group!["items"]!.AsArray().Select(id => NavigationEntry(id!.ToString())).Where(item => item is not null).ToList();
+                if (items.Count == 0) continue;
+                Navigation.MenuItems.Add(new NavigationViewItemHeader { Content = S(group,"title") });
+                foreach (var item in items)
                 {
-                    nav.IsExpanded = expanded;
-                    foreach (var folder in folderShortcuts) nav.MenuItems.Add(new NavigationViewItem { Content = folder.Name, Tag = "folder:" + folder.ID, Icon = new SymbolIcon(Symbol.Folder) });
+                    var id = S(item,"id");
+                    var category = item!["sections"]!.AsArray().Any(section => section is JsonObject);
+                    var route = category ? "settings:" + id : id;
+                    var nav = new NavigationViewItem { Content = S(item,"title"), Tag = route };
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(nav,"navigation." + id);
+                    if (id == "files") {
+                        nav.IsExpanded = expanded;
+                        foreach (var folder in folderShortcuts) nav.MenuItems.Add(new NavigationViewItem { Content = folder.Name, Tag = "folder:" + folder.ID, Icon = new SymbolIcon(Symbol.Folder) });
+                    }
+                    Navigation.MenuItems.Add(nav);
+                    if (route == page) Navigation.SelectedItem = nav;
                 }
-                Navigation.MenuItems.Add(nav);
-                if (route == page) Navigation.SelectedItem = nav;
             }
         }
         finally { buildingNavigation = false; }
+    }
+
+    private bool AvailableSection(JsonNode? item) =>
+        (item?["platforms"] is not JsonArray platforms || platforms.Any(value => value?.ToString() == "windows")) &&
+        (S(item,"capability") is "always" or "" || S(item,"capability") == S(status,"mode"));
+
+    private JsonNode? NavigationEntry(string id)
+    {
+        var destination = catalog["destinations"]!.AsArray().FirstOrDefault(item => S(item,"id") == id);
+        if (destination is not null) return AvailableSection(destination) ? destination : null;
+        var category = catalog["settings"]!.AsArray().FirstOrDefault(item => S(item,"id") == id);
+        return category?["sections"]!.AsArray().Any(AvailableSection) == true ? category : null;
     }
 
     private async Task LoadFolderShortcuts(string mode)
@@ -89,6 +105,7 @@ public sealed partial class MainPage
         var category = catalog["settings"]!.AsArray().First(item => S(item, "id") == id)!;
         foreach (var section in category["sections"]!.AsArray())
         {
+            if (!AvailableSection(section)) continue;
             var title = S(section, "title");
             var capability = S(section, "capability");
             Text(title, true);
