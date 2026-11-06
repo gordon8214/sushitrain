@@ -930,6 +930,49 @@ private slots:
     QVERIFY(backend.dialog().isEmpty());
   }
 
+  void operatingModeIsVisible_data() {
+    QTest::addColumn<QString>("mode");
+    QTest::addColumn<QString>("current");
+    QTest::addColumn<QString>("target");
+    QTest::newRow("synchronize") << QString("synchronize") << QString("Synchronize") << QString("Files");
+    QTest::newRow("files") << QString("files") << QString("Files") << QString("Synchronize");
+  }
+
+  void operatingModeIsVisible() {
+    QFETCH(QString, mode);
+    QFETCH(QString, current);
+    QFETCH(QString, target);
+    Fixture fixture(mode);
+    Backend backend;
+    QTRY_COMPARE_WITH_TIMEOUT(backend.mode(), mode, 1000);
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty("backend", &backend);
+    QQmlComponent component(&engine, QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> object(component.create());
+    QVERIFY2(object, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.data());
+    QVERIFY(window);
+    window->show();
+    backend.navigate("settings:general");
+    std::function<QQuickItem *(QQuickItem *, const QString &)> visibleText =
+        [&](QQuickItem *item, const QString &text) -> QQuickItem * {
+      if (item->isVisible() && item->property("text").toString() == text)
+        return item;
+      for (auto *child : item->childItems())
+        if (auto *found = visibleText(child, text)) return found;
+      return nullptr;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(visibleText(window->contentItem(), "Current mode: " + current), 1000);
+    const auto label = "Switch to " + target + "…";
+    QTRY_VERIFY_WITH_TIMEOUT(visibleText(window->contentItem(), label), 1000);
+    auto *button = visibleText(window->contentItem(), label);
+    QVERIFY(QMetaObject::invokeMethod(button, "clicked"));
+    QVERIFY(backend.dialog()["title"].toString().contains(target.toLower()));
+    backend.cancelDialog();
+    QCOMPARE(backend.mode(), mode);
+    QVERIFY(visibleText(window->contentItem(), "Current mode: " + current));
+  }
+
   void operatingModeChangeDiscardsBrowserSnapshot() {
     Fixture fixture("synchronize");
     fixture.handler=[](QString method,auto) {
@@ -945,8 +988,14 @@ private slots:
     QFile helper(fixture.dir.path()+"/synctrain-desktop");QVERIFY(helper.open(QIODevice::WriteOnly|QIODevice::Truncate));
     QJsonObject host{{"Mode","files"},{"FilesSocket",fixture.server.fullServerName()}};
     helper.write("#!/bin/sh\nprintf '%s\\n' '");helper.write(QJsonDocument(result(host)).toJson(QJsonDocument::Compact));helper.write("'\n");helper.close();
-    backend.activate(rowAction(backend,"Operating Mode","Configure"));backend.submit({});
+    backend.activate(rowAction(backend,"Operating Mode","Switch to Files…"));backend.submit({});
     QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),QString("files"),1000);
+    QVERIFY(!rowAction(backend,"Operating Mode","Switch to Synchronize…").isEmpty());
+    for (const auto &value : backend.rows()) {
+      const auto row = value.toMap();
+      if (row["title"] == "Operating Mode")
+        QCOMPARE(row["subtitle"].toString(), QString("Current mode: Files"));
+    }
     backend.navigate("Files");
     QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"New Remote Folder","Open Folder").isEmpty(),1000);
     QVERIFY(rowAction(backend,"old.txt","Open").isEmpty());

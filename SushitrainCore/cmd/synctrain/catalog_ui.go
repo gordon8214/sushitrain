@@ -110,7 +110,14 @@ func (d *desktopUI) settingsCategory(id string) {
 				continue
 			}
 			s := section
-			r := choiceRow(s.Title, "", func() { d.openCatalogSetting(s.Action, s.Title) })
+			title, subtitle := s.Title, ""
+			if s.Action == "mode" {
+				title, subtitle = "Switch to Files…", "Current mode: Synchronize"
+				if d.mode == modeFiles {
+					title, subtitle = "Switch to Synchronize…", "Current mode: Files"
+				}
+			}
+			r := choiceRow(title, subtitle, func() { d.openCatalogSetting(s.Action, s.Title) })
 			g.Add(r)
 			d.revealSetting(s.Action, r)
 		}

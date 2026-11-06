@@ -348,6 +348,10 @@ void Backend::settings() {
       const auto capability = str(section, "capability");
       if (capability != "always" && capability != m_mode) {
         row(str(section, "title"), "Available in " + capability + " mode. Change the operating mode in General.");
+      } else if (str(section, "action") == "mode") {
+        const bool files = m_mode == "files";
+        row(str(section, "title"), files ? "Current mode: Files" : "Current mode: Synchronize",
+            {{files ? "Switch to Synchronize…" : "Switch to Files…", [this] { openSetting("mode", "Operating Mode"); }}});
       } else {
         row(str(section, "title"), {}, {{"Configure", [this, section] { openSetting(str(section, "action"), str(section, "title")); }}});
         auto item = m_rows.last().toMap();

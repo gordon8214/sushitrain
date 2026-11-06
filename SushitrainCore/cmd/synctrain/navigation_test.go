@@ -272,6 +272,19 @@ func TestNavigation(t *testing.T) {
 					if i >= len(category.Sections) || group.Title() != category.Sections[i].Title {
 						t.Fatalf("%s section order differs", category.ID)
 					}
+					if category.Sections[i].Action == "mode" {
+						current, target := "Synchronize", "Files"
+						if mode == modeFiles {
+							current, target = "Files", "Synchronize"
+						}
+						r := navigationWidget[*adw.ActionRow](group)
+						if r == nil || r.Subtitle() != "Current mode: "+current {
+							t.Fatalf("General does not show the current %s mode", current)
+						}
+						if navigationButton(group, "Open Switch to "+target+"…") == nil {
+							t.Fatalf("General does not offer switching to %s", target)
+						}
+					}
 					i++
 				}
 			}
