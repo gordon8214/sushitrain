@@ -348,6 +348,9 @@ void Backend::settings() {
         row(str(section, "title"), "Available in " + capability + " mode. Change the operating mode in General.");
       } else {
         row(str(section, "title"), {}, {{"Configure", [this, section] { openSetting(str(section, "action"), str(section, "title")); }}});
+        auto item = m_rows.last().toMap();
+        item["navigationKey"] = item["actions"].toList().first().toMap()["key"];
+        m_rows.last() = item;
       }
     }
     emit changed();

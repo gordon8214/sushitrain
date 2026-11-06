@@ -17,6 +17,7 @@
 
 #include "modelutil.h"
 #include <algorithm>
+#include <utility>
 Backend::Backend(QObject *parent) : QObject(parent), client(this) {
   QFile catalogFile(":/desktop-ui/catalog.json");
   if (!catalogFile.open(QIODevice::ReadOnly)) qFatal("Desktop UI catalog is missing");
@@ -255,7 +256,8 @@ void Backend::form(const QString &title, const QJsonArray &fields,
       f["Value"] = display(f["Value"]);
     list.append(f.toVariantMap());
   }
-  m_dialog = {{"title", title}, {"fields", list}, {"accept", accept}};
+  m_dialog = {{"title", title}, {"fields", list}, {"accept", accept},
+              {"page", m_page.startsWith("settings:") && accept == "Save"}};
   acceptDialog = std::move(done);
   m_dirty = false;
   emit dialogChanged();
@@ -303,7 +305,10 @@ void Backend::cancelDialog() {
   emit dialogChanged();
   emit changed();
   if (closePending) { closePending = false; QTimer::singleShot(0, this, &Backend::closeReady); }
-  else drainArguments();
+  else if (!pendingNavigation.isEmpty()) {
+    const auto target = std::exchange(pendingNavigation, QString{});
+    QTimer::singleShot(0, this, [this, target] { navigate(target); });
+  } else drainArguments();
 }
 void Backend::drainArguments() {
   QTimer::singleShot(0, this, [this] {
@@ -316,8 +321,11 @@ void Backend::drainArguments() {
 }
 void Backend::navigate(const QString &page) {
   if (page == "Files" && m_page == "Files") return;
-  if (m_busy || !m_dialog.isEmpty())
+  if (m_busy) return;
+  if (!m_dialog.isEmpty()) {
+    if (m_dialog.value("page").toBool()) { pendingNavigation = page; cancelDialog(); }
     return;
+  }
   if (m_page == "Files" && page != "Files" && activeReads == 0 && m_title == "Files" && editorToken.isEmpty()) {
     browserSnapshot = {true,m_folder,m_directory,browserSearch,m_title,m_error,moreKey,parentItem,nextOffset,parents,m_rows,m_commands,actions};
   }
@@ -613,6 +621,7 @@ void Backend::loadShortcuts() {
 void Backend::keepEditing() {
   if (!m_dialog.value("discard").toBool()) return;
   closePending = false;
+  pendingNavigation.clear();
   m_dialog.remove("discard");
   m_dirty = true;
   emit dialogChanged(); emit changed();

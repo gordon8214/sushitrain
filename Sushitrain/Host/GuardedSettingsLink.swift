@@ -2,11 +2,12 @@
 #if os(macOS)
 	import SwiftUI
 
-	/// Staged editors have an explicit Cancel/Save boundary instead of an unguarded stack pop.
+	/// Presents a native navigation row; the owning stack protects departures from staged editors.
 	struct GuardedSettingsLink<Content: View>: View {
 		let title: Text
 		@ViewBuilder let content: () -> Content
-		@State private var presented = false
+		@Environment(\.settingsStack) private var navigation
+		@State private var route = MacSettingsRoute()
 		init(_ title: LocalizedStringKey, @ViewBuilder content: @escaping () -> Content) {
 			self.title = Text(title)
 			self.content = content
@@ -16,30 +17,72 @@
 			self.content = content
 		}
 		var body: some View {
-			Button {
-				presented = true
-			} label: {
-				title
+			if let navigation {
+				NavigationLink(value: route) { title }
+					.onAppear { navigation.register(route, title: title, content: content()) }
 			}
-			.sheet(isPresented: $presented) { DesktopSettingsPanel { content() } }
+			else {
+				NavigationLink {
+					StandaloneSettingsPage(title: title, content: content)
+				} label: {
+					title
+				}
+			}
 		}
 	}
 
-	struct DesktopSettingsPanel<Content: View>: View {
+	struct SettingsStackPage<Content: View>: View {
+		let navigation: MacSettingsNavigation
+		let pageID: UUID
+		let title: Text
+		@ViewBuilder let content: () -> Content
+		var body: some View {
+			content()
+				.environment(\.settingsPageID, pageID)
+				.navigationTitle(title)
+				.navigationBarBackButtonHidden()
+				.toolbar {
+					ToolbarItem(placement: .navigation) {
+						Button("Back", systemImage: "chevron.backward") { navigation.requestBack() }
+							.keyboardShortcut("[", modifiers: .command)
+							.disabled(navigation.isSaving)
+					}
+				}
+		}
+	}
+
+	/// Folder editors can also use a stack in the main app window.
+	private struct StandaloneSettingsPage<Content: View>: View {
+		let title: Text
 		@ViewBuilder let content: () -> Content
 		@Environment(\.dismiss) private var dismiss
 		@Environment(\.settingsNavigation) private var navigation
+		@State private var confirmingDiscard = false
 		var body: some View {
-			NavigationStack {
-				content().toolbar {
-					ToolbarItem(placement: .cancellationAction) {
-						Button(navigation?.hasChanges == true ? "Cancel" : "Done") { dismiss() }
-							.disabled(navigation?.isSaving == true)
+			content()
+				.environment(\.settingsUsesStack, true)
+				.navigationTitle(title)
+				.navigationBarBackButtonHidden()
+				.toolbar {
+					ToolbarItem(placement: .navigation) {
+						Button("Back", systemImage: "chevron.backward") {
+							if navigation?.hasChanges == true {
+								confirmingDiscard = true
+							}
+							else {
+								dismiss()
+							}
+						}
+						.keyboardShortcut("[", modifiers: .command)
+						.disabled(navigation?.isSaving == true)
 					}
 				}
-			}
-			.frame(minWidth: 620, minHeight: 520)
-			.interactiveDismissDisabled()
+				.alert("Discard unsaved changes?", isPresented: $confirmingDiscard) {
+					Button("Keep Editing", role: .cancel) {}
+					Button("Discard Changes", role: .destructive) { dismiss() }
+				} message: {
+					Text("The changes on this page have not been saved.")
+				}
 		}
 	}
 #endif

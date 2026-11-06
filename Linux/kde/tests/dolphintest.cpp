@@ -200,6 +200,9 @@ private slots:
     });
     StatusCache cache;
     cache.socket = server.fullServerName();
+    // This fixture represents an already discovered service. Keep the initial
+    // discovery callback from changing the mode during action revalidation.
+    cache.mode = "synchronize";
     cache.roots = {"/sync"};
     bool done = false;
     cache.perform("rescan", {QUrl::fromLocalFile("/sync/a")},

@@ -20,13 +20,18 @@
 
 		var body: some View {
 			@Bindable var navigation = navigation
+			let path = navigation.path
 			NavigationSplitView {
 				MacSettingsSidebar(mode: mode, navigation: navigation)
 			} detail: {
-				NavigationStack {
+				NavigationStack(path: Binding(get: { path }, set: { navigation.requestPath($0) })) {
 					detail(navigation.selection)
+						.environment(\.settingsPageID, navigation.rootPageID)
 						.navigationTitle(Text(navigation.selection.title))
+						.navigationDestination(for: MacSettingsRoute.self) { route in navigation.page(route) }
 				}
+				.environment(\.settingsStack, navigation)
+				.environment(\.settingsUsesStack, true)
 				.id("\(navigation.selection.rawValue).\(navigation.editorRevision)")
 			}
 			.background(SettingsWindowCloseGuard(navigation: navigation))

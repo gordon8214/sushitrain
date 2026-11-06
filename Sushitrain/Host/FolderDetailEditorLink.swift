@@ -7,19 +7,22 @@
 		enum Editor { case synchronization, versioning, ignores }
 		let folder: SushitrainFolder
 		let editor: Editor
-		@State private var presented = false
 		var body: some View {
 			Section {
-				Button("Configure…") { presented = true }
-			}
-			.sheet(isPresented: $presented) {
-				NavigationStack {
+				GuardedSettingsLink(title: Text(title)) {
 					switch editor {
 					case .synchronization: FolderSyncSettingsView(folder: folder)
 					case .versioning: FolderVersioningSettingsView(folder: folder)
 					case .ignores: IgnoresView(folder: folder)
 					}
 				}
+			}
+		}
+		private var title: LocalizedStringKey {
+			switch editor {
+			case .synchronization: "Synchronization"
+			case .versioning: "Versioning"
+			case .ignores: "Ignore Patterns"
 			}
 		}
 	}

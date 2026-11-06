@@ -31,10 +31,19 @@
 		var isSaving = false
 	}
 
+	struct MacSettingsRoute: Hashable, Sendable { let id = UUID() }
+
 	/// Each window owns its navigation and editors. Only accepted selections are remembered between openings.
 	@Observable @MainActor final class MacSettingsNavigation {
 		private var policy: SettingsNavigationPolicy<MacSettingsCategory>
-		private var editors: [UUID: SettingsEditorState] = [:]
+		private struct Editor {
+			let state: SettingsEditorState
+			let pageID: UUID?
+		}
+		private var editors: [UUID: Editor] = [:]
+		private var stack = SettingsStackPolicy<MacSettingsRoute>()
+		private(set) var rootPageID = UUID()
+		@ObservationIgnored private var pages: [MacSettingsRoute: (title: Text, content: AnyView)] = [:]
 		var isConfirmingDiscard = false
 		var editorRevision = 0
 		@ObservationIgnored private let selectionKey: String
@@ -49,49 +58,100 @@
 		}
 
 		var selection: MacSettingsCategory { policy.selection }
-		var isSaving: Bool { editors.values.contains(where: \.isSaving) }
-		var hasChanges: Bool { editors.values.contains(where: \.hasChanges) }
+		var isSaving: Bool { editors.values.contains { $0.state.isSaving } }
+		var hasChanges: Bool { editors.values.contains { $0.state.hasChanges } }
 		func discardForClosing() {
 			editors.removeAll()
+			resetStack()
 			editorRevision += 1
 		}
 
 		func request(_ category: MacSettingsCategory) {
-			if policy.request(category, hasUnsavedChanges: editors.values.contains(where: \.hasChanges), isSaving: isSaving) {
+			if policy.request(category, hasUnsavedChanges: hasChanges, isSaving: isSaving) {
 				self.didNavigate()
 			}
-			isConfirmingDiscard = policy.pendingSelection != nil
+			isConfirmingDiscard = policy.pendingSelection != nil || stack.pendingPath != nil
 		}
+
+		var path: [MacSettingsRoute] { stack.path }
+		func containsPage(_ id: UUID) -> Bool { id == rootPageID || path.contains { $0.id == id } }
+		func register<Content: View>(_ route: MacSettingsRoute, title: Text, content: Content) {
+			pages[route] = (title, AnyView(content))
+		}
+		func page(_ route: MacSettingsRoute) -> some View {
+			SettingsStackPage(navigation: self, pageID: route.id, title: pages[route]?.title ?? Text("Settings")) {
+				if let page = self.pages[route] { page.content }
+			}
+			.environment(\.settingsStack, self)
+			.environment(\.settingsUsesStack, true)
+		}
+		func requestPath(_ next: [MacSettingsRoute]) {
+			let dirty = Set(path.filter { route in editors.values.contains { $0.pageID == route.id && $0.state.hasChanges } })
+			if stack.request(next, dirtyPages: dirty, isSaving: isSaving) { removeDepartedEditors() }
+			isConfirmingDiscard = stack.pendingPath != nil || policy.pendingSelection != nil
+		}
+		func requestBack() { if !path.isEmpty { requestPath(Array(path.dropLast())) } }
 
 		func discardChanges() {
-			if policy.discardChanges(isSaving: isSaving) { self.didNavigate() }
+			if stack.pendingPath != nil {
+				if stack.discardChanges(isSaving: isSaving) { removeDepartedEditors() }
+			}
+			else if policy.discardChanges(isSaving: isSaving) {
+				didNavigate()
+			}
+			isConfirmingDiscard = false
 		}
 
-		func keepEditing() { policy.keepEditing() }
+		func keepEditing() {
+			policy.keepEditing()
+			stack.keepEditing()
+			isConfirmingDiscard = false
+		}
 
-		func report(_ state: SettingsEditorState?, for editor: UUID) {
-			editors[editor] = state
+		func report(_ state: SettingsEditorState?, for editor: UUID, pageID: UUID? = nil) {
+			if let pageID, !containsPage(pageID) {
+				editors[editor] = nil
+				return
+			}
+			editors[editor] = state.map { Editor(state: $0, pageID: pageID) }
+		}
+		private func removeDepartedEditors() {
+			editors = editors.filter { $0.value.pageID.map(containsPage) ?? true }
+		}
+		private func resetStack() {
+			stack.reset()
+			pages.removeAll()
+			rootPageID = UUID()
 		}
 
 		private func didNavigate() {
 			editors.removeAll()
+			resetStack()
 			UserDefaults.standard.set(selection.rawValue, forKey: selectionKey)
 		}
 	}
 
 	extension EnvironmentValues {
 		@Entry var settingsNavigation: MacSettingsNavigation? = nil
+		@Entry var settingsStack: MacSettingsNavigation? = nil
+		@Entry var settingsPageID: UUID? = nil
+		@Entry var settingsUsesStack = false
 	}
 
 	private struct SettingsEditorModifier: ViewModifier {
 		let state: SettingsEditorState
 		@Environment(\.settingsNavigation) private var navigation
+		@Environment(\.settingsPageID) private var pageID
 		@State private var editorID = UUID()
 
 		func body(content: Content) -> some View {
 			content
-				.onChange(of: state, initial: true) { _, state in navigation?.report(state, for: editorID) }
-				.onDisappear { navigation?.report(nil, for: editorID) }
+				.onChange(of: state, initial: true) { _, state in navigation?.report(state, for: editorID, pageID: pageID) }
+				.onDisappear {
+					if pageID.map({ navigation?.containsPage($0) != true }) ?? true {
+						navigation?.report(nil, for: editorID)
+					}
+				}
 		}
 	}
 

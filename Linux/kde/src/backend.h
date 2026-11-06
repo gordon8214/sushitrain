@@ -68,7 +68,7 @@ private:
   QObject *reads = nullptr;
   QObject *mutationOwner = nullptr;
   QObject *initializationOwner = nullptr;
-  QString activePairing, activeCancelMethod;
+  QString activePairing, activeCancelMethod, pendingNavigation;
   QStringList queuedArguments;
   bool inspected = false;
   quint64 serial = 0;

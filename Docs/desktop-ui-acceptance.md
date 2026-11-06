@@ -1,6 +1,6 @@
 # Shared desktop UI and acceptance record
 
-Date: November 5, 2026. Branch: `file-provider`. No production installation was performed.
+Date: November 5, 2026. Branch: `file-provider`. The initial unified UI was committed as `fa4aa99` and installed on `mac.ghbweb.com`; the stack-navigation follow-up is described below.
 
 ## Navigation contract
 
@@ -8,7 +8,7 @@ Date: November 5, 2026. Branch: `file-provider`. No production installation was 
 
 | Frontend | Catalog delivery | Native adapter |
 |---|---|---|
-| macOS | App bundle resource, decoded by `SynctrainHostKit.DesktopUICatalog` | SwiftUI split navigation, forms, menus, and guarded editor panels |
+| macOS | App bundle resource, decoded by `SynctrainHostKit.DesktopUICatalog` | SwiftUI split navigation, forms, menus, and guarded navigation stacks |
 | Windows | Linked app resource copied from the same source JSON | WinUI `NavigationView`, command bars, standard controls, and child editors |
 | GNOME | Go embedded resource | libadwaita navigation split view, navigation pages, preferences groups, and dialogs |
 | KDE | Qt resource compiled from the same source JSON | Kirigami drawer, scrollable pages, forms, dialogs, and native overflow menus |
@@ -46,7 +46,7 @@ The Mac Files window reads the existing metadata index and coordinator state. Fo
 
 New SwiftUI navigation and browser state use `@Observable`. Browser state is scoped to stable folder/parent identities. Returning from details retains native views or snapshots, selection, filters, loaded ranges, focus, and scroll position. Successful mutations invalidate cached metadata; mode/endpoint changes discard incompatible snapshots. Stale asynchronous results are rejected.
 
-Simple preferences apply immediately. Controls keep or restore the last confirmed value when persistence fails and show the error. Multi-field settings use Save/Cancel, keep failed drafts, block repeated saves, and retain backend validation and restart prompts. Navigation and window-close guards protect unsaved drafts, including invalid text. Mac nested staged editors use modal panels to avoid an unguarded Back action.
+Simple preferences apply immediately. Controls keep or restore the last confirmed value when persistence fails and show the error. Multi-field settings use Save with Back/Cancel, keep failed drafts, block repeated saves, and retain backend validation and restart prompts. Navigation and window-close guards protect unsaved drafts, including invalid text. Mac and KDE settings editors use child pages with Back; confirmation dialogs and focused tasks retain native modal presentation.
 
 The native Windows settings/engine facade and Mac in-process host accessor expose existing native operations without requiring MCP to be enabled. External MCP authorization and helper/socket restrictions remain in their existing backends. Synchronized-file rename, move, and identity-bearing delete validate the identity captured when the action was selected inside the existing folder coordinator; a replacement file is preserved.
 
@@ -147,3 +147,43 @@ Local logs include `core-build.log`, `mac-build.log`, `ios-build.log`, `swift-te
 Implementation, builds, and bounded regression checks are complete; the full native interaction matrix is not. Windows x64 execution, Linux x86-64 builds/execution, Intel Mac execution, actual GNOME interaction, both-mode Windows/KDE interaction, full accessibility narration, and live cross-platform remote/shell/provider workflows require further qualification. These gaps must not be treated as proven parity from the fixtures or successful builds.
 
 Native control choices follow the requested [Apple settings](https://developer.apple.com/documentation/foundation/adding-a-settings-interface-to-your-app), [Windows app settings](https://learn.microsoft.com/en-us/windows/apps/design/app-settings/guidelines-for-app-settings), [GNOME sidebars](https://developer.gnome.org/hig/patterns/nav/sidebars.html), and [KDE layout/navigation](https://develop.kde.org/hig/layout_and_nav/) guidance. Visual and interaction conformity outside the observed checks remains part of the open acceptance matrix.
+
+
+## Settings stack follow-up
+
+Settings category entry points on Mac now use native disclosure rows. Their child pages share a controlled SwiftUI
+navigation stack, including nested editors, with a Back toolbar action and Command-[. Back protects only editors on
+departing pages, preserving drafts on retained ancestors. Sidebar changes and window closing protect all owned drafts.
+Folder detail editors also navigate in the main window. Files-mode unavailable rows retain their labels and explanations.
+
+KDE settings forms appear inside the existing Kirigami page with native Back and Save actions. The previous category
+content and scroll position remain behind the editor. Sidebar and Back departures prompt before discarding a draft;
+Keep Editing and failed saves retain it. GNOME already uses navigation pages. Windows keeps its in-app child editor and
+now labels its return action Back.
+
+Verification for this follow-up:
+
+- 93 HostKit tests passed, including stack departure, retained-ancestor, saving, and replacement cases.
+- Mac Debug app/extensions, iOS Simulator, Windows ARM64/x64 Release packages, and Linux ARM64 RPMs built successfully.
+- All three Qt suites passed in 9.92 seconds. Native QML checks exercise page geometry at wide/narrow sizes, actual Back
+  and Save controls, failed saves, dirty drafts, category departures, and advanced-field retention. Recreated form items
+  are reacquired by the tests. An unrelated existing Dolphin test raced initial discovery; its pre-discovered-service
+  fixture now initializes both endpoint and mode consistently.
+- Native isolated Mac Synchronize checks passed for clean Back, two-level navigation, invalid drafts, Keep Editing,
+  Discard, sidebar changes, and window-close protection. Native Files-mode disclosure navigation and Back passed.
+- Strict Swift formatting passed. Logs use the `stack-` prefix under `build/desktop-ui`; screenshots include
+  `screenshots/mac-settings-stack-advanced.png` and `screenshots/mac-settings-stack-back-draft.png`.
+
+The Windows/Linux native interaction and unverified architecture gaps above remain open. Automated QML fixtures and
+package builds do not establish those acceptance results.
+
+
+The follow-up was built as a universal signed Release app and installed at `/Applications/Synctrain.app` on
+`mac.ghbweb.com`. Apple accepted notarization submission `198761cc-a5e7-4597-a489-bc16c1a4f0b1`; the app ticket was
+stapled and validated on the target, and Gatekeeper accepted it as Notarized Developer ID. All 112 installed files
+matched the validated candidate. After a graceful restart, the existing Synchronize identity, 12 folders, and 6 devices
+were unchanged. The previous app and configuration are backed up under
+`~/Library/Application Support/Synctrain Upgrade Backups/2026-11-06_001919Z-settings-stack` on the target.
+This installation includes uncommitted settings-stack changes on top of `fa4aa99`; installation logs and source
+provenance are under `build/desktop-ui/deploy-settings-stack`. Native navigation interaction was checked in the isolated
+local fixtures; the remote installation check verified signing, launch, identity, and backend health.

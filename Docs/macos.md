@@ -34,10 +34,12 @@ pausing, resource priority, scanning/database options, and reporting. Integratio
 Advanced contains Web GUI/REST access, configuration, expert options, and diagnostics. Remote service management is under
 Remote Access; history sources are under History. Existing contextual shortcuts remain available.
 
-Simple preferences apply immediately and show persistence errors. Multi-field editors use Save/Cancel and preserve invalid
-or failed drafts. Unsaved changes prompt **Discard Changes** or **Keep Editing** before changing settings categories or
-closing Settings. Nested staged editors use guarded modal panels, and category navigation and closing are blocked during
-saves. Existing validation and restart confirmations remain in their backends. The iOS settings layout stays the same.
+Simple preferences apply immediately and show persistence errors. Disclosure rows push child pages in the detail
+column, with a native **Back** toolbar action and Command-[. Multi-field editors keep **Save** in the toolbar; Back
+cancels a clean edit and prompts **Discard Changes** or **Keep Editing** for an unsaved draft, including invalid text.
+The same protection applies to category changes and closing Settings. Saving blocks navigation and closing, and failed
+saves retain the draft. Confirmation dialogs, pairing, and system file pickers remain focused tasks. Existing validation
+and restart confirmations remain in their backends. The iOS settings layout stays the same.
 See [desktop UI acceptance](desktop-ui-acceptance.md) for current build and interaction evidence.
 
 For an isolated native check of the Files-mode settings shell, a Debug build accepts

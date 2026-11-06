@@ -290,7 +290,7 @@ public sealed partial class MainPage : Page
             editorChanged=null; editorToken=null; await Refresh();
             if (B(result, "restartRequired") && await Confirm("Restart required", "Restart Syncthing to apply these settings?")) await EngineAction("restart");
         });
-        Command("Cancel", Symbol.Cancel, async () => { if (!await MayLeaveEditor()) return; await CloseEditor(); await Refresh(); });
+        Command("Back", Symbol.Back, async () => { if (!await MayLeaveEditor()) return; await CloseEditor(); await Refresh(); });
     }
     private void RememberFileState() {
         if(FileBrowser.Visibility!=Visibility.Visible || fileFilterScope.Length==0)return;

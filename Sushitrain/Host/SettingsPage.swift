@@ -29,6 +29,7 @@
 
 		@Environment(AppState.self) private var appState
 		@Environment(\.dismiss) private var dismiss
+		@Environment(\.settingsUsesStack) private var usesStack
 		@State private var draft: Draft? = nil
 		@State private var saved: Settings? = nil
 		@State private var isSaving = false
@@ -55,7 +56,7 @@
 			.navigationTitle(title)
 			.settingsEditor(hasChanges: self.hasChanges, isSaving: isSaving)
 			.toolbar {
-				if isSheet {
+				if isSheet && !usesStack {
 					// A save can take as long as the folder takes to restart, and its error has to have a view to show on
 					SheetButton(role: .cancel, isDisabled: isSaving) {
 						dismiss()
@@ -69,7 +70,7 @@
 					.disabled(!self.canSave)
 				}
 			}
-			.frame(minWidth: isSheet ? 520 : nil, minHeight: isSheet ? 460 : nil)
+			.frame(minWidth: isSheet && !usesStack ? 520 : nil, minHeight: isSheet && !usesStack ? 460 : nil)
 			// Again after the engine restarted, and when something else saved the configuration
 			.task(id: appState.isEngineRestarting) {
 				self.refresh()
@@ -121,7 +122,7 @@
 			Task {
 				do {
 					try await goBlocking { try save(settings) }
-					if isSheet {
+					if isSheet && !usesStack {
 						dismiss()
 					}
 					else {

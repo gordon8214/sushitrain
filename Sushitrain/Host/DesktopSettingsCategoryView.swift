@@ -12,8 +12,17 @@
 
 		var body: some View {
 			Form {
-				ForEach(category.descriptor.sections) { section in
-					DesktopSettingsSection(section: section, mode: mode, presence: $presence, appState: appState)
+				if [.filesAndStorage, .network, .synchronization, .defaults, .advanced].contains(category) {
+					Section {
+						ForEach(category.descriptor.sections) { section in
+							DesktopSettingsSection(section: section, mode: mode, presence: $presence, appState: appState, grouped: true)
+						}
+					}
+				}
+				else {
+					ForEach(category.descriptor.sections) { section in
+						DesktopSettingsSection(section: section, mode: mode, presence: $presence, appState: appState)
+					}
 				}
 			}
 			.formStyle(.grouped)
@@ -26,86 +35,103 @@
 		let mode: MacSettingsMode
 		@Binding var presence: AppPresence
 		let appState: AppState?
+		var grouped = false
 		@State private var name = ""
 		@State private var savedName = ""
-		@State private var presentingEditor = false
 		@State private var error: ErrorMessage?
 
 		var body: some View {
-			Section {
-				if section.capability == "synchronize", let appState,
-					appState.startupState != .started && !appState.isEngineRestarting
-				{
-					Text("Start the engine to change these settings.").foregroundStyle(.secondary)
-				}
-				else if !section.isAvailable(mode: mode.capabilityMode) {
-					Text(
-						section.capability == "files"
-							? "Available in Files mode. Change the operating mode in General."
-							: "Available in Synchronize mode. Change the operating mode in General."
-					)
-					.foregroundStyle(.secondary)
+			Group {
+				if grouped {
+					entry
 				}
 				else {
-					switch section.action {
-					case "name":
-						if let appState {
-							HStack {
-								TextField("Device name", text: $name)
-								Button("Save") {
-									do {
-										try appState.client.setName(name)
-										savedName = name
-									}
-									catch { self.error = ErrorMessage(error) }
-								}
-							}
-							.task {
-								var problem: NSError?
-								name = appState.client.getName(&problem)
-								savedName = name
-							}
-						}
-					case "mode":
-						LabeledContent("Current mode", value: mode == .synchronize ? "Synchronize" : "Files")
-						if mode == .synchronize {
-							Button("Switch to Files…") { ModeSwitch.askToSwitchToFilesInFinder() }
-						}
-						else {
-							SwitchToSynchronizeButton()
-						}
-					case "startup": AutoStartToggleView()
-					case "presence": AppPresenceToggles(presence: $presence)
-					case "fileManager":
-						FinderIntegrationSection()
-						if mode == .filesInFinder {
-							NavigationLink("Finder Location") { Form { FilesLocationSettingsView() } }
-						}
-					case "menuAccess":
-						if let appState {
-							DesktopMenuAccessView(userSettings: appState.userSettings)
-						}
-						else {
-							Text("Open Synctrain or Show in Finder from the menu bar.")
-						}
-					case "mcp": NavigationLink("MCP") { MCPSettingsView() }
-					case "versions":
-						LabeledContent(
-							"App version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
-						if appState != nil { Text("Engine: \(SushitrainVersion())") }
-					case "support", "licenses": NavigationLink(section.title) { AboutView(showsIntroduction: false) }
-					default:
-						Button(section.title) { presentingEditor = true }
+					Section {
+						entry
+					} header: {
+						if !["mcp", "support", "licenses"].contains(section.action) { Text(section.title) }
 					}
 				}
-			} header: {
-				Text(section.title)
 			}
 			.settingsEditor(hasChanges: section.action == "name" && name != savedName)
-			.sheet(isPresented: $presentingEditor) {
-				DesktopSettingsEditorSheet(action: section.action, appState: appState)
-			}
 			.errorAlert($error)
+		}
+
+		@ViewBuilder private var entry: some View {
+			if section.capability == "synchronize", let appState,
+				appState.startupState != .started && !appState.isEngineRestarting
+			{
+				unavailable("Start the engine to change these settings.")
+			}
+			else if !section.isAvailable(mode: mode.capabilityMode) {
+				unavailable(
+					section.capability == "files"
+						? "Available in Files mode. Change the operating mode in General."
+						: "Available in Synchronize mode. Change the operating mode in General.")
+			}
+			else {
+				switch section.action {
+				case "name":
+					if let appState {
+						HStack {
+							TextField("Device name", text: $name)
+							Button("Save") {
+								do {
+									try appState.client.setName(name)
+									savedName = name
+								}
+								catch { self.error = ErrorMessage(error) }
+							}
+						}
+						.task {
+							var problem: NSError?
+							name = appState.client.getName(&problem)
+							savedName = name
+						}
+					}
+				case "mode":
+					LabeledContent("Current mode", value: mode == .synchronize ? "Synchronize" : "Files")
+					if mode == .synchronize {
+						Button("Switch to Files…") { ModeSwitch.askToSwitchToFilesInFinder() }
+					}
+					else {
+						SwitchToSynchronizeButton()
+					}
+				case "startup": AutoStartToggleView()
+				case "presence": AppPresenceToggles(presence: $presence)
+				case "fileManager":
+					FinderIntegrationSection()
+					if mode == .filesInFinder {
+						GuardedSettingsLink("Finder Location") { Form { FilesLocationSettingsView() } }
+					}
+				case "menuAccess":
+					if let appState {
+						DesktopMenuAccessView(userSettings: appState.userSettings)
+					}
+					else {
+						Text("Open Synctrain or Show in Finder from the menu bar.")
+					}
+				case "mcp": GuardedSettingsLink("MCP") { MCPSettingsView() }
+				case "versions":
+					LabeledContent(
+						"App version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+					if appState != nil { Text("Engine: \(SushitrainVersion())") }
+				case "support", "licenses": GuardedSettingsLink(title: Text(section.title)) { AboutView(showsIntroduction: false) }
+				default:
+					GuardedSettingsLink(title: Text(section.title)) {
+						DesktopSettingsEditor(action: section.action, appState: appState)
+					}
+				}
+			}
+		}
+
+		private func unavailable(_ reason: LocalizedStringKey) -> some View {
+			VStack(alignment: .leading, spacing: 4) {
+				Text(section.title)
+				Text(reason).font(.callout).foregroundStyle(.secondary)
+					.fixedSize(horizontal: false, vertical: true)
+			}
+			.accessibilityElement(children: .combine)
 		}
 	}
 

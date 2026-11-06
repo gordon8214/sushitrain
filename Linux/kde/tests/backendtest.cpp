@@ -106,6 +106,14 @@ static QQuickItem *visualItem(QQuickItem *root, const QString &name) {
   }
   return nullptr;
 }
+static QQuickItem *editorItem(QObject *window, const QString &name) {
+  auto *editor = window->findChild<QObject *>("settingsEditor");
+  if (!editor) return nullptr;
+  auto *scope = editor->property("isPage").toBool()
+      ? window->findChild<QQuickItem *>("settingsStackPage")
+      : qvariant_cast<QQuickItem *>(editor->property("contentItem"));
+  return scope ? visualItem(scope, name) : nullptr;
+}
 class BackendTest : public QObject {
   Q_OBJECT
 private slots:
@@ -165,18 +173,18 @@ private slots:
     b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure"));
     auto *editor = window->findChild<QObject *>("settingsEditor");
     QVERIFY(editor);
-    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
-    auto *form = window->findChild<QQuickItem *>("editorForm");
-    auto *content = qvariant_cast<QQuickItem *>(editor->property("contentItem"));
-    QVERIFY(form && content);
-    const qreal padding = editor->property("padding").toReal();
-    QVERIFY(padding > 0);
-    const auto formOrigin = form->mapToScene(QPointF());
-    QVERIFY(formOrigin.x() >= editor->property("x").toReal() + padding);
-    QVERIFY(formOrigin.x() + form->width() <=
-            editor->property("x").toReal() + editor->property("width").toReal() - padding);
-    QVERIFY(editor->property("y").toReal() >= 0);
-    QVERIFY(editor->property("height").toReal() <= quickWindow->height());
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("presented").toBool(), 1000);
+    auto *form = editorItem(window.data(), "editorForm");
+    auto *page = window->findChild<QQuickItem *>("settingsStackPage");
+    QVERIFY(page && form);
+    auto *content = qvariant_cast<QQuickItem *>(page->property("flickable"));
+    QVERIFY(content);
+    QVERIFY(editor->property("isPage").toBool());
+    QVERIFY(!editor->property("opened").toBool());
+    const auto formOrigin = form->mapToItem(content, QPointF());
+    QVERIFY(formOrigin.x() >= 0);
+    QVERIFY(formOrigin.x() + form->width() <= content->width() + 1);
+    QVERIFY(page->height() <= quickWindow->height());
     if (!noticeOnly) {
       auto *loader = visualItem(form, "editorField_Enabled");
       QVERIFY(loader);
@@ -192,10 +200,8 @@ private slots:
     }
     if (longForm) {
       QVERIFY(content->property("contentHeight").toReal() > content->height());
-      auto *flickable = qvariant_cast<QObject *>(content->property("contentItem"));
-      QVERIFY(flickable);
-      const qreal end = flickable->property("contentHeight").toReal() - flickable->property("height").toReal();
-      QVERIFY(flickable->setProperty("contentY", end));
+      const qreal end = content->property("contentHeight").toReal() - content->height();
+      QVERIFY(content->setProperty("contentY", end));
       auto *last = visualItem(form, "editorField_Option39");
       QVERIFY(last);
       QVERIFY(last->mapToItem(content, QPointF()).y() + last->height() <= content->height() + 1);
@@ -232,10 +238,11 @@ private slots:
     auto open = [&] { b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure")); };
     open();
     auto *editor = window->findChild<QObject *>("settingsEditor");
-    auto *disclosure = window->findChild<QQuickItem *>("editorAdvanced");
-    auto *advancedForm = window->findChild<QQuickItem *>("editorAdvancedForm");
-    QVERIFY(editor && disclosure && advancedForm);
-    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    QVERIFY(editor);
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("presented").toBool(), 1000);
+    auto *disclosure = editorItem(window.data(), "editorAdvanced");
+    auto *advancedForm = editorItem(window.data(), "editorAdvancedForm");
+    QVERIFY(disclosure && advancedForm);
     QVERIFY(!disclosure->property("checked").toBool());
     QVERIFY(!advancedForm->isVisible());
     auto toggle = [&] {
@@ -248,7 +255,10 @@ private slots:
     b.cancelDialog();
     QTRY_VERIFY_WITH_TIMEOUT(b.dialog().isEmpty(), 1000);
     open();
-    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("presented").toBool(), 1000);
+    disclosure = editorItem(window.data(), "editorAdvanced");
+    advancedForm = editorItem(window.data(), "editorAdvancedForm");
+    QVERIFY(disclosure && advancedForm);
     QVERIFY(!disclosure->property("checked").toBool());
     toggle();
     QTRY_VERIFY_WITH_TIMEOUT(advancedForm->isVisible(), 1000);
@@ -278,7 +288,7 @@ private slots:
     // A retained error must not override the user's later collapse choice.
     toggle();
     QVERIFY(!advancedForm->isVisible());
-    auto *basicForm = window->findChild<QQuickItem *>("editorForm");
+    auto *basicForm = editorItem(window.data(), "editorForm");
     QVERIFY(basicForm);
     auto *basicLoader = visualItem(basicForm, "editorField_MinDiskFree");
     QVERIFY(basicLoader);
@@ -328,9 +338,10 @@ private slots:
     QTRY_VERIFY_WITH_TIMEOUT(!rowAction(b, "Test Folder", "Reset Synchronization Settings…").isEmpty(), 1000);
     b.activate(rowAction(b, "Test Folder", "Reset Synchronization Settings…"));
     auto *editor = window->findChild<QObject *>("settingsEditor");
-    auto *advanced = window->findChild<QQuickItem *>("editorAdvancedForm");
-    QVERIFY(editor && advanced);
-    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    QVERIFY(editor);
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("presented").toBool(), 1000);
+    auto *advanced = editorItem(window.data(), "editorAdvancedForm");
+    QVERIFY(advanced);
     QCOMPARE(f.parameters.at(f.calls.lastIndexOf("settings.get"))["Section"].toString(), QString("reset/folder/test"));
     QCOMPARE(editor->property("draft").toMap()["Copiers"].toString(), QString("0"));
     QVERIFY(!advanced->isVisible());
@@ -345,8 +356,9 @@ private slots:
     b.navigate("settings:network");
     b.navigate("settings:defaults");
     b.activate(rowAction(b, "Reset Synchronization Defaults…", "Configure"));
-    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("presented").toBool(), 1000);
     QCOMPARE(f.parameters.at(f.calls.lastIndexOf("settings.get"))["Section"].toString(), QString("reset/defaults/folder"));
+    advanced = editorItem(window.data(), "editorAdvancedForm");QVERIFY(advanced);
     QVERIFY(!advanced->isVisible());
     b.cancelDialog();
     QCOMPARE(f.calls.count("settings.save"), 0);
@@ -387,9 +399,14 @@ private slots:
     QCOMPARE(b.title(), QString("Advanced Configuration"));
     b.activate(rowAction(b, "options", "Edit"));
     QTRY_VERIFY_WITH_TIMEOUT(!b.dialog().isEmpty(), 1000);
-    QVERIFY(!actions.at(0)->property("enabled").toBool());
+    // An in-page editor keeps the sidebar available; dirty departures are guarded.
+    QVERIFY(actions.at(0)->property("enabled").toBool());
+    b.fieldChanged();
     b.navigate("Devices");
     QCOMPARE(b.page(), QString("settings:advanced"));
+    QVERIFY(b.dialog().value("discard").toBool());
+    b.keepEditing();
+    b.cancelDialog();
     b.cancelDialog();
     QVERIFY(QMetaObject::invokeMethod(actions.at(0), "trigger"));
     QCOMPARE(b.page(), QString("Overview"));
@@ -418,28 +435,32 @@ private slots:
     b.activate(rowAction(b, "Connectivity, Discovery, and Relays", "Configure"));
     QTRY_VERIFY_WITH_TIMEOUT(!b.dialog().isEmpty(), 1000);
     auto *editor = window->findChild<QObject *>("settingsEditor");
-    auto *cancel = window->findChild<QObject *>("editorCancel");
-    auto *save = window->findChild<QObject *>("editorSave");
-    QVERIFY(editor && cancel && save);
-    QTRY_VERIFY_WITH_TIMEOUT(editor->property("opened").toBool(), 1000);
+    auto *back = window->findChild<QObject *>("settingsPageBack");
+    auto *save = window->findChild<QObject *>("settingsPageSave");
+    auto *keep = window->findChild<QObject *>("settingsPageKeepEditing");
+    auto *discard = window->findChild<QObject *>("settingsPageDiscardChanges");
+    QVERIFY(editor && back && save && keep && discard);
+    QTRY_VERIFY_WITH_TIMEOUT(editor->property("presented").toBool(), 1000);
+    QVERIFY(editor->property("isPage").toBool());
+    QVERIFY(!editor->property("opened").toBool());
     editor->setProperty("draft", QVariantMap{{"name", "unsaved"}});
     b.fieldChanged();
-    QVERIFY(QMetaObject::invokeMethod(cancel, "clicked"));
+    QVERIFY(QMetaObject::invokeMethod(back, "clicked"));
     QCoreApplication::processEvents();
     QVERIFY(b.dialog()["discard"].toBool());
-    QVERIFY(editor->property("opened").toBool());
+    QVERIFY(editor->property("presented").toBool());
     QCOMPARE(editor->property("draft").toMap()["name"].toString(), QString("unsaved"));
     // An invalid save must keep the same visible draft as well.
-    QVERIFY(QMetaObject::invokeMethod(save, "clicked")); // Keep Editing
+    QVERIFY(QMetaObject::invokeMethod(keep, "clicked"));
     QVERIFY(!b.dialog().value("discard").toBool());
-    QVERIFY(QMetaObject::invokeMethod(save, "clicked")); // Save the preserved draft
+    QVERIFY(QMetaObject::invokeMethod(save, "trigger")); // Save the preserved draft
     QTRY_COMPARE_WITH_TIMEOUT(b.error(), QString("Invalid settings"), 1000);
-    QVERIFY(editor->property("opened").toBool());
+    QVERIFY(editor->property("presented").toBool());
     QCOMPARE(editor->property("draft").toMap()["name"].toString(), QString("unsaved"));
-    QVERIFY(QMetaObject::invokeMethod(cancel, "clicked"));
+    QVERIFY(QMetaObject::invokeMethod(back, "clicked"));
     QVERIFY(b.dialog()["discard"].toBool());
-    QVERIFY(editor->property("opened").toBool());
-    QVERIFY(QMetaObject::invokeMethod(cancel, "clicked")); // Confirm Discard
+    QVERIFY(editor->property("presented").toBool());
+    QVERIFY(QMetaObject::invokeMethod(discard, "clicked"));
     QTRY_VERIFY_WITH_TIMEOUT(b.dialog().isEmpty(), 1000);
   }
   void closePreservesDirtyEditorUntilExplicitDiscard() {
@@ -747,6 +768,31 @@ private slots:
     QCOMPARE(b.rows().size(),2);
     QCOMPARE(f.calls.count("files.childrenPage"),2);
   }
+  void settingsPagesGuardBackAndCategoryNavigation() {
+    Fixture fixture;
+    fixture.handler=[](QString method,auto) {
+      if(method=="settings.get") return result(QJsonObject{{"Token","stack-token"},{"Fields",QJsonArray{QJsonObject{{"Path","Name"},{"Kind","string"},{"Value","confirmed"},{"Label","Name"}}}}});
+      return result(QJsonObject{});
+    };
+    Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.title(),QString("Overview"),1000);
+    backend.navigate("settings:network");
+    backend.activate(rowAction(backend,"Connection Options","Configure"));
+    QTRY_VERIFY_WITH_TIMEOUT(backend.dialog().value("page").toBool(),1000);
+    backend.fieldChanged();backend.cancelDialog();
+    QVERIFY(backend.dialog().value("discard").toBool());
+    backend.keepEditing();QVERIFY(backend.dirty());
+    backend.navigate("settings:advanced");
+    QVERIFY(backend.dialog().value("discard").toBool());
+    QCOMPARE(backend.page(),QString("settings:network"));
+    backend.keepEditing();backend.cancelDialog();backend.cancelDialog();
+    QTRY_VERIFY_WITH_TIMEOUT(backend.dialog().isEmpty(),1000);
+    QCOMPARE(backend.page(),QString("settings:network"));
+    backend.activate(rowAction(backend,"Connection Options","Configure"));
+    QTRY_VERIFY_WITH_TIMEOUT(!backend.dialog().isEmpty(),1000);
+    backend.fieldChanged();backend.navigate("settings:advanced");backend.cancelDialog();
+    QTRY_COMPARE_WITH_TIMEOUT(backend.page(),QString("settings:advanced"),1000);
+  }
+
   void overviewProgressBelongsToTransferRows() {
     Fixture fixture;
     fixture.delay=[](QString method,auto) { return method=="engine.stats"?40:0; };
