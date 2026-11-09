@@ -491,8 +491,26 @@ public sealed partial class MainPage : Page
     }
     private async Task ChooseRemoteFolders(string service)
     {
-        Detail(()=>ChooseRemoteFolders(service));var folders=await Call("files.available",new { ServiceID=service });ShowBody();Body.Children.Clear();Commands.PrimaryCommands.Clear();Heading.Text="Choose remote folders";Command("Back",Symbol.Back,LeaveDetails);
-        foreach(var folder in folders?.AsArray()??[]){var id=S(folder,"id");Row(S(folder,"label"),id,ActionButton("Add to this PC",async()=>{await Call("files.add",new { ServiceID=service,Folder=id });await Refresh();}));}
+        Detail(()=>ChooseRemoteFolders(service));var folders=await Call("files.available",new { ServiceID=service });
+        // The folders of this gateway already on this PC, by their ID on the gateway, with their name in Explorer
+        var added=new Dictionary<string,string>();
+        foreach(var folder in (await Call("files.folders"))?.AsArray()??[]) if(S(folder,"serviceID")==service) added.TryAdd(S(folder,"remoteID"),S(folder,"dirName"));
+        ShowBody();Body.Children.Clear();Commands.PrimaryCommands.Clear();Heading.Text="Choose remote folders";Command("Back",Symbol.Back,LeaveDetails);
+        foreach(var folder in folders?.AsArray()??[]){
+            var id=S(folder,"id");var detail=id+" · "+(B(folder?["permissions"],"write")?"read and write":"read only");
+            if(added.TryGetValue(id,out var dirName)) {
+                Row(S(folder,"label"),detail+"\nAdded to this PC",ActionButton("Open in File Explorer",()=>{var path=Path.Combine(S(status,"root"),dirName);return OpenPath(Directory.Exists(path)?path:S(status,"root"));}));
+                continue;
+            }
+            Button? add=null;
+            add=ActionButton("Add to this PC",async()=>{
+                add!.IsEnabled=false;add.Content="Adding…";
+                try { await Call("files.add",new { ServiceID=service,Folder=id }); }
+                catch { add.IsEnabled=true;add.Content="Add to this PC";throw; }
+                await Refresh();
+            });
+            Row(S(folder,"label"),detail,add);
+        }
     }
     private async Task RemoteFolders()
     {
