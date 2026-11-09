@@ -8,7 +8,7 @@
  xmlns:virtualization="http://schemas.microsoft.com/appx/manifest/virtualization/windows10"
  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
  IgnorableNamespaces="uap5 uap desktop cloudFiles com virtualization rescap">
- <Identity Name="com.gordonbyrnes.Synctrain" Publisher="CN=Gordon Byrnes" Version="1.0.14.0"/>
+ <Identity Name="com.gordonbyrnes.Synctrain" Publisher="CN=Gordon Byrnes" Version="1.0.15.0"/>
  <Properties>
   <DisplayName>Synctrain</DisplayName><PublisherDisplayName>Gordon Byrnes</PublisherDisplayName><Logo>Assets\StoreLogo.png</Logo>
   <virtualization:FileSystemWriteVirtualization><virtualization:ExcludedDirectories><virtualization:ExcludedDirectory>$(KnownFolder:LocalAppData)\Synctrain</virtualization:ExcludedDirectory></virtualization:ExcludedDirectories></virtualization:FileSystemWriteVirtualization>
