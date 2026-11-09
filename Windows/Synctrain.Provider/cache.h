@@ -8,7 +8,7 @@ void trimNativeCache() {
     auto storage=request(L"files.storage").result.GetObject();
     auto available=std::max<int64_t>(0,static_cast<int64_t>(storage.GetNamedNumber(L"budget"))-static_cast<int64_t>(storage.GetNamedNumber(L"used")));
     struct Candidate {size_t index;int64_t bytes;uint64_t accessed;};
-    std::vector<Candidate> candidates;int64_t total{};
+    std::vector<Candidate> candidates;std::vector<size_t> requested;int64_t total{};
     for(size_t i=0;i<records.size();++i){
         auto const& record=records[i];auto entry=record.GetNamedObject(L"Entry");
         if(entry.GetNamedNumber(L"Kind")!=0 || entry.GetNamedBoolean(L"Keep",false))continue;
@@ -16,24 +16,19 @@ void trimNativeCache() {
             auto path=fs::path(rootPath)/std::wstring(record.GetNamedString(L"Path"));auto file=attributes(path);
             std::vector<std::byte> buffer(8192);auto info=reinterpret_cast<CF_PLACEHOLDER_STANDARD_INFO*>(buffer.data());
             if(FAILED(CfGetPlaceholderInfo(file.get(),CF_PLACEHOLDER_INFO_STANDARD,info,static_cast<DWORD>(buffer.size()),nullptr)) || info->PinState==CF_PIN_STATE_PINNED)continue;
+            if(info->PinState==CF_PIN_STATE_UNPINNED && !legacyPins(record)){requested.push_back(i);continue;}
             total+=info->OnDiskDataSize.QuadPart;
             if(!info->OnDiskDataSize.QuadPart || info->InSyncState!=CF_IN_SYNC_STATE_IN_SYNC || record.HasKey(L"Capture") || record.HasKey(L"Create") || record.GetNamedBoolean(L"NeedsCapture",false) || record.GetNamedBoolean(L"AwaitingSync",false))continue;
             BY_HANDLE_FILE_INFORMATION basic{};check_bool(GetFileInformationByHandle(file.get(),&basic));
             candidates.push_back({i,info->OnDiskDataSize.QuadPart,(uint64_t(basic.ftLastAccessTime.dwHighDateTime)<<32)|basic.ftLastAccessTime.dwLowDateTime});
         }catch(hresult_error const&){} // Open editors and vanished entries remain intact.
     }
+    // Free up space requests that waited for an editor to close or an upload to finish
+    for(auto index:requested)freeUp(records[index],fs::path(rootPath)/std::wstring(records[index].GetNamedString(L"Path")),false);
     std::sort(candidates.begin(),candidates.end(),[](auto const& a,auto const& b){return a.accessed<b.accessed;});
     for(auto const& candidate:candidates){
         if(total<=available)break;
-        try{
-            auto const& record=records[candidate.index];auto entry=record.GetNamedObject(L"Entry");
-            if(!clean(entry))continue;
-            auto path=fs::path(rootPath)/std::wstring(record.GetNamedString(L"Path"));ProtectedFile guard(path);
-            struct Reference {HANDLE value;explicit Reference(HANDLE handle):value(handle){check_bool(CfReferenceProtectedHandle(value));}~Reference(){CfReleaseProtectedHandle(value);}} reference(guard.value);
-            auto local=inspect(path,CfGetWin32HandleFromProtectedHandle(guard.value));
-            if(local.key!=record.GetNamedString(L"Key") || local.stamp!=record.GetNamedString(L"Stamp") || item(local.identity)!=item(entry) || local.identity.GetNamedNumber(L"Node")!=entry.GetNamedNumber(L"Node") || local.pin==CF_PIN_STATE_PINNED || local.sync!=CF_IN_SYNC_STATE_IN_SYNC)continue;
-            LARGE_INTEGER offset{},length{};length.QuadPart=CF_EOF;
-            check_hresult(CfDehydratePlaceholder(guard.value,offset,length,CF_DEHYDRATE_FLAG_NONE,nullptr));total-=candidate.bytes;
-        }catch(hresult_error const&){} // Cache limits never discard unconfirmed local work.
+        try{if(dehydrate(records[candidate.index]))total-=candidate.bytes;}
+        catch(hresult_error const&){} // Cache limits never discard unconfirmed local work.
     }
 }

@@ -49,7 +49,7 @@ production publisher.
 | Remote Files hosting | Gateway exports, permissions, pairing approval, and client revocation |
 | Remote Files browsing | Virtualized lists, filtering, create, rename, delete, and save a copy |
 | On-demand Explorer access | Cloud Files placeholders, verified ranged hydration, and local-save capture |
-| Offline access | Keep on device and cache-budget eviction of clean unpinned files |
+| Offline access | Always keep on this device, Free up space, and cache-budget eviction of clean files that aren't kept |
 | Recovery and history | Pending-change export/discard, recovered captures, versions, restore, and copy |
 | Shell integration | Thumbnail previews, availability/pending status, Previous Versions, and Recycle Bin |
 | Desktop lifecycle | Tray, login startup, close to background, and explicit Quit |
@@ -102,6 +102,17 @@ mode cleanup also have replay handling. NTFS file identities and USNs distinguis
 local saves from provider metadata changes. Remote dehydration and deletion protect
 the affected file against concurrent writers and replacement.
 
+Kept items are pinned; items that aren't kept have Windows' default (unspecified)
+pin state. An unpinned item is therefore always Explorer's Free up space: the
+provider removes the file's local content when it is synchronized and no editor
+holds it, then returns it to unspecified, so opening it later downloads it again.
+A file that is open or has unsynchronized edits keeps its content until that
+changes; the cache pass retries every 30 seconds. Pin changes wait for an item to
+be in sync, because they write a USN record. Earlier versions
+marked every item that wasn't kept unpinned, so Explorer showed every downloaded
+file as Sync pending (unpinned content waiting to be freed); those items are
+switched to unspecified once, without removing anything.
+
 Removing a selected folder waits for its native captures to settle as well as the
 shared write queue. Captures retain their original local folder identity; selecting
 another folder at the same Explorer path cannot redirect a preserved edit to it.
@@ -140,10 +151,20 @@ the local Parallels Windows 11 development VM. Transfer sources to a local guest
 checkout before building. Tests must use disposable folders and gateway identities.
 
 Explorer integration is declared through the package's `windows.cloudFiles` and
-out-of-process COM extensions. Thumbnail extraction requests a bounded gateway
-preview instead of reading the placeholder's full data stream. Custom status
-properties show pending, failed, local-only, and availability states. The Previous
-Versions command activates the native app with a client-bound item identity.
+out-of-process COM extensions. Every handler in that declaration needs a CLSID:
+when one has none, Explorer ignores the declaration and treats the sync root as
+an ordinary folder, with no status, Always keep on this device, or Free up space.
+Handlers Synctrain doesn't implement name a class that nothing registers.
+Thumbnail extraction requests a bounded gateway preview instead of reading the
+placeholder's full data stream. Explorer's own status shows availability; custom
+status properties add only pending, failed, local-only, and unsynchronized local
+changes, each with an icon (Explorer crashes on a custom state without one). The
+Previous Versions command activates the native app with a client-bound item
+identity.
+
+To check that Explorer associates a location with Synctrain, read the
+`System.StorageProviderId` property of the root through `Shell.Application`; it is
+`com.gordonbyrnes.Synctrain`, not `computer`.
 
 ### Local acceptance record, November 3, 2026
 

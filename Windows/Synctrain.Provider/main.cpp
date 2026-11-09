@@ -98,10 +98,20 @@ void authenticateServer(HANDLE pipe) {
     auto server = tokenUser(token.get()); auto current = tokenUser(GetCurrentProcessToken());
     if (!EqualSid(reinterpret_cast<TOKEN_USER*>(server.data())->User.Sid, reinterpret_cast<TOKEN_USER*>(current.data())->User.Sid)) throw hresult_error(E_ACCESSDENIED, L"The Synctrain pipe belongs to another Windows user.");
 }
+// The host opens its next pipe instance only after a client connects, and another
+// client can take the instance WaitNamedPipe reported free: a busy pipe is retried.
+handle connectHost() {
+    auto deadline=GetTickCount64()+10000;
+    for (;;) {
+        handle pipe(CreateFileW(pipePath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr));
+        if (pipe.get() != INVALID_HANDLE_VALUE) return pipe;
+        auto error=GetLastError();auto now=GetTickCount64();
+        if (error != ERROR_PIPE_BUSY || now >= deadline) throw_hresult(HRESULT_FROM_WIN32(error));
+        if (!WaitNamedPipeW(pipePath.c_str(), static_cast<DWORD>(std::min<ULONGLONG>(deadline-now, 1000))) && GetLastError() != ERROR_SEM_TIMEOUT) throw_last_error();
+    }
+}
 Response request(std::wstring const& method, JsonObject const& params = JsonObject{}) {
-    if (!WaitNamedPipeW(pipePath.c_str(), 5000) && GetLastError() != ERROR_SEM_TIMEOUT) throw_last_error();
-    handle pipe(CreateFileW(pipePath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr));
-    check_bool(pipe.get() != INVALID_HANDLE_VALUE);
+    auto pipe=connectHost();
     authenticateServer(pipe.get());
     JsonObject message; message.Insert(L"method", text(method)); message.Insert(L"params", params);
     auto line = to_string(message.Stringify()) + "\n"; writeAll(pipe.get(), line.data(), static_cast<DWORD>(line.size()));
@@ -290,8 +300,9 @@ void projectDirectory(int64_t parent, fs::path const& directory) {
         if (attrs == INVALID_FILE_ATTRIBUTES) {
             CF_PLACEHOLDER_CREATE_INFO create{}; create.RelativeFileName = name.c_str(); create.FsMetadata = metadata; create.FileIdentity = id.data(); create.FileIdentityLength = static_cast<DWORD>(id.size()); create.Flags = CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC | CF_PLACEHOLDER_CREATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
             DWORD processed{}; check_hresult(CfCreatePlaceholders(windowsPath(directory).c_str(), &create, 1, CF_CREATE_FLAG_NONE, &processed)); check_hresult(create.Result); recorded=true;
-            auto file=attributes(path);auto desired=entry.GetNamedBoolean(L"Keep")?CF_PIN_STATE_PINNED:CF_PIN_STATE_UNPINNED;
-            check_hresult(CfSetPinState(file.get(),desired,CF_SET_PIN_FLAG_NONE,nullptr));
+            // A new placeholder is unspecified; only a kept one changes.
+            auto file=attributes(path);auto desired=entry.GetNamedBoolean(L"Keep")?CF_PIN_STATE_PINNED:CF_PIN_STATE_UNSPECIFIED;
+            if(desired==CF_PIN_STATE_PINNED)check_hresult(CfSetPinState(file.get(),desired,CF_SET_PIN_FLAG_NONE,nullptr));
             if(desired==CF_PIN_STATE_PINNED && !isDirectory){LARGE_INTEGER offset{},length{};length.QuadPart=CF_EOF;check_hresult(CfHydratePlaceholder(file.get(),offset,length,CF_HYDRATE_FLAG_NONE,nullptr));}
         } else if (attrs & FILE_ATTRIBUTE_REPARSE_POINT) {
             handle file(CreateFileW(windowsPath(path).c_str(), FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | WRITE_DAC, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr));
@@ -310,10 +321,13 @@ void projectDirectory(int64_t parent, fs::path const& directory) {
                     if (contentChanged && !isDirectory && info->PinState==CF_PIN_STATE_PINNED) {check_hresult(CfSetPinState(exclusive.value,CF_PIN_STATE_UNSPECIFIED,CF_SET_PIN_FLAG_NONE,nullptr));info->PinState=CF_PIN_STATE_UNSPECIFIED;}
                     check_hresult(CfUpdatePlaceholder(exclusive.value, &metadata, id.data(), static_cast<DWORD>(id.size()), nullptr, 0, (!isDirectory && contentChanged ? CF_UPDATE_FLAG_DEHYDRATE : CF_UPDATE_FLAG_NONE) | CF_UPDATE_FLAG_MARK_IN_SYNC | CF_UPDATE_FLAG_VERIFY_IN_SYNC, nullptr, nullptr)); recorded=true;
                 }
-                auto desired=entry.GetNamedBoolean(L"Keep") ? CF_PIN_STATE_PINNED : CF_PIN_STATE_UNPINNED;
+                auto desired=entry.GetNamedBoolean(L"Keep") ? CF_PIN_STATE_PINNED : CF_PIN_STATE_UNSPECIFIED;
                 // A local capture's USN remains its content proof until the
                 // shared queue commits it. Defer our own pin metadata changes.
-                if (info->InSyncState==CF_IN_SYNC_STATE_IN_SYNC && info->PinState!=desired) {check_hresult(CfSetPinState(file.get(),desired,CF_SET_PIN_FLAG_NONE,nullptr));recorded=true;}
+                // An unpinned item that isn't kept is a Free up space request
+                // (or a pin from before PinModel 2), which localChanges carries out.
+                bool requested=desired==CF_PIN_STATE_UNSPECIFIED && info->PinState==CF_PIN_STATE_UNPINNED;
+                if (info->InSyncState==CF_IN_SYNC_STATE_IN_SYNC && info->PinState!=desired && !requested) {check_hresult(CfSetPinState(file.get(),desired,CF_SET_PIN_FLAG_NONE,nullptr));recorded=true;}
                 if (info->InSyncState==CF_IN_SYNC_STATE_IN_SYNC && desired == CF_PIN_STATE_PINNED) {
                     LARGE_INTEGER offset{}, length{}; length.QuadPart = CF_EOF;
                     if (!isDirectory) check_hresult(CfHydratePlaceholder(file.get(), offset, length, CF_HYDRATE_FLAG_NONE, nullptr));

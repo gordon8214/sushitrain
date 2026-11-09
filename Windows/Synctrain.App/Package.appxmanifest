@@ -8,7 +8,7 @@
  xmlns:virtualization="http://schemas.microsoft.com/appx/manifest/virtualization/windows10"
  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
  IgnorableNamespaces="uap5 uap desktop cloudFiles com virtualization rescap">
- <Identity Name="com.gordonbyrnes.Synctrain" Publisher="CN=Gordon Byrnes" Version="1.0.16.0"/>
+ <Identity Name="com.gordonbyrnes.Synctrain" Publisher="CN=Gordon Byrnes" Version="1.0.19.0"/>
  <Properties>
   <DisplayName>Synctrain</DisplayName><PublisherDisplayName>Gordon Byrnes</PublisherDisplayName><Logo>Assets\StoreLogo.png</Logo>
   <virtualization:FileSystemWriteVirtualization><virtualization:ExcludedDirectories><virtualization:ExcludedDirectory>$(KnownFolder:LocalAppData)\Synctrain</virtualization:ExcludedDirectory></virtualization:ExcludedDirectories></virtualization:FileSystemWriteVirtualization>
@@ -28,9 +28,11 @@
     <cloudFiles:Extension Category="windows.cloudFiles"><cloudFiles:CloudFiles>
      <cloudFiles:CustomStateHandler Clsid="36F7C1C1-6702-4E7E-9FF8-0497045529D0"/>
      <cloudFiles:ThumbnailProviderHandler Clsid="36F7C1C1-6702-4E7E-9FF8-0497045529CE"/>
-     <!-- The SDK requires these containers; an omitted CLSID declares no handler. -->
-     <cloudFiles:ExtendedPropertyHandler/>
-     <cloudFiles:BannersHandler/>
+     <!-- Explorer ignores the whole declaration, and with it every sync root the
+          package registers, when a handler has no CLSID. These two name a class
+          that nothing registers, so Explorer finds no handler for them. -->
+     <cloudFiles:ExtendedPropertyHandler Clsid="36F7C1C1-6702-4E7E-9FF8-0497045529D1"/>
+     <cloudFiles:BannersHandler Clsid="36F7C1C1-6702-4E7E-9FF8-0497045529D1"/>
      <cloudFiles:CloudFilesContextMenus><cloudFiles:Verb Id="PreviousVersions" Clsid="36F7C1C1-6702-4E7E-9FF8-0497045529CF"/></cloudFiles:CloudFilesContextMenus>
     </cloudFiles:CloudFiles></cloudFiles:Extension>
     <com:Extension Category="windows.comServer"><com:ComServer>

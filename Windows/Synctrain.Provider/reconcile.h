@@ -189,6 +189,40 @@ bool clean(JsonObject const& entry) {
     auto state=request(L"files.state",args).result.GetString();
     return state==L"remote" || state==L"partial" || state==L"local" || state==L"kept" || state.empty();
 }
+// Explorer's Free up space marks items unpinned. Synctrain leaves the items it
+// doesn't keep unspecified, so an unpinned item is always that request. Records
+// saved before PinModel 2 still carry the unpinned state Synctrain used to give
+// every item it didn't keep; they are switched to unspecified once, not freed.
+void currentPins(JsonObject& record) { record.Insert(L"PinModel",number(2)); }
+bool legacyPins(JsonObject const& record) { return record.GetNamedNumber(L"PinModel",1)<2; }
+// Removes the local content of a clean, synchronized file while holding it
+// against writers and replacement. Unconfirmed local work is never touched;
+// false when the content can't be removed now.
+bool dehydrate(JsonObject const& record) {
+    auto entry=record.GetNamedObject(L"Entry");
+    if(entry.GetNamedNumber(L"Kind",0)!=0 || record.HasKey(L"Capture") || record.HasKey(L"Create") || record.GetNamedBoolean(L"NeedsCapture",false) || record.GetNamedBoolean(L"AwaitingSync",false) || !clean(entry))return false;
+    auto path=fs::path(rootPath)/std::wstring(record.GetNamedString(L"Path"));ProtectedFile guard(path);
+    struct Reference {HANDLE value;explicit Reference(HANDLE handle):value(handle){check_bool(CfReferenceProtectedHandle(value));}~Reference(){CfReleaseProtectedHandle(value);}} reference(guard.value);
+    auto local=inspect(path,CfGetWin32HandleFromProtectedHandle(guard.value));
+    if(local.key!=record.GetNamedString(L"Key") || local.stamp!=record.GetNamedString(L"Stamp") || item(local.identity)!=item(entry) || local.identity.GetNamedNumber(L"Node")!=entry.GetNamedNumber(L"Node") || local.pin==CF_PIN_STATE_PINNED || local.sync!=CF_IN_SYNC_STATE_IN_SYNC)return false;
+    LARGE_INTEGER offset{},length{};length.QuadPart=CF_EOF;
+    check_hresult(CfDehydratePlaceholder(guard.value,offset,length,CF_DEHYDRATE_FLAG_NONE,nullptr));
+    return true;
+}
+// Carries out Free up space on an unpinned item, which then returns to
+// unspecified. Explorer unpins a folder's contents along with it. Like every pin
+// change Synctrain makes, it waits for the item to be in sync: a pin change
+// writes a USN record, and an unsynchronized file's USN is its content proof.
+// False when the item has to wait (an open editor or unconfirmed edits).
+bool freeUp(JsonObject const& record,fs::path const& path,bool directory) {
+    try {
+        if(!directory && !dehydrate(record))return false;
+        auto current=attributes(path);
+        if(inspect(path,current.get()).sync!=CF_IN_SYNC_STATE_IN_SYNC)return false;
+        check_hresult(CfSetPinState(current.get(),CF_PIN_STATE_UNSPECIFIED,CF_SET_PIN_FLAG_NONE,nullptr));
+        return true;
+    }catch(hresult_error const&){return false;} // An open editor keeps its content; trimNativeCache tries again.
+}
 void renameLocal(JsonObject& record,LocalFile const& local) {
     if(record.GetNamedString(L"Path")==rootRelative(local.path))return;
     auto entry=record.GetNamedObject(L"Entry");
@@ -216,7 +250,7 @@ void localChanges() {
                 entry.Insert(L"Kind",number(local.directory ? 1 : 0));
 
             }
-            record.Insert(L"Entry",entry); observe(record,local);
+            record.Insert(L"Entry",entry); observe(record,local); currentPins(record);
             if (local.directory && item(entry)==0) {
                 JsonObject args;args.Insert(L"Parent",number(item(entryAt(local.path.parent_path()))));args.Insert(L"Name",text(local.path.filename().wstring()));args.Insert(L"Directory",JsonValue::CreateBooleanValue(true));args.Insert(L"ID",text(operationID()));args.Insert(L"ClientID",text(clientID));record.Insert(L"Create",args);
             } else if (!local.directory && item(entry)==0) record.Insert(L"Capture",capture(local,entry));
@@ -255,6 +289,11 @@ void localChanges() {
             }
         }
         record.Insert(L"Pinned",JsonValue::CreateBooleanValue(pinned));
+        if(legacyPins(record)) {
+            if(local.sync!=CF_IN_SYNC_STATE_IN_SYNC)continue; // Switched once it is in sync.
+            if(local.pin==CF_PIN_STATE_UNPINNED){auto file=attributes(local.path);check_hresult(CfSetPinState(file.get(),CF_PIN_STATE_UNSPECIFIED,CF_SET_PIN_FLAG_NONE,nullptr));}
+            currentPins(record);checkpointDirty=true;
+        } else if(local.pin==CF_PIN_STATE_UNPINNED) freeUp(record,local.path,local.directory);
     }
     // Children first, so directory deletion never hides outstanding file edits.
     for (size_t n=records.size();n>0;--n) {
@@ -282,7 +321,7 @@ void projected(fs::path const& path,JsonObject const& entry) {
         if(record.GetNamedBoolean(L"AwaitingSync",false))return;
         record.Insert(L"Entry",entry); observe(record,local); record.Insert(L"Pinned",JsonValue::CreateBooleanValue(entry.GetNamedBoolean(L"Keep",false))); checkpointDirty=true; return;
     }
-    JsonObject record; record.Insert(L"Entry",entry); observe(record,local); record.Insert(L"Pinned",JsonValue::CreateBooleanValue(entry.GetNamedBoolean(L"Keep",false))); records.push_back(record);itemIndex[item(entry)]=records.size()-1;checkpointDirty=true;
+    JsonObject record; record.Insert(L"Entry",entry); observe(record,local); currentPins(record); record.Insert(L"Pinned",JsonValue::CreateBooleanValue(entry.GetNamedBoolean(L"Keep",false))); records.push_back(record);itemIndex[item(entry)]=records.size()-1;checkpointDirty=true;
 }
 bool moveRemote(JsonObject const& entry,fs::path const& path) {
     remoteItems.insert(item(entry));
@@ -339,7 +378,7 @@ void recoverParents(std::vector<LocalFile> const& observed) {
         if(found==records.end()){
             auto parent=item(entryAt(current.path.parent_path()));
             if(!parent)throw hresult_error(E_INVALIDARG,L"Use Synctrain to select a gateway folder. Local files at the Explorer root have been preserved.");
-            JsonObject record,entry;entry.Insert(L"Kind",number(1));entry.Insert(L"ClientID",text(clientID));record.Insert(L"Entry",entry);observe(record,current);
+            JsonObject record,entry;entry.Insert(L"Kind",number(1));entry.Insert(L"ClientID",text(clientID));record.Insert(L"Entry",entry);observe(record,current);currentPins(record);
             JsonObject args;args.Insert(L"Parent",number(parent));args.Insert(L"Name",text(current.path.filename().wstring()));args.Insert(L"Directory",JsonValue::CreateBooleanValue(true));args.Insert(L"ID",text(operationID()));args.Insert(L"ClientID",text(clientID));record.Insert(L"Create",args);
             records.push_back(record);found=std::prev(records.end());saveCheckpoint();
         }

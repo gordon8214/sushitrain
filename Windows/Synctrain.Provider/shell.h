@@ -60,16 +60,27 @@ struct __declspec(uuid("36F7C1C1-6702-4E7E-9FF8-0497045529CF")) PreviousVersions
         }catch(...){return to_hresult();}
     }
 };
+// The icon of a custom state. Explorer stops (in windows.storage.dll) on a state without one.
+std::wstring const& stateIcon() {
+    static std::wstring const icon=[] {
+        wchar_t module[32768]{};check_bool(GetModuleFileNameW(nullptr,module,32768)!=0);
+        return (fs::path(module).parent_path()/L"Synctrain.App.exe").wstring()+L",0";
+    }();
+    return icon;
+}
 struct __declspec(uuid("36F7C1C1-6702-4E7E-9FF8-0497045529D0")) CloudState : implements<CloudState,IStorageProviderItemPropertySource>,ShellLifetime {
+    // Only what Explorer's own status doesn't show: it already shows online-only, available, kept and in-sync
     Windows::Foundation::Collections::IIterable<StorageProviderItemProperty> GetItemProperties(hstring const& path) {
         std::vector<StorageProviderItemProperty> properties;
         try {
             com_ptr<IShellItem> item;check_hresult(SHCreateItemFromParsingName(path.c_str(),nullptr,IID_PPV_ARGS(item.put())));
             auto identity=shellIdentity(item.get());auto state=std::wstring(request(L"files.state",itemArguments(identity)).result.GetString());
-            std::wstring label=state==L"pending"?L"Uploading changes":state==L"local-only"?L"Local only":state==L"failed" || state==L"blocked"?L"Needs attention":state==L"remote"?L"Available online":state==L"partial"?L"Downloading":state==L"kept"?L"Kept on this device":L"Synchronized";
+            std::wstring label=state==L"pending"?L"Uploading changes":state==L"local-only"?L"Local only":state==L"failed" || state==L"blocked"?L"Needs attention":L"";
             if(!identity.GetNamedBoolean(L"NativeInSync",true) && (state==L"remote" || state==L"partial" || state==L"local" || state==L"kept"))label=L"Local changes pending";
-            StorageProviderItemProperty property;property.Id(1);property.Value(label);properties.push_back(property);
-        }catch(...){StorageProviderItemProperty property;property.Id(1);property.Value(L"Synctrain is unavailable");properties.push_back(property);}
+            if(!label.empty()){StorageProviderItemProperty property;property.Id(1);property.Value(label);property.IconResource(stateIcon());properties.push_back(property);}
+        }catch(...){
+            // Not one of this provider's items (the root itself), or Synctrain isn't running: no custom state
+        }
         return single_threaded_vector(std::move(properties));
     }
 };
