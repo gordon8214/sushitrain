@@ -11,6 +11,8 @@
 #include <QJsonDocument>
 #include <QLocale>
 #include <QMenu>
+#include <QQmlEngine>
+#include <QScopedValueRollback>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUuid>
@@ -24,14 +26,17 @@ Backend::Backend(QObject *parent) : QObject(parent), client(this) {
   catalog = QJsonDocument::fromJson(catalogFile.readAll()).object();
   if (catalog["version"].toInt() != 1) qFatal("Invalid desktop UI catalog");
   reads = new QObject(this);
+  QQmlEngine::setObjectOwnership(&model, QQmlEngine::CppOwnership);
+  connect(this, &Backend::changed, &model, [this] { model.sync(m_rows); });
+  liveTimer.setObjectName("liveTimer");
+  statusTimer.setObjectName("fileStatusTimer");
+  connect(&liveTimer, &QTimer::timeout, this, &Backend::liveRefresh);
+  connect(&statusTimer, &QTimer::timeout, this, &Backend::pollFileStatus);
   auto *timer = new QTimer(this);
   timer->setInterval(2000);
   connect(timer, &QTimer::timeout, this, [this] {
     if (!searchQuery.trimmed().isEmpty() && !m_busy)
       loadSettingsIndex();
-    if (m_page == "Overview" && m_title == "Overview" && activeReads == 0 &&
-        !m_busy && m_dialog.isEmpty())
-      refresh();
   });
   timer->start();
   QTimer::singleShot(0, this, &Backend::inspect);
@@ -39,6 +44,7 @@ Backend::Backend(QObject *parent) : QObject(parent), client(this) {
 void Backend::fail(const QString &error) {
   if (!error.isEmpty()) {
     m_error = error;
+    readFailure = false;
     emit changed();
   }
 }
@@ -56,19 +62,32 @@ void Backend::command(const QString &label, std::function<void()> fn) {
 }
 void Backend::row(
     const QString &title, const QString &subtitle,
-    const QList<std::pair<QString, std::function<void()>>> &buttons, const QString &section, std::optional<double> progress) {
+    const QList<std::pair<QString, std::function<void()>>> &buttons, const QString &section, const RowDetail &detail) {
   QVariantList list;
   for (const auto &[name, fn] : buttons)
     action(name, fn, &list);
-  QVariantMap model{{"title", title}, {"subtitle", subtitle}, {"actions", list}, {"section", section}};
-  if (progress) model["progress"] = qBound(0.0, *progress, 1.0);
-  m_rows.append(model);
-  if (m_page == "Overview") {
-    QJsonArray order;
-    for (auto entry : catalog["destinations"].toArray()) if (entry.toObject()["id"] == "overview") order = entry.toObject()["sections"].toArray();
-    auto rank = [order](const QVariant &value) -> int { auto key = value.toMap()["section"].toString(); for (int i=0;i<order.size();++i) if(order[i].toString()==key)return i; return order.size(); };
-    std::stable_sort(m_rows.begin(),m_rows.end(),[rank](const QVariant &a,const QVariant &b){return rank(a)<rank(b);});
-  }
+  // Progress belongs to the row it is created with, never to another row
+  // with the same title.
+  QVariantMap entry{{"title", title}, {"subtitle", subtitle}, {"actions", list}, {"section", section}};
+  if (detail.progress) entry["progress"] = qBound(0.0, *detail.progress, 1.0);
+  if (!detail.id.isEmpty()) entry["id"] = detail.id;
+  if (!detail.error.isEmpty()) entry["error"] = detail.error;
+  if (detail.order) entry["order"] = detail.order;
+  if (detail.heading) entry["heading"] = true;
+  // Overview orders sections as the catalog does. Within a section, rows
+  // from separate requests keep their order however the replies arrive, so
+  // a page that refreshes itself doesn't shuffle.
+  QJsonArray order;
+  if (m_page == "Overview")
+    for (auto destination : catalog["destinations"].toArray()) if (destination.toObject()["id"] == "overview") order = destination.toObject()["sections"].toArray();
+  auto rank = [order](const QVariantMap &value) {
+    int section = order.size();
+    for (int i = 0; i < order.size(); ++i) if (order[i].toString() == value["section"].toString()) section = i;
+    return std::pair(section, value["order"].toInt());
+  };
+  const auto position = std::upper_bound(m_rows.begin(), m_rows.end(), rank(entry),
+      [rank](const auto &key, const QVariant &value) { return key < rank(value.toMap()); });
+  m_rows.insert(position, entry);
   emit changed();
 }
 void Backend::toggleRow(const QString &title, const QString &subtitle, bool checked,
@@ -81,6 +100,10 @@ void Backend::toggleRow(const QString &title, const QString &subtitle, bool chec
   emit changed();
 }
 void Backend::clear(const QString &title) {
+  // A live refresh only adds rows; it never changes the page.
+  Q_ASSERT(!liveBuilding);
+  stopLive();
+  readFailure = false;
   delete reads;
   activeReads = 0;
   moreKey.clear();
@@ -94,8 +117,14 @@ void Backend::clear(const QString &title) {
 }
 void Backend::call(const QString &method, const QJsonObject &p, Reply reply,
                    bool mutation, int timeout) {
+  if (liveBuilding && !mutation) {
+    liveCall(method, p, std::move(reply), timeout);
+    return;
+  }
   if (mutation && m_busy)
     return;
+  // Reads of the page being built, and the reads their replies make
+  const bool pageRead = !mutation && buildingPage;
   if (!mutation)
     ++activeReads;
   if (mutation) {
@@ -111,7 +140,7 @@ void Backend::call(const QString &method, const QJsonObject &p, Reply reply,
   }
   client.call(
       m_socket, method, p, mutation ? mutationOwner : reads,
-      [this, reply, mutation, method](QJsonValue value, QString error) {
+      [this, reply, mutation, method, pageRead](QJsonValue value, QString error) {
         if (!mutation)
           activeReads = qMax(0, activeReads - 1);
         if (mutation) {
@@ -124,6 +153,8 @@ void Backend::call(const QString &method, const QJsonObject &p, Reply reply,
         }
         if (!error.isEmpty()) {
           fail(error);
+          // A page that refreshes itself takes this down once it reads again
+          readFailure = pageRead;
           if (method == "settings.save" || method == "mcp.preferences.save")
             emit settingsSaveFailed();
           if (mutation)
@@ -146,7 +177,10 @@ void Backend::call(const QString &method, const QJsonObject &p, Reply reply,
                  method == "files.restoreDownloaded")
           KNotification::event(KNotification::Notification, "Synctrain",
                                "The previous version was restored.");
-        reply(value, {});
+        {
+          const QScopedValueRollback building(buildingPage, pageRead);
+          reply(value, {});
+        }
         if (mutation)
           drainArguments();
       },
@@ -251,6 +285,7 @@ void Backend::closeEditor() {
 void Backend::form(const QString &title, const QJsonArray &fields,
                    std::function<void(QJsonObject)> done,
                    const QString &accept) {
+  Q_ASSERT(!liveBuilding);
   if (!m_dialog.isEmpty()) {
     fail("Finish the open dialog first.");
     return;
@@ -390,13 +425,25 @@ void Backend::refresh() {
         {{"Set Up Files", [this] { changeMode("files"); }}});
     return;
   }
-  if (m_page == "Overview")
+  {
+    // Failures of the page's own reads go once a live refresh succeeds.
+    const QScopedValueRollback building(buildingPage, true);
+    buildPage();
+  }
+  loadShortcuts();
+  loadSettingsIndex();
+}
+void Backend::buildPage() {
+  if (m_page == "Overview") {
     overview();
-  else if (m_page == "Folders") {
+    live([this] { overview(); }, m_mode == "files" ? 2000 : 1000);
+  } else if (m_page == "Folders") {
     if (m_mode == "files")
       filesService();
-    else
+    else {
       folders();
+      live([this] { folders(); }, 1000);
+    }
   } else if (m_page == "Devices") {
     if (m_mode == "files")
       row("Devices are managed by each gateway", "Switch to Synchronize mode to manage local synchronization devices.");
@@ -413,10 +460,10 @@ void Backend::refresh() {
       remote();
   } else if (m_page == "History")
     historyPage();
-  else if (m_page == "Activity")
+  else if (m_page == "Activity") {
     activityPage();
-  loadShortcuts();
-  loadSettingsIndex();
+    live([this] { activityPage(); }, m_mode == "files" ? 2000 : 1000);
+  }
 }
 void Backend::overview() {
   if (m_mode == "files") {
@@ -450,12 +497,15 @@ void Backend::overview() {
         row("Restart Required", "Saved settings require an engine restart.",
             {{"Restart", [this] { engineAction("restart"); }}}, "attention");
     });
+    overviewTransfers();
     call("engine.folders", {}, [this](QJsonValue v, QString) {
       for (auto f : v.toArray()) {
         auto o = f.toObject();
-        row(str(o, "Label"), str(o, "State") + " · " + str(o, "Error"),
+        const auto sync = folderSync(o);
+        row(str(o, "Label"), sync ? sync->first : joined({str(o, "State"), str(o, "Error")}),
             {{"Open in File Manager", [this,o] { openDefault(str(o,"Path"),{}); }},
-             {"Browse in Synctrain", [this, o] { openFiles(str(o, "ID")); }}}, "summary");
+             {"Browse in Synctrain", [this, o] { openFiles(str(o, "ID")); }}}, "summary",
+            {.progress = sync ? std::optional(sync->second) : std::nullopt, .id = "folder:" + str(o, "ID"), .order = 1});
       }
     });
     call("engine.stats", {}, [this](QJsonValue v, QString) {
@@ -469,20 +519,11 @@ void Backend::overview() {
                   totals["Local"].toObject()["Bytes"].toInteger()) + " · " +
               locale.toString(totals["LocalNeed"].toObject()["Files"].toInteger()) +
               " files remaining", {}, "storage");
-      for (const auto &name : QStringList{"Download", "Upload"}) {
-        auto progress = stats[name.toLower()].toObject();
-        row(name, progress.isEmpty()
-                      ? QString("Idle")
-                      : locale.formattedDataSize(progress["BytesDone"].toInteger()) +
-                            " of " + locale.formattedDataSize(
-                                         progress["BytesTotal"].toInteger()), {}, "summary", progress["Percentage"].toDouble());
-      }
-      emit changed();
     });
     call("policy.get", {}, [this](QJsonValue v, QString) {
       const auto reason = v.toObject()["Reason"].toString();
       if (!reason.isEmpty())
-        row("Automatic Pause", reason, {}, "attention");
+        row("Automatic Pause", reason, {}, "attention", {.order = 1});
     });
     command("Pause All", [this] { engineAction("pauseAll"); });
     command("Resume All", [this] { engineAction("resumeAll"); });
@@ -622,9 +663,15 @@ void Backend::setupTray() {
           [this](bool, const QPoint &) { emit present(); });
 }
 
+// Outside the page's reads: a page that refreshes itself updates the sidebar
+// too, and a failure here leaves the last folders in place.
 void Backend::loadShortcuts() {
   const auto files = m_mode == "files";
-  call(files ? "files.children" : "engine.folders", {{"Parent", 0}}, [this, files](QJsonValue v, QString error) {
+  const auto serial = ++shortcutsSerial;
+  shortcutsPending = true;
+  client.call(m_socket, files ? "files.children" : "engine.folders", {{"Parent", 0}}, this, [this, files, serial](QJsonValue v, QString error) {
+    if (serial != shortcutsSerial) return;
+    shortcutsPending = false;
     if (!error.isEmpty()) return;
     auto entries = v.toArray();
     QVariantList next;
@@ -637,7 +684,7 @@ void Backend::loadShortcuts() {
     }
     std::stable_sort(next.begin(), next.end(), [](auto a, auto b) { const auto first=a.toMap(),second=b.toMap();const auto x=first["title"].toString().toLower(),y=second["title"].toString().toLower(); return x==y?first["route"].toString()<second["route"].toString():x<y; });
     if (next != folderShortcuts) { folderShortcuts = next; emit navigationChanged(); }
-  });
+  }, 5000);
 }
 
 void Backend::keepEditing() {

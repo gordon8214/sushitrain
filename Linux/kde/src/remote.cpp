@@ -99,7 +99,7 @@ void Backend::pending() {
   }
   call("pending.list", {}, [this](QJsonValue v, QString) {
     if (v.toArray().isEmpty())
-      row("No pending changes", "All edits have reached their gateways.");
+      row("No pending changes", "All edits have reached their gateways.", {}, {}, {.order = 1});
     for (auto e : v.toArray()) {
       auto p = e.toObject();
       row(str(p, "path"), str(p, "state") + " · " + str(p, "error"),
@@ -120,7 +120,7 @@ void Backend::pending() {
                             "pending.discard", {{"ID", p["id"]}},
                             [this](auto, auto) { refresh(); }, true);
                       });
-            }}});
+            }}}, {}, {.order = 1});
     }
   });
 }

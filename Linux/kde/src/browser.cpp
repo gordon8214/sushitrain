@@ -291,9 +291,7 @@ void Backend::browse(int offset, bool append, const QString &search) {
              }});
       }
       if (!directory && !buttons.isEmpty()) buttons.append({"Preview",buttons.first().second});
-      buttons.append({"Information",[this,e,name] {
-        form("Information", {field("notice",name + "\n" + str(e,"Path") + "\n" + display(e["Size"]) + " bytes",{},"notice")}, [this](auto) { cancelDialog(); }, "Done");
-      }});
+      buttons.append({"Information",[this,e,name] { fileInformation(e, name); }});
       const auto descriptors = catalog["detailDescriptors"].toObject()["fileActions"].toArray();
       auto rank = [descriptors](const QString &label) -> int {
         QString id="information";

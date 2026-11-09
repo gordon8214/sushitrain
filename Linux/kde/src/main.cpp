@@ -123,8 +123,9 @@ int main(int argc, char **argv) {
     app.setQuitOnLastWindowClosed(false);
   KDBusService service(KDBusService::Unique);
   QQuickStyle::setStyle("org.kde.desktop");
-  QQmlApplicationEngine engine;
+  // The window goes before the backend whose rows it shows.
   Backend backend;
+  QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("backend", &backend);
   engine.addImageProvider("qr", new QRProvider);
   engine.loadFromModule("com.gordonbyrnes.synctrain", "Main");

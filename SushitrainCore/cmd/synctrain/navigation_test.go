@@ -385,6 +385,8 @@ func TestNavigation(t *testing.T) {
 	if unresolved.socket != socket || len(unresolved.settingsSearchIndex) != 1 {
 		t.Fatal("first resolved search snapshot was discarded")
 	}
+	testProgressLists(t)
+	testLiveProgress(t, d, server)
 }
 
 func waitNavigationUI(t *testing.T, ready func() bool) {

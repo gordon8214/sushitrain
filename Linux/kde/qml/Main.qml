@@ -99,6 +99,8 @@ Kirigami.ApplicationWindow {
   }
  }
  Component.onCompleted: updateNavigation()
+ // Live pages stop asking while the window is hidden or minimized.
+ Binding { target: backend; property: "shown"; value: root.visible && root.visibility !== Window.Minimized }
  Component {
   id: navigationAction
   Kirigami.Action {
@@ -134,62 +136,87 @@ Kirigami.ApplicationWindow {
    QQC2.ProgressBar { Layout.fillWidth: true; visible: backend.busy; indeterminate: true; Accessible.name: "Operation in progress" }
    Loader { Layout.fillWidth: true; active: editor.isPage; sourceComponent: editorBody }
    Flow {
+    id: commandBar
     visible: !editor.isPage
     Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
-    Repeater { model: backend.commands.filter(command => command.label !== "Back"); QQC2.Button { required property var modelData; text: modelData.label; enabled: !backend.busy; onClicked: backend.activate(modelData.key) } }
+    // Made again only when the commands change, so a refreshing page keeps their focus and presses.
+    readonly property string commandsJson: JSON.stringify(backend.commands.filter(command => command.label !== "Back"))
+    Repeater { model: JSON.parse(commandBar.commandsJson); QQC2.Button { required property var modelData; text: modelData.label; enabled: !backend.busy; onClicked: backend.activate(modelData.key) } }
    }
    GridLayout {
+    id: rowGrid
     visible: !editor.isPage
     Layout.fillWidth: true
     columns: backend.grid ? Math.max(1, Math.floor(width / 320)) : 1
     Repeater {
-     model: backend.rows
-     QQC2.Frame {
-      required property var modelData
-      padding: modelData.navigationKey ? 0 : Kirigami.Units.largeSpacing
+     // Rows that a live page refreshes are changed in place, keeping their delegates.
+     model: backend.rowModel
+     ColumnLayout {
+      id: rowItem
+      required property var row
+      readonly property var modelData: row
+      // Buttons are made again only when the actions change, so a refreshing row keeps focus and open menus.
+      readonly property string actionsJson: JSON.stringify(row.actions || [])
+      readonly property var rowActions: JSON.parse(actionsJson)
+      objectName: "row:" + (row.id || row.title)
+      spacing: 0
       Layout.fillWidth: true; Layout.alignment: Qt.AlignTop
-      ColumnLayout {
-       width: parent.width
-       Image { visible: !!modelData.thumbnail; source: modelData.thumbnail || ""; Layout.preferredWidth: 96; Layout.preferredHeight: visible ? 72 : 0; fillMode: Image.PreserveAspectFit; asynchronous: true; Accessible.ignored: true }
-       QQC2.ItemDelegate {
-        Layout.fillWidth: true; visible: !!modelData.navigationKey
-        text: modelData.title
-        enabled: !backend.busy
-        onClicked: backend.activate(modelData.navigationKey)
-        contentItem: RowLayout {
-         QQC2.Label { text: modelData.title; Layout.fillWidth: true; wrapMode: Text.Wrap }
-         Kirigami.Icon { source: "go-next"; Layout.preferredWidth: Kirigami.Units.iconSizes.small; Layout.preferredHeight: width; Accessible.ignored: true }
+      // A section heading takes a line of its own in a grid.
+      Layout.columnSpan: row.heading === true ? rowGrid.columns : 1
+      Kirigami.Heading {
+       visible: rowItem.row.heading === true
+       Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing
+       level: 3; type: Kirigami.Heading.Type.Primary
+       text: rowItem.row.title; wrapMode: Text.Wrap; textFormat: Text.PlainText
+      }
+      QQC2.Frame {
+       visible: rowItem.row.heading !== true
+       padding: modelData.navigationKey ? 0 : Kirigami.Units.largeSpacing
+       Layout.fillWidth: true
+       ColumnLayout {
+        width: parent.width
+        Image { visible: !!modelData.thumbnail; source: modelData.thumbnail || ""; Layout.preferredWidth: 96; Layout.preferredHeight: visible ? 72 : 0; fillMode: Image.PreserveAspectFit; asynchronous: true; Accessible.ignored: true }
+        QQC2.ItemDelegate {
+         Layout.fillWidth: true; visible: !!modelData.navigationKey
+         text: modelData.title
+         enabled: !backend.busy
+         onClicked: backend.activate(modelData.navigationKey)
+         contentItem: RowLayout {
+          QQC2.Label { text: modelData.title; Layout.fillWidth: true; wrapMode: Text.Wrap }
+          Kirigami.Icon { source: "go-next"; Layout.preferredWidth: Kirigami.Units.iconSizes.small; Layout.preferredHeight: width; Accessible.ignored: true }
+         }
         }
-       }
-       Kirigami.Heading { visible: !modelData.navigationKey; Layout.fillWidth: true; level: 3; text: modelData.title; wrapMode: Text.Wrap; textFormat: Text.PlainText }
-       QQC2.Label { visible: !modelData.navigationKey; Layout.fillWidth: true; text: modelData.subtitle; wrapMode: Text.Wrap; textFormat: Text.PlainText }
-       Image { visible: !!modelData.qr; source: visible ? "image://qr/" + encodeURIComponent(modelData.qr) : ""; Layout.preferredWidth: 300; Layout.preferredHeight: visible ? 300 : 0; Accessible.name: "Pairing QR code" }
-       QQC2.ProgressBar { Layout.fillWidth: true; visible: modelData.progress !== undefined; value: modelData.progress || 0; Accessible.name: modelData.title }
-       QQC2.Switch {
-        objectName: "immediatePreferenceToggle"
-        visible: !!modelData.toggleKey
-        text: modelData.title
-        checked: modelData.checked === true
-        enabled: !backend.busy
-        onToggled: {
-         if (checked === modelData.checked) return
-         const action = modelData.toggleKey
-         checked = Qt.binding(() => modelData.checked === true)
-         backend.activate(action)
+        Kirigami.Heading { visible: !modelData.navigationKey; Layout.fillWidth: true; level: 3; text: modelData.title; wrapMode: Text.Wrap; textFormat: Text.PlainText }
+        QQC2.Label { visible: !modelData.navigationKey; Layout.fillWidth: true; text: modelData.subtitle; wrapMode: Text.Wrap; textFormat: Text.PlainText }
+        Image { visible: !!modelData.qr; source: visible ? "image://qr/" + encodeURIComponent(modelData.qr) : ""; Layout.preferredWidth: 300; Layout.preferredHeight: visible ? 300 : 0; Accessible.name: "Pairing QR code" }
+        QQC2.Label { visible: !modelData.navigationKey && !!modelData.error; Layout.fillWidth: true; text: modelData.error || ""; color: Kirigami.Theme.negativeTextColor; wrapMode: Text.Wrap; textFormat: Text.PlainText }
+        QQC2.ProgressBar { objectName: "rowProgress"; Layout.fillWidth: true; visible: modelData.progress !== undefined; from: 0; to: 1; value: modelData.progress || 0; Accessible.name: modelData.title; Accessible.description: modelData.subtitle }
+        QQC2.Switch {
+         objectName: "immediatePreferenceToggle"
+         visible: !!modelData.toggleKey
+         text: modelData.title
+         checked: modelData.checked === true
+         enabled: !backend.busy
+         onToggled: {
+          if (checked === modelData.checked) return
+          const action = modelData.toggleKey
+          checked = Qt.binding(() => modelData.checked === true)
+          backend.activate(action)
+         }
+         Accessible.name: modelData.title
         }
-        Accessible.name: modelData.title
-       }
-       RowLayout {
-        visible: !modelData.navigationKey
-        Layout.fillWidth: true
-        Repeater { model: modelData.actions.slice(0, 2); QQC2.Button { required property var modelData; text: modelData.label; enabled: !backend.busy; onClicked: backend.activate(modelData.key) } }
-        QQC2.ToolButton {
-         visible: modelData.actions.length > 2
-         text: "More"; icon.name: "overflow-menu"
-         onClicked: overflow.open()
-         QQC2.Menu {
-          id: overflow
-          Repeater { model: modelData.actions.slice(2); QQC2.MenuItem { required property var modelData; text: modelData.label; enabled: !backend.busy; onTriggered: backend.activate(modelData.key) } }
+        RowLayout {
+         visible: !modelData.navigationKey
+         Layout.fillWidth: true
+         Repeater { model: rowItem.rowActions.slice(0, 2); QQC2.Button { required property var modelData; text: modelData.label; enabled: !backend.busy; onClicked: backend.activate(modelData.key) } }
+         QQC2.ToolButton {
+          visible: rowItem.rowActions.length > 2
+          text: "More"; icon.name: "overflow-menu"
+          onClicked: overflow.open()
+          QQC2.Menu {
+           id: overflow
+           Repeater { model: rowItem.rowActions.slice(2); QQC2.MenuItem { required property var modelData; text: modelData.label; enabled: !backend.busy; onTriggered: backend.activate(modelData.key) } }
+          }
          }
         }
        }
@@ -228,7 +255,7 @@ Kirigami.ApplicationWindow {
  Component {
   id: editorBody
   SettingsEditorContent {
-   fields: editor.fields; busy: backend.busy; expanded: editor.advancedExpanded
+   fields: editor.fields; busy: backend.busy; expanded: editor.advancedExpanded; status: backend.dialogStatus
    targetAnchor: backend.settingsAnchor; targetField: backend.settingsField
    onRevealRequested: item => Qt.callLater(() => {
     if (editor.isPage && mainPage.flickable) {
@@ -271,7 +298,7 @@ Kirigami.ApplicationWindow {
     editor.parentOffset = mainPage.flickable.contentY
     editor.advancedExpanded = false
     editor.draft = {}; editor.fields = backend.dialog.fields
-    for (let f of editor.fields) if (f.Kind !== "notice") editor.draft[f.Path] = f.IsSecret ? "" : f.Value
+    for (let f of editor.fields) if (f.Kind !== "notice" && f.Kind !== "status") editor.draft[f.Path] = f.IsSecret ? "" : f.Value
     if (editor.isPage) Qt.callLater(() => mainPage.flickable.contentY = 0)
     else editor.open()
    }

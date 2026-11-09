@@ -38,6 +38,11 @@ type filesView struct {
 	showing bool
 	mount   string
 	busy    bool
+	// Downloads, live while the Changes page is in view
+	transfersGroup   *adw.PreferencesGroup
+	transfers        *progressRows
+	transfersProblem *gtk.Label
+	stack            *adw.ViewStack
 }
 
 // filesState is what the view shows, fetched from the daemon
@@ -45,6 +50,10 @@ type filesState struct {
 	status  files.Status
 	edits   []files.Edit
 	storage files.Storage
+	// Fetched only while the Changes page is in view
+	transfers       []files.TransferProgress
+	transfersErr    error
+	transfersLoaded bool
 }
 
 func newFilesView(w *mainWindow) (gtk.Widgetter, func()) { return newFilesPage(w, "") }
@@ -85,7 +94,23 @@ func newFilesPage(w *mainWindow, selected string) (gtk.Widgetter, func()) {
 	// Changes
 	v.edits = newListGroup("Changes", "Changes made here that aren't on their gateway yet. Those it can't take "+
 		"wait here: export a copy, or discard them to show the gateway's version again.")
-	stack.AddTitledWithIcon(page(v.edits.group), "changes", "Changes", "document-send-symbolic")
+	// Transfers come first, as on the Mac. Uploads are the changes below.
+	transfers := adw.NewPreferencesGroup()
+	transfers.SetTitle("Transfers")
+	// Shown once the daemon has said what they are, and never by a daemon older than the window that can't
+	transfers.SetVisible(false)
+	v.transfersGroup = transfers
+	v.transfers = newProgressRows("No recent transfers")
+	transfers.Add(v.transfers.list)
+	v.transfersProblem = gtk.NewLabel("")
+	v.transfersProblem.SetXAlign(0)
+	v.transfersProblem.SetWrap(true)
+	v.transfersProblem.AddCSSClass("error")
+	v.transfersProblem.SetVisible(false)
+	transfers.Add(v.transfersProblem)
+	changes := page(transfers)
+	changes.Add(v.edits.group)
+	stack.AddTitledWithIcon(changes, "changes", "Changes", "document-send-symbolic")
 
 	// Storage
 	storage := adw.NewPreferencesGroup()
@@ -135,6 +160,7 @@ func newFilesPage(w *mainWindow, selected string) (gtk.Widgetter, func()) {
 	if selected != "" {
 		stack.SetVisibleChildName(selected)
 	}
+	v.stack = stack
 	toolbar.SetContent(stack)
 
 	v.refresh()
@@ -165,6 +191,7 @@ func (v *filesView) refresh() {
 		return
 	}
 	v.busy = true
+	withTransfers := v.stack.VisibleChildName() == "changes"
 	background(func() (filesState, error) {
 		var st filesState
 		socket := filesSocket()
@@ -174,7 +201,15 @@ func (v *filesView) refresh() {
 		if err := callBounded(socket, "pending.list", nil, &st.edits); err != nil {
 			return st, err
 		}
-		return st, callBounded(socket, "storage", nil, &st.storage)
+		if err := callBounded(socket, "storage", nil, &st.storage); err != nil {
+			return st, err
+		}
+		if withTransfers {
+			// Not mcp.files.transfers, which brings bookmarks and places up to date at each call
+			st.transfersErr = callBounded(socket, "transfers", nil, &st.transfers)
+			st.transfersLoaded = true
+		}
+		return st, nil
 	}, func(st filesState, err error) {
 		v.busy = false
 		v.banner.SetRevealed(err != nil)
@@ -271,6 +306,15 @@ func (v *filesView) show(st filesState) {
 	}
 	v.used.SetSubtitle(humanBytes(st.storage.Used) + " of " + humanBytes(st.storage.Budget))
 	v.kept.SetSubtitle(humanBytes(st.storage.Kept))
+	if st.transfersLoaded {
+		v.transfersGroup.SetVisible(!unknownMethod(st.transfersErr))
+		v.transfersProblem.SetVisible(st.transfersErr != nil)
+		if st.transfersErr != nil {
+			v.transfersProblem.SetText(sentence(st.transfersErr))
+		} else {
+			v.transfers.set(filesTransferItems(st.transfers))
+		}
+	}
 }
 
 func plural(n int, one, many string) string {

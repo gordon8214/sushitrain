@@ -2,6 +2,7 @@
 #include "../src/backend.h"
 #include "../src/modelutil.h"
 #include "../src/previewwindow.h"
+#include <QAbstractItemModelTester>
 #include <QApplication>
 #include <QDesktopServices>
 #include <QDir>
@@ -97,6 +98,33 @@ static QString rowAction(Backend &backend, const QString &title,
       return key(row["actions"].toList(), label);
   }
   return {};
+}
+static QVariantMap rowWithId(Backend &backend, const QString &id) {
+  for (const auto &value : backend.rows())
+    if (value.toMap()["id"].toString() == id)
+      return value.toMap();
+  return {};
+}
+static qsizetype rowIndex(Backend &backend, const QString &id) {
+  const auto rows = backend.rows();
+  for (qsizetype i = 0; i < rows.size(); ++i)
+    if (rows[i].toMap()["id"].toString() == id)
+      return i;
+  return -1;
+}
+static QStringList titles(Backend &backend) {
+  QStringList out;
+  for (const auto &value : backend.rows())
+    out << value.toMap()["title"].toString();
+  return out;
+}
+static QQuickItem *visibleText(QQuickItem *item, const QString &text) {
+  if (item->isVisible() && item->property("text").toString() == text)
+    return item;
+  for (auto *child : item->childItems())
+    if (auto *found = visibleText(child, text))
+      return found;
+  return nullptr;
 }
 static QQuickItem *visualItem(QQuickItem *root, const QString &name) {
   if (root->objectName() == name)
@@ -911,12 +939,16 @@ private slots:
 
   void overviewProgressBelongsToTransferRows() {
     Fixture fixture;
-    fixture.delay=[](QString method,auto) { return method=="engine.stats"?40:0; };
+    // The transfers arrive last, with titles that a device and a folder have too.
+    fixture.delay=[](QString method,auto) { return method=="engine.transfers"?40:0; };
     fixture.handler=[](QString method,auto) {
-      if(method=="engine.status") return result(QJsonObject{{"name","Upload"}});
-      if(method=="engine.folders") return result(QJsonArray{QJsonObject{{"ID","folder"},{"Label","Download"}}});
-      if(method=="engine.stats") return result(QJsonObject{
-        {"download",QJsonObject{{"Percentage",0.25}}},{"upload",QJsonObject{{"Percentage",0.75}}}});
+      if(method=="engine.status") return result(QJsonObject{{"name","Receiving 1 file…"}});
+      if(method=="engine.devices") return result(QJsonArray{QJsonObject{{"ID","peer"},{"Name","Peer"},{"Connected",true}}});
+      if(method=="engine.folders") return result(QJsonArray{QJsonObject{{"ID","folder"},{"Label","Sending 1 file…"},{"State","idle"}}});
+      if(method=="engine.transfers") return result(QJsonObject{
+        {"Download",QJsonObject{{"FilesTotal",1},{"Percentage",0.25},{"BytesDone",25},{"BytesTotal",100},{"BytesPerSecond",0},{"SecondsRemaining",-1}}},
+        {"Upload",QJsonObject{{"FilesTotal",1},{"Percentage",0.75},{"BytesDone",75},{"BytesTotal",100},{"BytesPerSecond",10},{"SecondsRemaining",3}}},
+        {"Downloads",QJsonArray{}},{"Uploads",QJsonArray{}}});
       return result(QJsonObject{});
     };
     Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.title(),QString("Overview"),1000);
@@ -924,12 +956,443 @@ private slots:
     QTRY_COMPARE_WITH_TIMEOUT(progressRows(),2,1000);
     for(auto value:backend.rows()) {
       auto row=value.toMap();
-      if(!row["actions"].toList().isEmpty())QVERIFY(!row.contains("progress"));
       if(row.contains("progress")) {
-        QVERIFY(row["actions"].toList().isEmpty());
-        QCOMPARE(row["progress"].toDouble(),row["title"]=="Download"?0.25:0.75);
-      }
+        QVERIFY(row["id"].toString().startsWith("transfers:"));
+        QCOMPARE(row["progress"].toDouble(),row["id"]=="transfers:download"?0.25:0.75);
+      } else QVERIFY(!row["id"].toString().startsWith("transfers:"));
     }
+    const auto download=rowWithId(backend,"transfers:download"),upload=rowWithId(backend,"transfers:upload");
+    QCOMPARE(download["title"].toString(),QString("Receiving 1 file…"));
+    QCOMPARE(download["subtitle"].toString(),"25% · "+QLocale().formattedDataSize(25)+" of "+QLocale().formattedDataSize(100)+" · (Transfer speed unknown)");
+    QCOMPARE(upload["title"].toString(),QString("Sending 1 file…"));
+    QVERIFY(upload["subtitle"].toString().endsWith(transferSpeed(10)+" · 0:00:03 remaining"));
+    QVERIFY(!key(download["actions"].toList(),"View Downloads").isEmpty());
+    QVERIFY(!key(upload["actions"].toList(),"View Uploads").isEmpty());
+    QVERIFY(rowWithId(backend,"transfers:connection").isEmpty());
+    // Transfers come first in their section, whichever reply came first.
+    QVERIFY(rowIndex(backend,"transfers:upload")<rowIndex(backend,"folder:folder"));
+  }
+  void overviewShowsConnectionWhileIdle_data() {
+    QTest::addColumn<QJsonArray>("devices");
+    QTest::addColumn<QString>("title");
+    QTest::addColumn<QString>("subtitle");
+    QTest::newRow("connected") << QJsonArray{QJsonObject{{"ID","a"},{"Connected",true}},QJsonObject{{"ID","b"},{"Connected",false}}} << QString("Connected") << QString("1 of 2 devices connected");
+    QTest::newRow("disconnected") << QJsonArray{QJsonObject{{"ID","a"},{"Connected",false}}} << QString("Not connected") << QString("0 of 1 device connected");
+    QTest::newRow("alone") << QJsonArray{} << QString("Not connected") << QString("No other devices have been added.");
+  }
+  void overviewShowsConnectionWhileIdle() {
+    QFETCH(QJsonArray, devices);
+    QFETCH(QString, title);
+    QFETCH(QString, subtitle);
+    Fixture fixture;
+    fixture.handler=[devices](QString method,auto) {
+      if(method=="engine.devices") return result(devices);
+      if(method=="engine.transfers") return result(QJsonObject{{"Download",QJsonValue()},{"Upload",QJsonValue()},{"Downloads",QJsonArray{}},{"Uploads",QJsonArray{}}});
+      return result(QJsonObject{});
+    };
+    Backend backend;
+    QTRY_VERIFY_WITH_TIMEOUT(!rowWithId(backend,"transfers:connection").isEmpty(),1000);
+    const auto row=rowWithId(backend,"transfers:connection");
+    QCOMPARE(row["title"].toString(),title);
+    QCOMPARE(row["subtitle"].toString(),subtitle);
+    QVERIFY(!row.contains("progress"));
+  }
+  void transferListsGroupInSections() {
+    Fixture fixture;
+    bool idle=false;
+    fixture.handler=[&idle](QString method,auto) {
+      if(method!="engine.transfers") return result(QJsonObject{});
+      if(idle) return result(QJsonObject{{"Download",QJsonValue()},{"Upload",QJsonValue()},{"Downloads",QJsonArray{}},{"Uploads",QJsonArray{}}});
+      auto file=[](QString folder,QString label,QString path) { return QJsonObject{{"Folder",folder},{"FolderLabel",label},{"Path",path},{"BytesDone",1},{"BytesTotal",4},{"Percentage",0.25},{"BytesPerSecond",0}}; };
+      auto upload=file("docs","Docs","a.txt");upload["Device"]="DEVICE";upload["DeviceName"]="Laptop";upload["BytesPerSecond"]=2048;
+      return result(QJsonObject{
+        {"Download",QJsonObject{{"FilesTotal",3},{"Percentage",0.25},{"BytesDone",3},{"BytesTotal",12}}},
+        {"Upload",QJsonObject{{"FilesTotal",1},{"Percentage",0.25},{"BytesDone",1},{"BytesTotal",4}}},
+        {"Downloads",QJsonArray{file("docs","Docs","a.txt"),file("docs","Docs","sub/b.txt"),file("photos","","c.jpg")}},
+        {"Uploads",QJsonArray{upload}}});
+    };
+    Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),QString("synchronize"),1000);
+    backend.navigate("Activity");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"Transfers","View Downloads").isEmpty(),1000);
+    QCOMPARE(backend.rows().first().toMap()["title"].toString(),QString("Transfers"));
+    QCOMPARE(backend.rows().first().toMap()["subtitle"].toString(),"Receiving 3 files (25"+QLocale().percent()+") · Sending 1 file (25"+QLocale().percent()+")");
+    backend.activate(rowAction(backend,"Transfers","View Downloads"));
+    QCOMPARE(backend.title(),QString("Downloads"));
+    QVERIFY(!key(backend.commands(),"Back").isEmpty());
+    QTRY_COMPARE_WITH_TIMEOUT(titles(backend),(QStringList{"Docs","a.txt","sub/b.txt","photos","c.jpg"}),1000);
+    QVERIFY(backend.rows()[0].toMap()["heading"].toBool());
+    QVERIFY(backend.rows()[3].toMap()["heading"].toBool());
+    QVERIFY(!backend.rows()[1].toMap().contains("heading"));
+    QCOMPARE(backend.rows()[1].toMap()["progress"].toDouble(),0.25);
+    QCOMPARE(backend.rows()[1].toMap()["subtitle"].toString(),"25"+QLocale().percent()+" · "+QLocale().formattedDataSize(1)+" of "+QLocale().formattedDataSize(4));
+    backend.activate(key(backend.commands(),"Back"));
+    QCOMPARE(backend.title(),QString("Activity"));
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"Transfers","View Uploads").isEmpty(),1000);
+    backend.activate(rowAction(backend,"Transfers","View Uploads"));
+    QCOMPARE(backend.title(),QString("Uploads"));
+    QTRY_COMPARE_WITH_TIMEOUT(titles(backend),(QStringList{"Laptop","Docs: a.txt"}),1000);
+    QVERIFY(backend.rows()[1].toMap()["subtitle"].toString().endsWith(transferSpeed(2048)));
+    idle=true;
+    QTRY_COMPARE_WITH_TIMEOUT((backend.liveRefresh(),titles(backend)),QStringList{"Not uploading"},1000);
+    QCOMPARE(backend.rows().first().toMap()["subtitle"].toString(),QString("Currently no files are being sent to other devices."));
+    backend.activate(key(backend.commands(),"Back"));
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"Transfers","View Downloads").isEmpty(),1000);
+    QCOMPARE(backend.rows().first().toMap()["subtitle"].toString(),QString("No files are being received or sent."));
+    backend.activate(rowAction(backend,"Transfers","View Downloads"));
+    QTRY_COMPARE_WITH_TIMEOUT(titles(backend),QStringList{"Not downloading"},1000);
+    QCOMPARE(backend.rows().first().toMap()["subtitle"].toString(),QString("Currently no files are being downloaded from other devices."));
+  }
+  void liveRowsUpdateInPlace() {
+    Fixture fixture;
+    int polls=0;
+    fixture.handler=[&polls](QString method,auto) {
+      if(method=="engine.devices") return result(QJsonArray{QJsonObject{{"ID","peer"},{"Connected",true}}});
+      if(method=="engine.folders") return result(QJsonArray{QJsonObject{{"ID","docs"},{"Label","Documents"},{"State","idle"}}});
+      if(method=="engine.transfers") {
+        const double done=qMin(0.9,0.1*++polls);
+        return result(QJsonObject{{"Download",QJsonObject{{"FilesTotal",1},{"Percentage",done},{"BytesDone",qint64(done*100)},{"BytesTotal",100}}},
+                                  {"Downloads",QJsonArray{}},{"Uploads",QJsonArray{}}});
+      }
+      return result(QJsonObject{});
+    };
+    Backend backend;
+    QQmlEngine engine;engine.rootContext()->setContextProperty("backend",&backend);
+    QQmlComponent component(&engine,QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> object(component.create());QVERIFY2(object,qPrintable(component.errorString()));
+    auto *window=qobject_cast<QQuickWindow *>(object.data());QVERIFY(window);
+    window->show();QVERIFY(QTest::qWaitForWindowExposed(window,1000));
+    QTRY_VERIFY_WITH_TIMEOUT(visualItem(window->contentItem(),"row:transfers:download"),1000);
+    QTRY_VERIFY_WITH_TIMEOUT(visualItem(window->contentItem(),"row:folder:docs"),1000);
+    QPointer<QQuickItem> transfer(visualItem(window->contentItem(),"row:transfers:download"));
+    QPointer<QQuickItem> folder(visualItem(window->contentItem(),"row:folder:docs"));
+    QPointer<QQuickItem> bar(visualItem(transfer,"rowProgress"));
+    QPointer<QQuickItem> button(visibleText(transfer,"View Downloads"));
+    QPointer<QQuickItem> pause(visibleText(window->contentItem(),"Pause All"));
+    QVERIFY(bar);QVERIFY(button);QVERIFY(pause);
+    const auto pauseKey=key(backend.commands(),"Pause All");
+    const auto first=bar->property("value").toDouble();
+    const auto action=rowAction(backend,"Receiving 1 file…","View Downloads");
+    auto *model=backend.rowModel();
+    QSignalSpy resets(model,&QAbstractItemModel::modelReset),removals(model,&QAbstractItemModel::rowsRemoved),changes(model,&QAbstractItemModel::dataChanged);
+    QTRY_VERIFY_WITH_TIMEOUT((backend.liveRefresh(),bar && bar->property("value").toDouble()>first),1000);
+    // The same delegates, buttons, commands and actions show the new progress.
+    QVERIFY(transfer);QVERIFY(folder);QVERIFY(button);QVERIFY(pause);
+    QCOMPARE(visibleText(window->contentItem(),"Pause All"),pause.data());
+    QCOMPARE(key(backend.commands(),"Pause All"),pauseKey);
+    QCOMPARE(visualItem(window->contentItem(),"row:transfers:download"),transfer.data());
+    QCOMPARE(resets.count(),0);
+    QCOMPARE(removals.count(),0);
+    QVERIFY(changes.count()>0);
+    const auto row=rowIndex(backend,"transfers:download");
+    for(const auto &change:changes) QCOMPARE(qsizetype(change[0].toModelIndex().row()),row);
+    QCOMPARE(rowAction(backend,"Receiving 1 file…","View Downloads"),action);
+    backend.activate(action);
+    QCOMPARE(backend.title(),QString("Downloads"));
+  }
+  void liveRefreshStopsWhenHiddenOrLeft() {
+    Fixture fixture;
+    Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.title(),QString("Overview"),1000);
+    const auto polls=[&] { return fixture.calls.count("engine.transfers"); };
+    auto *timer=backend.findChild<QTimer *>("liveTimer");
+    QVERIFY(timer);
+    // It refreshes by itself.
+    QTRY_VERIFY_WITH_TIMEOUT(polls()>=2,2000);
+    QVERIFY(timer->isActive());
+    // Hidden, its timer stops and asking now does nothing.
+    backend.setShown(false);
+    QVERIFY(!timer->isActive());
+    QTRY_VERIFY_WITH_TIMEOUT(!backend.busy(),1000);
+    QTest::qWait(50);
+    const auto hidden=polls();
+    backend.liveRefresh();
+    QTest::qWait(50);
+    QCOMPARE(polls(),hidden);
+    // Shown again, it asks at once.
+    backend.setShown(true);
+    QVERIFY(timer->isActive());
+    QTRY_VERIFY_WITH_TIMEOUT(polls()>hidden,300);
+    backend.navigate("settings:general");
+    QVERIFY(!timer->isActive());
+    QTest::qWait(50);
+    const auto left=polls();
+    backend.liveRefresh();
+    QTest::qWait(50);
+    QCOMPARE(polls(),left);
+  }
+  void syncingFoldersShowProgress() {
+    Fixture fixture;
+    fixture.handler=[](QString method,auto) {
+      if(method=="engine.folders") return result(QJsonArray{
+        QJsonObject{{"ID","docs"},{"Label","Documents"},{"Path","/sync/docs"},{"Type","sendreceive"},{"State","syncing"},
+                    {"Sync",QJsonObject{{"LocalBytes",250},{"GlobalBytes",1000},{"NeedBytes",750},{"NeedFiles",3},{"Fraction",0.25}}}},
+        QJsonObject{{"ID","quiet"},{"Label","Quiet"},{"Path","/sync/quiet"},{"Type","sendreceive"},{"State","idle"}}});
+      return result(QJsonObject{});
+    };
+    const auto expected="Synchronizing… · "+QLocale().formattedDataSize(750)+" remaining";
+    Backend backend;
+    QTRY_VERIFY_WITH_TIMEOUT(!rowWithId(backend,"folder:quiet").isEmpty(),1000);
+    QCOMPARE(rowWithId(backend,"folder:docs")["progress"].toDouble(),0.25);
+    QCOMPARE(rowWithId(backend,"folder:docs")["subtitle"].toString(),expected);
+    QVERIFY(!rowWithId(backend,"folder:quiet").contains("progress"));
+    QCOMPARE(rowWithId(backend,"folder:quiet")["subtitle"].toString(),QString("idle"));
+    backend.navigate("Folders");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowWithId(backend,"folder:docs").isEmpty(),1000);
+    QCOMPARE(rowWithId(backend,"folder:docs")["progress"].toDouble(),0.25);
+    QCOMPARE(rowWithId(backend,"folder:docs")["subtitle"].toString(),"/sync/docs · sendreceive · "+expected);
+    QVERIFY(!rowWithId(backend,"folder:quiet").contains("progress"));
+  }
+  void filesActivityListsTransfers() {
+    Fixture fixture("files");
+    QJsonArray transfers{
+      QJsonObject{{"id","abc"},{"item",3},{"path","Docs/a.txt"},{"totalBytes",400},{"verifiedBytes",100},{"verifiedBlocks",1},{"totalBlocks",4},{"state","downloading"}},
+      QJsonObject{{"id","def"},{"item",4},{"path",""},{"totalBytes",0},{"verifiedBytes",0},{"verifiedBlocks",0},{"totalBlocks",0},{"state","failed"},{"error","Gateway offline"}}};
+    fixture.delay=[](QString method,auto) { return method=="transfers"?40:0; };
+    fixture.handler=[&transfers](QString method,auto) {
+      if(method=="transfers") return result(transfers);
+      if(method=="pending.list") return result(QJsonArray{});
+      return result(QJsonObject{});
+    };
+    Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),QString("files"),1000);
+    backend.navigate("Activity");
+    QTRY_COMPARE_WITH_TIMEOUT(titles(backend),(QStringList{"Transfers","Docs/a.txt","def","Pending Changes","No pending changes"}),1000);
+    QVERIFY(backend.rows()[0].toMap()["heading"].toBool());
+    QVERIFY(backend.rows()[3].toMap()["heading"].toBool());
+    const auto reading=backend.rows()[1].toMap(),failed=backend.rows()[2].toMap();
+    QCOMPARE(reading["subtitle"].toString(),QString("Download · downloading"));
+    QCOMPARE(reading["progress"].toDouble(),0.25);
+    QVERIFY(!reading.contains("error"));
+    QCOMPARE(failed["subtitle"].toString(),QString("Download · failed"));
+    QVERIFY(!failed.contains("progress"));
+    QCOMPARE(failed["error"].toString(),QString("Gateway offline"));
+    // The plain method, which doesn't make the daemon update bookmarks and places each time
+    QVERIFY(!fixture.calls.contains("mcp.files.transfers"));
+    transfers={};
+    QTRY_COMPARE_WITH_TIMEOUT((backend.liveRefresh(),titles(backend)),(QStringList{"Transfers","No recent transfers","Pending Changes","No pending changes"}),1000);
+    // Past the first hundred, the rest are counted.
+    for(int i=0;i<101;++i) transfers.append(QJsonObject{{"id",QString("t%1").arg(i)},{"path",QString("Docs/%1.bin").arg(i)},{"totalBlocks",0},{"state","paused"}});
+    QTRY_VERIFY_WITH_TIMEOUT((backend.liveRefresh(),titles(backend).contains("1 more transfer")),1000);
+    QCOMPARE(titles(backend).size(),1+100+1+2);
+  }
+  void fileInformationFollowsDownload() {
+    Fixture fixture;
+    QStringList downloading{"a.txt","c.txt"};
+    bool local=false;
+    fixture.handler=[&downloading,&local](QString method,QJsonObject params) {
+      const auto entry=[](QString name,bool ignored) { QJsonObject e{{"Name",name},{"Path",name},{"Directory",false},{"Local",false},{"Size",100}}; if(ignored) e["Ignored"]=true; return e; };
+      if(method=="engine.browsePage") return result(QJsonObject{{"Entries",QJsonArray{entry("a.txt",false),entry("b.txt",true),entry("c.txt",false)}}});
+      if(method=="engine.transfers") {
+        QJsonArray files;
+        for(const auto &path:downloading) files.append(QJsonObject{{"Folder","docs"},{"FolderLabel","Docs"},{"Path",path},{"BytesDone",50},{"BytesTotal",100},{"Percentage",0.5},{"BytesPerSecond",10}});
+        return result(QJsonObject{{"Downloads",files},{"Uploads",QJsonArray{}}});
+      }
+      if(method=="engine.inspect") {
+        const auto path=params["Path"].toString();
+        if(path=="a.txt") return result(QJsonObject{{"entry",QJsonObject{{"Path",path},{"Local",local}}}});
+        if(path=="b.txt") return result(QJsonObject{{"entry",QJsonObject{{"Path",path},{"Ignored",true}}}});
+        return QJsonObject{{"error","file no longer exists"}};
+      }
+      return result(QJsonObject{});
+    };
+    Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),QString("synchronize"),1000);
+    auto *timer=backend.findChild<QTimer *>("fileStatusTimer");
+    QVERIFY(timer);
+    backend.navigate("folder:docs");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"c.txt","Information").isEmpty(),1000);
+    backend.activate(rowAction(backend,"a.txt","Information"));
+    QCOMPARE(backend.dialog()["title"].toString(),QString("Information"));
+    bool statusField=false;
+    for(const auto &value:backend.dialog()["fields"].toList()) statusField|=value.toMap()["Kind"]=="status";
+    QVERIFY(statusField);
+    QVERIFY(timer->isActive());
+    QTRY_COMPARE_WITH_TIMEOUT(backend.dialogStatus()["title"].toString(),QString("Downloading file…"),1000);
+    QCOMPARE(backend.dialogStatus()["progress"].toDouble(),0.5);
+    QVERIFY(backend.dialogStatus()["detail"].toString().endsWith(transferSpeed(10)+" · 0:00:05 remaining"));
+    downloading.removeAll("a.txt");
+    QTRY_COMPARE_WITH_TIMEOUT((backend.pollFileStatus(),backend.dialogStatus()["title"].toString()),QString("Waiting to synchronize…"),1000);
+    QVERIFY(!backend.dialogStatus().contains("progress"));
+    local=true;
+    QTRY_VERIFY_WITH_TIMEOUT((backend.pollFileStatus(),backend.dialogStatus().isEmpty()),1000);
+    backend.submit({});
+    QVERIFY(backend.dialog().isEmpty());
+    // Closing it stops asking.
+    backend.pollFileStatus();
+    QVERIFY(!timer->isActive());
+    QTest::qWait(50);
+    const auto polls=fixture.calls.count("engine.transfers");
+    backend.pollFileStatus();
+    QTest::qWait(50);
+    QCOMPARE(fixture.calls.count("engine.transfers"),polls);
+    // A file the ignore patterns leave out isn't waited for.
+    backend.activate(rowAction(backend,"b.txt","Information"));
+    QVERIFY(backend.dialogStatus().isEmpty());
+    const auto inspected=fixture.calls.count("engine.inspect");
+    QTRY_VERIFY_WITH_TIMEOUT((backend.pollFileStatus(),fixture.calls.count("engine.transfers")>polls+1),1000);
+    QVERIFY(backend.dialogStatus().isEmpty());
+    QCOMPARE(fixture.calls.count("engine.inspect"),inspected);
+    backend.submit({});
+    // A file that leaves the downloads and can't be looked at any more doesn't stay "downloading".
+    backend.activate(rowAction(backend,"c.txt","Information"));
+    QTRY_COMPARE_WITH_TIMEOUT((backend.pollFileStatus(),backend.dialogStatus()["title"].toString()),QString("Downloading file…"),1000);
+    downloading.clear();
+    QTRY_VERIFY_WITH_TIMEOUT((backend.pollFileStatus(),backend.dialogStatus().isEmpty()),1000);
+    backend.submit({});
+  }
+  void transferFormatting() {
+    QCOMPARE(remainingTime(83),QString("0:01:23"));
+    QCOMPARE(remainingTime(3725),QString("1:02:05"));
+    QCOMPARE(percentage(999,1000),"99"+QLocale().percent());
+    QCOMPARE(percentage(29,100),"29"+QLocale().percent());
+    QCOMPARE(percentage(100,100),"100"+QLocale().percent());
+    QCOMPARE(percentage(0,0),"0"+QLocale().percent());
+    QCOMPARE(percentage(QJsonObject{{"BytesDone",57},{"BytesTotal",100}}),"57"+QLocale().percent());
+    QCOMPARE(fileCount(1),QString("1 file"));
+    QCOMPARE(fileCount(3),QString("3 files"));
+    QCOMPARE(transferPace(0,-1),QString("(Transfer speed unknown)"));
+    QCOMPARE(transferPace(2048,90),transferSpeed(2048)+" · 0:01:30 remaining");
+    QCOMPARE(transferPace(2048,-1),transferSpeed(2048));
+    QCOMPARE(fileSecondsRemaining({{"BytesDone",50},{"BytesTotal",100},{"BytesPerSecond",30}}),2);
+    QCOMPARE(fileSecondsRemaining({{"BytesDone",50},{"BytesTotal",100},{"BytesPerSecond",0}}),-1);
+    QVERIFY(!folderSync({{"State","idle"},{"Sync",QJsonObject{{"GlobalBytes",10},{"LocalBytes",5}}}}));
+    QVERIFY(!folderSync({{"State","syncing"},{"Sync",QJsonObject{{"GlobalBytes",0}}}}));
+    QVERIFY(!folderSync({{"State","syncing"}}));
+  }
+  void rowModelAppliesChangesByIdentity() {
+    RowModel model;
+    QAbstractItemModelTester tester(&model,QAbstractItemModelTester::FailureReportingMode::QtTest);
+    const auto row=[](QString id,QString subtitle) { return QVariant(QVariantMap{{"id",id},{"title",id},{"subtitle",subtitle}}); };
+    const auto contents=[&model] {
+      QStringList out;
+      for(int i=0;i<model.rowCount();++i) {
+        const auto value=model.data(model.index(i),Qt::UserRole).toMap();
+        out << value["title"].toString()+"="+value["subtitle"].toString();
+      }
+      return out;
+    };
+    model.sync({row("a","1"),row("b","1"),row("c","1")});
+    QCOMPARE(contents(),(QStringList{"a=1","b=1","c=1"}));
+    QSignalSpy resets(&model,&QAbstractItemModel::modelReset),inserted(&model,&QAbstractItemModel::rowsInserted),
+        removed(&model,&QAbstractItemModel::rowsRemoved),changed(&model,&QAbstractItemModel::dataChanged);
+    model.sync({row("a","1"),row("b","2"),row("d","1"),row("c","1")});
+    QCOMPARE(contents(),(QStringList{"a=1","b=2","d=1","c=1"}));
+    QCOMPARE(changed.count(),1);
+    QCOMPARE(changed[0][0].toModelIndex().row(),1);
+    QCOMPARE(inserted.count(),1);
+    QCOMPARE(inserted[0][1].toInt(),2);
+    QCOMPARE(removed.count(),0);
+    model.sync({row("b","2"),row("c","1")});
+    QCOMPARE(contents(),(QStringList{"b=2","c=1"}));
+    QCOMPARE(removed.count(),2);
+    QCOMPARE(resets.count(),0);
+    // Titles without an id, repeated, are told apart by their order.
+    model.sync({row("b","2"),row("c","1"),QVariantMap{{"title","x"}},QVariantMap{{"title","x"},{"subtitle","second"}}});
+    QCOMPARE(contents(),(QStringList{"b=2","c=1","x=","x=second"}));
+    QCOMPARE(inserted.count(),2);
+    // An unchanged list changes nothing.
+    const auto signals_=changed.count()+inserted.count()+removed.count();
+    model.sync({row("b","2"),row("c","1"),QVariantMap{{"title","x"}},QVariantMap{{"title","x"},{"subtitle","second"}}});
+    QCOMPARE(changed.count()+inserted.count()+removed.count(),signals_);
+    model.sync({row("c","1"),row("b","2")});
+    QCOMPARE(contents(),(QStringList{"c=1","b=2"}));
+    QCOMPARE(resets.count(),1);
+    model.sync({});
+    QCOMPARE(model.rowCount(),0);
+  }
+  void liveFailureKeepsRowsAndOtherErrors() {
+    Fixture fixture;
+    bool failing=false;
+    fixture.handler=[&failing](QString method,QJsonObject params) {
+      if(method=="engine.devices") return result(QJsonArray{QJsonObject{{"ID","peer"},{"Connected",true}}});
+      if(method=="engine.folders") return result(QJsonArray{QJsonObject{{"ID","docs"},{"Label","Documents"},{"State","idle"}}});
+      if(method=="engine.transfers") return failing?QJsonObject{{"error","The engine is busy"}}:result(QJsonObject{
+        {"Download",QJsonObject{{"FilesTotal",1},{"Percentage",0.5},{"BytesDone",50},{"BytesTotal",100}}},{"Downloads",QJsonArray{}},{"Uploads",QJsonArray{}}});
+      if(method=="engine.action"&&params["Action"].toString()=="pauseAll") return QJsonObject{{"error","Pausing failed"}};
+      if(method=="engine.action"&&params["Action"].toString()=="ignores") return QJsonObject{{"error","Ignore patterns are unreadable"}};
+      return result(QJsonObject{});
+    };
+    Backend backend;
+    QTRY_VERIFY_WITH_TIMEOUT(!rowWithId(backend,"transfers:download").isEmpty(),1000);
+    QTRY_VERIFY_WITH_TIMEOUT(!rowWithId(backend,"folder:docs").isEmpty(),1000);
+    const auto rows=backend.rows();
+    const auto refresh=[&](bool fails) {
+      failing=fails;
+      const auto before=fixture.calls.count("engine.transfers");
+      QTRY_VERIFY_WITH_TIMEOUT((backend.liveRefresh(),fixture.calls.count("engine.transfers")>before),1000);
+      // The merge follows the last reply
+      QTRY_VERIFY_WITH_TIMEOUT((backend.liveRefresh(),fixture.calls.count("engine.transfers")>before+1),1000);
+    };
+    // A failed refresh shows its error and leaves the page as it was.
+    refresh(true);
+    QCOMPARE(backend.error(),QString("The engine is busy"));
+    QCOMPARE(backend.rows(),rows);
+    QVERIFY(!rowAction(backend,"Documents","Open in File Manager").isEmpty());
+    // The next good one takes the error down.
+    refresh(false);
+    QVERIFY(backend.error().isEmpty());
+    QCOMPARE(backend.rows(),rows);
+    // A mutation's error stays through failed and good refreshes.
+    backend.activate(key(backend.commands(),"Pause All"));
+    QTRY_COMPARE_WITH_TIMEOUT(backend.error(),QString("Pausing failed"),1000);
+    refresh(true);
+    QCOMPARE(backend.error(),QString("Pausing failed"));
+    refresh(false);
+    QCOMPARE(backend.error(),QString("Pausing failed"));
+    // So does a read the user started on a page that refreshes itself.
+    backend.navigate("Folders");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"Documents","Ignore Patterns").isEmpty(),1000);
+    QVERIFY(backend.error().isEmpty());
+    backend.activate(rowAction(backend,"Documents","Ignore Patterns"));
+    QTRY_COMPARE_WITH_TIMEOUT(backend.error(),QString("Ignore patterns are unreadable"),1000);
+    const auto folders=fixture.calls.count("engine.folders");
+    // Each refresh reads the folders twice (the page and the sidebar), and starts after the last one merged.
+    QTRY_VERIFY_WITH_TIMEOUT((backend.liveRefresh(),fixture.calls.count("engine.folders")>folders+3),1000);
+    QCOMPARE(backend.error(),QString("Ignore patterns are unreadable"));
+  }
+  void liveRefreshUpdatesFolderShortcuts() {
+    Fixture fixture;
+    QJsonArray folders{QJsonObject{{"ID","docs"},{"Label","Documents"},{"State","idle"}}};
+    fixture.handler=[&folders](QString method,auto) {
+      if(method=="engine.folders") return result(folders);
+      return result(QJsonObject{});
+    };
+    Backend backend;
+    const auto shortcut=[&](const QString &route) {
+      for(const auto &value:backend.navigation()) for(const auto &child:value.toMap()["children"].toList()) if(child.toMap()["route"]==route) return true;
+      return false;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(shortcut("folder:docs"),1000);
+    folders.append(QJsonObject{{"ID","photos"},{"Label","Photos"},{"State","idle"}});
+    QTRY_VERIFY_WITH_TIMEOUT((backend.liveRefresh(),shortcut("folder:photos")),1000);
+  }
+  void gridHeadingsSpanTheRow() {
+    Fixture fixture;
+    fixture.handler=[](QString method,auto) {
+      if(method=="mcp.preferences.get") return result(QJsonObject{{"Token","app"},{"Fields",QJsonArray{QJsonObject{{"Path","Grid"},{"Value","true"}}}}});
+      if(method=="engine.transfers") return result(QJsonObject{{"Downloads",QJsonArray{
+        QJsonObject{{"Folder","docs"},{"FolderLabel","Docs"},{"Path","a.txt"},{"BytesDone",1},{"BytesTotal",4},{"Percentage",0.25}},
+        QJsonObject{{"Folder","docs"},{"FolderLabel","Docs"},{"Path","b.txt"},{"BytesDone",1},{"BytesTotal",4},{"Percentage",0.25}}}},{"Uploads",QJsonArray{}}});
+      return result(QJsonObject{});
+    };
+    Backend backend;
+    QQmlEngine engine;engine.rootContext()->setContextProperty("backend",&backend);
+    QQmlComponent component(&engine,QUrl("qrc:/test-ui/qml/Main.qml"));
+    QScopedPointer<QObject> object(component.create());QVERIFY2(object,qPrintable(component.errorString()));
+    auto *window=qobject_cast<QQuickWindow *>(object.data());QVERIFY(window);
+    window->resize(1100,780);window->show();QVERIFY(QTest::qWaitForWindowExposed(window,1000));
+    QTRY_VERIFY_WITH_TIMEOUT(backend.gridView(),1000);
+    backend.navigate("Activity");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"Transfers","View Downloads").isEmpty(),1000);
+    backend.activate(rowAction(backend,"Transfers","View Downloads"));
+    QTRY_VERIFY_WITH_TIMEOUT(visualItem(window->contentItem(),"row:section:docs"),1000);
+    QTRY_VERIFY_WITH_TIMEOUT(visualItem(window->contentItem(),QStringList{"row:download","","docs","b.txt"}.join('\x1f')),1000);
+    auto *heading=visualItem(window->contentItem(),"row:section:docs");
+    auto *first=visualItem(window->contentItem(),QStringList{"row:download","","docs","a.txt"}.join('\x1f'));
+    auto *second=visualItem(window->contentItem(),QStringList{"row:download","","docs","b.txt"}.join('\x1f'));
+    QVERIFY(first&&second);
+    // Two files share a line below the heading, which has the line to itself.
+    QTRY_COMPARE_WITH_TIMEOUT(first->y(),second->y(),1000);
+    QVERIFY(first->x()<second->x());
+    QVERIFY(heading->y()<first->y());
+    QVERIFY(qAbs(heading->width()-(second->x()+second->width()-first->x()))<1);
   }
 
   void filesFoldersAndRemoteAccessHaveDistinctContent() {

@@ -378,11 +378,13 @@ type transfer struct {
 	refs     int
 	keep     bool
 	// Whether something reads it, rather than only keeping it here
-	read     bool
-	running  bool
-	closed   bool
-	done     bool
-	err      error
+	read    bool
+	running bool
+	closed  bool
+	done    bool
+	err     error
+	// Why the last attempt was interrupted, while it waits to try again (cleared by the next verified block)
+	retryErr error
 	changed  chan struct{}
 	stop     context.CancelFunc
 	finished chan struct{}
@@ -618,6 +620,9 @@ func (t *transfer) run(ctx context.Context) {
 			delay = max(delay, e.RetryAfter)
 		}
 		t.c.s.log.Debug("Download interrupted", "content", t.contentID, "error", err, "retry", delay)
+		t.mutex.Lock()
+		t.retryErr = err
+		t.mutex.Unlock()
 		backoff = min(backoff*2, time.Minute)
 		select {
 		case <-ctx.Done():
@@ -777,6 +782,7 @@ func (t *transfer) fetch(ctx context.Context) error {
 				t.verified[i] = true
 				t.count++
 			}
+			t.retryErr = nil
 			t.notify()
 			t.mutex.Unlock()
 		}

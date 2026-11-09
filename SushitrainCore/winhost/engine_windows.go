@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"t-shaped.nl/sushitrain/v2/desktopapi"
+	"t-shaped.nl/sushitrain/v2/enginecontrol"
 	core "t-shaped.nl/sushitrain/v2/src"
 )
 
@@ -30,6 +31,7 @@ type folderSummary struct {
 	ID, Label, Path, State, Error string
 	Paused, Trash, CanRemoveFiles bool
 	Failed                        int
+	Sync                          *desktopapi.FolderSync `json:",omitempty"`
 }
 type deviceSummary struct {
 	ID, Name          string
@@ -51,7 +53,12 @@ func (h *Host) engineCall(ctx context.Context, method string, p request) (any, e
 		out := []folderSummary{}
 		for _, id := range stringsFrom(c.Folders()) {
 			f := c.FolderWithID(id)
-			out = append(out, folderSummary{ID: id, Label: f.Label(), Path: f.Path(), State: f.State(), Error: f.StateError(), Paused: f.IsPaused(), Trash: f.IsTrashEnabled(), CanRemoveFiles: f.CanRemoveFiles(), Failed: f.FailedItemCount()})
+			if f == nil {
+				// Removed since the list was read
+				continue
+			}
+			state := f.State()
+			out = append(out, folderSummary{ID: id, Label: f.Label(), Path: f.Path(), State: state, Error: f.StateError(), Paused: f.IsPaused(), Trash: f.IsTrashEnabled(), CanRemoveFiles: f.CanRemoveFiles(), Failed: f.FailedItemCount(), Sync: enginecontrol.FolderSyncProgress(f, state)})
 		}
 		return out, nil
 	case "engine.devices":

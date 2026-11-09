@@ -11,13 +11,12 @@ import SwiftUI
 
 private struct OverallDownloadProgressView: View {
 	@Environment(AppState.self) private var appState
-	@State private var lastProgress: (Date, SushitrainProgress)? = nil
-	@State private var progress: (Date, SushitrainProgress)? = nil
+	@State private var samples = ProgressSamples()
 	@State private var peerStatusText: String = ""
 
 	var body: some View {
 		Group {
-			if let (date, progress) = progress {
+			if let (date, progress) = samples.current {
 				NavigationLink(destination: DownloadsView()) {
 					ProgressView(value: progress.percentage, total: 1.0) {
 						VStack {
@@ -33,7 +32,7 @@ private struct OverallDownloadProgressView: View {
 								Spacer()
 							}
 
-							self.speeds
+							TransferSpeedView(samples: samples)
 						}
 					}
 					.tint(.green)
@@ -51,41 +50,12 @@ private struct OverallDownloadProgressView: View {
 		}
 	}
 
-	@ViewBuilder private var speeds: some View {
-		// Download speed
-		HStack {
-			Spacer()
-			if let (date, progress) = progress, let (lastDate, lastProgress) = self.lastProgress {
-				let diffBytes = progress.bytesDone - lastProgress.bytesDone
-				let diffTime = date.timeIntervalSince(lastDate)
-				let speed = Int64(Double(diffBytes) / Double(diffTime))
-				let formatter = ByteCountFormatter()
-
-				if speed > 0 && diffTime > 0 {
-					Text("\(formatter.string(fromByteCount: speed))/s")
-						.foregroundStyle(.green)
-					let secondsToGo = Duration(
-						secondsComponent: (progress.bytesTotal - progress.bytesDone) / speed, attosecondsComponent: 0)
-					let secondsToGoFormatted: String = secondsToGo.formatted(.time(pattern: .hourMinuteSecond(padHourToLength: 0)))
-					Text(secondsToGoFormatted).foregroundStyle(.green)
-				}
-				else {
-					Text("(Transfer speed unknown)").foregroundStyle(.gray)
-				}
-			}
-		}
-	}
-
 	private func updateProgress() async {
-		self.peerStatusText = "\(self.appState.client.connectedPeerCount())/\(await self.appState.peers().count - 1)"
-
-		self.lastProgress = self.progress
-		if let p = self.appState.client.getTotalDownloadProgress() {
-			self.progress = (Date.now, p)
-		}
-		else {
-			self.progress = nil
-		}
+		let peerCount = await self.appState.peers().count
+		// A newer event's reading may have landed already
+		guard !Task.isCancelled else { return }
+		self.peerStatusText = "\(self.appState.client.connectedPeerCount())/\(peerCount - 1)"
+		self.samples.take(self.appState.client.getTotalDownloadProgress())
 	}
 }
 
@@ -211,20 +181,27 @@ struct OverallStatusView: View {
 private struct OverallUploadStatusView: View {
 	@Environment(AppState.self) private var appState
 
-	@State private var progress: SushitrainProgress? = nil
+	@State private var samples = ProgressSamples()
 
 	var body: some View {
 		ZStack {
-			if let progress = progress {
+			if let (date, progress) = samples.current {
 				ProgressView(value: progress.percentage, total: 1.0) {
-					Label(
-						"Sending \(progress.filesTotal) files...",
-						systemImage: "arrow.up"
-					)
-					.foregroundStyle(.green)
-					.symbolEffect(.pulse, value: progress.percentage)
-					.badge(localFormattedPercentage(Double(progress.percentage)))
-					.frame(maxWidth: .infinity)
+					VStack {
+						HStack {
+							Label(
+								"Sending \(progress.filesTotal) files...",
+								systemImage: "arrow.up"
+							)
+							.foregroundStyle(.green)
+							.symbolEffect(.pulse, value: date)
+							.badge(localFormattedPercentage(Double(progress.percentage)))
+							.frame(maxWidth: .infinity)
+							Spacer()
+						}
+
+						TransferSpeedView(samples: samples)
+					}
 				}.tint(.green)
 			}
 			else {
@@ -232,16 +209,79 @@ private struct OverallUploadStatusView: View {
 					.foregroundStyle(.green)
 					.frame(maxWidth: .infinity)
 			}
-		}.task {
+		}
+		// Each engine event (progress from other devices among them) reads the progress again
+		.task(id: appState.eventCounter) {
 			await self.update()
 		}
 	}
 
 	private func update() async {
 		let client = appState.client
-		self.progress = await Task.detached {
+		let current = await Task.detached {
 			return client.getTotalUploadProgress()
 		}.value
+		// A newer event's reading may have landed already
+		guard !Task.isCancelled else { return }
+		self.samples.take(current)
+	}
+}
+
+/// The last two readings of a transfer's progress that differed. Progress changes when the engine or another device
+/// reports it, at its own pace, while readings come at each engine event, so a speed between two readings that saw
+/// the same progress would be wrong.
+private struct ProgressSamples {
+	private(set) var last: (Date, SushitrainProgress)? = nil
+	private(set) var current: (Date, SushitrainProgress)? = nil
+	/// When a reading was last taken, whether it changed anything or not
+	private(set) var checked = Date.distantPast
+
+	mutating func take(_ progress: SushitrainProgress?) {
+		checked = .now
+		guard let progress else {
+			last = nil
+			current = nil
+			return
+		}
+		if let (_, previous) = current, previous.bytesDone == progress.bytesDone,
+			previous.bytesTotal == progress.bytesTotal, previous.filesTotal == progress.filesTotal
+		{
+			return
+		}
+		last = current
+		current = (checked, progress)
+	}
+}
+
+/// The speed of a transfer and the time it still takes, from two readings of its progress
+private struct TransferSpeedView: View {
+	let samples: ProgressSamples
+
+	/// Progress that hasn't changed for this long has no speed any more
+	private static let stalledAfter: TimeInterval = 15
+
+	var body: some View {
+		HStack {
+			Spacer()
+			if let (date, progress) = samples.current, let (lastDate, lastProgress) = samples.last {
+				let diffBytes = progress.bytesDone - lastProgress.bytesDone
+				let diffTime = date.timeIntervalSince(lastDate)
+				let stalled = samples.checked.timeIntervalSince(date) > Self.stalledAfter
+				// A file that finished leaves the totals, which can make them go down
+				let speed = diffTime > 0 && !stalled ? Int64(max(0, Double(diffBytes) / diffTime)) : 0
+
+				if speed > 0 {
+					Text("\(ByteCountFormatter().string(fromByteCount: speed))/s")
+						.foregroundStyle(.green)
+					let secondsToGo = Duration(
+						secondsComponent: max(0, progress.bytesTotal - progress.bytesDone) / speed, attosecondsComponent: 0)
+					Text(secondsToGo.formatted(.time(pattern: .hourMinuteSecond(padHourToLength: 0)))).foregroundStyle(.green)
+				}
+				else {
+					Text("(Transfer speed unknown)").foregroundStyle(.gray)
+				}
+			}
+		}
 	}
 }
 

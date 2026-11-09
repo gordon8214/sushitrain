@@ -140,10 +140,13 @@ void Backend::folders() {
                    "Local changes are replaced by the synchronized versions.",
                    [this, id] { engineAction("revert", id); });
              }});
+      const auto sync = folderSync(f);
       row(str(f, "Label").isEmpty() ? id : str(f, "Label"),
-          str(f, "Path") + " · " + str(f, "Type") + " · " + str(f, "State") +
-              " · " + str(f, "Error"),
-          buttons);
+          joined({str(f, "Path"), str(f, "Type"),
+                  sync ? sync->first : str(f, "State"), str(f, "Error")}),
+          buttons, {},
+          {.progress = sync ? std::optional(sync->second) : std::nullopt,
+           .id = "folder:" + id});
     }
     if (v.toArray().isEmpty())
       row("No folders yet", "Add a folder to start synchronizing.");
@@ -468,10 +471,10 @@ void Backend::historyPage() {
   historySources();
 }
 void Backend::activityPage() {
-  if (m_mode == "files") { pending(); return; }
-  row("Transfers", "Synchronization progress and current activity", {{"View", [this] { navigate("Overview"); }}});
-  row("Activity Log", "Events, errors, and diagnostics", {{"Open", [this] { logs(); }}});
-  row("Pending Changes and Recovery", "Available in Files mode.");
+  if (m_mode == "files") { filesActivity(); return; }
+  transfersSummary();
+  row("Activity Log", "Events, errors, and diagnostics", {{"Open", [this] { logs(); }}}, {}, {.order = 1});
+  row("Pending Changes and Recovery", "Available in Files mode.", {}, {}, {.order = 1});
 }
 void Backend::policy() {
   call("policy.get", {}, [this](QJsonValue v, QString) {

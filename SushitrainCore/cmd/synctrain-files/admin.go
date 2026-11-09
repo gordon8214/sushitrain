@@ -275,6 +275,10 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 	a.Register("storage", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		return s.Storage()
 	})
+	// For windows that poll it: unlike mcp.files.transfers, it doesn't bring bookmarks and places up to date each time
+	a.Register("transfers", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return s.Transfers(ctx)
+	})
 	a.Register("storage.budget", func(ctx context.Context, params json.RawMessage) (any, error) {
 		p, err := decode[struct{ Bytes int64 }](params)
 		if err != nil {

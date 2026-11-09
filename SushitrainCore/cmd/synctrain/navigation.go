@@ -28,6 +28,10 @@ type navigationPage struct {
 	reload   bool
 	editor   bool
 	browser  bool
+	// Fetches what the page shows again while it's in view (nil for a page that doesn't)
+	poll *pagePoll
+	// Set while the banner shows the error of the page's last poll
+	pollFailed bool
 }
 
 func (d *desktopUI) newNavigationPage(title string, show func()) *navigationPage {
@@ -111,8 +115,14 @@ func (d *desktopUI) pagePopped() {
 	if p.reload && p.show != nil {
 		p.reload = false
 		p.show()
-	} else if p.focus != nil {
-		d.w.win.SetFocus(p.focus)
+	} else {
+		if p.focus != nil {
+			d.w.win.SetFocus(p.focus)
+		}
+		// Its live content catches up at once (the page isn't mapped yet, which pollVisible waits for)
+		if p.poll != nil && !d.saving {
+			p.poll.run()
+		}
 	}
 	d.updateNavigation()
 }

@@ -48,10 +48,12 @@ public sealed partial class MainPage : Page
         BuildNavigation();
         updates.Tick+=async(_,_)=>{
             if (activeOperations==0 && settingsQuery.Trim().Length>0) await LoadSettingsIndex(force:true);
-            if(activeOperations!=0 || editorToken is not null || status is null) return;
+            // A page with live progress follows the revision itself, updating in place
+            if(activeOperations!=0 || editorToken is not null || status is null || LiveActive) return;
             await Run(async()=>{ var next=await Call("status"); if(S(next,"revision")!=S(status,"revision") || S(next,"mode")!=S(status,"mode")) await Refresh(); },clearError:false);
         };
-        Loaded+=(_,_)=>updates.Start(); Unloaded+=(_,_)=>updates.Stop();
+        liveTimer.Tick+=async(_,_)=>await LiveTick();
+        Loaded+=(_,_)=>{updates.Start();if(LiveActive)liveTimer.Start();}; Unloaded+=(_,_)=>{updates.Stop();liveTimer.Stop();};
         Loaded += async (_, _) => await Run(async () => { try { await host.EnsureRunning(); } catch (Exception error) { ShowError(error.Message); } await Refresh(); });
     }
 
@@ -79,7 +81,7 @@ public sealed partial class MainPage : Page
     private static bool B(JsonNode? value, string key) => value?[key]?.GetValue<bool>() ?? false;
     private async Task<JsonNode?> Call(string method,object? parameters=null,int seconds=60)
     {
-        var result=await host.Call(method,parameters,seconds);
+        var result=await host.Call(method,parameters,livePoll.Value?Math.Min(seconds,LivePollSeconds):seconds);
         if(renderOperation.Value?.Generation!=generation) throw new OperationCanceledException("The view changed while its request was running.");
         return result;
     }
@@ -122,11 +124,14 @@ public sealed partial class MainPage : Page
         button.Click += async (_, _) => await Run(action); Commands.PrimaryCommands.Add(button);
     }
     private void Text(string text, bool title = false) => Body.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = title ? 20 : 14, IsTextSelectionEnabled = true });
-    private void Row(string title, string detail, params Button[] buttons)
+    private void Row(string title, string detail, params Button[] buttons) => StatusRow(title, detail, null, buttons);
+    // A row with an element that updates in place below its detail
+    private void StatusRow(string title, string detail, UIElement? state, params Button[] buttons)
     {
         var row = new StackPanel { Spacing = 8, Margin = new Thickness(0, 4, 0, 12) };
         row.Children.Add(new TextBlock { Text = title, FontSize = 18, TextWrapping = TextWrapping.Wrap });
         row.Children.Add(new TextBlock { Text = detail, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+        if (state is not null) row.Children.Add(state);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         foreach (var button in buttons.Take(2)) actions.Children.Add(button);
         if(buttons.Length>2) {
@@ -206,10 +211,13 @@ public sealed partial class MainPage : Page
             var id = await Input("Folder ID", "Use the same folder ID on devices sharing this folder", Guid.NewGuid().ToString("N")[..12]); if (id is null) return;
             await Call("engine.addFolder", new { ID = id, Path = path }); await Refresh();
         });
-        foreach (var folder in (await Call("engine.folders"))?.AsArray() ?? [])
+        var folders = await Call("engine.folders");
+        var states = new Dictionary<string, FolderStatus>();
+        foreach (var folder in folders?.AsArray() ?? [])
         {
             var id = S(folder, "ID");
-            Row(S(folder, "Label") is { Length: > 0 } label ? label : id, S(folder, "Path") + "\n" + S(folder, "State") + " " + S(folder, "Error"),
+            var state = new FolderStatus(); state.Show(folder); states[id] = state;
+            StatusRow(S(folder, "Label") is { Length: > 0 } label ? label : id, S(folder, "Path"), state.Element,
                 ActionButton("Details", () => FolderDetails(id)), ActionButton("Browse", () => BrowseSync(id, "")), ActionButton("Overview", () => EditSettings("basic/folder/" + id)), ActionButton("Synchronization", () => EditSettings("folder/" + id)), ActionButton("Reset Synchronization Settings…", () => EditSettings("reset/folder/" + id)), ActionButton("Versioning", () => EditSettings("versioning/" + id)), ActionButton("Share…",()=>ShareFolder(id)), ActionButton("Ignore patterns",()=>Ignores(id)), ActionButton("Deleted files",()=>DeletedFiles(id)), ActionButton("Errors",()=>FolderErrors(id)),
                 ActionButton(B(folder, "Paused") ? "Resume" : "Pause", () => EngineAction(B(folder, "Paused") ? "resume" : "pause", id)),
                 ActionButton("Rescan", () => EngineAction("rescan", id)),
@@ -217,7 +225,17 @@ public sealed partial class MainPage : Page
                 ActionButton("Move…",async()=>{var target=await PickFolder();if(target is not null){await Call("engine.action",new { Action="relocate",Folder=id,Path=target },150);await Refresh();}}),
                 ActionButton(B(folder,"Trash")?"Stop using Recycle Bin":"Use Recycle Bin",async()=>{await Call("engine.action",new { Action="trash",Folder=id,Enabled=!B(folder,"Trash") });await Refresh();}), ActionButton("Remove", async () => { if (await Confirm("Remove folder?", "The folder stays on this PC. Syncthing stops synchronizing it.")) await EngineAction("remove", id); }));
         }
+        // States and synchronization progress change in place; anything the rows' buttons depend on builds the page again
+        var shape = FoldersShape(folders);
+        Live(async (_, changed) => {
+            if (!changed && !states.Values.Any(state => state.Syncing)) return true;
+            var current = await Call("engine.folders");
+            if (FoldersShape(current) != shape) return false;
+            foreach (var folder in current?.AsArray() ?? []) states[S(folder, "ID")].Show(folder);
+            return true;
+        });
     }
+    private static string FoldersShape(JsonNode? folders) => string.Join("\n", folders?.AsArray().Select(folder => string.Join("\t", S(folder, "ID"), S(folder, "Label"), S(folder, "Path"), B(folder, "Paused"), B(folder, "Trash"))) ?? []);
     private async Task Devices()
     {
         Command("Add device", Symbol.Add, async () => { var id = await Input("Add device", "Syncthing device ID"); if (id is null) return; await Call("engine.addDevice", new { ID = id }); await Refresh(); });
@@ -400,6 +418,15 @@ public sealed partial class MainPage : Page
             rows.Add(new(name,isDirectory?"Folder":N(entry,"Size").ToString("N0")+" bytes",()=>isDirectory?BrowseSync(folder,S(entry,"Path")):Preview(S(entry,"URL"),name),OrderedFileActions(SyncFileActions(folder,entry)),folder+":"+S(entry,"Path")));
         }
         ShowFiles(rows,"sync:"+folder+"/"+path);
+        // While files arrive the engine's revision moves constantly; the list is built again only when the listing
+        // changes, so an open menu or file information stays usable. It's read at most every 2 seconds, as before.
+        var listing=entries?.ToJsonString();var pending=false;var checkedAt=Environment.TickCount64;
+        Live(async(_,changed)=>{
+            pending|=changed;
+            if(!pending || Environment.TickCount64-checkedAt<2000)return true;
+            pending=false;checkedAt=Environment.TickCount64;
+            return (await Call("desktop.engine.browse",new { Folder=folder,Path=path }))?.ToJsonString()==listing;
+        });
     }
     private void Detail(Func<Task> route) {
         if (!restoringDetail) {
@@ -523,15 +550,19 @@ public sealed partial class MainPage : Page
         }
         Body.Children.Add(ActionButton("Choose folders from a gateway", async () => { page = "remoteAccess"; await Refresh(); }));
     }
-    private async Task Pending()
+    // Returns what the rows show, to notice when they change
+    private async Task<string> Pending()
     {
-        foreach (var edit in (await Call("files.pending"))?.AsArray() ?? [])
+        var edits = await Call("files.pending");
+        foreach (var edit in edits?.AsArray() ?? [])
         {
             var id = N(edit, "id"); Row(S(edit, "path"), S(edit, "state") + "\n" + S(edit, "error"),
                 ActionButton("Export", async () => { var destination = await PickSave(Path.GetFileName(S(edit,"path"))); if (destination is not null) await Call("files.export", new { Item = id, Path = destination }); }),
                 ActionButton("Discard", async () => { if (await Confirm("Discard pending change?", "This gives up the local change and restores what the gateway has.")) { await Call("files.discard", new { Item = id }); await Refresh(); } }));
         }
+        return PendingShape(edits);
     }
+    private static string PendingShape(JsonNode? edits) => string.Join("\n", edits?.AsArray().Select(edit => string.Join("\t", S(edit, "id"), S(edit, "path"), S(edit, "state"), S(edit, "error"))) ?? []);
     private async Task Versions(long item)
     {
         Detail(()=>Versions(item));
@@ -599,12 +630,15 @@ public sealed partial class MainPage : Page
         await Refresh();
     }
     private async Task ImportHome(){var source=await PickFolder();if(source is not null && await Confirm("Import Syncthing configuration?","Syncthing must be stopped. Its configuration and identity are copied; synchronized folders stay where they are.")){await Call("home.import",new {Path=source});await SetMode("synchronize");}}
-    private async Task RecoveredCaptures()
+    // Returns what the rows show, to notice when they change
+    private async Task<string> RecoveredCaptures()
     {
         Text("These complete snapshots were retained before a save could finish. Export keeps the original capture for recovery.");
-        foreach(var capture in (await Call("recovery.captures"))?.AsArray()??[]) {
+        var captures = await Call("recovery.captures");
+        foreach(var capture in captures?.AsArray()??[]) {
             var name=S(capture,"Name");var path=S(capture,"Path");Row(path.Length>0?path:"Unassigned captured file",N(capture,"Size").ToString("N0")+" bytes · "+S(capture,"Modified"),ActionButton("Export…",async()=>{var destination=await PickSave(path.Length>0?Path.GetFileName(path):"Recovered file");if(destination is not null)await Call("recovery.export",new {Captured=name,Path=destination});}));
         }
+        return captures?.ToJsonString() ?? "";
     }
     private async Task ChooseLocation(){var path=await PickFolder();if(path is not null){await Call("root.set",new {Path=path});await Refresh();}}
     private async Task HistorySources()

@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Gordon. SPDX-License-Identifier: MPL-2.0
 using Microsoft.UI.Xaml.Controls;
+using System.Text.Json.Nodes;
 
 namespace Synctrain_App;
 
@@ -14,13 +15,23 @@ public sealed partial class MainPage
         Command("Back", Symbol.Back, LeaveDetails);
         Command(B(folder, "Paused") ? "Resume" : "Pause", B(folder, "Paused") ? Symbol.Play : Symbol.Pause, () => EngineAction(B(folder, "Paused") ? "resume" : "pause", id));
         Command("Rescan", Symbol.Sync, () => EngineAction("rescan", id));
+        var state = new FolderStatus(); state.Show(folder);
+        // The state and synchronization progress change in place; anything the commands and sections depend on builds the page again
+        static string Shape(JsonNode? value) => string.Join("\t", S(value, "Label"), S(value, "Path"), S(value, "Type"), B(value, "Paused"));
+        var shape = Shape(folder);
+        Live(async (_, changed) => {
+            if (!changed && !state.Syncing) return true;
+            var current = (await Call("desktop.engine.folders"))?.AsArray().FirstOrDefault(item => S(item, "ID") == id);
+            if (current is null || Shape(current) != shape) return false;
+            state.Show(current); return true;
+        });
         foreach (var section in catalog["detailDescriptors"]!["folder"]!.AsArray())
         {
             var title = S(section, "title"); Text(title, true);
             switch (S(section, "id"))
             {
                 case "overview":
-                    Text(S(folder, "Path") + "\n" + S(folder, "State") + " " + S(folder, "Error"));
+                    Text(S(folder, "Path")); Body.Children.Add(state.Element);
                     Body.Children.Add(ActionButton("Folder settings…", () => EditSettings("basic/folder/" + id)));
                     Body.Children.Add(ActionButton("Browse", () => BrowseSync(id, ""))); break;
                 case "synchronization":

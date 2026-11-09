@@ -11,6 +11,8 @@ The app opens Overview and keeps one navigation list while switching between man
 
 Folders manages synchronized or mounted folders. Browse Files remains an optional in-app tool; Overview provides system file-manager access. Settings search is available from every page and shows applicable results. Existing unsaved-draft and Save protections apply when moving between management and preference pages. See [the shared UI acceptance record](desktop-ui-acceptance.md) for verification and remaining platform limits.
 
+Progress is live in Synchronize mode: Overview shows how many files are being received and sent, with the bytes done, speed and time remaining, and opens lists of each file being received (by folder) or sent (by device). A syncing folder shows how much of it is here and how much remains, and a file's information shows its download while it arrives. These pages update every second or two while they are shown. The speeds come from `engine.transfers`: a direction's speed from the bytes every connection received or sent over the last 10 seconds, as in Syncthing's own GUI, and a file's from its own progress. In Files mode, Activity lists the downloads from gateways with their state and verified blocks.
+
 ## Build and install
 
 Build on local NTFS with Windows 11, .NET 10, Go 1.27, Visual Studio's WinUI and C++

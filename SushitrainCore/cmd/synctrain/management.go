@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
@@ -26,77 +27,179 @@ func (d *desktopUI) folders() {
 			return
 		}
 		g := d.group("Synchronized Folders")
-		for _, f := range folders {
-			f := f
-			r := adw.NewExpanderRow()
-			r.SetUseMarkup(false)
-			r.SetTitle(f.Label)
-			r.SetSubtitle(strings.Join(nonEmpty(f.Path, f.Type, f.State, f.Error), " · "))
-			r.AddSuffix(textButton("Browse", func() {
-				if d.route == "Files" {
-					d.subpage(func() { d.folder = f.ID; d.directory = ""; d.browse() })
-				} else {
-					d.openFilesAt(f.ID, "", 0)
-				}
-			}))
-			actions := []struct {
-				name string
-				run  func()
-			}{
-				{"Overview", func() { d.edit("basic/folder/"+f.ID, "Folder Settings") }},
-				{"Synchronization", func() { d.edit("folder/"+f.ID, "Synchronization Settings") }},
-				{"Sharing", func() { d.share(f) }},
-				{"Versioning", func() { d.edit("versioning/"+f.ID, "Versioning") }},
-				{"Ignore Patterns", func() { d.ignores(f.ID) }},
-				{"Advanced", func() { d.edit("advanced/folder/"+f.ID, "Advanced") }},
-				{"Reset Synchronization Settings…", func() { d.edit("reset/folder/"+f.ID, "Reset Synchronization Settings") }},
-				{"Failed Items", func() { d.failedItems(f.ID) }},
-				{"Deleted Files", func() { d.deletedFiles(f.ID) }},
-				{"Rescan", func() { d.action("rescan", f.ID, "") }},
-				{"Open in Files", func() { d.w.openPath(f.Path) }},
-				{"Move Folder…", func() {
-					d.pickFolder("Move into this directory", func(target string) {
-						d.run("engine.action", desktopapi.Request{Action: "relocate", Folder: f.ID, Path: target}, nil)
-					})
-				}},
-				{"Remove Folder…", func() {
-					d.w.confirm("Remove “"+f.Label+"”?", "Local files stay on this machine. Synchronization stops.", "Remove", true, func() { d.action("remove", f.ID, "") })
-				}},
+		shown, rows := folderListKey(folders), d.folderRows(g, folders)
+		widgets := folderWidgets(g, rows, len(folders))
+		// Folder states and syncing progress are live. A folder added, removed or shared elsewhere makes the rows again.
+		pollPage(d, func(ctx context.Context) ([]desktopapi.Folder, error) {
+			var next []desktopapi.Folder
+			err := d.request(ctx, "engine.folders", nil, &next)
+			return next, err
+		}, func(next []desktopapi.Folder, err error) {
+			if err != nil {
+				return
 			}
-			pause := "Pause"
+			if key := folderListKey(next); key != shown {
+				for _, w := range widgets {
+					g.Remove(w)
+				}
+				shown, rows = key, d.folderRows(g, next)
+				widgets = folderWidgets(g, rows, len(next))
+				return
+			}
+			for _, f := range next {
+				rows[f.ID].update(f)
+			}
+		})
+	})
+}
+
+// folderListKey changes when the folder rows have to be made again: a folder is added or removed, or something its
+// row's actions use changes (they keep the folder as it was when the row was made)
+func folderListKey(folders []desktopapi.Folder) string {
+	var b strings.Builder
+	for _, f := range folders {
+		b.WriteString(strings.Join([]string{f.ID, f.Label, f.Path, f.Type, strings.Join(f.Devices, ",")}, "\x00") + "\x01")
+	}
+	return b.String()
+}
+
+// folderWidgets are the rows of a folder list, with the row saying there are none
+func folderWidgets(g *adw.PreferencesGroup, rows map[string]*folderRow, count int) []gtk.Widgetter {
+	var widgets []gtk.Widgetter
+	for _, r := range rows {
+		widgets = append(widgets, r.row)
+	}
+	if count == 0 {
+		empty := row("No folders yet", "Add a folder to start synchronizing.")
+		g.Add(empty)
+		widgets = append(widgets, empty)
+	}
+	return widgets
+}
+
+// folderRow is a synchronized folder's row, with how far a syncing folder has come
+type folderRow struct {
+	row       *adw.ExpanderRow
+	pause     *gtk.Button
+	sync      *gtk.Box
+	bar       *gtk.ProgressBar
+	remaining *gtk.Label
+	paused    bool
+}
+
+// folderState is a folder's state as its row says it
+func folderState(f desktopapi.Folder) string {
+	if f.State == "syncing" {
+		return "Synchronizing…"
+	}
+	return f.State
+}
+
+// folderRemaining is how much a syncing folder has yet to receive ("" when that isn't known)
+func folderRemaining(f desktopapi.Folder) string {
+	if f.Sync == nil || f.Sync.GlobalBytes <= 0 {
+		return ""
+	}
+	return humanBytes(max(0, f.Sync.GlobalBytes-f.Sync.LocalBytes)) + " remaining"
+}
+
+func (r *folderRow) update(f desktopapi.Folder) {
+	r.row.SetSubtitle(strings.Join(nonEmpty(f.Path, f.Type, folderState(f), f.Error), " · "))
+	r.paused = f.Paused
+	if f.Paused {
+		r.pause.SetLabel("Resume")
+	} else {
+		r.pause.SetLabel("Pause")
+	}
+	remaining := folderRemaining(f)
+	r.sync.SetVisible(remaining != "")
+	if remaining != "" {
+		setProgress(r.bar, f.Sync.Fraction)
+		r.remaining.SetText(remaining)
+	}
+}
+
+func (d *desktopUI) folderRows(g *adw.PreferencesGroup, folders []desktopapi.Folder) map[string]*folderRow {
+	rows := map[string]*folderRow{}
+	for _, f := range folders {
+		f := f
+		r := adw.NewExpanderRow()
+		r.SetUseMarkup(false)
+		r.SetTitle(f.Label)
+		fr := &folderRow{row: r, sync: gtk.NewBox(gtk.OrientationVertical, 2),
+			bar: newProgressBar(120, "Synchronization of "+f.Label), remaining: gtk.NewLabel("")}
+		fr.remaining.AddCSSClass("dim-label")
+		fr.remaining.AddCSSClass("caption")
+		fr.sync.SetVAlign(gtk.AlignCenter)
+		fr.sync.Append(fr.bar)
+		fr.sync.Append(fr.remaining)
+		r.AddSuffix(fr.sync)
+		r.AddSuffix(textButton("Browse", func() {
+			if d.route == "Files" {
+				d.subpage(func() { d.folder = f.ID; d.directory = ""; d.browse() })
+			} else {
+				d.openFilesAt(f.ID, "", 0)
+			}
+		}))
+		actions := []struct {
+			name string
+			run  func()
+		}{
+			{"Overview", func() { d.edit("basic/folder/"+f.ID, "Folder Settings") }},
+			{"Synchronization", func() { d.edit("folder/"+f.ID, "Synchronization Settings") }},
+			{"Sharing", func() { d.share(f) }},
+			{"Versioning", func() { d.edit("versioning/"+f.ID, "Versioning") }},
+			{"Ignore Patterns", func() { d.ignores(f.ID) }},
+			{"Advanced", func() { d.edit("advanced/folder/"+f.ID, "Advanced") }},
+			{"Reset Synchronization Settings…", func() { d.edit("reset/folder/"+f.ID, "Reset Synchronization Settings") }},
+			{"Failed Items", func() { d.failedItems(f.ID) }},
+			{"Deleted Files", func() { d.deletedFiles(f.ID) }},
+			{"Rescan", func() { d.action("rescan", f.ID, "") }},
+			{"Open in Files", func() { d.w.openPath(f.Path) }},
+			{"Move Folder…", func() {
+				d.pickFolder("Move into this directory", func(target string) {
+					d.run("engine.action", desktopapi.Request{Action: "relocate", Folder: f.ID, Path: target}, nil)
+				})
+			}},
+			{"Remove Folder…", func() {
+				d.w.confirm("Remove “"+f.Label+"”?", "Local files stay on this machine. Synchronization stops.", "Remove", true, func() { d.action("remove", f.ID, "") })
+			}},
+		}
+		// The label follows the folder's state, which can change elsewhere
+		fr.pause = textButton("", func() {
 			action := "pause"
-			if f.Paused {
-				pause = "Resume"
+			if fr.paused {
 				action = "resume"
 			}
-			r.AddSuffix(textButton(pause, func() { d.action(action, f.ID, "") }))
-			if f.Type == "sendonly" {
-				actions = append(actions, struct {
-					name string
-					run  func()
-				}{"Override Remote Changes…", func() {
-					d.w.confirm("Override Remote Changes?", "Other devices will be changed to match this folder, including deletions.", "Override", true, func() { d.action("override", f.ID, "") })
-				}})
-			}
-			if f.Type == "receiveonly" || f.Type == "receiveencrypted" {
-				actions = append(actions, struct {
-					name string
-					run  func()
-				}{"Revert Local Changes…", func() {
-					d.w.confirm("Revert Local Changes?", "Local changes are replaced with the synchronized version.", "Revert", true, func() { d.action("revert", f.ID, "") })
-				}})
-			}
-			for _, a := range actions {
-				a := a
-				rr := choiceRow(a.name, "", a.run)
-				r.AddRow(rr)
-			}
-			g.Add(r)
+			d.action(action, f.ID, "")
+		})
+		r.AddSuffix(fr.pause)
+		if f.Type == "sendonly" {
+			actions = append(actions, struct {
+				name string
+				run  func()
+			}{"Override Remote Changes…", func() {
+				d.w.confirm("Override Remote Changes?", "Other devices will be changed to match this folder, including deletions.", "Override", true, func() { d.action("override", f.ID, "") })
+			}})
 		}
-		if len(folders) == 0 {
-			g.Add(row("No folders yet", "Add a folder to start synchronizing."))
+		if f.Type == "receiveonly" || f.Type == "receiveencrypted" {
+			actions = append(actions, struct {
+				name string
+				run  func()
+			}{"Revert Local Changes…", func() {
+				d.w.confirm("Revert Local Changes?", "Local changes are replaced with the synchronized version.", "Revert", true, func() { d.action("revert", f.ID, "") })
+			}})
 		}
-	})
+		for _, a := range actions {
+			a := a
+			rr := choiceRow(a.name, "", a.run)
+			r.AddRow(rr)
+		}
+		fr.update(f)
+		g.Add(r)
+		rows[f.ID] = fr
+	}
+	return rows
 }
 func (d *desktopUI) devices() {
 	d.button("Add Device…", func() {

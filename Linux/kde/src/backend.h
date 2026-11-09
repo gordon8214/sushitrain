@@ -2,10 +2,45 @@
 #pragma once
 #include "serviceclient.h"
 #include <KStatusNotifierItem>
+#include <QAbstractListModel>
 #include <QHash>
 #include <QJsonArray>
+#include <QTimer>
 #include <QVariantList>
 #include <optional>
+
+// The rows QML shows. Each change is applied as row insertions, removals and
+// data changes by row identity, so a page that refreshes itself keeps its
+// delegates (focus, open menus, scroll position) when its rows stay.
+class RowModel : public QAbstractListModel {
+  Q_OBJECT
+public:
+  using QAbstractListModel::QAbstractListModel;
+  int rowCount(const QModelIndex &parent = {}) const override;
+  QVariant data(const QModelIndex &index, int role) const override;
+  QHash<int, QByteArray> roleNames() const override;
+  void sync(const QVariantList &rows);
+  // A row's identity: its "id", or its title and section, and which of the
+  // rows with those it is
+  static QStringList keys(const QVariantList &rows);
+
+private:
+  QVariantList current;
+  QStringList currentKeys;
+};
+
+// What a row shows besides its title, subtitle and actions
+struct RowDetail {
+  std::optional<double> progress = std::nullopt;
+  // A stable identity, for rows whose title changes as they refresh
+  QString id = {};
+  // Shown in the negative text color
+  QString error = {};
+  // Orders rows from separate requests within their section
+  int order = 0;
+  // A section heading instead of a row
+  bool heading = false;
+};
 
 // QML receives presentation data and opaque action keys; protocol identifiers
 // and integer timestamps remain in C++ QJsonValue objects without JS rounding.
@@ -22,6 +57,11 @@ class Backend : public QObject {
   Q_PROPERTY(QString page READ page NOTIFY changed)
   Q_PROPERTY(QString error READ error NOTIFY changed)
   Q_PROPERTY(QVariantList rows READ rows NOTIFY changed)
+  Q_PROPERTY(QAbstractItemModel *rowModel READ rowModel CONSTANT)
+  // Pages refresh themselves only while the window is on screen
+  Q_PROPERTY(bool shown READ shown WRITE setShown NOTIFY shownChanged)
+  // Download progress of the file whose information is open
+  Q_PROPERTY(QVariantMap dialogStatus READ dialogStatus NOTIFY dialogStatusChanged)
   Q_PROPERTY(QVariantList commands READ commands NOTIFY changed)
   Q_PROPERTY(bool cancelable READ cancelable NOTIFY changed)
   Q_PROPERTY(bool busy READ busy NOTIFY changed)
@@ -43,6 +83,10 @@ public:
   QString page() const { return m_page; }
   QString error() const { return m_error; }
   QVariantList rows() const { return m_rows; }
+  QAbstractItemModel *rowModel() { return &model; }
+  bool shown() const { return m_shown; }
+  void setShown(bool value);
+  QVariantMap dialogStatus() const { return m_dialogStatus; }
   QVariantList commands() const { return m_commands; }
   bool busy() const { return m_busy; }
   bool cancelable() const { return !activePairing.isEmpty(); }
@@ -60,12 +104,18 @@ public:
   Q_INVOKABLE void refresh();
   void arguments(const QStringList &args);
   void inspect();
+  // The live page and the open file information ask again now, instead of
+  // at their next interval
+  void liveRefresh();
+  void pollFileStatus();
 signals:
   void settingsSearchChanged();
   void changed();
   void navigationChanged();
   void closeReady();
   void dialogChanged();
+  void shownChanged();
+  void dialogStatusChanged();
   void settingsSaveFailed();
   void preview(const QString &file, const QString &kind, const QString &text,
                const QString &location, const QString &name);
@@ -110,7 +160,7 @@ private:
   void command(const QString &label, std::function<void()> fn);
   void
   row(const QString &title, const QString &subtitle,
-      const QList<std::pair<QString, std::function<void()>>> &buttons = {}, const QString &section = {}, std::optional<double> progress = std::nullopt);
+      const QList<std::pair<QString, std::function<void()>>> &buttons = {}, const QString &section = {}, const RowDetail &detail = {});
   void toggleRow(const QString &title, const QString &subtitle, bool checked, std::function<void()> toggle);
   void clear(const QString &title);
   void call(const QString &method, const QJsonObject &p, Reply reply,
@@ -123,6 +173,7 @@ private:
             const QString &accept = "Save");
   void confirm(const QString &title, const QString &text,
                std::function<void()> done);
+  void buildPage();
   void overview();
   void folders();
   void devices();
@@ -131,6 +182,50 @@ private:
   void openSetting(const QString &action, const QString &title);
   void historyPage();
   void activityPage();
+  // Live pages: a builder that runs again every interval while its page is
+  // shown, and whose rows are merged into the page in place
+  RowModel model{this};
+  bool m_shown = true;
+  QTimer liveTimer{this};
+  QTimer statusTimer{this};
+  std::function<void()> livePage;
+  QObject *liveReads = nullptr;
+  int liveOutstanding = 0;
+  bool liveBuilding = false;
+  // Reads made while a page builds; their errors go once a refresh succeeds
+  bool buildingPage = false;
+  // m_error came from such a read (not from a mutation or a user's own read)
+  bool readFailure = false;
+  quint64 shortcutsSerial = 0;
+  bool shortcutsPending = false;
+  struct LiveStaging {
+    QVariantList rows, commands;
+    QString error;
+  } staging;
+  void live(std::function<void()> builder, int interval);
+  void stopLive();
+  void liveCall(const QString &method, const QJsonObject &p, Reply reply,
+                int timeout);
+  void settleLive();
+  void mergeLive();
+  bool adoptActions(QVariantMap &fresh, const QVariantMap &old);
+  void dropActions(const QVariantMap &row);
+  friend struct LiveScope;
+  void overviewTransfers();
+  void transferList(bool uploads);
+  void transferPage(bool uploads);
+  void transfersSummary();
+  void filesActivity();
+  QVariantMap m_dialogStatus;
+  struct FileStatus {
+    quint64 serial = 0;
+    QString folder, path;
+    // Here, or left out by the ignore patterns: nothing to wait for
+    bool settled = true, pending = false;
+  } fileStatus;
+  quint64 fileStatusSerial = 0;
+  void fileInformation(const QJsonObject &entry, const QString &name);
+  void setDialogStatus(const QVariantMap &status);
   void edit(const QString &section);
   void remote(bool revealSettings = false);
   void filesService();

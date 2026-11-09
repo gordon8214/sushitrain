@@ -236,20 +236,64 @@ public sealed partial class MainPage
     private async Task ActivityPage(string mode)
     {
         Text("Transfers", true);
+        // Transfers change in place every second; the other sections build the page again when what they show changes
+        Func<JsonNode?, bool, Task<bool>> update;
         if (mode == "files")
         {
-            Text("Pending Changes", true); await Pending();
+            var transfers = new ProgressList("No recent transfers");
+            async Task Load() { var current = await Call("files.transfers"); transfers.Show(FileTransferGroups(current), MoreTransfers(current)); }
+            var polling = await FirstTransfers(Load, transfers.Element);
+            Text("Pending Changes", true); var pending = await Pending();
             Text("Errors", true);
+            var issues = status?["projectionIssues"]?.ToJsonString() ?? "";
             foreach (var issue in status?["projectionIssues"]?.AsArray() ?? []) Text(S(issue, "Name") + ": " + S(issue, "Reason"));
-
+            update = async (next, changed) => {
+                if ((next?["projectionIssues"]?.ToJsonString() ?? "") != issues) return false;
+                // Transfers that couldn't be loaded are tried again when anything changes
+                if (!polling) return !changed;
+                await Load();
+                return !changed || PendingShape(await Call("files.pending")) == pending;
+            };
         }
         else
         {
-            var stats = await Call("engine.stats");
-            foreach (var direction in new[] { "download", "upload" }) if (stats?[direction] is JsonNode progress) Text(direction + ": " + S(progress, "FilesTotal") + " files");
+            var downloads = new ProgressList("Not downloading", "Currently no files are being downloaded from other devices.");
+            var uploads = new ProgressList("Not uploading", "Currently no files are being sent to other devices.");
+            var totals = new TransferSummary(null);
+            var sending = new TransferSummary(null);
+            void Show(JsonNode? transfers) {
+                totals.Show(new JsonObject { ["Download"] = transfers?["Download"]?.DeepClone() }); downloads.Show(DownloadGroups(transfers));
+                sending.Show(new JsonObject { ["Upload"] = transfers?["Upload"]?.DeepClone() }); uploads.Show(UploadGroups(transfers));
+            }
+            var section = new StackPanel { Spacing = 12 };
+            foreach (var element in new UIElement[] { Subheading("Downloads"), totals.Element, downloads.Element, Subheading("Uploads"), sending.Element, uploads.Element }) section.Children.Add(element);
+            var polling = await FirstTransfers(async () => Show(await Call("desktop.engine.transfers")), section);
+            update = async (_, changed) => {
+                // Transfers that couldn't be loaded are tried again when anything changes
+                if (!polling) return !changed;
+                // Speeds need samples while anything moves, even between engine events
+                if (changed || downloads.Count + uploads.Count > 0) Show(await Call("desktop.engine.transfers"));
+                return true;
+            };
             Body.Children.Add(ActionButton("Folder Errors", async () => { page = "folders"; await Refresh(); }));
             Text("Activity Log", true); Body.Children.Add(ActionButton("Activity Log", ShowLogs));
         }
-        Text("Recovery", true); await RecoveredCaptures();
+        Text("Recovery", true); var captures = await RecoveredCaptures();
+        Live(async (next, changed) => await update(next, changed) && (!changed || (await Call("recovery.captures"))?.ToJsonString() == captures));
+    }
+
+    private static TextBlock Subheading(string text)
+    {
+        var heading = new TextBlock { Text = text, FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetHeadingLevel(heading, Microsoft.UI.Xaml.Automation.Peers.AutomationHeadingLevel.Level2);
+        return heading;
+    }
+
+    // The first load of the transfers adds what shows them; when it fails, the rest of the page is still built
+    private async Task<bool> FirstTransfers(Func<Task> load, UIElement element)
+    {
+        try { await load(); Body.Children.Add(element); return true; }
+        catch (OperationCanceledException) when (ViewChanged) { throw; }
+        catch (Exception error) { Text("Transfers are unavailable: " + error.Message); return false; }
     }
 }

@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -189,35 +188,7 @@ func (d *desktopUI) activityPage() {
 		return
 	}
 	g := d.group("Transfers")
-	d.load("engine.stats", nil, func(b json.RawMessage) {
-		var stats struct {
-			Download, Upload struct {
-				FilesTotal            int
-				BytesTotal, BytesDone int64
-				Percentage            float64
-			}
-		}
-		if err := json.Unmarshal(b, &stats); err != nil {
-			d.error(err)
-			return
-		}
-		for _, item := range []struct {
-			title       string
-			files       int
-			total, done int64
-			fraction    float64
-		}{
-			{"Downloading", stats.Download.FilesTotal, stats.Download.BytesTotal, stats.Download.BytesDone, stats.Download.Percentage},
-			{"Uploading", stats.Upload.FilesTotal, stats.Upload.BytesTotal, stats.Upload.BytesDone, stats.Upload.Percentage},
-		} {
-			r := row(item.title, fmt.Sprintf("%d files • %s of %s", item.files, humanBytes(item.done), humanBytes(item.total)))
-			progress := gtk.NewProgressBar()
-			progress.SetFraction(item.fraction)
-			progress.SetSizeRequest(180, -1)
-			r.AddSuffix(progress)
-			g.Add(r)
-		}
-	})
+	d.transferStatus(g)
 	g.Add(choiceRow("Activity Log", "Recent events, errors, and diagnostics", d.logs))
 	d.text("Pending file changes and recovery are available in Files mode.")
 }

@@ -75,7 +75,10 @@ private struct MobileManagementPage: View {
 				case "remoteAccess": Form { RemoteGatewaysSection() }.navigationTitle("Remote Access")
 				case "activity":
 					Form {
-						if RemoteCoordinator.shared.operations.isEmpty { Text("No pending edits.") }
+						RemoteTransfersSection(store: RemoteEnvironment.shared?.store)
+						if RemoteCoordinator.shared.operations.isEmpty {
+							Section("Pending Changes") { Text("No pending edits.") }
+						}
 						RemoteOperationsSection()
 					}.navigationTitle("Activity")
 				case "history":

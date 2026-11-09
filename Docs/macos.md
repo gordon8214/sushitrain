@@ -21,6 +21,8 @@ Both operating modes open Overview and use one grouped sidebar: Manage contains 
 
 There is no separate Settings window. The app menu, Command-comma, and menu-bar Settings command activate the main window at General. About shortcuts open the About page. Folders manages the configured folders; Browse Files is the optional in-app browser, with native Finder access available from Overview and folder management. Metadata browsing does not download file contents; Open/Preview/offline actions keep using the existing services.
 
+Progress is live in Synchronize mode: Overview shows how many files are being received and sent, with the percentage, speed and time remaining, and opens lists of each file being received or sent; the menu bar shows the same summary. A syncing folder shows how much of it is here, and a file's information shows its download while it arrives. In Files in Finder mode, Finder shows each download's progress, and Activity lists the recent transfers with their state and verified blocks. The iPhone and iPad app lists its own transfers the same way, under Activity.
+
 The authoritative order, stable IDs, and platform/mode availability are in `SushitrainCore/desktopui/catalog.json`. Settings search stays available throughout the shell and opens applicable controls directly.
 
 General contains identity, mode, startup, and app presence. Files & Storage contains browsing, previews, caches, and locations.

@@ -57,8 +57,8 @@ type Folder struct {
 }
 
 func (fld *Folder) folderConfiguration() *config.FolderConfiguration {
-	folders := fld.client.cfg().Folders()
-	folderInfo, ok := folders[fld.FolderID]
+	// Only this folder's configuration is copied: copying all of them made listing folders cost their count squared
+	folderInfo, ok := fld.client.cfg().Folder(fld.FolderID)
 	if !ok {
 		return nil
 	}

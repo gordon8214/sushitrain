@@ -30,6 +30,8 @@ type browserRow struct {
 	node                            uint64
 	keep, writable                  bool
 	size                            int64
+	// A synchronized folder's file that its ignore patterns leave out
+	ignored bool
 }
 
 func (d *desktopUI) browse() {
@@ -96,7 +98,7 @@ func (d *desktopUI) browsePage(offset int) {
 				return
 			}
 			for _, e := range entries {
-				rows = append(rows, browserRow{name: e.Name, detail: humanBytes(e.Size), path: e.Path, url: e.URL, native: e.NativePath, identity: e.Identity, directory: e.Directory, writable: e.Local, size: e.Size})
+				rows = append(rows, browserRow{name: e.Name, detail: humanBytes(e.Size), path: e.Path, url: e.URL, native: e.NativePath, identity: e.Identity, directory: e.Directory, writable: e.Local, size: e.Size, ignored: e.Ignored})
 			}
 		}
 		d.browserRows = append(d.browserRows, rows...)
@@ -477,7 +479,18 @@ func (d *desktopUI) fileActionsPage(r browserRow) {
 			d.button("Show in Files", func() { d.w.openPath(filepath.Dir(r.native)) })
 		}
 	}
-	d.button("Information", func() { d.subpage(func() { d.reset("Information"); d.text(r.name); d.text(r.path); d.text(r.detail) }) })
+	folder := d.folder
+	d.button("Information", func() {
+		d.subpage(func() {
+			d.reset("Information")
+			d.text(r.name)
+			d.text(r.path)
+			d.text(r.detail)
+			if d.mode == modeSynchronize && !r.directory {
+				d.fileProgress(r, folder)
+			}
+		})
+	})
 	if !r.directory {
 		d.button("Preview", func() { d.openBrowserRow(r) })
 	}
@@ -577,7 +590,7 @@ func (d *desktopUI) searchFilesPage(query string) {
 			var list []desktopapi.Entry
 			json.Unmarshal(b, &list)
 			for _, e := range list {
-				rows = append(rows, browserRow{name: e.Name, path: e.Path, url: e.URL, native: e.NativePath, identity: e.Identity, size: e.Size, directory: e.Directory, detail: e.Path})
+				rows = append(rows, browserRow{name: e.Name, path: e.Path, url: e.URL, native: e.NativePath, identity: e.Identity, size: e.Size, directory: e.Directory, detail: e.Path, ignored: e.Ignored})
 			}
 		}
 		sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })

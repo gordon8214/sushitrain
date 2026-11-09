@@ -43,6 +43,8 @@ type Control struct {
 	mu         sync.RWMutex
 	editors    map[string]*draft
 	closed     bool
+
+	transferSampler transferSampler
 }
 
 func New(c *core.Client, restart func() error) *Control {
@@ -67,7 +69,7 @@ func Strings(list *core.ListOfStrings) []string {
 }
 func (c *Control) Register(a *adminsock.Server) {
 	desktopapi.RegisterItems(a, c.itemStatus)
-	for _, name := range []string{"engine.diagnostics", "engine.differences", "engine.snapshots", "engine.exportSnapshot", "engine.inspect", "engine.read", "engine.replace", "engine.mkdir", "engine.import", "engine.rename", "engine.move", "engine.status", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.browsePage", "engine.thumbnail", "engine.search", "engine.pending", "engine.pendingFolders", "engine.ignored", "engine.stats", "engine.logs", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "engine.previewVersion", "engine.exportCurrent", "engine.resolvePath", "engine.captureRestore", "engine.restoreDownloaded", "settings.index", "settings.get", "settings.save", "settings.close", "configuration.export"} {
+	for _, name := range []string{"engine.diagnostics", "engine.differences", "engine.snapshots", "engine.exportSnapshot", "engine.inspect", "engine.read", "engine.replace", "engine.mkdir", "engine.import", "engine.rename", "engine.move", "engine.status", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.browsePage", "engine.thumbnail", "engine.search", "engine.pending", "engine.pendingFolders", "engine.ignored", "engine.stats", "engine.transfers", "engine.logs", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "engine.previewVersion", "engine.exportCurrent", "engine.resolvePath", "engine.captureRestore", "engine.restoreDownloaded", "settings.index", "settings.get", "settings.save", "settings.close", "configuration.export"} {
 		a.Register(name, func(ctx context.Context, params json.RawMessage) (any, error) {
 			var p Request
 			if len(params) > 0 {
@@ -164,7 +166,10 @@ func (c *Control) Call(ctx context.Context, method string, p Request) (any, erro
 			if f == nil {
 				continue
 			}
-			out = append(out, Folder{id, f.Label(), f.Path(), f.FolderType(), f.State(), f.StateError(), f.IsPaused(), f.CanRemoveFiles(), f.FailedItemCount(), Strings(f.SharedWithDeviceIDs())})
+			state := f.State()
+			out = append(out, Folder{ID: id, Label: f.Label(), Path: f.Path(), Type: f.FolderType(), State: state, Error: f.StateError(),
+				Paused: f.IsPaused(), CanRemoveFiles: f.CanRemoveFiles(), Failed: f.FailedItemCount(),
+				Devices: Strings(f.SharedWithDeviceIDs()), Sync: FolderSyncProgress(f, state)})
 		}
 		return out, nil
 	case "engine.devices":
@@ -258,6 +263,8 @@ func (c *Control) Call(ctx context.Context, method string, p Request) (any, erro
 			return nil, err
 		}
 		return map[string]any{"totals": stats, "download": cl.GetTotalDownloadProgress(), "upload": cl.GetTotalUploadProgress()}, nil
+	case "engine.transfers":
+		return c.transfers(), nil
 	case "engine.logs":
 		b, e := cl.LogLinesJSON(p.Offset)
 		return json.RawMessage(b), e
@@ -510,6 +517,10 @@ func entry(e *core.Entry) Entry {
 		native, _ = e.LocalNativePath()
 	}
 	result := Entry{Path: e.Path(), Name: e.Name(), MIME: e.MIMEType(), URL: e.OnDemandURL(), NativePath: native, Size: e.Size(), Directory: e.IsDirectory(), Local: e.IsLocallyPresent()}
+	if !result.Directory && !result.Local {
+		// Only what isn't here can be waiting for, and the ignore matcher is cached
+		result.Ignored = !e.IsSelected()
+	}
 	if identified, ok := any(e).(interface{ DesktopIdentity() string }); ok {
 		result.Identity = identified.DesktopIdentity()
 	}

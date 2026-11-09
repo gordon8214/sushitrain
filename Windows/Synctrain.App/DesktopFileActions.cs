@@ -1,4 +1,5 @@
 // Copyright (C) 2026 Gordon. SPDX-License-Identifier: MPL-2.0
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System.Text.Json.Nodes;
 
@@ -11,10 +12,48 @@ public sealed partial class MainPage
         var order=catalog["detailDescriptors"]!["fileActions"]!.AsArray().Select((item,index)=>(ID:S(item,"id"),Index:index)).ToDictionary(pair=>pair.ID,pair=>pair.Index);
         return actions.OrderBy(action=>order.GetValueOrDefault(action.ID,order["information"])).ToList();
     }
+    private static string InformationText(JsonNode? entry) => string.Join("\n",new[]{"Name","Path","Size","Modified","State","Local","Writable"}.Where(key=>entry?[key] is not null).Select(key=>key+": "+S(entry,key)));
     private Task FileInformation(JsonNode? entry) => new ContentDialog {
         XamlRoot=XamlRoot, Title="Information", CloseButtonText="Done",
-        Content=new TextBlock { Text=string.Join("\n",new[]{"Name","Path","Size","Modified","State","Local","Writable"}.Where(key=>entry?[key] is not null).Select(key=>key+": "+S(entry,key))), TextWrapping=Microsoft.UI.Xaml.TextWrapping.Wrap,IsTextSelectionEnabled=true }
+        Content=new TextBlock { Text=InformationText(entry), TextWrapping=Microsoft.UI.Xaml.TextWrapping.Wrap,IsTextSelectionEnabled=true }
     }.ShowAsync().AsTask();
+    // A synchronized file's information, with its download progress while it's open, or that it waits to be synchronized
+    // (nothing for a file the ignore patterns leave out)
+    private async Task SyncFileInformation(string folder,JsonNode? entry)
+    {
+        var details=new TextBlock { Text=InformationText(entry), TextWrapping=Microsoft.UI.Xaml.TextWrapping.Wrap,IsTextSelectionEnabled=true };
+        var panel=new StackPanel { Spacing=16,MinWidth=380 };panel.Children.Add(details);
+        var dialog=new ContentDialog { XamlRoot=XamlRoot,Title="Information",CloseButtonText="Done",Content=panel };
+        if(B(entry,"Directory")) { await dialog.ShowAsync();return; }
+        var progress=new FileProgress();progress.Hide();panel.Children.Add(progress.Element);
+        var path=S(entry,"Path");var local=B(entry,"Local");var ignored=B(entry,"Ignored");var busy=false;var open=true;
+        async Task Update() {
+            if(busy || !open)return;
+            busy=true;
+            try {
+                var transfers=await host.Call("desktop.engine.transfers",timeoutSeconds:LivePollSeconds);
+                var file=(transfers?["Downloads"] as JsonArray)?.FirstOrDefault(item=>S(item,"Folder")==folder && S(item,"Path")==path);
+                if(!open)return;
+                if(file is not null) { progress.Downloading(file);return; }
+                // A file that was missing may have arrived since
+                if(!local) {
+                    var inspected=await host.Call("desktop.engine.inspect",new { Folder=folder,Path=path },LivePollSeconds);
+                    if(!open)return;
+                    if(inspected?["entry"] is JsonObject current) { local=B(current,"Local");ignored=B(current,"Ignored");details.Text=InformationText(current); }
+                }
+                if(local || ignored)progress.Hide(); else progress.Waiting();
+            } catch(Exception error) { if(open)progress.Problem(error.Message); }
+            finally { busy=false; }
+        }
+        // The dialog opens at once; its first update follows
+        var shown=dialog.ShowAsync().AsTask();
+        var timer=new DispatcherTimer { Interval=TimeSpan.FromSeconds(1) };
+        timer.Tick+=async(_,_)=>await Update();
+        timer.Start();
+        _=Update();
+        try { await shown; }
+        finally { open=false;timer.Stop(); }
+    }
     private List<FileAction> RemoteFileActions(JsonNode? entry,long listingParent)
     {
         var item=N(entry,"Item");var node=N(entry,"Node");var name=S(entry,"Name");var directory=N(entry,"Kind")!=0;
@@ -37,7 +76,7 @@ public sealed partial class MainPage
     private List<FileAction> SyncFileActions(string folder,JsonNode? entry)
     {
         var path=S(entry,"Path");var name=S(entry,"Name");var token=S(entry,"Identity");var directory=B(entry,"Directory");
-        var actions=new List<FileAction> { new("Information",()=>FileInformation(entry),"information") };
+        var actions=new List<FileAction> { new("Information",()=>SyncFileInformation(folder,entry),"information") };
         if(!directory) {
             actions.Add(new("Preview",()=>Preview(S(entry,"URL"),name),"preview"));
             actions.Add(new("Previous Versions",()=>SyncVersions(folder,path),"previousVersions"));

@@ -35,7 +35,6 @@ type desktopUI struct {
 	resolveErr                             error
 	deviceID                               string
 	browserSearch                          bool
-	overviewRefresh                        func()
 	browserRows                            []browserRow
 	browserNext                            int
 	browserSelected                        string
@@ -142,11 +141,8 @@ func newDesktopUI(w *mainWindow) *desktopUI {
 			_ = configureTray(next.Tray)
 			d.refreshView()
 		}
-		if d.route == "Overview" && !d.saving {
-			if d.overviewRefresh != nil {
-				d.overviewRefresh()
-			}
-		}
+		// Live progress, on the page in view
+		d.pollVisible()
 		return true
 	})
 	return d
@@ -388,7 +384,14 @@ func (d *desktopUI) runWithFailure(method string, p any, done func(json.RawMessa
 func (d *desktopUI) error(err error) { d.banner.SetTitle(sentence(err)); d.banner.SetRevealed(true) }
 func (d *desktopUI) reset(title string) {
 	if len(d.pages) > 0 {
-		d.pages[len(d.pages)-1].page.SetTitle(title)
+		p := d.pages[len(d.pages)-1]
+		p.page.SetTitle(title)
+		// What the page polled for is replaced, and so is the error of a poll that failed
+		p.poll = nil
+		if p.pollFailed {
+			p.pollFailed = false
+			p.banner.SetRevealed(false)
+		}
 	}
 	d.body = gtk.NewBox(gtk.OrientationVertical, 12)
 	d.detail.SetSensitive(!d.saving)
@@ -512,6 +515,23 @@ func (d *desktopUI) overview() {
 			}
 		}
 	}
+	// What the engine receives and sends, or else whether other devices are connected (each opens its list)
+	var receiving, sending *transferRow
+	var connection, downloads, uploads *adw.ActionRow
+	if d.mode == modeSynchronize {
+		receiving = newTransferRow(true, func() { d.openTransfers(true) })
+		sending = newTransferRow(false, func() { d.openTransfers(false) })
+		connection = row("", "")
+		for _, r := range []*adw.ActionRow{receiving.row, sending.row, connection} {
+			r.SetVisible(false)
+			groups["status"].Add(r)
+		}
+		// The lists, also when nothing goes that way (shown in their place: a list has one way in)
+		downloads = choiceRow("Downloads", "", func() { d.openTransfers(true) })
+		uploads = choiceRow("Uploads", "", func() { d.openTransfers(false) })
+		groups["summary"].Add(downloads)
+		groups["summary"].Add(uploads)
+	}
 	heading := gtk.NewLabel("Connecting to the background service…")
 	heading.SetXAlign(0)
 	heading.SetWrap(true)
@@ -550,14 +570,6 @@ func (d *desktopUI) overview() {
 	gatewaySummary.SetXAlign(0)
 	gatewaySummary.SetVisible(d.mode == modeFiles)
 	groups["summary"].Add(gatewaySummary)
-	download := gtk.NewProgressBar()
-	download.SetShowText(true)
-	download.SetVisible(d.mode == modeSynchronize)
-	groups["summary"].Add(download)
-	upload := gtk.NewProgressBar()
-	upload.SetShowText(true)
-	upload.SetVisible(d.mode == modeSynchronize)
-	groups["summary"].Add(upload)
 	summary := gtk.NewLabel("")
 	summary.SetXAlign(0)
 	summary.SetWrap(true)
@@ -575,10 +587,6 @@ func (d *desktopUI) overview() {
 			RestartRequired              bool
 		}
 		Stats struct {
-			Download, Upload *struct {
-				BytesTotal, BytesDone int64
-				Percentage            float64
-			}
 			Totals struct {
 				Local, LocalNeed *struct {
 					Files int
@@ -586,94 +594,122 @@ func (d *desktopUI) overview() {
 				}
 			}
 		}
-		Policy  struct{ Reason string }
-		Storage struct{ Used, Kept, Budget int64 }
+		Transfers    liveTransfers
+		Devices      []desktopapi.Device
+		DevicesKnown bool
+		Policy       struct{ Reason string }
+		Storage      struct{ Used, Kept, Budget int64 }
 	}
-	updating := false
-	generation := d.generation
-	ctx := d.ctx
-	d.overviewRefresh = func() {
-		if updating {
-			return
+	pollPage(d, func(ctx context.Context) (snapshot, error) {
+		var state snapshot
+		method := "engine.status"
+		if d.mode == modeFiles {
+			method = "status"
 		}
-		updating = true
-		background(func() (snapshot, error) {
-			var state snapshot
-			method := "engine.status"
-			if d.mode == modeFiles {
-				method = "status"
-			}
-			if err := d.request(ctx, method, nil, &state.Status); err != nil {
+		if err := d.request(ctx, method, nil, &state.Status); err != nil {
+			return state, err
+		}
+		if d.mode == modeFiles {
+			if err := d.request(ctx, "storage", nil, &state.Storage); err != nil {
 				return state, err
 			}
-			if d.mode == modeFiles {
-				if err := d.request(ctx, "storage", nil, &state.Storage); err != nil {
-					return state, err
-				}
+		}
+		if d.mode == modeSynchronize {
+			if err := d.request(ctx, "engine.stats", nil, &state.Stats); err != nil {
+				return state, err
 			}
+			var err error
+			if state.Transfers, err = d.fetchTransfers(ctx); err != nil {
+				return state, err
+			}
+			state.DevicesKnown = d.request(ctx, "engine.devices", nil, &state.Devices) == nil
+			_ = d.request(ctx, "policy.get", nil, &state.Policy)
+		}
+		return state, nil
+	}, func(s snapshot, err error) {
+		if err != nil {
+			heading.SetText("The background service is stopped or unavailable.")
 			if d.mode == modeSynchronize {
-				if err := d.request(ctx, "engine.stats", nil, &state.Stats); err != nil {
-					return state, err
-				}
-				_ = d.request(ctx, "policy.get", nil, &state.Policy)
+				// What they said isn't known any more
+				receiving.row.SetVisible(false)
+				sending.row.SetVisible(false)
+				connection.SetVisible(false)
+				downloads.SetVisible(true)
+				uploads.SetVisible(true)
 			}
-			return state, nil
-		}, func(s snapshot, err error) {
-			updating = false
-			if d.closed || generation != d.generation {
-				return
+			return
+		}
+		if d.mode == modeFiles {
+			heading.SetText("Files mode — folders are fetched as you open them")
+			identity.SetText(s.Status.Mount)
+			mountPath = s.Status.Mount
+			openMount.SetSensitive(mountPath != "")
+			gatewaySummary.SetText(fmt.Sprintf("%d folders available", len(s.Status.Folders)))
+			summary.SetText(fmt.Sprintf("Cached: %s · Kept: %s · Cache budget: %s", humanBytes(s.Storage.Used), humanBytes(s.Storage.Kept), humanBytes(s.Storage.Budget)))
+			reason.SetText("Gateway connection and pending-edit problems are shown in Remote Access and Activity.")
+			return
+		}
+		d.deviceID = s.Status.DeviceID
+		heading.SetText(s.Status.Name + " · " + s.Status.State)
+		identity.SetText("Device ID: " + s.Status.DeviceID)
+		local, needed := s.Stats.Totals.Local, s.Stats.Totals.LocalNeed
+		if local != nil {
+			pending := 0
+			if needed != nil {
+				pending = needed.Files
 			}
-			if err != nil {
-				heading.SetText("The background service is stopped or unavailable.")
-				d.error(err)
-				return
-			}
-			d.banner.SetRevealed(false)
-			if d.mode == modeFiles {
-				heading.SetText("Files mode — folders are fetched as you open them")
-				identity.SetText(s.Status.Mount)
-				mountPath = s.Status.Mount
-				openMount.SetSensitive(mountPath != "")
-				gatewaySummary.SetText(fmt.Sprintf("%d folders available", len(s.Status.Folders)))
-				summary.SetText(fmt.Sprintf("Cached: %s · Kept: %s · Cache budget: %s", humanBytes(s.Storage.Used), humanBytes(s.Storage.Kept), humanBytes(s.Storage.Budget)))
-				reason.SetText("Gateway connection and pending-edit problems are shown in Remote Access and Activity.")
-				return
-			}
-			d.deviceID = s.Status.DeviceID
-			heading.SetText(s.Status.Name + " · " + s.Status.State)
-			identity.SetText("Device ID: " + s.Status.DeviceID)
-			local, needed := s.Stats.Totals.Local, s.Stats.Totals.LocalNeed
-			if local != nil {
-				pending := 0
-				if needed != nil {
-					pending = needed.Files
-				}
-				summary.SetText(fmt.Sprintf("%d local files · %s · %d files remaining", local.Files, humanBytes(local.Bytes), pending))
-			}
-			for _, progress := range []struct {
-				bar   *gtk.ProgressBar
-				name  string
-				value *struct {
-					BytesTotal, BytesDone int64
-					Percentage            float64
-				}
-			}{{download, "Downloading", s.Stats.Download}, {upload, "Uploading", s.Stats.Upload}} {
-				if progress.value == nil || progress.value.BytesTotal == 0 {
-					progress.bar.SetFraction(0)
-					progress.bar.SetText(progress.name + ": idle")
-				} else {
-					progress.bar.SetFraction(max(0, min(1, progress.value.Percentage)))
-					progress.bar.SetText(fmt.Sprintf("%s: %s of %s", progress.name, humanBytes(progress.value.BytesDone), humanBytes(progress.value.BytesTotal)))
-				}
-			}
-			message := s.Policy.Reason
-			if s.Status.RestartRequired {
-				message += " Saved settings require an engine restart."
-			}
-			reason.SetText(strings.TrimSpace(message))
-		})
+			summary.SetText(fmt.Sprintf("%d local files · %s · %d files remaining", local.Files, humanBytes(local.Bytes), pending))
+		}
+		download, upload := s.Transfers.Download, s.Transfers.Upload
+		receiving.set(download)
+		receiving.row.SetVisible(download != nil)
+		downloads.SetVisible(download == nil)
+		sending.set(upload)
+		sending.row.SetVisible(upload != nil)
+		uploads.SetVisible(upload == nil)
+		title, subtitle := connectionStatus(s.Devices)
+		connection.SetTitle(title)
+		connection.SetSubtitle(subtitle)
+		connection.SetVisible(download == nil && upload == nil && s.DevicesKnown)
+		message := s.Policy.Reason
+		if s.Status.RestartRequired {
+			message += " Saved settings require an engine restart."
+		}
+		reason.SetText(strings.TrimSpace(message))
+	})()
+}
+
+// statsProgress is a direction's totals in engine.stats
+type statsProgress struct {
+	FilesTotal, BytesTotal, BytesDone int64
+	Percentage                        float64
+}
+
+// totals are statsProgress as engine.transfers has them, without the speed (nil when nothing goes that way)
+func (p *statsProgress) totals() *desktopapi.TransferTotals {
+	if p == nil || p.BytesTotal == 0 {
+		return nil
 	}
-	d.overviewRefresh()
+	return &desktopapi.TransferTotals{FilesTotal: p.FilesTotal, BytesDone: p.BytesDone, BytesTotal: p.BytesTotal,
+		Percentage: p.Percentage, SecondsRemaining: -1}
+}
+
+// connectionStatus is whether other devices are connected, and how many of them
+func connectionStatus(devices []desktopapi.Device) (string, string) {
+	connected := 0
+	for _, device := range devices {
+		if device.Connected {
+			connected++
+		}
+	}
+	title := "Not connected"
+	if connected > 0 {
+		title = "Connected"
+	}
+	if len(devices) == 0 {
+		return title, ""
+	}
+	return title, fmt.Sprintf("%d of %s connected", connected, plural(len(devices), "device", "devices"))
 }
 
 func (d *desktopUI) serviceButtons() {
@@ -737,7 +773,6 @@ func (d *desktopUI) input(title, caption, initial string, done func(string)) {
 }
 
 func (d *desktopUI) startView() {
-	d.overviewRefresh = nil
 	d.closeEditor()
 	d.cancel()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
