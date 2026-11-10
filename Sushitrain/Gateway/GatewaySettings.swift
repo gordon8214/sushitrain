@@ -5,9 +5,11 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 #if os(macOS)
 	import Foundation
+	import SynctrainFileProviderKit
 	import SystemConfiguration
 
-	/// How the remote file service is reached, stored in the user defaults. Changes apply when the service starts.
+	/// How the remote file service is reached, stored in the user defaults. Changes apply when the service starts, but
+	/// for the address devices connect to (`publicHost`, `publicPort`), which a running service takes at once.
 	struct GatewaySettings: Equatable, Sendable {
 		enum CertificateMode: String, CaseIterable, Sendable {
 			/// A certificate the service creates, whose public key devices pin when pairing
@@ -20,9 +22,13 @@
 		static let defaultContentCacheMiB = 8192
 		static let validPorts = 1...65535
 
+		/// The port the service listens on
 		var port = Self.defaultPort
 		/// Where devices connect, for pairing codes (empty: this Mac's local host name)
 		var publicHost = ""
+		/// The port devices connect to, for pairing codes, when a router forwards another one to this Mac (0: the port
+		/// the service listens on)
+		var publicPort = 0
 		/// The name paired devices show (empty: this Mac's name)
 		var serviceName = ""
 		var certificateMode = CertificateMode.selfSigned
@@ -31,6 +37,7 @@
 		private enum Key {
 			static let port = "remoteFileServicePort"
 			static let publicHost = "remoteFileServicePublicHost"
+			static let publicPort = "remoteFileServicePublicPort"
 			static let serviceName = "remoteFileServiceName"
 			static let certificateMode = "remoteFileServiceCertificateMode"
 			static let contentCacheMiB = "remoteFileServiceContentCacheMiB"
@@ -43,6 +50,9 @@
 				settings.port = port
 			}
 			settings.publicHost = defaults.string(forKey: Key.publicHost) ?? ""
+			if let port = defaults.object(forKey: Key.publicPort) as? Int, validPorts.contains(port) {
+				settings.publicPort = port
+			}
 			settings.serviceName = defaults.string(forKey: Key.serviceName) ?? ""
 			if let mode = defaults.string(forKey: Key.certificateMode).flatMap(CertificateMode.init(rawValue:)) {
 				settings.certificateMode = mode
@@ -57,18 +67,72 @@
 			let defaults = UserDefaults.standard
 			defaults.set(port, forKey: Key.port)
 			defaults.set(publicHost, forKey: Key.publicHost)
+			defaults.set(publicPort, forKey: Key.publicPort)
 			defaults.set(serviceName, forKey: Key.serviceName)
 			defaults.set(certificateMode.rawValue, forKey: Key.certificateMode)
 			defaults.set(contentCacheMiB, forKey: Key.contentCacheMiB)
 		}
 
 		var isValid: Bool {
-			Self.validPorts.contains(port)
+			Self.validPorts.contains(port) && (publicPort == 0 || Self.validPorts.contains(publicPort))
 		}
 
 		@MainActor var effectivePublicHost: String {
 			let host = publicHost.trimmingCharacters(in: .whitespacesAndNewlines)
 			return host.isEmpty ? Self.localHostName : host
+		}
+
+		var effectivePublicPort: Int {
+			publicPort == 0 ? port : publicPort
+		}
+
+		/// Where devices connect (`host:port`), as pairing codes give it
+		@MainActor var address: String {
+			RemoteAddress.format(host: effectivePublicHost, port: effectivePublicPort)
+		}
+
+		/// The address as the user set it, for editing: empty while it is this Mac's local name and the listening port
+		@MainActor var customAddress: String {
+			publicHost.isEmpty && publicPort == 0 ? "" : address
+		}
+
+		/// These settings with the address the user typed: empty for this Mac's local name and the listening port. A
+		/// host without a port keeps following the listening port, and so does this Mac's local name. Nil when the text
+		/// is not an address.
+		@MainActor func withAddress(_ text: String) -> Self? {
+			var settings = self
+			guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+				settings.publicHost = ""
+				settings.publicPort = 0
+				return settings
+			}
+			guard let address = RemoteAddress(parsing: text) else {
+				return nil
+			}
+			settings.publicHost = address.host
+			settings.publicPort = address.port ?? 0
+			return settings.normalized()
+		}
+
+		/// These settings in the one form that stands for them, which the editors compare: the host trimmed and parsed
+		/// (no brackets or scheme; a port saved with it, as the earlier host name field allowed, becomes the public port
+		/// unless there is one), this Mac's local name as empty (it follows the Mac's name), and a public port equal to
+		/// the listening one as 0 (it follows the listening port). A host that isn't an address stays as it is, trimmed.
+		@MainActor func normalized() -> Self {
+			var settings = self
+			let host = publicHost.trimmingCharacters(in: .whitespacesAndNewlines)
+			settings.publicHost = host
+			if !host.isEmpty, let address = RemoteAddress(parsing: host) {
+				let isLocalName = address.host.caseInsensitiveCompare(Self.localHostName) == .orderedSame
+				settings.publicHost = isLocalName ? "" : address.host
+				if let port = address.port, settings.publicPort == 0 {
+					settings.publicPort = port
+				}
+			}
+			if settings.publicPort == settings.port {
+				settings.publicPort = 0
+			}
+			return settings
 		}
 
 		@MainActor var effectiveServiceName: String {

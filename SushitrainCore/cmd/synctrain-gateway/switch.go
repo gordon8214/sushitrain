@@ -220,7 +220,8 @@ func (w *serviceSwitch) status() gatewayadmin.ServiceStatus {
 	return st
 }
 
-// set changes the settings, keeps them, and starts, stops or restarts the service to match
+// set changes the settings, keeps them, and starts, stops or restarts the service to match (a new address for clients
+// alone needs no restart)
 func (w *serviceSwitch) set(s serviceSettings) error {
 	if s.Listen != "" {
 		if _, _, err := net.SplitHostPort(s.Listen); err != nil {
@@ -246,6 +247,19 @@ func (w *serviceSwitch) set(s serviceSettings) error {
 	}
 	if s.Listen == "" {
 		s.Listen = w.settings.Listen
+	}
+	// Only where pairing codes send clients changes: the running service takes it, and its clients stay connected
+	if w.svc != nil && s.Enabled && s.Listen == w.settings.Listen {
+		host, port, err := pairingAddress(s.PublicHost, s.PublicPort, s.Listen)
+		if err != nil {
+			return err
+		}
+		if err := saveSettings(w.opts.service.Home, s); err != nil {
+			return err
+		}
+		w.settings = s
+		w.svc.RegisterAdmin(w.admin, host, port)
+		return nil
 	}
 	previous := w.settings
 	if err := w.apply(s); err != nil {

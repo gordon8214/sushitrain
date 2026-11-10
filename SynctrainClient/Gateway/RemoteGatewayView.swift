@@ -93,9 +93,7 @@ private struct RemoteGatewayStatusSection: View {
 
 	var body: some View {
 		Section {
-			LabeledContent("Address") {
-				Text(verbatim: status.address).textSelection(.enabled)
-			}
+			RemoteGatewayAddressField(status: status)
 			LabeledContent("Certificate") {
 				if let pin = status.endpoint.pinnedSPKIHash {
 					Text("Pinned key \(String(pin.prefix(12)))…").monospaced()
@@ -123,6 +121,17 @@ private struct RemoteGatewayStatusSection: View {
 			}
 		} header: {
 			Text("Connection")
+		} footer: {
+			if status.endpoint.acceptedSPKIHashes.isEmpty {
+				Text(
+					"The address comes from the pairing code. This gateway is trusted by the name in its certificate, so only its port can be changed here: for another name, pair with it again from a pairing code with that name."
+				)
+			}
+			else {
+				Text(
+					"The address comes from the pairing code. If another name reaches the gateway from elsewhere, such as one set up for its router or VPN, enter it here: the pairing stays as it is."
+				)
+			}
 		}
 
 		if status.authorityChangedAt != nil {
@@ -150,6 +159,92 @@ private struct RemoteGatewayStatusSection: View {
 					.accessibilityLabel("No")
 			case .none:
 				Text("Unknown").foregroundStyle(.secondary)
+			}
+		}
+	}
+}
+
+/// Where this device reaches the gateway (`host` or `host:port`). Saving keeps the pairing and checks the gateway again.
+private struct RemoteGatewayAddressField: View {
+	let status: RemoteGatewayStatus
+	private var coordinator = RemoteCoordinator.shared
+	@State private var text: String
+	@State private var isSaving = false
+	@State private var errorMessage: String? = nil
+
+	init(status: RemoteGatewayStatus) {
+		self.status = status
+		_text = State(initialValue: status.address)
+	}
+
+	/// The address entered, nil when it is not one
+	private var address: RemoteAddress? {
+		RemoteAddress(parsing: text)
+	}
+
+	private var hasChanges: Bool {
+		guard let address else {
+			return true
+		}
+		return address.host != status.endpoint.host || (address.port ?? status.endpoint.port) != status.endpoint.port
+	}
+
+	var body: some View {
+		LabeledContent("Address") {
+			TextField("Address", text: $text, prompt: Text(verbatim: status.address))
+				.labelsHidden()
+				.multilineTextAlignment(.trailing)
+				.autocorrectionDisabled()
+				#if os(iOS)
+					.textInputAutocapitalization(.never)
+					.keyboardType(.URL)
+				#else
+					.onExitCommand {
+						text = status.address
+					}
+				#endif
+				.onSubmit(save)
+		}
+		#if os(macOS)
+			.settingsEditor(hasChanges: hasChanges, isSaving: isSaving)
+		#endif
+		.onChange(of: status.address) { previous, address in
+			if text == previous {
+				text = address
+			}
+		}
+		.alert(
+			"Could not change the address", isPresented: Binding.isNotNil($errorMessage), presenting: errorMessage
+		) { _ in
+			Button("OK") {}
+		} message: { message in
+			Text(message)
+		}
+
+		// Not while the field is empty, as when its text was just selected and deleted to type another
+		if address == nil, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+			Text("Enter a host name or IP address, optionally followed by a colon and a port.")
+				.foregroundStyle(.red)
+		}
+		if hasChanges {
+			Button("Save Address", action: save)
+				.disabled(address == nil || isSaving)
+		}
+	}
+
+	private func save() {
+		guard let address, hasChanges, !isSaving else {
+			return
+		}
+		isSaving = true
+		Task {
+			defer { isSaving = false }
+			do throws(GatewayFolderError) {
+				try await coordinator.changeAddress(serviceID: status.id, to: address)
+				text = coordinator.status(serviceID: status.id)?.address ?? text
+			}
+			catch {
+				errorMessage = error.localizedDescription
 			}
 		}
 	}

@@ -22,7 +22,11 @@ the phone, and for edits to complete. Edits made while it is unreachable wait on
   public key the pairing code carries (clients then accept exactly that key). Arbitrary certificates are never
   accepted. The gateway can also sit behind a reverse proxy (below).
 - **A reachable address**: the local network, a VPN, or a public address you configure. The gateway doesn't open
-  ports or use Syncthing relays for this.
+  ports or use Syncthing relays for this. Pairing codes carry the address; a paired device can be given another one
+  later without pairing again, on the gateway's page in Synctrain (or with
+  `synctrain-files gateways --gateway <service ID> --address <host[:port]>`). That takes a self-signed certificate,
+  whose key the pairing code pins: a gateway with a certificate clients trust normally is trusted by name, so only its
+  port can change, and another name means pairing again from a code with that name.
 
 ## Pairing
 
@@ -39,8 +43,12 @@ exported there.
 ## Synctrain on macOS
 
 In Synchronize mode, Settings › Remote file service: turn it on, choose the port and certificate, export folders, pair
-phones, and see pending operations and clients. The Mac must stay awake and Synctrain running (it can start at login without a
-window); while the service runs, Synctrain keeps macOS from napping it. Sleep is an ordinary outage. Thumbnails are rendered
+phones, and see pending operations and clients. **Address** is where devices connect, as pairing codes give it: the
+Mac's local name and the port by default, which only work on the same network. Enter `host` or `host:port` for a name
+that reaches the Mac from elsewhere, with a port when the router forwards another one. Devices paired before a change
+keep the address they were given; change it on each one, on the gateway's page under Settings › Gateways, rather than
+pairing again. The Mac must stay awake and Synctrain running (it can start at login without a window); while the
+service runs, Synctrain keeps macOS from napping it. Sleep is an ordinary outage. Thumbnails are rendered
 with Quick Look. A Mac in [Files in Finder mode](macos.md#two-modes) runs no engine, so it can't be a gateway.
 
 ## Linux (`synctrain-gateway`)

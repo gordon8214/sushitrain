@@ -6,7 +6,8 @@
 #if os(macOS)
 	import SwiftUI
 
-	/// How devices reach the service: port, host name, name, certificate and cache size. Changes apply when saved.
+	/// How devices reach the service: port, name, certificate and cache size. Changes apply when saved. The address
+	/// devices connect to is edited with the service's status.
 	struct GatewayConnectionSection: View {
 		private var controller = GatewayController.shared
 		@State private var draft = GatewayController.shared.settings
@@ -17,9 +18,17 @@
 
 		private static let cacheSizesMiB = [1024, 2048, 4096, 8192, 16384, 32768, 65536]
 
+		/// The draft with the address as saved, which this section does not edit
+		private var edited: GatewaySettings {
+			var edited = draft
+			edited.publicHost = controller.settings.publicHost
+			edited.publicPort = controller.settings.publicPort
+			return edited
+		}
+
 		private var canApply: Bool {
-			draft != controller.settings && draft.isValid && Int(portText) == draft.port
-				&& (draft.certificateMode == .selfSigned || hasCertificateFiles)
+			edited != controller.settings && edited.isValid && Int(portText) == edited.port
+				&& (edited.certificateMode == .selfSigned || hasCertificateFiles)
 		}
 
 		var body: some View {
@@ -34,9 +43,6 @@
 							.foregroundStyle(.red)
 					}
 					TextField(
-						"Host name", text: $draft.publicHost, prompt: Text(verbatim: GatewaySettings.localHostName)
-					).settingsAnchor("gateway.host")
-					TextField(
 						"Service name", text: $draft.serviceName, prompt: Text(verbatim: GatewaySettings.computerName)
 					).settingsAnchor("gateway.name")
 					Picker("Content cache", selection: $draft.contentCacheMiB) {
@@ -48,7 +54,7 @@
 					Text("Connection")
 				} footer: {
 					Text(
-						"Devices connect to this host name and port; pairing codes contain them. This Mac's local name only works on the same network: elsewhere, use a VPN or an address you set up to reach this Mac. Paired devices show the service name. The content cache holds files fetched from other devices and changes being received."
+						"The service listens on this port, which devices connect to unless the address gives another. Paired devices show the service name. The content cache holds files fetched from other devices and changes being received."
 					)
 				}
 
@@ -106,7 +112,8 @@
 						}
 						.disabled(!self.hasChanges)
 						Button(controller.isEnabled ? "Save and Restart" : "Save") {
-							controller.apply(draft)
+							controller.apply(edited)
+							draft = controller.settings
 							portText = String(draft.port)
 						}
 						.keyboardShortcut(.defaultAction)
@@ -118,7 +125,7 @@
 		}
 
 		private var hasChanges: Bool {
-			draft != controller.settings || portText != String(controller.settings.port)
+			edited != controller.settings || portText != String(controller.settings.port)
 		}
 
 		/// The sizes to choose from, including the current one

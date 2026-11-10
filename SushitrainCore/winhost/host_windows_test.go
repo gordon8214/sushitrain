@@ -339,3 +339,58 @@ func TestRecoveredCaptureExportRejectsCloudJunction(t *testing.T) {
 		}
 	}
 }
+
+func TestGatewayAddressSetting(t *testing.T) {
+	name, _ := os.Hostname()
+	for text, want := range map[string]struct {
+		host string
+		port int
+	}{
+		"":                               {"", 0},
+		"studio.example.org":             {"studio.example.org", 0},
+		"studio.example.org:20920":       {"studio.example.org", 0},
+		"studio.example.org:443":         {"studio.example.org", 443},
+		"[fd00::1]:8443":                 {"fd00::1", 8443},
+		strings.ToLower(name):            {"", 0},
+		strings.ToUpper(name) + ":20921": {"", 20921},
+	} {
+		host, port, err := gatewayAddressSetting(text)
+		if err != nil || host != want.host || port != want.port {
+			t.Errorf("%q: %q, %d, %v; want %q, %d", text, host, port, err, want.host, want.port)
+		}
+	}
+	if _, _, err := gatewayAddressSetting("studio example.org"); err == nil {
+		t.Error("an address with a space was taken")
+	}
+	// MCP gives the host and the port apart, each kept when missing
+	str := func(s string) *string { return &s }
+	num := func(n int) *int { return &n }
+	for _, c := range []struct {
+		host        *string
+		port        *int
+		wantHost    string
+		wantPort    int
+		wantRefused bool
+	}{
+		{host: str("nas.example.org"), wantHost: "nas.example.org", wantPort: 443},
+		{port: num(8443), wantHost: "studio.example.org", wantPort: 8443},
+		{port: num(20920), wantHost: "studio.example.org"},
+		{host: str(""), port: num(0)},
+		{host: str(strings.ToUpper(name)), wantPort: 443},
+		{host: str("[fd00::1]"), wantHost: "fd00::1", wantPort: 443},
+		{host: str("nas.example.org:8443"), wantRefused: true},
+		{host: str("https://nas.example.org"), wantRefused: true},
+		{host: str("nas example.org"), wantRefused: true},
+		{port: num(70000), wantRefused: true},
+	} {
+		host, port, err := mergeGatewayAddress("studio.example.org", 443, c.host, c.port)
+		if c.wantRefused != (err != nil) || !c.wantRefused && (host != c.wantHost || port != c.wantPort) {
+			t.Errorf("%+v: %q, %d, %v", c, host, port, err)
+		}
+	}
+	// Pairing codes always carry a host: this PC's name when none is set
+	h := &Host{}
+	if host, port := h.gatewayAddress(); host == "" || port != gatewayListenPort {
+		t.Errorf("default address %q, %d", host, port)
+	}
+}

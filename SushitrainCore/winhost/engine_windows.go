@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"t-shaped.nl/sushitrain/v2/desktopapi"
 	"t-shaped.nl/sushitrain/v2/enginecontrol"
+	"t-shaped.nl/sushitrain/v2/remoteclient"
 	core "t-shaped.nl/sushitrain/v2/src"
 )
 
@@ -278,6 +280,35 @@ func (h *Host) engineCall(ctx context.Context, method string, p request) (any, e
 			return nil, err
 		}
 		return nil, nil
+	case "gateway.address":
+		// The address as text (the app), or a host and a port given apart, each kept when it is missing (MCP)
+		h.optionsMu.Lock()
+		oldHost, oldPort := h.settings.GatewayHost, h.settings.GatewayPort
+		var host string
+		var port int
+		var err error
+		if p.PublicHost != nil || p.PublicPort != nil {
+			host, port, err = mergeGatewayAddress(oldHost, oldPort, p.PublicHost, p.PublicPort)
+		} else {
+			host, port, err = gatewayAddressSetting(p.Address)
+		}
+		if err == nil {
+			h.settings.GatewayHost, h.settings.GatewayPort = host, port
+			if err = h.saveLocked(); err != nil {
+				h.settings.GatewayHost, h.settings.GatewayPort = oldHost, oldPort
+			}
+		}
+		h.optionsMu.Unlock()
+		if err != nil {
+			return nil, err
+		}
+		h.revision.Add(1)
+		publicHost, publicPort := h.gatewayAddress()
+		// Only pairing uses it: a running service takes it at once, and the devices connected to it stay
+		if h.gateway != nil {
+			h.gateway.SetPublicAddress(publicHost, publicPort)
+		}
+		return map[string]string{"address": remoteclient.FormatAddress(publicHost, publicPort)}, nil
 	}
 	if h.gateway != nil {
 		r := h.gateway
@@ -309,6 +340,55 @@ func (h *Host) engineCall(ctx context.Context, method string, p request) (any, e
 	return nil, fmt.Errorf("%s is not available", method)
 }
 func raw(data []byte, err error) (any, error) { return json.RawMessage(data), err }
+
+// gatewayAddressSetting reads the address for clients the person entered: host or host:port, giving the host to keep
+// (empty for this PC's name) and the port (0 for the one the service listens on). Empty text is this PC's name and port.
+func gatewayAddressSetting(text string) (string, int, error) {
+	if strings.TrimSpace(text) == "" {
+		return "", 0, nil
+	}
+	a, err := remoteclient.ParseAddress(text)
+	if err != nil {
+		return "", 0, err
+	}
+	if name, _ := os.Hostname(); strings.EqualFold(a.Host, name) {
+		a.Host = ""
+	}
+	if a.Port == gatewayListenPort {
+		a.Port = 0
+	}
+	return a.Host, a.Port, nil
+}
+
+// mergeGatewayAddress applies a host and a port given apart (nil: keep it) to the address for clients: a host without a
+// port (empty, or this PC's name, for this PC's name), and a port (0, or the listening port, for the listening port)
+func mergeGatewayAddress(host string, port int, newHost *string, newPort *int) (string, int, error) {
+	if newHost != nil {
+		host = ""
+		if text := strings.TrimSpace(*newHost); text != "" {
+			a, err := remoteclient.ParseAddress(text)
+			if err != nil {
+				return "", 0, err
+			}
+			if a.Port != 0 {
+				return "", 0, errors.New("give the public host without a port, and the port as publicPort")
+			}
+			if name, _ := os.Hostname(); !strings.EqualFold(a.Host, name) {
+				host = a.Host
+			}
+		}
+	}
+	if newPort != nil {
+		if *newPort < 0 || *newPort > 65535 {
+			return "", 0, errors.New("choose a public port between 1 and 65535, or 0 for the listening port")
+		}
+		port = *newPort
+		if port == gatewayListenPort {
+			port = 0
+		}
+	}
+	return host, port, nil
+}
 func splitLines(text string) []string {
 	var out []string
 	for _, line := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {

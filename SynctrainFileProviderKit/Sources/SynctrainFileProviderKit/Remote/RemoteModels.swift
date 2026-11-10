@@ -874,6 +874,18 @@ public struct RemoteEndpoint: Codable, Hashable, Sendable {
 		self.displayName = displayName
 	}
 
+	/// Whether the gateway may be reached at the host from now on, keeping its pairing. Always with a pinned key, which
+	/// whatever answers at any address has to have. Without one, only at the same host: its certificate is trusted for
+	/// whatever name it is valid for, so the credential would go to whatever has a valid certificate for another name.
+	public func allowsHost(_ newHost: String) -> Bool {
+		!acceptedSPKIHashes.isEmpty || host.caseInsensitiveCompare(newHost) == .orderedSame
+	}
+
+	/// Whether the other endpoint is reached at the same host and port
+	public func hasAddress(of other: RemoteEndpoint) -> Bool {
+		port == other.port && host.caseInsensitiveCompare(other.host) == .orderedSame
+	}
+
 	/// The origin every request goes to (`https://host:port`)
 	public var baseURL: URL {
 		let host = self.host.contains(":") && !self.host.hasPrefix("[") ? "[\(self.host)]" : self.host

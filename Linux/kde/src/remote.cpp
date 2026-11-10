@@ -25,7 +25,7 @@ void Backend::filesService() {
       row("No Gateways", "Pair with a gateway to choose its available folders.");
     if (!foldersPage) for (auto e : s["gateways"].toArray()) {
       auto g = e.toObject();
-      row(str(g, "name"), str(g, "state"),
+      row(str(g, "name"), joined({str(g, "address"), str(g, "state")}),
           {{"Add Folders",
             [this, g] {
               clear("Available Folders");
@@ -49,6 +49,37 @@ void Backend::filesService() {
                              }}});
                      }
                    });
+            }},
+           {"Change Address…",
+            [this, g] {
+              // Another name that reaches the gateway (one set up for its
+              // router or VPN) lets this machine use it away from its network.
+              // The pairing stays as it is.
+              form(
+                  "Change Gateway Address",
+                  {field("Address", "Host or host:port", str(g, "address"))},
+                  [this, g](auto p) {
+                    call(
+                        "gateways.address",
+                        {{"ServiceID", g["serviceID"]}, {"Address", p["Address"]}},
+                        [this](QJsonValue v, QString) {
+                          filesService();
+                          const auto change = v.toObject();
+                          const auto problem = str(change, "problem");
+                          // Kept anyway: it may work only away from the
+                          // gateway's network. The banner leaves the name
+                          // out, as it may show markup; the address is a
+                          // checked host and port.
+                          if (!problem.isEmpty()) {
+                            const auto gateway = change["gateway"].toObject();
+                            fail("The gateway is reached at " +
+                                 str(gateway, "address") + " from now on, but " +
+                                 problem + ".");
+                          }
+                        },
+                        true, 30000);
+                  },
+                  "Change");
             }},
            {"Forget…", [this, g] {
               confirm("Forget Gateway?",

@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,14 +22,18 @@ import (
 	"t-shaped.nl/sushitrain/v2/adminsock"
 	"t-shaped.nl/sushitrain/v2/enginecontrol"
 	"t-shaped.nl/sushitrain/v2/files"
+	"t-shaped.nl/sushitrain/v2/remoteclient"
 	core "t-shaped.nl/sushitrain/v2/src"
 	"t-shaped.nl/sushitrain/v2/winplatform"
 )
 
 type Settings struct {
-	Mode         string
-	Gateway      bool
+	Mode    string
+	Gateway bool
+	// Where clients reach the remote file service, for pairing codes: empty for this PC's name, and 0 for the port it
+	// listens on (a router may forward another one)
 	GatewayHost  string
+	GatewayPort  int
 	CacheBudget  int64
 	FilesRoot    string
 	ImportedHome string
@@ -186,8 +191,25 @@ func (h *Host) start(mode string) error {
 	h.revision.Add(1)
 	return nil
 }
+
+// The port the remote file service listens on
+const gatewayListenPort = 20920
+
+// gatewayAddress is where clients reach the remote file service, as pairing codes give it
+func (h *Host) gatewayAddress() (string, int) {
+	host, port := h.settings.GatewayHost, h.settings.GatewayPort
+	if host == "" {
+		host, _ = os.Hostname()
+	}
+	if port == 0 {
+		port = gatewayListenPort
+	}
+	return host, port
+}
+
 func (h *Host) startGateway() error {
-	settings, _ := json.Marshal(map[string]any{"listenAddress": ":20920", "publicHost": h.settings.GatewayHost, "serviceName": "Synctrain on Windows"})
+	host, port := h.gatewayAddress()
+	settings, _ := json.Marshal(map[string]any{"listenAddress": ":" + strconv.Itoa(gatewayListenPort), "publicHost": host, "publicPort": port, "serviceName": "Synctrain on Windows"})
 	r, err := h.client.StartRemoteFileService(settings)
 	if err == nil {
 		h.gateway = r
@@ -412,12 +434,15 @@ func (h *Host) recoverMode() error {
 }
 
 type request struct {
-	Mode, ID, Path, Name, Folder, Device, Action, Section, Token, Link, ServiceID, ContentID, Captured, ClientID, Password string
-	Item, Parent, NewParent, Offset, Length, Budget, LocalFolder                                                           int64
-	Node                                                                                                                   uint64
-	Enabled, Directory, Recovery                                                                                           bool
-	Values                                                                                                                 map[string]string
-	Grants, Snapshot                                                                                                       json.RawMessage
+	Mode, ID, Path, Name, Folder, Device, Action, Section, Token, Link, ServiceID, ContentID, Captured, ClientID, Password, Address string
+	Item, Parent, NewParent, Offset, Length, Budget, LocalFolder                                                                    int64
+	Node                                                                                                                            uint64
+	Enabled, Directory, Recovery                                                                                                    bool
+	Values                                                                                                                          map[string]string
+	Grants, Snapshot                                                                                                                json.RawMessage
+	// gateway.address: a host and a port given apart (MCP), each kept when missing
+	PublicHost *string
+	PublicPort *int
 }
 
 func (h *Host) Register(server *adminsock.Server) {
@@ -425,7 +450,7 @@ func (h *Host) Register(server *adminsock.Server) {
 		server.Register("mcp.call", func(context.Context, json.RawMessage) (any, error) { return nil, err })
 		server.Register("mcp.settings", func(context.Context, json.RawMessage) (any, error) { return nil, err })
 	}
-	methods := []string{"status", "mode.set", "root.set", "recovery.captures", "recovery.export", "home.import", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.pending", "engine.stats", "engine.logs", "engine.search", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "settings.index", "settings.get", "settings.save", "settings.close", "gateway.enable", "gateway.status", "gateway.exports", "gateway.export", "gateway.unexport", "gateway.clients", "gateway.revoke", "gateway.permission", "gateway.pair", "gateway.pending", "gateway.approve", "gateway.deny", "files.gateways", "files.pair", "files.forget", "files.available", "files.add", "files.remove", "files.folders", "files.children", "files.path", "files.entry", "files.read", "files.thumbnail", "files.keep", "files.create", "files.createAck", "files.rename", "files.delete", "files.stage", "files.stageAck", "files.resolve", "files.state", "projection.load", "projection.save", "projection.root.get", "projection.root.save", "projection.report", "files.download", "files.pending", "files.export", "files.discard", "files.versions", "files.restore", "files.copyVersion", "files.versionPreview", "files.storage", "files.transfers", "files.budget"}
+	methods := []string{"status", "mode.set", "root.set", "recovery.captures", "recovery.export", "home.import", "engine.folders", "engine.devices", "engine.addFolder", "engine.addDevice", "engine.action", "engine.browse", "engine.pending", "engine.stats", "engine.logs", "engine.search", "engine.share", "engine.versions", "engine.restoreVersion", "engine.exportVersion", "settings.index", "settings.get", "settings.save", "settings.close", "gateway.enable", "gateway.address", "gateway.status", "gateway.exports", "gateway.export", "gateway.unexport", "gateway.clients", "gateway.revoke", "gateway.permission", "gateway.pair", "gateway.pending", "gateway.approve", "gateway.deny", "files.gateways", "files.pair", "files.forget", "files.address", "files.available", "files.add", "files.remove", "files.folders", "files.children", "files.path", "files.entry", "files.read", "files.thumbnail", "files.keep", "files.create", "files.createAck", "files.rename", "files.delete", "files.stage", "files.stageAck", "files.resolve", "files.state", "projection.load", "projection.save", "projection.root.get", "projection.root.save", "projection.report", "files.download", "files.pending", "files.export", "files.discard", "files.versions", "files.restore", "files.copyVersion", "files.versionPreview", "files.storage", "files.transfers", "files.budget"}
 	for _, method := range methods {
 		server.Register(method, func(ctx context.Context, data json.RawMessage) (any, error) {
 			var p request
@@ -489,7 +514,7 @@ func (h *Host) call(ctx context.Context, method string, p request) (any, error) 
 		if h.files != nil {
 			clientID, _ = h.files.ClientIdentity()
 		}
-		return map[string]any{"clientID": clientID, "protocol": 1, "mode": h.settings.Mode, "state": state, "error": problem, "deviceID": device, "guiURL": gui, "root": h.Root, "configuration": configuration, "captureDir": filepath.Join(h.State, "Captured"), "revision": h.revision.Load(), "gatewayEnabled": h.settings.Gateway, "gatewayRunning": h.gateway != nil, "gatewayError": h.gatewayError, "projectionIssues": h.projectionIssues()}, nil
+		return map[string]any{"clientID": clientID, "protocol": 1, "mode": h.settings.Mode, "state": state, "error": problem, "deviceID": device, "guiURL": gui, "root": h.Root, "configuration": configuration, "captureDir": filepath.Join(h.State, "Captured"), "revision": h.revision.Load(), "gatewayEnabled": h.settings.Gateway, "gatewayRunning": h.gateway != nil, "gatewayError": h.gatewayError, "gatewayAddress": remoteclient.FormatAddress(h.gatewayAddress()), "projectionIssues": h.projectionIssues()}, nil
 	}
 	if method == "recovery.captures" {
 		return h.recoveredCaptures()
@@ -537,6 +562,8 @@ func (h *Host) call(ctx context.Context, method string, p request) (any, error) 
 			}
 		}
 		return nil, s.Forget(p.ServiceID)
+	case "files.address":
+		return s.SetGatewayAddress(ctx, p.ServiceID, p.Address)
 	case "files.available":
 		return s.RemoteFolders(ctx, p.ServiceID)
 	case "files.add":

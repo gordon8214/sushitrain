@@ -338,6 +338,24 @@ extension IndexStore {
 		}
 	}
 
+	/// Changes where a paired gateway is reached, leaving the rest of its endpoint (pins, name) as it is. Nil when it isn't
+	/// paired. Refused when another paired gateway is reached at that address, as background tasks are trusted by it.
+	public func updateRemoteAddress(serviceID: String, host: String, port: Int) throws(IndexError) -> RemoteEndpoint? {
+		try transaction { connection throws(IndexError) in
+			if try connection.queryOne(
+				"SELECT EXISTS (SELECT 1 FROM remote_endpoints WHERE host = ? COLLATE NOCASE AND port = ? AND service_id != ?)",
+				[host, port, serviceID], { $0.bool(0) }) == true
+			{
+				throw .notAllowed("another paired gateway is reached at this address")
+			}
+			try connection.run(
+				"UPDATE remote_endpoints SET host = ?, port = ?, updated_at = ? WHERE service_id = ?",
+				[host, port, Date().timeIntervalSince1970, serviceID])
+			return try connection.queryOne(
+				"SELECT \(Self.endpointColumns) FROM remote_endpoints WHERE service_id = ?", [serviceID], Self.endpoint)
+		}
+	}
+
 	public func remoteEndpoint(serviceID: String) throws(IndexError) -> RemoteEndpoint? {
 		try withConnection { connection throws(IndexError) in
 			try connection.queryOne(

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"t-shaped.nl/sushitrain/v2/linuxdesktop"
+	"t-shaped.nl/sushitrain/v2/remoteclient"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
@@ -192,7 +194,7 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 	})
 	service.Add(v.port)
 	v.host = adw.NewEntryRow()
-	v.host.SetTitle("Host Name for Clients (empty for this machine's name)")
+	v.host.SetTitle("Address for Clients: host or host:port (empty for this machine's name and the listening port)")
 	v.host.SetShowApplyButton(true)
 	v.host.ConnectChanged(func() {
 		if v.showing || v.closed {
@@ -204,22 +206,40 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 		}
 	})
 	v.host.ConnectApply(func() {
-		host := strings.TrimSpace(v.host.Text())
+		text := strings.TrimSpace(v.host.Text())
 		if w.desk == nil || w.desk.saving {
+			return
+		}
+		if _, err := remoteclient.ParseAddress(text); text != "" && err != nil {
+			w.toast(sentence(err))
 			return
 		}
 		d := w.desk
 		d.saving = true
 		d.detail.SetSensitive(false)
-		background(func() (struct{}, error) {
+		background(func() (string, error) {
 			var st gatewayadmin.ServiceStatus
 			if err := v.call("service.status", nil, &st); err != nil {
-				return struct{}{}, err
+				return "", err
 			}
 			settings := st.ServiceSettings
-			settings.PublicHost = host
-			return struct{}{}, v.call("service.set", settings, nil)
-		}, func(_ struct{}, err error) {
+			host, port, err := publicAddress(text, settings.Listen)
+			if err != nil {
+				return "", err
+			}
+			// What a flag of synctrain-gateway serve sets stays as it is
+			if fixed(st, "publicPort") && port == 0 {
+				port = settings.PublicPort
+			}
+			switch {
+			case fixed(st, "publicHost") && host != settings.PublicHost:
+				return "", errors.New("the host is set by a flag of synctrain-gateway serve: change only the port")
+			case fixed(st, "publicPort") && port != settings.PublicPort:
+				return "", errors.New("the port is set by a flag of synctrain-gateway serve: change only the host")
+			}
+			settings.PublicHost, settings.PublicPort = host, port
+			return displayedAddress(host, port, settings.Listen), v.call("service.set", settings, nil)
+		}, func(shown string, err error) {
 			d.saving = false
 			d.detail.SetSensitive(true)
 			if v.closed || d.closed {
@@ -227,7 +247,8 @@ func newSyncView(w *mainWindow) (gtk.Widgetter, func()) {
 			}
 			if err == nil {
 				v.hostDirty, d.dirty = false, false
-				v.savedHost = host
+				v.savedHost = shown
+				v.host.SetText(shown)
 			}
 			v.changed(struct{}{}, err)
 		})
@@ -409,13 +430,14 @@ func (v *syncView) show(st syncState) {
 		}
 	}
 	v.port.SetSensitive(!fixed(s, "listen"))
-	if !v.hostDirty && !editing(v.host) && v.host.Text() != s.PublicHost {
-		v.host.SetText(s.PublicHost)
+	address := displayedAddress(s.PublicHost, s.PublicPort, s.Listen)
+	if !v.hostDirty && !editing(v.host) && v.host.Text() != address {
+		v.host.SetText(address)
 	}
 	if !v.hostDirty {
-		v.savedHost = s.PublicHost
+		v.savedHost = address
 	}
-	v.host.SetSensitive(!fixed(s, "publicHost"))
+	v.host.SetSensitive(!fixed(s, "publicHost") || !fixed(s, "publicPort"))
 	v.pairButton.SetSensitive(s.Running)
 	v.operations.SetVisible(len(st.operations) > 0)
 	v.operations.SetSubtitle(strconv.Itoa(len(st.operations)))
@@ -538,6 +560,43 @@ func accessRow(title, subtitle string, names []string, access int, changed func(
 	r.SetSelected(uint(access))
 	r.NotifyProperty("selected", func() { changed(int(r.Selected())) })
 	return r
+}
+
+// defaultPublicHost is the host in pairing codes when none is set, as synctrain-gateway works it out: the host of its
+// listening address when it has a specific one, else this machine's name
+func defaultPublicHost(listen string) string {
+	if host, _, err := net.SplitHostPort(listen); err == nil && host != "" && host != "0.0.0.0" && host != "::" {
+		return host
+	}
+	name, _ := os.Hostname()
+	return name
+}
+
+// publicAddress reads the address for clients the person entered: host or host:port (a port left out is 0, the
+// listening port). Empty text, and the default host (defaultPublicHost), are an empty host that follows the default.
+func publicAddress(text, listen string) (host string, port int, err error) {
+	if strings.TrimSpace(text) == "" {
+		return "", 0, nil
+	}
+	a, err := remoteclient.ParseAddress(text)
+	if err != nil {
+		return "", 0, err
+	}
+	if strings.EqualFold(a.Host, defaultPublicHost(listen)) {
+		a.Host = ""
+	}
+	return a.Host, a.Port, nil
+}
+
+// displayedAddress is the address for clients as the field shows it: the host, with the port when it has one
+func displayedAddress(host string, port int, listen string) string {
+	switch {
+	case port == 0:
+		return host
+	case host == "":
+		host = defaultPublicHost(listen)
+	}
+	return remoteclient.FormatAddress(host, port)
 }
 
 func fixed(s gatewayadmin.ServiceStatus, setting string) bool {

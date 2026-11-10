@@ -66,8 +66,8 @@ func printGateways(gateways []files.Gateway) {
 			if state == "" {
 				state = "ok"
 			}
-			fmt.Fprintf(w, "%s\t%s:%d\t%s\t%d\t%s\n", printable(g.Name), printable(g.Host), g.Port, g.ServiceID,
-				g.Folders, state)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", printable(g.Name), printable(g.Address), g.ServiceID, g.Folders,
+				state)
 		}
 	})
 }
@@ -129,12 +129,37 @@ func pairCommand(args []string) error {
 func gatewaysCommand(args []string) error {
 	fs, cf := newFlagSet("gateways")
 	forget := fs.String("forget", "", "forget the gateway with this service ID (remove its folders first)")
+	gateway := fs.String("gateway", "", "the service ID of the gateway whose address to change")
+	address := fs.String("address", "", "with --gateway: reach the gateway at this host or host:port from now on, "+
+		"keeping the pairing")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if err := fs.Parse(args); err != nil {
 		return flag.ErrHelp
 	}
+	if (*gateway == "") != (*address == "") {
+		return errors.New("give both --gateway and --address")
+	}
+	if *forget != "" && *gateway != "" {
+		return errors.New("give either --forget or --gateway and --address")
+	}
 	if *forget != "" {
 		return adminsock.Call(cf.path(), "gateways.forget", map[string]string{"serviceID": *forget}, nil)
+	}
+	if *gateway != "" {
+		var change files.AddressChange
+		if err := adminsock.Call(cf.path(), "gateways.address", map[string]string{"serviceID": *gateway,
+			"address": *address}, &change); err != nil {
+			return err
+		}
+		if *asJSON {
+			return printJSON(change)
+		}
+		fmt.Printf("%s will be reached at %s from now on.\n", printable(change.Gateway.Name),
+			printable(change.Gateway.Address))
+		if change.Problem != "" {
+			fmt.Printf("But %s.\n", printable(change.Problem))
+		}
+		return nil
 	}
 	var st files.Status
 	if err := adminsock.Call(cf.path(), "status", nil, &st); err != nil {

@@ -46,7 +46,13 @@ Everything goes through the gateway over HTTPS, whether or not Synctrain is runn
 
 
 The gateway must be reachable (on the local network, a VPN or a public address you set up) for files that are not
-on the phone to open, and for edits to complete.
+on the phone to open, and for edits to complete. The phone connects to the address in the pairing code; to reach the
+gateway another way, such as through a name that works away from its network, change **Address** on its page under
+Settings › Gateways (`host` or `host:port`). The pairing stays. A gateway with a self-signed certificate (its key is
+pinned by the pairing code) is checked against that key, so another service at the new address is refused. One with a
+certificate the system trusts is checked by name instead, so only its port can be changed there: its credential would
+go to whatever has a valid certificate for another name. To reach it at another name, pair with it again from a code
+with that name.
 
 ## Viewing files in the app
 

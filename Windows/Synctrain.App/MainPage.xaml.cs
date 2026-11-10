@@ -513,8 +513,20 @@ public sealed partial class MainPage : Page
         Command("Pair", Symbol.Add, async () => { var link = await Input("Pair with a gateway", "Paste the synctrain+pair:// link from the gateway"); if (link is null) return; Text("Waiting for approval on the gateway…"); await Call("files.pair", new { Link = link }, 600); await Refresh(); });
         foreach (var gateway in (await Call("files.gateways"))?.AsArray() ?? [])
         {
-            var id = S(gateway, "serviceID"); Row(S(gateway, "name"), S(gateway, "host") + " · " + S(gateway, "state"), ActionButton("Choose folders", () => ChooseRemoteFolders(id)), ActionButton("Forget", async () => { if (await Confirm("Forget gateway?", "Remove its folders from this PC first.")) { await Call("files.forget", new { ServiceID = id }); await Refresh(); } }));
+            var id = S(gateway, "serviceID"); var name = S(gateway, "name"); var address = S(gateway, "address"); var state = S(gateway, "state");
+            Row(name, state.Length > 0 ? address + " · " + state : address, ActionButton("Choose folders", () => ChooseRemoteFolders(id)), ActionButton("Change address", () => ChangeGatewayAddress(id, name, address)), ActionButton("Forget", async () => { if (await Confirm("Forget gateway?", "Remove its folders from this PC first.")) { await Call("files.forget", new { ServiceID = id }); await Refresh(); } }));
         }
+    }
+    // Changes where this PC reaches a paired gateway, as when another name reaches it from outside its network. The
+    // pairing stays; the address is kept even if the gateway doesn't answer there from here.
+    private async Task ChangeGatewayAddress(string service, string name, string address)
+    {
+        var text = await Input("Change the address of " + name, "Host or host:port. The pairing code gave it; enter another name that reaches the gateway, such as one set up for its router or VPN, to use it away from its network. The pairing stays as it is.", address);
+        if (text is null || text.Trim() == address) return;
+        var change = await Call("files.address", new { ServiceID = service, Address = text });
+        await Refresh();
+        var problem = S(change, "problem");
+        if (problem.Length > 0) await new ContentDialog { XamlRoot = XamlRoot, Title = name + " didn't answer there", Content = new TextBlock { Text = "This PC reaches it at " + S(change?["gateway"], "address") + " from now on, but " + problem + ". Change the address again if it's wrong. If it works only away from the gateway's network, it's used once this PC is there.", TextWrapping = TextWrapping.Wrap }, CloseButtonText = "OK" }.ShowAsync();
     }
     private async Task ChooseRemoteFolders(string service)
     {
@@ -583,6 +595,16 @@ public sealed partial class MainPage : Page
         FrameworkElement searchControl = serviceButton;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(serviceButton,"settings.control.gateway.enabled");
         void Reveal() => DispatcherQueue.TryEnqueue(() => { searchControl.StartBringIntoView(); if (searchControl is Control control) control.Focus(FocusState.Programmatic); });
+        var address = S(status, "gatewayAddress");
+        var addressButton = ActionButton("Change address", async () =>
+        {
+            var text = await Input("Address for clients", "Host or host:port that pairing codes give from now on, for devices to reach this PC. Leave it empty for this PC's name and port 20920.", address);
+            if (text is null || text.Trim() == address) return;
+            await Call("gateway.address", new { Address = text }); await Refresh();
+        });
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(addressButton, "settings.control.gateway.host");
+        Row("Address", address + "\nA PC's name usually works only on its own network. To connect from elsewhere, enter a name that reaches this PC from there, through a VPN or a port your router forwards. Devices paired already keep their address; change it on the gateway's page on each of them.", addressButton);
+        if (searchAnchor == "gateway.host") searchControl = addressButton;
         if (S(status,"gatewayError").Length>0) Text(S(status,"gatewayError"));
         if (!enabled || !B(status,"gatewayRunning")) { if (searchAnchor is not null) Reveal(); return; }
         Command("Pair a client", Symbol.Add, async () => { var pairing = await Call("gateway.pair"); var box = new TextBox { Text = S(pairing, "url"), IsReadOnly = true, TextWrapping = TextWrapping.Wrap, MinWidth = 420 }; await new ContentDialog { XamlRoot = XamlRoot, Title = "Pair with this PC", Content = box, CloseButtonText = "Done" }.ShowAsync(); });

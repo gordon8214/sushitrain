@@ -37,6 +37,8 @@ enum RemoteWork {
 		var serviceID: String
 		/// The endpoint as stored afterwards (the gateway may have announced a certificate rotation)
 		var endpoint: RemoteEndpoint
+		/// The endpoint the requests went to: what they found is about its address, which may have changed since
+		var checkedEndpoint: RemoteEndpoint
 		var connection: RemoteGatewayStatus.Connection
 		var capabilities: Capabilities?
 		var folders: [RemoteFolder]?
@@ -54,7 +56,8 @@ enum RemoteWork {
 		// As stored now: an announced certificate rotation may have added a pin
 		let endpoint = (try? store.remoteEndpoint(serviceID: endpoint.serviceID)) ?? endpoint
 		let sync = environment.sync(for: endpoint)
-		var result = GatewayRefresh(serviceID: endpoint.serviceID, endpoint: endpoint, connection: .unknown)
+		var result = GatewayRefresh(
+			serviceID: endpoint.serviceID, endpoint: endpoint, checkedEndpoint: endpoint, connection: .unknown)
 		let previousGeneration = try? store.remoteAuthorityGeneration(serviceID: endpoint.serviceID)
 		do throws(RemoteError) {
 			let capabilities = try await sync.refreshCapabilities()
@@ -184,6 +187,8 @@ enum RemoteWork {
 
 	/// What a pass over the outbox did
 	struct OutboxPass: Sendable {
+		/// When the pass started: its errors are about the addresses gateways had then
+		var startedAt = Date()
 		/// Operations worked on
 		var claimed = 0
 		/// Operations that reached a final state

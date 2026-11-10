@@ -74,6 +74,8 @@ type Service struct {
 	mutex        sync.Mutex
 	clients      map[string]*remoteclient.Client
 	loops        map[int64]*folderLoop
+	// Folders being removed: their loops aren't started again, by a restart that overlaps the removal
+	removing     map[int64]bool
 	invalidator  func(Changes)
 	work         map[uint64]*workingCopy
 	settleTimers map[int64]*time.Timer
@@ -116,7 +118,7 @@ func Open(cfg Config) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{cfg: cfg, store: store, log: cfg.Logger, clients: map[string]*remoteclient.Client{},
-		loops: map[int64]*folderLoop{}, work: map[uint64]*workingCopy{}, settleTimers: map[int64]*time.Timer{},
+		loops: map[int64]*folderLoop{}, removing: map[int64]bool{}, work: map[uint64]*workingCopy{}, settleTimers: map[int64]*time.Timer{},
 		busySince: map[int64]time.Time{}, heldSince: map[int64]time.Time{}, outboxWake: make(chan struct{}, 1)}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	if s.cache, err = openCache(s); err != nil {
@@ -296,9 +298,11 @@ type Gateway struct {
 	Name      string `json:"name"`
 	Host      string `json:"host"`
 	Port      int    `json:"port"`
-	Pinned    bool   `json:"pinned"`
-	State     string `json:"state,omitempty"`
-	Folders   int    `json:"folders"`
+	// Host and port as people write them (host:port, [fd00::1]:port)
+	Address string `json:"address"`
+	Pinned  bool   `json:"pinned"`
+	State   string `json:"state,omitempty"`
+	Folders int    `json:"folders"`
 }
 
 // Gateways lists the paired gateways
@@ -317,6 +321,7 @@ func (s *Service) Gateways() ([]Gateway, error) {
 			return nil, err
 		}
 		g.Pinned = pins != ""
+		g.Address = remoteclient.FormatAddress(g.Host, g.Port)
 		result = append(result, g)
 	}
 	return result, rows.Err()
@@ -332,7 +337,7 @@ func (s *Service) Pair(ctx context.Context, link string, requested func()) (Gate
 	if err != nil {
 		return Gateway{}, err
 	}
-	if !s.cfg.AllowLocalGateway && isLocalHost(inv.Host) {
+	if !s.cfg.AllowLocalGateway && isLocalHost(ctx, inv.Host) {
 		return Gateway{}, ErrLocalGateway
 	}
 	clientID, err := s.store.ClientID()
@@ -395,19 +400,24 @@ func (s *Service) Pair(ctx context.Context, link string, requested func()) (Gate
 	return Gateway{}, errors.New("the gateway was not stored")
 }
 
-// isLocalHost reports whether host is this machine
-func isLocalHost(host string) bool {
-	ips, err := net.LookupIP(host)
+// How long isLocalHost waits for the name to resolve
+const localHostLookupTimeout = 5 * time.Second
+
+// isLocalHost reports whether host is this machine. A name that doesn't resolve in time isn't.
+func isLocalHost(ctx context.Context, host string) bool {
+	ctx, cancel := context.WithTimeout(ctx, localHostLookupTimeout)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil {
 		return false
 	}
 	addrs, _ := net.InterfaceAddrs()
 	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsUnspecified() {
+		if ip.IP.IsLoopback() || ip.IP.IsUnspecified() {
 			return true
 		}
 		for _, a := range addrs {
-			if n, ok := a.(*net.IPNet); ok && n.IP.Equal(ip) {
+			if n, ok := a.(*net.IPNet); ok && n.IP.Equal(ip.IP) {
 				return true
 			}
 		}
@@ -439,6 +449,130 @@ func (s *Service) Forget(serviceID string) error {
 	}
 	s.dropClient(serviceID)
 	return s.cfg.Credentials.DeleteCredential(serviceID)
+}
+
+// AddressChange is a gateway with its new address, and whether it answered there
+type AddressChange struct {
+	Gateway Gateway `json:"gateway"`
+	// Why the gateway couldn't be used at the new address just now (empty when it answered). The address is kept
+	// either way: one that works only away from the gateway's network can't be checked from inside it.
+	Problem string `json:"problem,omitempty"`
+}
+
+// How long changing an address waits for the gateway to answer there
+const addressCheckTimeout = 15 * time.Second
+
+// ErrUnpinnedHost refuses another host for a gateway paired without a pinned key
+var ErrUnpinnedHost = errors.New("this gateway is trusted by the name in its certificate, not by a pinned key: pair " +
+	"with it again from a pairing link with the new name (only its port can be changed here)")
+
+// SetGatewayAddress changes where this machine reaches a paired gateway (host or host:port; a port left out keeps the
+// current one), as when another name reaches it from outside its network. The pairing stays: the credential, and the
+// pins, which a gateway at the new address has to match. A gateway paired without a pin (its certificate is trusted by
+// the system, for its name) only gets another port: with another host, its credential would go to whatever has a valid
+// certificate for that name, so that takes pairing again (ErrUnpinnedHost).
+func (s *Service) SetGatewayAddress(ctx context.Context, serviceID, address string) (AddressChange, error) {
+	a, err := remoteclient.ParseAddress(address)
+	if err != nil {
+		return AddressChange{}, err
+	}
+	g, err := s.gatewayRef(serviceID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return AddressChange{}, errors.New("no such gateway")
+	} else if err != nil {
+		return AddressChange{}, err
+	}
+	if a.Port == 0 {
+		a.Port = g.port
+	}
+	if len(g.pins) == 0 && !strings.EqualFold(a.Host, g.host) {
+		return AddressChange{}, ErrUnpinnedHost
+	}
+	if !s.cfg.AllowLocalGateway && isLocalHost(ctx, a.Host) {
+		return AddressChange{}, ErrLocalGateway
+	}
+	err = s.store.tx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.Exec(`UPDATE gateways SET host = ?, port = ?, state = '' WHERE service_id = ?`, a.Host, a.Port,
+			serviceID)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return errors.New("no such gateway")
+		}
+		// The changes waiting for the gateway try the new address now, rather than after the backoff the old one gave
+		_, err = tx.Exec(`UPDATE outbox SET not_before = 0, attempts = 0 WHERE state IN `+activeStates+`
+			AND folder IN (SELECT id FROM folders WHERE service_id = ?)`, serviceID)
+		return err
+	})
+	if err != nil {
+		return AddressChange{}, err
+	}
+	s.log.Info("A gateway is reached at another address now", "gateway", g.name, "address",
+		remoteclient.FormatAddress(a.Host, a.Port))
+	s.dropClient(serviceID)
+
+	var change AddressChange
+	if g, err = s.gatewayRef(serviceID); err == nil {
+		var client *remoteclient.Client
+		if client, err = s.client(serviceID); err == nil {
+			checkCtx, cancel := context.WithTimeout(ctx, addressCheckTimeout)
+			err = s.checkCapabilities(checkCtx, g, client)
+			cancel()
+		}
+	}
+	change.Problem = addressProblem(err)
+	switch remoteclient.KindOf(err) {
+	case remoteclient.KindUntrusted:
+		s.setGatewayState(serviceID, "untrusted")
+	case remoteclient.KindUnauthenticated:
+		s.setGatewayState(serviceID, "unauthenticated")
+	}
+
+	// Its folders try the new address now rather than after their backoff (the outbox's waiting changes too, above)
+	folders, err := s.folderRefs()
+	if err != nil {
+		return AddressChange{}, err
+	}
+	for _, f := range folders {
+		if f.serviceID == serviceID {
+			s.restartLoop(f)
+		}
+	}
+	s.wakeOutbox()
+	list, err := s.Gateways()
+	if err != nil {
+		return AddressChange{}, err
+	}
+	for _, g := range list {
+		if g.ServiceID == serviceID {
+			change.Gateway = g
+			return change, nil
+		}
+	}
+	return AddressChange{}, errors.New("no such gateway")
+}
+
+// addressProblem says why a gateway couldn't be used at a new address, from its capabilities check ("" when it could)
+func addressProblem(err error) string {
+	var e *remoteclient.Error
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, errOtherService):
+		return "another gateway answers there"
+	case remoteclient.KindOf(err) == remoteclient.KindUntrusted:
+		return "what answers there doesn't have the certificate this machine paired with"
+	case remoteclient.KindOf(err) == remoteclient.KindUnauthenticated:
+		return "the gateway there doesn't accept this machine: pair with it again"
+	case remoteclient.KindOf(err) == remoteclient.KindUnreachable:
+		return "it can't be reached there from this machine now (" + err.Error() + ")"
+	case errors.As(err, &e) && (e.Kind == remoteclient.KindProtocol || e.Kind == remoteclient.KindNotFound),
+		errors.Is(err, errAPIVersion):
+		return "something that isn't this gateway answers there (" + err.Error() + ")"
+	default:
+		return "it couldn't be checked there (" + err.Error() + ")"
+	}
 }
 
 // RemoteFolders lists the folders a gateway lets this client access
@@ -665,7 +799,26 @@ func (s *Service) RemoveFolder(id int64) (string, int, error) {
 }
 
 func (s *Service) removeFolder(id int64) error {
-	s.stopLoop(id)
+	// Nothing starts its loop again meanwhile (a gateway's address changing, say); if it stays, it's followed again
+	s.mutex.Lock()
+	s.removing[id] = true
+	s.mutex.Unlock()
+	running := s.stopLoop(id)
+	removed := false
+	defer func() {
+		s.mutex.Lock()
+		delete(s.removing, id)
+		s.mutex.Unlock()
+		if !removed && running {
+			if folders, err := s.folderRefs(); err == nil {
+				for _, f := range folders {
+					if f.id == id {
+						s.startLoop(f)
+					}
+				}
+			}
+		}
+	}()
 	var changes Changes
 	err := s.store.tx(context.Background(), func(tx *sql.Tx) error {
 		// A handle opened before writing stopped may have changed something since it was counted
@@ -703,6 +856,7 @@ func (s *Service) removeFolder(id int64) error {
 	if err != nil {
 		return err
 	}
+	removed = true
 	s.changed(changes)
 	return nil
 }
@@ -734,7 +888,7 @@ type folderLoop struct {
 func (s *Service) startLoop(f folderRef) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	if _, ok := s.loops[f.id]; ok {
+	if _, ok := s.loops[f.id]; ok || s.removing[f.id] || s.ctx.Err() != nil {
 		return
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
@@ -749,14 +903,14 @@ func (s *Service) startLoop(f folderRef) {
 }
 
 // stopLoop stops a folder's loop and waits until it has, so that nothing it was doing is written afterwards (into a
-// folder being removed, say)
-func (s *Service) stopLoop(id int64) {
+// folder being removed, say). It reports whether there was one.
+func (s *Service) stopLoop(id int64) bool {
 	s.mutex.Lock()
 	loop, ok := s.loops[id]
 	delete(s.loops, id)
 	s.mutex.Unlock()
 	if !ok {
-		return
+		return false
 	}
 	loop.cancel()
 	select {
@@ -764,11 +918,14 @@ func (s *Service) stopLoop(id int64) {
 	case <-time.After(time.Minute):
 		s.log.Warn("A folder's updates didn't stop", "folder", id)
 	}
+	return true
 }
 
+// restartLoop starts a folder's loop again, if it runs: one stopped by a removal stays stopped
 func (s *Service) restartLoop(f folderRef) {
-	s.stopLoop(f.id)
-	s.startLoop(f)
+	if s.stopLoop(f.id) {
+		s.startLoop(f)
+	}
 }
 
 // How long the gateway may hold a request for changes

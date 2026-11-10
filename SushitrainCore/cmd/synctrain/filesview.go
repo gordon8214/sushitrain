@@ -20,6 +20,7 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"t-shaped.nl/sushitrain/v2/files"
+	"t-shaped.nl/sushitrain/v2/remoteclient"
 )
 
 // filesView is Files mode: folders, gateways, changes that aren't on the gateway yet, and storage
@@ -38,6 +39,8 @@ type filesView struct {
 	showing bool
 	mount   string
 	busy    bool
+	// A gateway's address is being changed (and checked, which can take a while): one change at a time
+	changingAddress bool
 	// Downloads, live while the Changes page is in view
 	transfersGroup   *adw.PreferencesGroup
 	transfers        *progressRows
@@ -265,11 +268,12 @@ func (v *filesView) show(st filesState) {
 			case "unauthenticated":
 				state = "pair again: the gateway revoked this machine"
 			case "untrusted":
-				state = "its certificate changed: pair again"
+				state = "its certificate isn't the paired one: check its address, or pair again"
 			}
-			r := row(g.Name, strings.Join(nonEmpty(fmt.Sprintf("%s:%d", g.Host, g.Port),
-				plural(g.Folders, "folder", "folders")+" here", state), " · "))
+			r := row(g.Name, strings.Join(nonEmpty(g.Address, plural(g.Folders, "folder", "folders")+" here", state),
+				" · "))
 			gateway := g
+			r.AddSuffix(iconButton("document-edit-symbolic", "Change Address", func() { v.changeAddress(gateway) }))
 			r.AddSuffix(iconButton("user-trash-symbolic", "Forget", func() { v.forget(gateway) }))
 			rows = append(rows, r)
 		}
@@ -371,6 +375,72 @@ func (v *filesView) forget(g files.Gateway) {
 				v.refresh()
 			})
 		})
+}
+
+// changeAddress changes where this machine reaches a gateway, as when another name reaches it from outside its
+// network. The pairing stays.
+func (v *filesView) changeAddress(g files.Gateway) {
+	if v.changingAddress {
+		v.w.toast("Another address is being checked")
+		return
+	}
+	d := adw.NewAlertDialog("Change the Address of “"+g.Name+"”?", "Where this machine reaches the gateway: a host "+
+		"name or IP address, optionally followed by a colon and a port. The pairing code gave it; another name that "+
+		"reaches the gateway, such as one set up for its router or VPN, lets this machine use it away from its "+
+		"network. The pairing stays as it is.")
+	entry := gtk.NewEntry()
+	entry.SetText(g.Address)
+	entry.SetActivatesDefault(true)
+	d.SetExtraChild(entry)
+	d.AddResponse("cancel", "Cancel")
+	d.AddResponse("save", "Change")
+	d.SetResponseAppearance("save", adw.ResponseSuggested)
+	d.SetDefaultResponse("save")
+	d.SetCloseResponse("cancel")
+	check := func() {
+		_, err := remoteclient.ParseAddress(entry.Text())
+		d.SetResponseEnabled("save", err == nil)
+		if err == nil {
+			entry.RemoveCSSClass("error")
+		} else {
+			entry.AddCSSClass("error")
+		}
+	}
+	entry.ConnectChanged(check)
+	check()
+	d.ConnectResponse(func(response string) {
+		if response != "save" {
+			return
+		}
+		address := entry.Text()
+		v.changingAddress = true
+		v.w.toast("Checking whether “" + g.Name + "” answers at " + strings.TrimSpace(address) + "…")
+		background(func() (files.AddressChange, error) {
+			var change files.AddressChange
+			err := callFiles("gateways.address", map[string]string{"serviceID": g.ServiceID, "address": address},
+				&change)
+			return change, err
+		}, func(change files.AddressChange, err error) {
+			v.changingAddress = false
+			v.mutationFinished(err)
+			v.refresh()
+			switch {
+			case err != nil:
+				v.w.toast("The address wasn't changed: " + err.Error())
+			case change.Problem != "":
+				// A dialog, or a notification once the window is closed
+				v.w.report("Check the Address of “"+change.Gateway.Name+"”", "This machine reaches it at "+
+					change.Gateway.Address+" from now on, but "+change.Problem+". Change the address again if "+
+					"it's wrong. If it works only away from the gateway's network, it's used once this machine "+
+					"is there.")
+			default:
+				v.w.toast("“" + change.Gateway.Name + "” is reached at " + change.Gateway.Address + " now")
+			}
+		})
+	})
+	d.Present(v.w.win)
+	// Typing goes into the address, not to the default response
+	d.SetFocus(entry)
 }
 
 func (v *filesView) discard(e files.Edit) {

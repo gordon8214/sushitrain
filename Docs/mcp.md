@@ -123,7 +123,7 @@ or settings. To administer that host, connect its own MCP helper over SSH.
 | Platform snapshot metadata inspection/export | Complete macOS archives | Through gateway capabilities | Archive metadata may be unavailable | Through gateway capabilities | Complete archives when the source supports them | Through gateway capabilities |
 | On-demand pinning/materialization and queued edits | Not an on-demand mode | Materialization only; Finder owns retention and completion | Not an on-demand mode | Cloud Files | Not an on-demand mode | Files service/FUSE |
 | Host gateway exports, clients, grants, pairing approvals | Yes | No local gateway | Yes | No local gateway | Yes | No local gateway |
-| Gateway listener settings | Native supported settings | No local gateway | Enable/disable; host fixes the listener | No local gateway | Supported settings; explicit deployment flags remain fixed | No local gateway |
+| Gateway listener settings | Native supported settings | No local gateway | Enable/disable, public host and port; the host fixes the listener at :20920 | No local gateway | Supported settings; explicit deployment flags remain fixed | No local gateway |
 
 The live capability resource is authoritative for individual operations. A stopped
 engine, offline gateway, unsupported versioning type, revoked permission, or

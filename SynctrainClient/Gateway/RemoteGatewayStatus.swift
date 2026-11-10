@@ -69,7 +69,7 @@ struct RemoteGatewayStatus: Identifiable, Hashable, Sendable {
 	var displayName: String { endpoint.displayName }
 
 	var address: String {
-		endpoint.host.contains(":") ? "[\(endpoint.host)]:\(endpoint.port)" : "\(endpoint.host):\(endpoint.port)"
+		RemoteAddress.format(host: endpoint.host, port: endpoint.port)
 	}
 
 	/// A short description of the connection, for lists

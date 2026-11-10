@@ -332,16 +332,24 @@ func (s *Service) apply(ctx context.Context, fn func(*projector) error) error {
 
 // checkCapabilities refreshes what the service knows of a gateway. A new authority generation (the gateway's database
 // was reset or restored) means every folder of it takes a fresh snapshot.
+var (
+	// The gateway at the stored address is another service than the one paired with
+	errOtherService = errors.New("another service")
+	// The gateway speaks another version of the API
+	errAPIVersion = errors.New("incompatible gateway")
+)
+
 func (s *Service) checkCapabilities(ctx context.Context, g gatewayRef, client *remoteclient.Client) error {
 	caps, err := client.Capabilities(ctx)
 	if err != nil {
 		return err
 	}
 	if caps.ServiceID != g.serviceID {
-		return fmt.Errorf("%w: the gateway at %s is another service now", remoteclient.ErrUntrusted, g.host)
+		return fmt.Errorf("%w: the gateway at %s is %w now", remoteclient.ErrUntrusted, g.host, errOtherService)
 	}
 	if caps.APIVersion != remoteapi.APIVersion {
-		return fmt.Errorf("the gateway speaks API version %d, not %d", caps.APIVersion, remoteapi.APIVersion)
+		return fmt.Errorf("%w: the gateway speaks API version %d, not %d", errAPIVersion, caps.APIVersion,
+			remoteapi.APIVersion)
 	}
 	pins := g.pins
 	if len(pins) > 0 && caps.Certificate != nil && caps.Certificate.Next != nil && caps.Certificate.Next.SPKI != "" &&

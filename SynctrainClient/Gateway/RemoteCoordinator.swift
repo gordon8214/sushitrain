@@ -51,6 +51,8 @@ import SynctrainFileProviderKit
 	@ObservationIgnored private var lastRefresh: Date? = nil
 	/// When Files was last told that what it was told about a gateway is resolved, by service ID
 	@ObservationIgnored private var lastResolvedSignal: [String: Date] = [:]
+	/// When the address of a gateway last changed, by service ID: the outbox's errors from before are about the old one
+	@ObservationIgnored private var addressChangedAt: [String: Date] = [:]
 
 	private static let tombstonePruneInterval: TimeInterval = 24 * 3600
 	private static let tombstoneRetention: TimeInterval = 30 * 24 * 3600
@@ -304,7 +306,10 @@ import SynctrainFileProviderKit
 	}
 
 	private func apply(_ result: RemoteWork.GatewayRefresh) {
-		guard let index = gateways.firstIndex(where: { $0.id == result.serviceID }) else {
+		// A check of an address the gateway no longer has (changed while it ran) says nothing about the new one
+		guard let index = gateways.firstIndex(where: { $0.id == result.serviceID }),
+			gateways[index].endpoint.hasAddress(of: result.checkedEndpoint)
+		else {
 			return
 		}
 		let previous = gateways[index]
@@ -444,7 +449,8 @@ import SynctrainFileProviderKit
 			}
 			signalReached(serviceID: target.endpoint.serviceID, force: false)
 		case .failure(let error):
-			guard error != .canceled, let index = gateways.firstIndex(where: { $0.id == target.endpoint.serviceID })
+			guard error != .canceled, let index = gateways.firstIndex(where: { $0.id == target.endpoint.serviceID }),
+				gateways[index].endpoint.hasAddress(of: target.endpoint)
 			else {
 				return
 			}
@@ -564,7 +570,9 @@ import SynctrainFileProviderKit
 
 	private func afterOutboxPass(_ pass: RemoteWork.OutboxPass, signal: Bool = true) async {
 		for (serviceID, error) in pass.gatewayErrors {
-			guard let index = gateways.firstIndex(where: { $0.id == serviceID }) else {
+			guard let index = gateways.firstIndex(where: { $0.id == serviceID }),
+				addressChangedAt[serviceID].map({ $0 < pass.startedAt }) ?? true
+			else {
 				continue
 			}
 			switch error {
@@ -1007,6 +1015,53 @@ import SynctrainFileProviderKit
 			// Not signaled by the refresh (the gateway did not answer it): pairing itself shows it accepts this device
 			signalReached(serviceID: serviceID, force: true)
 		}
+	}
+
+	/// Changes where this device reaches a paired gateway, as when another name reaches it from outside its network.
+	/// The pairing stays: the credential, and the pinned certificate key, which a gateway at the new address has to have.
+	/// A gateway paired without a pin only gets another port (`RemoteEndpoint.allowsHost`). A port left out keeps the
+	/// current one.
+	func changeAddress(serviceID: String, to address: RemoteAddress) async throws(GatewayFolderError) {
+		guard let environment else {
+			return
+		}
+		let result = await Task.detached(priority: .userInitiated) { () -> Result<RemoteEndpoint?, GatewayFolderError> in
+			do throws(IndexError) {
+				guard let current = try environment.store.remoteEndpoint(serviceID: serviceID) else {
+					return .success(nil)
+				}
+				guard current.allowsHost(address.host) else {
+					return .failure(
+						.notEligible(
+							String(
+								localized:
+									"This gateway is trusted by the name in its certificate, not by a pinned key. To reach it at another name, pair with it again from a pairing code with that name. Only its port can be changed here."
+							)))
+				}
+				return .success(
+					try environment.store.updateRemoteAddress(
+						serviceID: serviceID, host: address.host, port: address.port ?? current.port))
+			}
+			catch .notAllowed {
+				return .failure(.notEligible(String(localized: "Another paired gateway is reached at this address.")))
+			}
+			catch {
+				return .failure(.store(error))
+			}
+		}.value
+		guard let endpoint = try result.get() else {
+			return
+		}
+		Log.info("Gateway \(serviceID) is now reached at \(RemoteAddress.format(host: endpoint.host, port: endpoint.port))")
+		addressChangedAt[serviceID] = Date()
+		environment.forgetClient(serviceID: serviceID)
+		// What is known about the connection was about the old address
+		if let index = gateways.firstIndex(where: { $0.id == serviceID }) {
+			gateways[index].endpoint = endpoint
+			gateways[index].connection = .unknown
+			gateways[index].lastChecked = nil
+		}
+		await refresh(serviceID: serviceID)
 	}
 
 	/// Forgets a paired gateway and its credential. Refused while folders are accessed through it (their edits and

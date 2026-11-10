@@ -145,8 +145,10 @@ Pause All, Resume All, Settings, and Quit and Stop. Closing a window leaves the 
 
 **Remote Files** manages the remote file service:
 
-- It is off until you turn it on. Then it listens on port 20920; the host name in pairing codes is the machine's name
-  unless you give another (the one phones reach it at).
+- It is off until you turn it on. Then it listens on port 20920. **Address for Clients** is where pairing codes send
+  clients: the machine's name and that port unless you give another, as `host` or `host:port` (the port when a router
+  forwards another one), such as a name that reaches the machine from outside its network. Clients paired already
+  keep the address they were given; change it on each of them.
 - **Shared folders** are what clients may be given: not shared, read only (which includes previous versions), or read
   and write.
 - **Pair…** shows a code to scan in Synctrain on an iPhone, iPad or Mac, with a link to paste in Synctrain on a machine
@@ -156,9 +158,10 @@ Pause All, Resume All, Settings, and Quit and Stop. Closing a window leaves the 
   nobody is logged in.
 
 **Files** starts `synctrain-files.service`. Its pages are the folders in `~/Synctrain` (Add…, Remove from This Device),
-the gateways (Pair… with a link from the gateway, Forget), changes that aren't on their gateway yet (Export…, Discard),
-and the cache's size. **Previous Versions** of a file, opened from Nautilus (or `synctrain versions <path>`), lists what
-the folder's versioning keeps on the gateway, to open, restore or save a copy of.
+the gateways (Pair… with a link from the gateway, Change Address, Forget), changes that aren't on their gateway yet
+(Export…, Discard), and the cache's size. **Previous Versions** of a file, opened from Nautilus (or
+`synctrain versions <path>`), lists what the folder's versioning keeps on the gateway, to open, restore or save a copy
+of.
 
 **Switching modes** follows the Mac's order, and the mode changes last, so a switch that stops halfway can be repeated:
 
@@ -216,7 +219,12 @@ it: while it is locked, it waits. Without a keyring (on a server, say), or with 
 
 `synctrain-files status` shows the gateways and folders. `synctrain-files folders --remove <ID>` takes a folder out of
 `~/Synctrain` (it stays on the gateway), and `synctrain-files gateways --forget <service ID>` forgets a gateway whose
-folders are all removed. A gateway on this machine can't be paired with: Files mode shows the folders of another system.
+folders are all removed. `synctrain-files gateways --gateway <service ID> --address <host[:port]>` changes where this
+machine reaches a gateway, as when another name reaches it away from its network; the pairing stays, and the address is
+kept even if the gateway doesn't answer there just then (it says so). The window's Change Address does the same. Only
+the port of a gateway paired without a pinned key (one whose certificate is trusted normally, by its name) can change:
+another name takes pairing again. A gateway on this machine can't be paired with: Files mode shows the folders of
+another system.
 
 ### Files
 

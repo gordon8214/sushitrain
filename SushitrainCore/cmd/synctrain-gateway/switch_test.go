@@ -91,6 +91,30 @@ func TestServiceSwitch(t *testing.T) {
 		t.Fatalf("pairing code without the public host: %s", session.URL)
 	}
 
+	// Another address for clients reaches pairing codes without a restart, so connected clients stay
+	w.mutex.Lock()
+	running := w.svc
+	w.mutex.Unlock()
+	if err := gateway.AdminCall(socket, "service.set", serviceSettings{Enabled: true, Listen: "127.0.0.1:0",
+		PublicHost: "studio.example.org", PublicPort: 443}, &st); err != nil {
+		t.Fatal(err)
+	}
+	w.mutex.Lock()
+	restarted := w.svc != running
+	w.mutex.Unlock()
+	if restarted || !st.Running || st.PublicHost != "studio.example.org" || st.PublicPort != 443 {
+		t.Fatalf("after a new address for clients (restarted: %v): %+v", restarted, st)
+	}
+	if err := gateway.AdminCall(socket, "pairing.start", nil, &session); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(session.URL, "studio.example.org:443/") {
+		t.Fatalf("pairing code without the new address: %s", session.URL)
+	}
+	if s, _, err := loadSettings(home); err != nil || s.PublicHost != "studio.example.org" || s.PublicPort != 443 {
+		t.Fatalf("the new address wasn't kept: %+v %v", s, err)
+	}
+
 	// Kept for the next start, whatever the default is
 	if s, found, err := loadSettings(home); err != nil || !found || !s.Enabled || s.Listen != "127.0.0.1:0" {
 		t.Fatalf("%+v %v %v", s, found, err)

@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"t-shaped.nl/sushitrain/v2/adminsock"
@@ -16,6 +18,7 @@ import (
 	"t-shaped.nl/sushitrain/v2/mcpapi"
 	"t-shaped.nl/sushitrain/v2/mcpcontrol"
 	"t-shaped.nl/sushitrain/v2/mcpfiles"
+	"t-shaped.nl/sushitrain/v2/remoteclient"
 )
 
 func (h *Host) registerMCP(server *adminsock.Server) error {
@@ -149,19 +152,29 @@ func (h *Host) registerMCP(server *adminsock.Server) error {
 		defer finish()
 		h.gatewayMu.Lock()
 		defer h.gatewayMu.Unlock()
-		return map[string]any{"enabled": h.settings.Gateway, "running": h.gateway != nil, "publicHost": h.settings.GatewayHost, "error": h.gatewayError}, nil
+		h.optionsMu.Lock()
+		defer h.optionsMu.Unlock()
+		return map[string]any{"enabled": h.settings.Gateway, "running": h.gateway != nil, "listen": ":" + strconv.Itoa(gatewayListenPort), "publicHost": h.settings.GatewayHost, "publicPort": h.settings.GatewayPort, "address": remoteclient.FormatAddress(h.gatewayAddress()), "error": h.gatewayError}, nil
 	})
 	api.Register("service.set", func(ctx context.Context, b json.RawMessage) (any, error) {
 		var p struct {
-			Enabled            bool
-			Listen, PublicHost string
-			PublicPort         int
+			Enabled    bool
+			Listen     string
+			PublicHost *string
+			PublicPort *int
 		}
 		if err := json.Unmarshal(b, &p); err != nil {
 			return nil, err
 		}
-		if p.Listen != "" || p.PublicHost != "" || p.PublicPort != 0 {
-			return nil, errors.New("unsupported: Windows exposes gateway enablement only; listener settings are fixed by its host")
+		if p.Listen != "" && p.Listen != ":"+strconv.Itoa(gatewayListenPort) {
+			return nil, fmt.Errorf("unsupported: Windows listens on :%d; set publicPort for another port a router forwards", gatewayListenPort)
+		}
+		if p.PublicHost != nil || p.PublicPort != nil {
+			// Merged in the handler, under its lock, with what it has then
+			params, _ := json.Marshal(request{PublicHost: p.PublicHost, PublicPort: p.PublicPort})
+			if _, err := server.Invoke(ctx, "gateway.address", params); err != nil {
+				return nil, err
+			}
 		}
 		params, _ := json.Marshal(request{Enabled: p.Enabled})
 		return server.Invoke(ctx, "gateway.enable", params)

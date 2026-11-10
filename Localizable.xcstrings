@@ -7761,6 +7761,52 @@
         }
       }
     },
+    "Another paired gateway is reached at this address." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein anderes gekoppeltes Gateway wird unter dieser Adresse erreicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya se accede a otra puerta de enlace vinculada en esta dirección."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un altro gateway abbinato è già raggiungibile a questo indirizzo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このアドレスでは、ペアリング済みの別のゲートウェイにすでにアクセスしています。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een andere gekoppelde gateway is al via dit adres bereikbaar."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "За цією адресою вже доступний інший шлюз, з яким створено пару."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已通过此地址访问另一个已配对的网关。"
+          }
+        }
+      }
+    },
     "Another Syncthing runs on this Mac. Both would compete for the same ports. Quit it, or run Synctrain alongside it." : {
       "localizations" : {
         "de" : {
@@ -16661,6 +16707,52 @@
         }
       }
     },
+    "Could not change the address" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Adresse konnte nicht geändert werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se ha podido cambiar la dirección"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile modificare l'indirizzo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アドレスを変更できませんでした"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan het adres niet wijzigen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося змінити адресу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更改地址"
+          }
+        }
+      }
+    },
     "Could not change the device's access" : {
       "localizations" : {
         "de" : {
@@ -20348,7 +20440,54 @@
         }
       }
     },
+    "Devices connect to the address in their pairing code. This Mac's local name only works on the same network: to connect from elsewhere, enter a name that reaches this Mac from there, through a VPN or a port your router forwards. Devices paired already keep their address; change it on the gateway's page in their settings." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geräte verbinden sich mit der Adresse in ihrem Kopplungscode. Der lokale Name dieses Mac funktioniert nur im selben Netzwerk: Damit Geräte sich von anderswo verbinden können, geben Sie einen Namen ein, der diesen Mac von dort aus erreicht, über ein VPN oder einen Port, den Ihr Router weiterleitet. Bereits gekoppelte Geräte behalten ihre Adresse; ändern Sie sie auf der Seite des Gateways in deren Einstellungen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los dispositivos se conectan a la dirección de su código de vinculación. El nombre local de este Mac solo funciona en la misma red: para conectarse desde otros lugares, escribe un nombre con el que se pueda acceder a este Mac desde allí, a través de una VPN o de un puerto que reenvíe tu router. Los dispositivos ya vinculados conservan su dirección; cámbiala en la página de la puerta de enlace en sus ajustes."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dispositivi si connettono all'indirizzo contenuto nel loro codice di abbinamento. Il nome locale di questo Mac funziona solo sulla stessa rete: per connettersi da altrove, inserisci un nome con cui questo Mac sia raggiungibile da lì, tramite una VPN o una porta inoltrata dal tuo router. I dispositivi già abbinati mantengono il loro indirizzo; cambialo nella pagina del gateway nelle loro impostazioni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デバイスはペアリングコードに含まれるアドレスに接続します。このMacのローカル名は同じネットワーク上でのみ使用できます。ほかの場所から接続するには、VPNやルーターで転送するポートを通じて、その場所からこのMacにアクセスできる名前を入力してください。ペアリング済みのデバイスは元のアドレスを使い続けます。各デバイスの設定にあるゲートウェイのページで変更してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apparaten maken verbinding met het adres in hun koppelcode. De lokale naam van deze Mac werkt alleen op hetzelfde netwerk: om van elders verbinding te maken, voer je een naam in waarmee deze Mac vanaf daar bereikbaar is, via een VPN of een poort die je router doorstuurt. Al gekoppelde apparaten houden hun adres; wijzig het op de pagina van de gateway in hun instellingen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пристрої підключаються до адреси з їхнього коду створення пари. Локальне ім’я цього Mac працює лише в тій самій мережі: щоб підключатися з інших місць, введіть ім’я, через яке цей Mac доступний звідти, — через VPN або порт, який переспрямовує ваш маршрутизатор. Пристрої, що вже в парі, зберігають свою адресу; змініть її на сторінці шлюзу в їхніх налаштуваннях."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备会连接到其配对码中的地址。此 Mac 的本地名称仅在同一网络中有效：若要从其他地方连接，请输入一个能从那里访问此 Mac 的名称，例如通过 VPN 或你的路由器转发的端口。已配对的设备会保留原来的地址；请在这些设备的设置中，于该网关的页面上更改。"
+          }
+        }
+      }
+    },
     "Devices connect to this host name and port; pairing codes contain them. This Mac's local name only works on the same network: elsewhere, use a VPN or an address you set up to reach this Mac. Paired devices show the service name. The content cache holds files fetched from other devices and changes being received." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -24463,6 +24602,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "足够的连接数"
+          }
+        }
+      }
+    },
+    "Enter a host name or IP address, optionally followed by a colon and a port." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geben Sie einen Hostnamen oder eine IP-Adresse ein, optional gefolgt von einem Doppelpunkt und einem Port."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe un nombre de host o una dirección IP, opcionalmente seguidos de dos puntos y un puerto."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inserisci un nome host o un indirizzo IP, eventualmente seguito da due punti e una porta."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ホスト名またはIPアドレスを入力してください。必要に応じて、コロンとポート番号を続けて入力できます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voer een hostnaam of IP-adres in, eventueel gevolgd door een dubbele punt en een poort."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введіть ім’я хоста або IP-адресу, за потреби з двокрапкою й портом після них."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入主机名或 IP 地址，可在其后加上冒号和端口。"
           }
         }
       }
@@ -32936,6 +33121,7 @@
       }
     },
     "Host name" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -56352,6 +56538,52 @@
         }
       }
     },
+    "Save Address" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresse speichern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar dirección"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva indirizzo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アドレスを保存"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adres opslaan"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зберегти адресу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存地址"
+          }
+        }
+      }
+    },
     "Save and Restart" : {
       "localizations" : {
         "de" : {
@@ -69422,6 +69654,98 @@
         }
       }
     },
+    "The address comes from the pairing code. If another name reaches the gateway from elsewhere, such as one set up for its router or VPN, enter it here: the pairing stays as it is." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Adresse stammt aus dem Kopplungscode. Wenn das Gateway von anderswo über einen anderen Namen erreichbar ist, etwa einen für seinen Router oder sein VPN eingerichteten, geben Sie ihn hier ein: Die Kopplung bleibt bestehen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La dirección procede del código de vinculación. Si se puede acceder a la puerta de enlace desde otros lugares con otro nombre, como uno configurado para su router o su VPN, escríbelo aquí: la vinculación se mantiene."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'indirizzo proviene dal codice di abbinamento. Se il gateway è raggiungibile da altrove con un altro nome, ad esempio uno configurato per il suo router o la sua VPN, inseriscilo qui: l'abbinamento resta invariato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アドレスはペアリングコードから取得されます。ルーターやVPN用に設定した名前など、ほかの場所からゲートウェイにアクセスできる別の名前がある場合は、ここに入力してください。ペアリングはそのまま維持されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het adres komt uit de koppelcode. Als de gateway van elders via een andere naam bereikbaar is, zoals een die voor de router of VPN is ingesteld, voer die dan hier in: de koppeling blijft zoals ze is."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Адреса береться з коду створення пари. Якщо шлюз доступний з інших місць через інше ім’я, наприклад налаштоване для його маршрутизатора чи VPN, введіть його тут: пара залишиться без змін."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "地址来自配对码。如果从其他地方可以通过另一个名称访问该网关，例如为其路由器或 VPN 设置的名称，请在此输入：配对将保持不变。"
+          }
+        }
+      }
+    },
+    "The address comes from the pairing code. This gateway is trusted by the name in its certificate, so only its port can be changed here: for another name, pair with it again from a pairing code with that name." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Adresse stammt aus dem Kopplungscode. Diesem Gateway wird über den Namen in seinem Zertifikat vertraut, daher kann hier nur sein Port geändert werden: Für einen anderen Namen koppeln Sie es erneut mit einem Kopplungscode, der diesen Namen enthält."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La dirección procede del código de vinculación. Esta puerta de enlace es de confianza por el nombre de su certificado, así que aquí solo se puede cambiar su puerto: para otro nombre, vuelve a vincularla con un código de vinculación que tenga ese nombre."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'indirizzo proviene dal codice di abbinamento. Questo gateway è attendibile per il nome nel suo certificato, quindi qui puoi modificare solo la sua porta: per un altro nome, abbinalo di nuovo con un codice di abbinamento che contenga quel nome."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アドレスはペアリングコードから取得されます。このゲートウェイは証明書の名前によって信頼されているため、ここで変更できるのはポートだけです。別の名前を使うには、その名前を含むペアリングコードでもう一度ペアリングしてください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het adres komt uit de koppelcode. Deze gateway wordt vertrouwd op de naam in zijn certificaat, dus hier kan alleen de poort worden gewijzigd: voor een andere naam koppel je hem opnieuw met een koppelcode met die naam."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Адреса береться з коду створення пари. Цей шлюз вважається довіреним за ім’ям у його сертифікаті, тому тут можна змінити лише його порт: для іншого імені створіть пару знову з кодом створення пари, що містить це ім’я."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "地址来自配对码。此网关通过其证书中的名称获得信任，因此此处只能更改其端口：若要使用其他名称，请使用包含该名称的配对码重新与其配对。"
+          }
+        }
+      }
+    },
     "The app could not move its data out of its old app container (%@). Your data is still in the container." : {
       "localizations" : {
         "de" : {
@@ -74316,6 +74640,52 @@
         }
       }
     },
+    "The service listens on this port, which devices connect to unless the address gives another. Paired devices show the service name. The content cache holds files fetched from other devices and changes being received." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Dienst wartet an diesem Port auf Verbindungen; Geräte verbinden sich mit ihm, sofern die Adresse keinen anderen angibt. Gekoppelte Geräte zeigen den Dienstnamen an. Der Inhaltscache enthält Dateien, die von anderen Geräten abgerufen wurden, und Änderungen, die gerade empfangen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El servicio escucha en este puerto, al que se conectan los dispositivos salvo que la dirección indique otro. Los dispositivos vinculados muestran el nombre del servicio. La caché de contenido guarda los archivos obtenidos de otros dispositivos y los cambios que se están recibiendo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il servizio è in ascolto su questa porta, a cui si connettono i dispositivi a meno che l'indirizzo non ne indichi un'altra. I dispositivi abbinati mostrano il nome del servizio. La cache dei contenuti contiene i file recuperati da altri dispositivi e le modifiche in arrivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サービスはこのポートで待ち受けます。アドレスで別のポートを指定しない限り、デバイスはこのポートに接続します。ペアリング済みのデバイスにはサービス名が表示されます。コンテンツキャッシュには、ほかのデバイスから取得したファイルと受信中の変更が保存されます。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De dienst luistert op deze poort, waarmee apparaten verbinding maken tenzij het adres een andere opgeeft. Gekoppelde apparaten tonen de dienstnaam. De inhoudscache bevat bestanden die van andere apparaten zijn opgehaald en wijzigingen die worden ontvangen."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Служба приймає з’єднання на цьому порту; пристрої підключаються до нього, якщо в адресі не вказано інший. Пристрої в парі показують назву служби. Кеш вмісту зберігає файли, отримані з інших пристроїв, і зміни, що надходять."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务在此端口上监听；除非地址中指定了其他端口，设备都会连接到此端口。已配对的设备会显示服务名称。内容缓存保存从其他设备获取的文件以及正在接收的更改。"
+          }
+        }
+      }
+    },
     "The shared index is unavailable." : {
       "localizations" : {
         "de" : {
@@ -77919,6 +78289,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此网关现在是历史记录来源。其文件夹不会添加到此设备。"
+          }
+        }
+      }
+    },
+    "This gateway is trusted by the name in its certificate, not by a pinned key. To reach it at another name, pair with it again from a pairing code with that name. Only its port can be changed here." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diesem Gateway wird über den Namen in seinem Zertifikat vertraut, nicht über einen fixierten Schlüssel. Um es unter einem anderen Namen zu erreichen, koppeln Sie es erneut mit einem Kopplungscode, der diesen Namen enthält. Hier kann nur sein Port geändert werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta puerta de enlace es de confianza por el nombre de su certificado, no por una clave fijada. Para acceder a ella con otro nombre, vuelve a vincularla con un código de vinculación que tenga ese nombre. Aquí solo se puede cambiar su puerto."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo gateway è attendibile per il nome nel suo certificato, non per una chiave fissata. Per raggiungerlo con un altro nome, abbinalo di nuovo con un codice di abbinamento che contenga quel nome. Qui puoi modificare solo la sua porta."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このゲートウェイは、固定された鍵ではなく、証明書の名前によって信頼されています。別の名前でアクセスするには、その名前を含むペアリングコードでもう一度ペアリングしてください。ここで変更できるのはポートだけです。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze gateway wordt vertrouwd op de naam in zijn certificaat, niet op een vastgezette sleutel. Om hem via een andere naam te bereiken, koppel je hem opnieuw met een koppelcode met die naam. Hier kan alleen de poort worden gewijzigd."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей шлюз вважається довіреним за ім’ям у його сертифікаті, а не за закріпленим ключем. Щоб підключатися до нього за іншим ім’ям, створіть пару знову з кодом створення пари, що містить це ім’я. Тут можна змінити лише його порт."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此网关通过其证书中的名称获得信任，而不是通过固定的密钥。若要通过其他名称访问它，请使用包含该名称的配对码重新与其配对。此处只能更改其端口。"
           }
         }
       }

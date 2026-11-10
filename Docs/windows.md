@@ -48,13 +48,23 @@ production publisher.
 | --- | --- |
 | Folder and device management | Native forms, sharing, encryption, ignore rules, pause/resume, and errors |
 | Engine settings and diagnostics | Native settings, logs, statistics, search, and the local engine GUI |
-| Remote Files hosting | Gateway exports, permissions, pairing approval, and client revocation |
+| Remote Files hosting | Gateway exports, permissions, pairing approval, client revocation, and the address in pairing codes |
 | Remote Files browsing | Virtualized lists, filtering, create, rename, delete, and save a copy |
+| Paired gateways | Pairing, choosing folders, changing a gateway's address without pairing again, and forgetting it |
 | On-demand Explorer access | Cloud Files placeholders, verified ranged hydration, and local-save capture |
 | Offline access | Always keep on this device, Free up space, and cache-budget eviction of clean files that aren't kept |
 | Recovery and history | Pending-change export/discard, recovered captures, versions, restore, and copy |
 | Shell integration | Thumbnail previews, availability/pending status, Previous Versions, and Recycle Bin |
 | Desktop lifecycle | Tray, login startup, close to background, and explicit Quit |
+
+The remote file service listens on port 20920 on every interface. Remote Access › **Address** is where pairing codes
+send clients: this PC's name and that port unless you change it to `host` or `host:port`, such as a name that reaches
+the PC from outside its network (with the port a router forwards). A running service takes a new one at once, and the
+devices connected to it stay. Clients
+paired already keep their address; in Files mode, **Change address** on a paired gateway's row gives this PC another
+one without pairing again, and keeps it even if the gateway doesn't answer there just then (it says so). A gateway
+paired without a pinned key (its certificate is trusted normally, by name) only gets another port that way; another
+name takes pairing again.
 
 ## Runtime ownership
 

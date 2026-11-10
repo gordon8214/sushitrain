@@ -31,10 +31,12 @@ import (
 // RemoteFileService runs the remote file service (Docs/gateway.md) in this client, so that Synctrain on other devices
 // (the Files app on iOS) can browse, open and edit this device's folders over HTTPS. Not available on iOS.
 type RemoteFileService struct {
-	client     *Client
-	svc        *gateway.Service
-	publicHost string
-	publicPort int
+	client *Client
+	svc    *gateway.Service
+	// Where pairing codes send clients (SetPublicAddress changes it while the service runs)
+	addressMutex sync.Mutex
+	publicHost   string
+	publicPort   int
 
 	stopMutex sync.Mutex
 	stopped   bool
@@ -282,17 +284,27 @@ func (r *RemoteFileService) SetPermission(clientID, folderID, access string) err
 	return r.svc.SetPermission(clientID, folderID, access)
 }
 
+// SetPublicAddress changes where pairing codes send clients from now on (port 0: the one the service listens on). It
+// is used only by pairing, so the service goes on serving the devices connected to it.
+func (r *RemoteFileService) SetPublicAddress(host string, port int) {
+	r.addressMutex.Lock()
+	defer r.addressMutex.Unlock()
+	r.publicHost, r.publicPort = host, port
+}
+
 // StartPairingJSON starts pairing and returns the session (sessionID, secret, url, expires) as JSON
 func (r *RemoteFileService) StartPairingJSON() ([]byte, error) {
 	spki := ""
 	if r.svc.UsesSelfSignedCertificate() {
 		spki = r.svc.SPKI()
 	}
-	port := r.publicPort
+	r.addressMutex.Lock()
+	host, port := r.publicHost, r.publicPort
+	r.addressMutex.Unlock()
 	if port == 0 {
 		port = r.Port()
 	}
-	return jsonResult(r.svc.StartPairing(r.publicHost, port, spki))
+	return jsonResult(r.svc.StartPairing(host, port, spki))
 }
 
 func (r *RemoteFileService) PendingPairingsJSON() ([]byte, error) {

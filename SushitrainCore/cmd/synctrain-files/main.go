@@ -27,7 +27,7 @@ Commands:
   serve       Mount the folders and follow their gateways
   status      Show the gateways and folders
   pair        Pair with a gateway, from its pairing link
-  gateways    List paired gateways; forget one
+  gateways    List paired gateways; change one's address, or forget it
   folders     List folders here; list a gateway's folders; add or remove one
   keep        Keep files on this device (or stop keeping them)
   state       Show whether files are on this device, or changed here

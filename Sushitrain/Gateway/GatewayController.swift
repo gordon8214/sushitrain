@@ -7,6 +7,7 @@
 	import AppKit
 	import Foundation
 	import os
+	import SynctrainFileProviderKit
 	import SynctrainHostKit
 	@preconcurrency import SushitrainCore
 
@@ -58,7 +59,7 @@
 
 		private init() {
 			isEnabled = UserDefaults.standard.bool(forKey: Self.enabledKey)
-			settings = GatewaySettings.load()
+			settings = GatewaySettings.load().normalized()
 		}
 
 		/// Starts the service if the user turned it on. Call once the client has started.
@@ -91,13 +92,22 @@
 			}
 		}
 
-		/// Saves new settings and restarts the service with them
+		/// Saves new settings and restarts the service with them. A new address for devices alone needs no restart: the
+		/// running service takes it, and the devices connected to it stay.
 		func apply(_ newSettings: GatewaySettings) {
+			let newSettings = newSettings.normalized()
 			guard newSettings != settings else {
 				return
 			}
+			var withNewAddress = settings
+			withNewAddress.publicHost = newSettings.publicHost
+			withNewAddress.publicPort = newSettings.publicPort
 			settings = newSettings
 			settings.save()
+			if withNewAddress == newSettings, state == .running, let service {
+				service.setPublicAddress(newSettings.effectivePublicHost, port: newSettings.effectivePublicPort)
+				return
+			}
 			restart()
 		}
 
@@ -374,7 +384,7 @@
 			let configuration = ServiceConfiguration(
 				listenAddress: ":\(settings.port)", certFile: certFile, keyFile: keyFile,
 				serviceName: settings.effectiveServiceName, publicHost: settings.effectivePublicHost,
-				publicPort: settings.port, contentCacheMiB: settings.contentCacheMiB,
+				publicPort: settings.effectivePublicPort, contentCacheMiB: settings.contentCacheMiB,
 				cacheDirectory: AppLocations.current.remoteFileService.path(percentEncoded: false))
 			return try JSONEncoder().encode(configuration)
 		}
@@ -495,8 +505,9 @@
 			if method == "service.status" {
 				return try MCPIntegration.json([
 					"enabled": isEnabled, "running": state == .running,
-					"listen": ":\(settings.port)", "publicHost": settings.publicHost,
-					"serviceName": settings.serviceName, "contentCacheMiB": settings.contentCacheMiB,
+					"listen": ":\(settings.port)", "publicHost": settings.publicHost, "publicPort": settings.publicPort,
+					"address": settings.address, "serviceName": settings.serviceName,
+					"contentCacheMiB": settings.contentCacheMiB,
 				])
 			}
 			if method == "service.set" {
@@ -507,9 +518,24 @@
 					}
 					next.port = port
 				}
-				if let host = p["publicHost"] as? String { next.publicHost = host }
-				if let port = p["publicPort"] as? Int, port != next.port {
-					throw MCPAppError("unsupported: set the public port as part of the public host on macOS.")
+				if let host = p["publicHost"] as? String {
+					let host = host.trimmingCharacters(in: .whitespacesAndNewlines)
+					next.publicHost = ""
+					if !host.isEmpty {
+						guard let address = RemoteAddress(parsing: host) else {
+							throw MCPAppError("The public host is not a host name or IP address.")
+						}
+						guard address.port == nil else {
+							throw MCPAppError("Give the public host without a port, and the port as publicPort.")
+						}
+						next.publicHost = address.host
+					}
+				}
+				if let port = p["publicPort"] as? Int {
+					guard port == 0 || GatewaySettings.validPorts.contains(port) else {
+						throw MCPAppError("Choose a public port between 1 and 65535, or 0 for the listening port.")
+					}
+					next.publicPort = port
 				}
 				apply(next)
 				setEnabled(p["enabled"] as? Bool ?? false)

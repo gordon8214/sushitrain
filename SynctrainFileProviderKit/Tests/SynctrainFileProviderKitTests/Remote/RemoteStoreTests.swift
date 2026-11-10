@@ -9,6 +9,30 @@ import Testing
 @testable import SynctrainFileProviderKit
 
 @Suite struct RemoteStoreTests {
+	@Test func changingAnAddressKeepsTheRestOfTheEndpoint() throws {
+		let store = try makeRemoteStore()
+		let nas = RemoteEndpoint(
+			serviceID: "nas", host: "nas.local", port: 20920, pinnedSPKIHash: "pin", nextPinnedSPKIHash: "next",
+			displayName: "NAS")
+		try store.saveRemoteEndpoint(nas)
+		try store.saveRemoteEndpoint(RemoteEndpoint(serviceID: "mac", host: "mac.local", port: 20920, displayName: "Mac"))
+
+		let moved = try store.updateRemoteAddress(serviceID: "nas", host: "nas.example.org", port: 443)
+		var expected = nas
+		expected.host = "nas.example.org"
+		expected.port = 443
+		#expect(moved == expected)
+		#expect(try store.remoteEndpoint(serviceID: "nas") == expected)
+		#expect(try store.remoteEndpoint(host: "NAS.example.org", port: 443)?.serviceID == "nas")
+
+		// Not the address of another paired gateway (background tasks are trusted by it), in any case
+		#expect(throws: IndexError.self) {
+			try store.updateRemoteAddress(serviceID: "nas", host: "MAC.local", port: 20920)
+		}
+		#expect(try store.remoteEndpoint(serviceID: "nas") == expected)
+		#expect(try store.updateRemoteAddress(serviceID: "unknown", host: "x.example.org", port: 1) == nil)
+	}
+
 	@Test func snapshotAndChangesProjectIntoItems() throws {
 		let store = try makeRemoteStore()
 		let start = try store.currentAnchor()

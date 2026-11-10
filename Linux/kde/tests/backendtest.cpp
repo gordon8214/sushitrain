@@ -1413,6 +1413,37 @@ private slots:
     QVERIFY(rowAction(backend,"Fixture Folder","Browse").isEmpty());
     QVERIFY(!key(backend.commands(),"Pair…").isEmpty());
   }
+  void gatewayAddressCanBeChanged() {
+    Fixture fixture("files");
+    fixture.handler=[](QString method,QJsonObject) {
+      if(method=="status") return result(QJsonObject{
+        {"gateways",QJsonArray{QJsonObject{{"name","Fixture Gateway"},{"serviceID","gateway"},{"address","nas.local:20920"}}}}});
+      if(method=="gateways.address") return result(QJsonObject{
+        {"gateway",QJsonObject{{"name","Fixture Gateway"},{"address","nas.example.org:20920"}}},
+        {"problem","it can't be reached there from this machine now"}});
+      return result(QJsonObject{});
+    };
+    Backend backend;QTRY_COMPARE_WITH_TIMEOUT(backend.mode(),QString("files"),1000);
+    backend.navigate("Remote Access");
+    QTRY_VERIFY_WITH_TIMEOUT(!rowAction(backend,"Fixture Gateway","Change Address…").isEmpty(),1000);
+    QVariantMap gateway;
+    for(const auto &value:backend.rows()) if(value.toMap()["title"]=="Fixture Gateway") gateway=value.toMap();
+    QCOMPARE(gateway["subtitle"].toString(),QString("nas.local:20920"));
+    backend.activate(rowAction(backend,"Fixture Gateway","Change Address…"));
+    QTRY_VERIFY_WITH_TIMEOUT(!backend.dialog().isEmpty(),1000);
+    // It starts from the address the gateway has now
+    const auto fields=backend.dialog()["fields"].toList();
+    QCOMPARE(fields.size(),1);
+    QCOMPARE(fields.first().toMap()["Value"].toString(),QString("nas.local:20920"));
+    backend.submit({{"Address","nas.example.org"}});
+    QTRY_VERIFY_WITH_TIMEOUT(fixture.calls.contains("gateways.address"),1000);
+    const auto i=fixture.calls.indexOf("gateways.address");
+    QCOMPARE(fixture.parameters[i]["ServiceID"].toString(),QString("gateway"));
+    QCOMPARE(fixture.parameters[i]["Address"].toString(),QString("nas.example.org"));
+    // Kept although the gateway didn't answer there, and said so
+    QTRY_VERIFY_WITH_TIMEOUT(backend.error()=="The gateway is reached at nas.example.org:20920 from now on, but it can't be reached there from this machine now.",1000);
+    QVERIFY(backend.dialog().isEmpty());
+  }
   void immediatePreferenceFailureKeepsConfirmedValue() {
     Fixture fixture("files");
     fixture.handler=[](QString method,QJsonObject params) {

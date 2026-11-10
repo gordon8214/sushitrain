@@ -93,6 +93,13 @@ func registerAdmin(a *adminsock.Server, s *files.Service, mount string, foldersC
 		}
 		return nil, s.Forget(p.ServiceID)
 	})
+	a.Register("gateways.address", func(ctx context.Context, params json.RawMessage) (any, error) {
+		p, err := decode[struct{ ServiceID, Address string }](params)
+		if err != nil {
+			return nil, err
+		}
+		return s.SetGatewayAddress(ctx, p.ServiceID, p.Address)
+	})
 	a.Register("folders.remote", func(ctx context.Context, params json.RawMessage) (any, error) {
 		p, err := decode[struct{ ServiceID string }](params)
 		if err != nil {
