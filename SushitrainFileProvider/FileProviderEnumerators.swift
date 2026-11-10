@@ -72,33 +72,38 @@ struct ExtensionContext: Sendable {
 		// enumerations.
 		let shown = known.filter { !($0.pending == .create && content[$0.id]?.overlayOrigin == .system) }
 		let attributes = try store.attributes(of: shown.map(\.id))
-		return shown.compactMap { item in
-			bindings[item.folderID].map {
-				makeItem(item, attributes: attributes[item.id], remote: $0, content: content[item.id])
+		var result: [NSFileProviderItem] = []
+		for item in shown {
+			if let binding = bindings[item.folderID] {
+				result.append(try makeItem(item, attributes: attributes[item.id], remote: binding, content: content[item.id]))
 			}
 		}
+		return result
 	}
 
 	func makeItem(_ item: IndexItem) throws(IndexError) -> NSFileProviderItem {
 		guard let remote = try remoteBinding(folderID: item.folderID) else {
 			throw .notFound
 		}
-		return makeItem(
+		return try makeItem(
 			item, attributes: try store.attributes(of: [item.id])[item.id], remote: remote,
 			content: try store.remoteLocalContent(of: [item.id])[item.id])
 	}
 
 	/// The item to return with its contents, which must not be missing (without its details if they cannot be read)
 	func makeItemForContents(_ item: IndexItem, remote: RemoteFolderBinding) -> NSFileProviderItem {
-		(try? makeItem(item)) ?? makeItem(item, attributes: nil, remote: remote, content: nil)
+		(try? makeItem(item)) ?? FileProviderItem(item: item, isOnDevice: isOnDevice(item, content: nil), remote: remote)
 	}
 
 	private func makeItem(
 		_ item: IndexItem, attributes: ItemAttributes?, remote: RemoteFolderBinding, content: RemoteLocalContent?
-	) -> NSFileProviderItem {
-		FileProviderItem(
+	) throws(IndexError) -> NSFileProviderItem {
+		let packageSize =
+			item.kind == .directory && FileProviderItem.directoryType(of: item).conforms(to: .package)
+			? try store.directoryContentSize(of: item) : nil
+		return FileProviderItem(
 			item: item, isOnDevice: isOnDevice(item, content: content), attributes: attributes ?? ItemAttributes(),
-			remote: remote)
+			remote: remote, packageSize: packageSize)
 	}
 
 	static func pageSize(_ suggested: Int) -> Int {

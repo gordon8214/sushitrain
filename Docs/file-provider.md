@@ -34,7 +34,10 @@ Everything goes through the gateway over HTTPS, whether or not Synctrain is runn
 - **Moving** a file to a folder on another gateway copies it there and then deletes the original; directories can't
   be moved between gateways (copy them, then delete them).
 - **Packages** (directories a Mac shows as one document, like an Xcode project or an Icon Composer icon) show as one
-  document in Files too, as in iCloud Drive; the app still opens them as folders. The phone's own types and those of
+  document in Files too, with the total size of their files, as in iCloud Drive; the app still opens them as folders.
+  Opening a package downloads its directory tree, verifying each file, and hands the complete directory to Files.
+  If the tree changes during the download, Files retries rather than receiving a mixture of versions.
+  The phone's own types and those of
   Apple's and open formats always count, except a few Mac formats named with ordinary words (such as `.help` and
   `.workflow`). A gateway in Synctrain on a Mac also marks the types of every app installed there (a newly installed
   app's within a minute); `synctrain-gateway` marks none. iOS keeps the kind it first saw: a directory already on

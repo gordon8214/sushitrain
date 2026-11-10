@@ -64,14 +64,23 @@ struct PartialUpload {
 	var storage: RemoteStorage { fixture.storage }
 
 	/// A session that runs its tasks against the mocked gateway (background sessions cannot be mocked)
-	func transfers(identifier: String = "test.remote.app", onFinished: (@Sendable (TransferRecord) -> Void)? = nil)
+	func transfers(
+		identifier: String = "test.remote.app", beforeResponse: (@Sendable () -> Void)? = nil,
+		onFinished: (@Sendable (TransferRecord) -> Void)? = nil
+	)
 		-> BackgroundTransfers
 	{
 		let host = host
 		let gateway = gateway
 		return BackgroundTransfers(
 			identifier: identifier, store: store, storage: storage, credentials: credentials,
-			configuration: { MockURLProtocol.configuration(host: host) { gateway.handle($0) } },
+			configuration: {
+				MockURLProtocol.configuration(host: host) {
+					let response = gateway.handle($0)
+					beforeResponse?()
+					return response
+				}
+			},
 			onTransferFinished: onFinished)
 	}
 
@@ -105,7 +114,7 @@ struct PartialUpload {
 	@Test func handoffSendsTheRestFromABackgroundTask() async throws {
 		let upload = try PartialUpload()
 		let finished = Locked<[TransferRecord]>([])
-		let transfers = upload.transfers { record in finished.update { $0.append(record) } }
+		let transfers = upload.transfers(onFinished: { record in finished.update { $0.append(record) } })
 		let handoff = BackgroundHandoff(transfers: transfers, minimumRemainder: 1000)
 		handoff.request()
 		let outbox = upload.outbox(handoff: handoff)
@@ -192,7 +201,7 @@ struct PartialUpload {
 		try upload.store.finishTask(transferID: previous.transferID, state: .interrupted, error: "network interrupted")
 		try upload.store.expediteMutation(operationID: upload.operationID)
 		let finished = Locked<[TransferRecord]>([])
-		let transfers = upload.transfers(identifier: session) { record in finished.update { $0.append(record) } }
+		let transfers = upload.transfers(identifier: session, onFinished: { record in finished.update { $0.append(record) } })
 		let handoff = BackgroundHandoff(transfers: transfers, minimumRemainder: 1)
 		handoff.request()
 		guard case .waiting = try await upload.outbox(handoff: handoff).process(operationID: upload.operationID) else {
@@ -216,7 +225,11 @@ struct PartialUpload {
 	/// transfer a task runs, and a worker that lost its claim starts nothing
 	@Test func aTransferHasOneTaskAtATime() async throws {
 		let upload = try PartialUpload()
-		let transfers = upload.transfers()
+		// Keep the mocked request in flight while checking its claim. Otherwise a fast response can complete the
+		// transfer before the assertions, and the test itself steals the completed transfer's claim.
+		let responseGate = DispatchSemaphore(value: 0)
+		defer { responseGate.signal() }
+		let transfers = upload.transfers(beforeResponse: { _ = responseGate.wait(timeout: .now() + 5) })
 		let registered = try upload.store.claimUploadTransfer(
 			operationID: upload.operationID, itemID: nil, uploadID: PartialUpload.uploadID, tokenReference: nil,
 			totalSize: 10, owner: "a", duration: 60)
@@ -240,6 +253,7 @@ struct PartialUpload {
 				id: transfer.transferID, owner: "c", duration: 60, now: Date().addingTimeInterval(600)),
 			"a task runs it")
 		#expect(try !upload.store.renewTransferClaim(id: transfer.transferID, owner: "a", duration: 60))
+		responseGate.signal()
 		#expect(try await eventually { try upload.store.transfer(id: transfer.transferID)?.state == .completed })
 	}
 

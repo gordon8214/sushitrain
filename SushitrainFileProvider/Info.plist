@@ -49,6 +49,8 @@
 		<string>$(SYNCTRAIN_APP_GROUP)</string>
 		<key>NSExtensionFileProviderSupportsEnumeration</key>
 		<true/>
+		<key>NSExtensionFileProviderWantsFlattenedPackages</key>
+		<false/>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.fileprovider-nonui</string>
 		<key>NSExtensionPrincipalClass</key>

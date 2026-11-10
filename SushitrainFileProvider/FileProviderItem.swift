@@ -42,6 +42,8 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	/// The type of a directory in the reply to a change the system made, which keeps the system's type
 	/// (`RemoteProvider.reply(_:to:)`)
 	let directoryReplyType: UTType?
+	/// Total bytes of the files inside a package, whose directory row itself has no size
+	let packageSize: Int64?
 
 	var lastUsedDate: Date? { attributes.lastUsedDate }
 	var tagData: Data? { attributes.tagData }
@@ -53,26 +55,31 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	static let referenceDate = Date(timeIntervalSince1970: 946_684_800)  // 2000-01-01
 
 	convenience init(
-		item: IndexItem, isOnDevice: Bool, attributes: ItemAttributes = ItemAttributes(), remote: RemoteFolderBinding
+		item: IndexItem, isOnDevice: Bool, attributes: ItemAttributes = ItemAttributes(), remote: RemoteFolderBinding,
+		packageSize: Int64? = nil
 	) {
-		self.init(item: item, isOnDevice: isOnDevice, attributes: attributes, remote: remote, directoryReplyType: nil)
+		self.init(
+			item: item, isOnDevice: isOnDevice, attributes: attributes, remote: remote, directoryReplyType: nil,
+			packageSize: packageSize)
 	}
 
 	private init(
 		item: IndexItem, isOnDevice: Bool, attributes: ItemAttributes, remote: RemoteFolderBinding,
-		directoryReplyType: UTType?
+		directoryReplyType: UTType?, packageSize: Int64?
 	) {
 		self.item = item
 		self.isOnDevice = isOnDevice
 		self.attributes = attributes
 		self.remote = remote
 		self.directoryReplyType = directoryReplyType
+		self.packageSize = packageSize
 	}
 
 	/// The same item, with the type a directory has in a reply
 	func replying(withDirectoryType type: UTType) -> FileProviderItem {
 		FileProviderItem(
-			item: item, isOnDevice: isOnDevice, attributes: attributes, remote: remote, directoryReplyType: type)
+			item: item, isOnDevice: isOnDevice, attributes: attributes, remote: remote, directoryReplyType: type,
+			packageSize: packageSize)
 	}
 
 	var itemIdentifier: NSFileProviderItemIdentifier {
@@ -107,7 +114,7 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	/// gateway on a Mac marks them, with the types of the apps installed there. iOS reads the type when it first learns of
 	/// a directory and never changes it for an item it has (iOS 27.2); the Simulator decides from the host Mac's types
 	/// instead. Finder on a Mac decides from the directory's name itself.
-	private static func directoryType(of item: IndexItem) -> UTType {
+	static func directoryType(of item: IndexItem) -> UTType {
 		#if os(iOS)
 			PackageTypes.type(ofDirectoryNamed: item.name, markedByGateway: item.isPackage) ?? .folder
 		#else
@@ -158,7 +165,10 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	}
 
 	var documentSize: NSNumber? {
-		item.kind == .file ? NSNumber(value: item.size) : nil
+		if item.kind == .file {
+			return NSNumber(value: item.size)
+		}
+		return packageSize.map { NSNumber(value: $0) }
 	}
 
 	var contentModificationDate: Date? {

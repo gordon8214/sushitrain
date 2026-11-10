@@ -65,7 +65,11 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		self.context = ExtensionContext()
 		self.remote = context.map { RemoteProvider(context: $0, domain: domain) }
 		super.init()
+		let refreshedPackages = (try? context?.store.refreshPackageMetadata()) ?? 0
 		remote?.start()
+		if refreshedPackages > 0 {
+			remote?.signalWorkingSet()
+		}
 		if context != nil {
 			// Left behind when an earlier instance was terminated in the middle of a download
 			if let temporary = try? NSFileProviderManager(for: domain)?.temporaryDirectoryURL() {
@@ -172,13 +176,19 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 		for itemIdentifier: NSFileProviderItemIdentifier, version requestedVersion: NSFileProviderItemVersion?,
 		request: NSFileProviderRequest, completionHandler: @escaping (URL?, NSFileProviderItem?, (any Error)?) -> Void
 	) -> Progress {
+		trace("fetch requested \(itemIdentifier.rawValue)")
 		guard let context, let remote, let manager = NSFileProviderManager(for: domain) else {
 			completionHandler(nil, nil, unavailableError)
 			return Progress()
 		}
 		do {
-			guard let id = try itemIdentifier.itemID(in: context.store), let item = try context.store.item(id: id),
-				item.kind == .file,
+			guard let id = try itemIdentifier.itemID(in: context.store), let item = try context.store.item(id: id) else {
+				completionHandler(nil, nil, NSError.fileProviderErrorForNonExistentItem(withIdentifier: itemIdentifier))
+				return Progress()
+			}
+			trace("fetch item \(item.id) kind \(item.kind) package \(item.isPackage) size \(item.size)")
+			guard
+				item.kind == .file || (item.kind == .directory && FileProviderItem.directoryType(of: item).conforms(to: .package)),
 				let binding = try context.remoteBinding(folderID: item.folderID)
 			else {
 				completionHandler(nil, nil, NSError.fileProviderErrorForNonExistentItem(withIdentifier: itemIdentifier))

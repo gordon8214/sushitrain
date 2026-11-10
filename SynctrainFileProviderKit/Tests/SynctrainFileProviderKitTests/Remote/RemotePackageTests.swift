@@ -10,6 +10,75 @@ import Testing
 
 /// Directories a gateway on a Mac marks as packages (`RemoteItem.isPackage`)
 @Suite struct RemotePackageTests {
+	@Test func upgradingRefreshesPackageMetadataOnce() throws {
+		let store = try makeRemoteStore()
+		try store.snapshot([
+			remoteDirectory("itm_icon", "AppIcon.icon"), remoteDirectory("itm_folder", "Photos"),
+			remoteFile("itm_json", "AppIcon.icon/icon.json", parent: "itm_icon"),
+		])
+		let original = try #require(try store.item(folderID: "docs", path: "AppIcon.icon"))
+		let anchor = try store.currentAnchor()
+		#expect(try store.refreshPackageMetadata() == 1)
+		let changes = try store.changes(since: anchor, limit: 10)
+		#expect(changes.updated.map(\.id) == [original.id])
+		let refreshed = try #require(changes.updated.first)
+		#expect(refreshed.metadataRevision == original.metadataRevision + 1)
+		#expect(refreshed.contentRevision == original.contentRevision)
+		#expect(refreshed.fileProviderIdentifier == original.fileProviderIdentifier)
+		#expect(try store.refreshPackageMetadata() == 0)
+		#expect(try store.currentAnchor() == changes.anchor)
+	}
+
+	@Test func packageSizeIncludesOnlyItsLiveFiles() throws {
+		let store = try makeRemoteStore()
+		// SQL wildcard characters are literal path components; similarly named siblings are outside the package.
+		let path = "App_Icon%.icon"
+		try store.snapshot([
+			remoteDirectory("itm_icon", path),
+			remoteDirectory("itm_assets", path + "/Assets", parent: "itm_icon"),
+			remoteDirectory("itm_nested", path + "/Nested.rtfd", parent: "itm_icon"),
+			remoteFile("itm_json", path + "/icon.json", parent: "itm_icon", size: 100),
+			remoteFile("itm_image", path + "/Assets/icon.png", parent: "itm_assets", size: 1_500_000),
+			remoteFile("itm_nested_file", path + "/Nested.rtfd/TXT.rtf", parent: "itm_nested", size: 200),
+			remoteDirectory("itm_sibling", path + "-other"),
+			remoteFile("itm_other", path + "-other/data", parent: "itm_sibling", size: 900),
+		])
+		let icon = try #require(try store.item(folderID: "docs", path: path))
+		#expect(try store.directoryContentSize(of: icon) == 1_500_300)
+		try store.changes([
+			remoteFile("itm_image", path + "/Assets/icon.png", parent: "itm_assets", rev: "new", size: 250),
+			remoteFile("itm_json", path + "/icon.json", parent: "itm_icon", deleted: true),
+		])
+		#expect(try store.directoryContentSize(of: icon) == 450)
+		let assets = try #require(try store.item(folderID: "docs", path: path + "/Assets"))
+		#expect(try store.directoryContentSize(of: assets) == 250)
+	}
+
+	@Test func emptyPackageHasZeroSize() throws {
+		let store = try makeRemoteStore()
+		try store.snapshot([remoteDirectory("itm_icon", "Empty.icon")])
+		let icon = try #require(try store.item(folderID: "docs", path: "Empty.icon"))
+		#expect(try store.directoryContentSize(of: icon) == 0)
+	}
+
+	@Test func packageStampDetectsChangesWithinItsTree() throws {
+		let store = try makeRemoteStore()
+		try store.snapshot([
+			remoteDirectory("itm_icon", "AppIcon.icon"),
+			remoteFile("itm_json", "AppIcon.icon/icon.json", parent: "itm_icon"),
+			remoteFile("itm_outside", "outside.txt"),
+		])
+		let icon = try #require(try store.item(folderID: "docs", path: "AppIcon.icon"))
+		let first = try store.directoryContentStamp(of: icon)
+		try store.changes([remoteFile("itm_outside", "outside.txt", content: "different")])
+		#expect(try store.directoryContentStamp(of: icon) == first)
+		try store.changes([remoteFile("itm_json", "AppIcon.icon/icon.json", parent: "itm_icon", content: "new")])
+		let second = try store.directoryContentStamp(of: icon)
+		#expect(second != first)
+		try store.changes([remoteFile("itm_json", "AppIcon.icon/icon.json", parent: "itm_icon", deleted: true)])
+		#expect(try store.directoryContentStamp(of: icon) != second)
+	}
+
 	@Test func decodesTheMark() throws {
 		let json = """
 			{"id": "itm_icon", "folderID": "Documents", "parentID": "itm_root", "name": "AppIcon.icon",

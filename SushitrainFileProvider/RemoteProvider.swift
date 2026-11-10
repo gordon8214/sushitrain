@@ -725,7 +725,7 @@ final class RemoteProvider: Sendable {
 		let task = call { [self] in
 			// The version the download asks for: a newer one the gateway answers with replaces only that
 			let requested: RemoteRevision?
-			if case .remote(let state)? = try? contentSource(of: item) {
+			if item.kind == .file, case .remote(let state)? = try? contentSource(of: item) {
 				requested = state.revision
 			}
 			else {
@@ -758,9 +758,12 @@ final class RemoteProvider: Sendable {
 		return progress
 	}
 
-	private func fetch(_ item: IndexItem, binding: RemoteFolderBinding, to destination: URL, progress: Progress)
+	func fetch(_ item: IndexItem, binding: RemoteFolderBinding, to destination: URL, progress: Progress)
 		async throws -> NSFileProviderItem
 	{
+		if item.kind == .directory {
+			return try await fetchPackage(item, binding: binding, to: destination, progress: progress)
+		}
 		let source = try contentSource(of: item)
 		switch source {
 		case .staged(let url):
