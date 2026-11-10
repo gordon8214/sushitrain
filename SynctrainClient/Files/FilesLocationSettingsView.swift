@@ -26,6 +26,11 @@ struct FilesLocationSettingsView: View {
 				case .none: ProgressView()
 				}
 			}
+			if domain.isRelisting {
+				LabeledContent("Fetching folders from gateways…") {
+					ProgressView()
+				}
+			}
 			if let error = domain.lastError {
 				Text(error).foregroundStyle(.red)
 			}

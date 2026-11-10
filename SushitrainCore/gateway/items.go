@@ -143,8 +143,9 @@ func hasPrefixFold(s, prefix string) bool {
 	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
 }
 
-// toItem converts a row to its wire form, for a client whose write permission on the folder is canWrite
-func (r itemRow) toItem(canWrite bool) Item {
+// baseItem converts a row to its wire form, for a client whose write permission on the folder is canWrite, without
+// what the host decides (Package): send Service.itemOf instead
+func (r itemRow) baseItem(canWrite bool) Item {
 	item := Item{
 		ID:         r.id,
 		FolderID:   r.folder,

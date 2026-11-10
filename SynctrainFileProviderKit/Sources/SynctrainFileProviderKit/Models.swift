@@ -50,6 +50,8 @@ public struct IndexItem: Sendable, Hashable {
 	/// Persistent system identifiers can predate this database's row IDs.
 	public var fileProviderIdentifier: String? = nil
 	public var parentFileProviderIdentifier: String? = nil
+	/// A directory the gateway's host counts as a package (`RemoteItem.isPackage`)
+	public var isPackage = false
 
 	public var modificationDate: Date? {
 		modifiedNanoseconds == 0 ? nil : Date(timeIntervalSince1970: Double(modifiedNanoseconds) / 1_000_000_000)

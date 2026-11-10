@@ -39,6 +39,9 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	let attributes: ItemAttributes
 	/// The binding of the item's folder
 	let remote: RemoteFolderBinding
+	/// The type of a directory in the reply to a change the system made, which keeps the system's type
+	/// (`RemoteProvider.reply(_:to:)`)
+	let directoryReplyType: UTType?
 
 	var lastUsedDate: Date? { attributes.lastUsedDate }
 	var tagData: Data? { attributes.tagData }
@@ -49,11 +52,27 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 	/// Items need a date: the system fails to create items in its replica without one
 	static let referenceDate = Date(timeIntervalSince1970: 946_684_800)  // 2000-01-01
 
-	init(item: IndexItem, isOnDevice: Bool, attributes: ItemAttributes = ItemAttributes(), remote: RemoteFolderBinding) {
+	convenience init(
+		item: IndexItem, isOnDevice: Bool, attributes: ItemAttributes = ItemAttributes(), remote: RemoteFolderBinding
+	) {
+		self.init(item: item, isOnDevice: isOnDevice, attributes: attributes, remote: remote, directoryReplyType: nil)
+	}
+
+	private init(
+		item: IndexItem, isOnDevice: Bool, attributes: ItemAttributes, remote: RemoteFolderBinding,
+		directoryReplyType: UTType?
+	) {
 		self.item = item
 		self.isOnDevice = isOnDevice
 		self.attributes = attributes
 		self.remote = remote
+		self.directoryReplyType = directoryReplyType
+	}
+
+	/// The same item, with the type a directory has in a reply
+	func replying(withDirectoryType type: UTType) -> FileProviderItem {
+		FileProviderItem(
+			item: item, isOnDevice: isOnDevice, attributes: attributes, remote: remote, directoryReplyType: type)
 	}
 
 	var itemIdentifier: NSFileProviderItemIdentifier {
@@ -71,14 +90,29 @@ final class FileProviderItem: NSObject, NSFileProviderItem, NSFileProviderItemDe
 
 	var contentType: UTType {
 		switch item.kind {
-		case .directory, .folderRoot:
+		case .folderRoot:
 			return .folder
+		case .directory:
+			return directoryReplyType ?? Self.directoryType(of: item)
 		case .symlink:
 			return .symbolicLink
 		case .file:
 			let ext = (item.name as NSString).pathExtension
 			return ext.isEmpty ? .data : (UTType(filenameExtension: ext) ?? .data)
 		}
+	}
+
+	/// Files on iOS shows a directory as one document when its type is a package, as iCloud Drive does with an Icon
+	/// Composer icon or an Xcode project. iOS knows few of the packages a Mac makes, so it would show those as folders: a
+	/// gateway on a Mac marks them, with the types of the apps installed there. iOS reads the type when it first learns of
+	/// a directory and never changes it for an item it has (iOS 27.2); the Simulator decides from the host Mac's types
+	/// instead. Finder on a Mac decides from the directory's name itself.
+	private static func directoryType(of item: IndexItem) -> UTType {
+		#if os(iOS)
+			PackageTypes.type(ofDirectoryNamed: item.name, markedByGateway: item.isPackage) ?? .folder
+		#else
+			.folder
+		#endif
 	}
 
 	#if os(macOS)

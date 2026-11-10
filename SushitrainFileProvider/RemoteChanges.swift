@@ -67,7 +67,7 @@ extension RemoteProvider {
 					template, fields: fields, contents: url, options: options, parent: parent, binding: binding,
 					progress: progress)
 				progress.completedUnitCount = progress.totalUnitCount
-				completion.call(result.item, [], result.shouldFetchContent, nil)
+				completion.call(Self.reply(result.item, to: template), [], result.shouldFetchContent, nil)
 				if result.changedOthers {
 					signalWorkingSet()
 				}
@@ -108,7 +108,7 @@ extension RemoteProvider {
 				trace(
 					"remote: modify \(item.id) fields \(changedFields.rawValue) fetch \(result.shouldFetchContent) \(memoryFootprint())"
 				)
-				completion.call(result.item, [], result.shouldFetchContent, nil)
+				completion.call(Self.reply(result.item, to: template), [], result.shouldFetchContent, nil)
 				if result.changedOthers {
 					signalWorkingSet()
 				}
@@ -153,6 +153,20 @@ extension RemoteProvider {
 		}
 		progress.cancellationHandler = { task.cancel() }
 		return progress
+	}
+
+	/// The item to reply with. A directory keeps the type the system gave it, folder or package, because the system
+	/// refuses a reply that changes it (`PackageTypes.replyType(ofDirectoryTemplate:)`). A Mac reports every directory
+	/// as a folder and lets Finder decide.
+	static func reply(_ item: NSFileProviderItem?, to template: ItemTemplate) -> NSFileProviderItem? {
+		#if os(iOS)
+			if let item = item as? FileProviderItem, item.item.kind == .directory,
+				let type = PackageTypes.replyType(ofDirectoryTemplate: template.contentType)
+			{
+				return item.replying(withDirectoryType: type)
+			}
+		#endif
+		return item
 	}
 
 	// MARK: - Creating

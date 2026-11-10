@@ -67,7 +67,7 @@ func (s *Service) handleThumbnail(w http.ResponseWriter, r *http.Request, p prin
 		return errNotFound
 	}
 	if r.URL.Query().Get("revision") != row.revision {
-		item := row.toItem(access.write)
+		item := s.itemOf(row, access.write)
 		return revisionMismatch(&item)
 	}
 	size := thumbnailDefaultSize
@@ -97,7 +97,7 @@ func (s *Service) handleThumbnail(w http.ResponseWriter, r *http.Request, p prin
 		return err
 	}
 	if !ok || contentIDOf(file) != row.contentID {
-		item := row.toItem(access.write)
+		item := s.itemOf(row, access.write)
 		return revisionMismatch(&item)
 	}
 	source := ""

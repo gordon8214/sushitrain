@@ -402,12 +402,22 @@ public struct RemoteItem: Codable, Hashable, Sendable {
 	/// On a tombstone in a folder's change list: the item moved to this folder of the same gateway, where it keeps its
 	/// ID (and shows up live in that folder's change list)
 	public var movedToFolderID: String?
+	/// On a directory: the gateway's host counts it as one document (a package, like an Xcode project) rather than a
+	/// folder. Only Macs say so, for the package types of every app installed there.
+	public var isPackage: Bool?
+
+	/// Listed by hand for `isPackage`: a property left out is never decoded (`RemotePackageTests` checks every one is here)
+	enum CodingKeys: String, CodingKey, CaseIterable {
+		case id, folderID, parentID, name, path, kind, size, modifiedNs, mode, writable, revision, contentID
+		case subtreeGeneration, availability, deleted, movedToFolderID
+		case isPackage = "package"
+	}
 
 	public init(
 		id: String, folderID: String, parentID: String?, name: String, path: String, kind: RemoteItemKind,
 		size: Int64? = nil, modifiedNs: Int64, mode: Int? = nil, writable: Bool? = nil, revision: RemoteRevision,
 		contentID: ContentIdentity? = nil, subtreeGeneration: Int64? = nil, availability: RemoteAvailability? = nil,
-		deleted: Bool? = nil, movedToFolderID: String? = nil
+		deleted: Bool? = nil, movedToFolderID: String? = nil, isPackage: Bool? = nil
 	) {
 		self.id = id
 		self.folderID = folderID
@@ -425,6 +435,7 @@ public struct RemoteItem: Codable, Hashable, Sendable {
 		self.availability = availability
 		self.deleted = deleted
 		self.movedToFolderID = movedToFolderID
+		self.isPackage = isPackage
 	}
 
 	public var isDeleted: Bool { deleted == true }

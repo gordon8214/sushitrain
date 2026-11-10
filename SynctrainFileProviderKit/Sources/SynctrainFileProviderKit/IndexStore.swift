@@ -11,7 +11,7 @@ public struct IndexStore: Sendable {
 	public let url: URL
 	private let container: SharedContainer?
 
-	static let schemaVersion = 3
+	static let schemaVersion = 4
 
 	static let itemColumns = """
 		id, folder_id, path, parent_id, name, kind, size, mod_ns, blocks_hash, content_rev, meta_rev, changed_seq, \
@@ -21,7 +21,8 @@ public struct IndexStore: Sendable {
 				THEN 'gateway:' ELSE '' END) || items.id), \
 		COALESCE((SELECT identifier FROM file_provider_legacy_identifiers WHERE item_id = items.parent_id), \
 			(CASE WHEN EXISTS (SELECT 1 FROM meta WHERE key = 'legacy_file_provider_identifiers') \
-				THEN 'gateway:' ELSE '' END) || items.parent_id)
+				THEN 'gateway:' ELSE '' END) || items.parent_id), \
+		COALESCE((SELECT package FROM remote_items WHERE item_id = items.id), 0)
 		"""
 
 	public init(url: URL) {
@@ -76,7 +77,23 @@ public struct IndexStore: Sendable {
 			try createRemoteSchema(connection)
 			try createHistorySchema(connection)
 			try createFileProviderIdentifierSchema(connection)
+			// Version 4: whether the gateway counts a directory as a package. Items stored before have no mark until the
+			// gateway lists them again, which a rebuild of the Files location has it do (`RemoteWork`).
+			try addColumnIfMissing(
+				connection, table: "remote_items", column: "package", definition: "INTEGER NOT NULL DEFAULT 0")
 			try connection.setUserVersion(schemaVersion)
+		}
+	}
+
+	/// Adds a column to a table an earlier version created (a new table has it already)
+	private static func addColumnIfMissing(
+		_ connection: SQLiteConnection, table: StaticString, column: StaticString, definition: StaticString
+	) throws(IndexError) {
+		let exists = try connection.queryOne(
+			"SELECT 1 FROM pragma_table_info(?) WHERE name = ?", ["\(table)", "\(column)"]
+		) { _ in true }
+		if exists != true {
+			try connection.execute("ALTER TABLE \(table) ADD COLUMN \(column) \(definition)")
 		}
 	}
 
@@ -148,7 +165,8 @@ public struct IndexStore: Sendable {
 			pending: PendingChange(rawValue: Int(row.int64(12))) ?? .none,
 			isDeleted: row.bool(13),
 			fileProviderIdentifier: row.optionalText(14),
-			parentFileProviderIdentifier: row.optionalText(15)
+			parentFileProviderIdentifier: row.optionalText(15),
+			isPackage: row.bool(16)
 		)
 	}
 

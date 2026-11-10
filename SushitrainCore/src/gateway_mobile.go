@@ -74,6 +74,27 @@ func SetRemoteThumbnailRenderer(renderer RemoteThumbnailRenderer) {
 	remoteThumbnails.renderer = renderer
 }
 
+// RemotePackageTypes tells the remote file service which directories are packages, like an Xcode project
+// (implemented with the system's types on macOS). The service asks from its own threads, sometimes while it holds a
+// folder's lock: answer quickly, without waiting for the main thread or calling back into the core.
+type RemotePackageTypes interface {
+	// IsPackageExtension reports whether a directory whose name has this extension (without the dot, in lower case)
+	// is a package
+	IsPackageExtension(ext string) bool
+}
+
+var remotePackages struct {
+	sync.Mutex
+	types RemotePackageTypes
+}
+
+// SetRemotePackageTypes must be called before starting the service for it to mark packages
+func SetRemotePackageTypes(types RemotePackageTypes) {
+	remotePackages.Lock()
+	defer remotePackages.Unlock()
+	remotePackages.types = types
+}
+
 // How long the audit log keeps entries, as on Linux hosts
 const remoteAuditRetention = 365 * 24 * time.Hour
 
@@ -176,6 +197,11 @@ func (clt *Client) StartRemoteFileService(settingsJSON []byte) (*RemoteFileServi
 		cfg.Thumbnails = thumbnailAdapter{renderer: remoteThumbnails.renderer}
 	}
 	remoteThumbnails.Unlock()
+	remotePackages.Lock()
+	if remotePackages.types != nil {
+		cfg.Packages = remotePackages.types
+	}
+	remotePackages.Unlock()
 	svc, err := gateway.New(cfg, backend)
 	if err != nil {
 		return nil, err

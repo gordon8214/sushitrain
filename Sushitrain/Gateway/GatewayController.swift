@@ -47,7 +47,7 @@
 		/// The latest refresh: refreshes run one after the other, so that an older snapshot never replaces a newer one
 		@ObservationIgnored private var refreshing: Task<Void, Never>? = nil
 		@ObservationIgnored private var terminationObserver: (any NSObjectProtocol)? = nil
-		@ObservationIgnored private var hasThumbnailRenderer = false
+		@ObservationIgnored private var hasSetHostHelpers = false
 
 		private static let enabledKey = "remoteFileServiceEnabled"
 		private static let refreshInterval: Duration = .seconds(3)
@@ -267,10 +267,11 @@
 			state = .starting
 			do {
 				let configuration = try await serviceConfiguration()
-				if !hasThumbnailRenderer {
-					// The core only offers thumbnails if the renderer is set before the service starts
+				if !hasSetHostHelpers {
+					// The core only offers thumbnails, and marks packages, if these are set before the service starts
 					SushitrainSetRemoteThumbnailRenderer(QuickLookThumbnailRenderer())
-					hasThumbnailRenderer = true
+					SushitrainSetRemotePackageTypes(SystemPackageTypes())
+					hasSetHostHelpers = true
 				}
 				let started = try await Self.startService(client: client, configuration: configuration)
 				service = started

@@ -910,6 +910,16 @@ components:
           type: string
           enum: [local, peers, unavailable]
           description: Where the gateway can read the current content from now.
+        package:
+          type: boolean
+          description: >-
+            On a directory the gateway's host counts as one document (a package or bundle, like an Xcode project or an
+            Icon Composer icon) rather than a folder to browse: one whose name has an extension (as macOS takes it: not
+            a leading dot alone, no space) of a package type the host declares, including those of the apps installed
+            there. Only the gateway in Synctrain on macOS sets it; synctrain-gateway never does. It is worked out from
+            the name when the item is sent and is not covered by `revision`, so it can change (an app installed or
+            removed on the host) without a change-list entry. Clients show such directories as documents. Absent means
+            false.
         deleted:
           type: boolean
           description: Tombstone in a change list.

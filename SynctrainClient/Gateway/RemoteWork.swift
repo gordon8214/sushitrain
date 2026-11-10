@@ -113,6 +113,83 @@ enum RemoteWork {
 		return result
 	}
 
+	/// Lists every folder again from a new snapshot of its gateway, before the Files location is set up again. A gateway
+	/// in Synctrain on a Mac marks packages when it lists an item, and iOS reads a directory's type only when it first
+	/// learns of it: the marks stored with items listed earlier may be out of date (an app installed on the Mac since,
+	/// or a phone updated before its gateway). Gateways are asked in parallel; one that can't be reached, or hasn't
+	/// finished by the deadline, keeps what the index has. Returns whether every folder was listed again.
+	static func relistForRebuild(environment: RemoteEnvironment, deadline: Duration) async -> Bool {
+		let store = environment.store
+		guard let bindings = try? store.remoteBindings().filter(\.permissions.read) else {
+			return false
+		}
+		var gateways: [(endpoint: RemoteEndpoint, folderIDs: [String])] = []
+		for serviceID in Set(bindings.map(\.serviceID)).sorted() {
+			guard let endpoint = try? store.remoteEndpoint(serviceID: serviceID) else {
+				return false
+			}
+			gateways.append((endpoint, bindings.filter { $0.serviceID == serviceID }.map(\.folderID)))
+		}
+		guard !gateways.isEmpty else {
+			return true
+		}
+		enum Outcome: Sendable {
+			case gateway(listedAll: Bool)
+			case deadline
+		}
+		return await withTaskGroup(of: Outcome.self) { group in
+			for gateway in gateways {
+				group.addTask {
+					let sync = environment.sync(for: gateway.endpoint)
+					// A gateway that can't be reached keeps the folders' cursors, rather than needing new snapshots
+					guard (try? await sync.refreshCapabilities()) != nil else {
+						return .gateway(listedAll: false)
+					}
+					var listedAll = true
+					for folderID in gateway.folderIDs {
+						guard !Task.isCancelled else {
+							return .gateway(listedAll: false)
+						}
+						do throws(IndexError) {
+							try store.resetRemoteCursor(folderID: folderID)
+						}
+						catch {
+							listedAll = false
+							continue
+						}
+						do throws(RemoteError) {
+							try await sync.refresh(folderID: folderID)
+						}
+						catch {
+							listedAll = false
+						}
+					}
+					return .gateway(listedAll: listedAll)
+				}
+			}
+			group.addTask {
+				try? await Task.sleep(for: deadline)
+				return .deadline
+			}
+			var listedAll = true
+			var waiting = gateways.count
+			for await outcome in group where waiting > 0 {
+				switch outcome {
+				case .gateway(let all):
+					listedAll = listedAll && all
+					waiting -= 1
+				case .deadline:
+					listedAll = false
+					waiting = 0
+				}
+				if waiting == 0 {
+					group.cancelAll()
+				}
+			}
+			return listedAll
+		}
+	}
+
 	/// A folder to long-poll, with the folders of all gateways that are only refreshed
 	struct PollTarget: Sendable, Hashable {
 		var folderID: String

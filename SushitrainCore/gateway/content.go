@@ -533,12 +533,12 @@ func (s *Service) handleCreateLease(w http.ResponseWriter, r *http.Request, p pr
 	}
 	current := revisionOf(file)
 	if current != req.Revision || row.revision != req.Revision {
-		item := row.toItem(access.write)
+		item := s.itemOf(row, access.write)
 		if current != row.revision {
 			// The change log hasn't caught up yet; describe the item as the index has it
 			fresh := row
 			fresh.setFromFileInfo(file, access.info.IgnorePerms)
-			item = fresh.toItem(access.write)
+			item = s.itemOf(fresh, access.write)
 		}
 		return newAPIError(http.StatusPreconditionFailed, codeRevisionMismatch, "the item changed").withItem(&item)
 	}

@@ -33,6 +33,14 @@ Everything goes through the gateway over HTTPS, whether or not Synctrain is runn
   with an edit that wasn't sent). Thumbnails come from the gateway.
 - **Moving** a file to a folder on another gateway copies it there and then deletes the original; directories can't
   be moved between gateways (copy them, then delete them).
+- **Packages** (directories a Mac shows as one document, like an Xcode project or an Icon Composer icon) show as one
+  document in Files too, as in iCloud Drive; the app still opens them as folders. The phone's own types and those of
+  Apple's and open formats always count, except a few Mac formats named with ordinary words (such as `.help` and
+  `.workflow`). A gateway in Synctrain on a Mac also marks the types of every app installed there (a newly installed
+  app's within a minute); `synctrain-gateway` marks none. iOS keeps the kind it first saw: a directory already on
+  the phone as a folder stays one, a package renamed to a plain name stays a document, and a package copied in from
+  where Files shows it as a folder (On My iPhone) stays a folder. **Rebuild Synctrain location** (below) shows each
+  as what it is now.
 - **Previous Versions…** (in a file's menu in Files and the app) combines the folder gateway with additional gateways
   enabled under Settings › **History Sources**. [Additional history sources](gateway.md#additional-history-sources)
   match by Syncthing folder ID and current path, with source names, dates, sizes, and independent connection errors.
@@ -163,4 +171,6 @@ xcrun devicectl device copy from --device <device> --domain-type appGroupDataCon
 
 **Rebuild Synctrain location** under Settings › Gateways removes the location and sets it up again, starting a new index
 generation. Files on gateways are not affected, but changes made in Files that have not reached Synctrain yet are
-discarded; Synctrain asks before doing that, and refuses while edits are unresolved.
+discarded; Synctrain asks before doing that, and refuses while edits are unresolved. Before the location comes back,
+every folder is listed again from its gateway (for up to a minute), so that packages show as the gateway marks them
+now; folders of a gateway that can't be reached keep what the phone had, and Synctrain says so.

@@ -33,6 +33,22 @@
       "availability": "local"
     },
     {
+      "id": "itm_XdjMRBe9kQOe5txaxO4Zvw",
+      "folderID": "Documents",
+      "parentID": "itm_SBNJTRN-FjG7owHVrKtuew",
+      "name": "Logo.icon",
+      "path": "Logo.icon",
+      "kind": "directory",
+      "size": 0,
+      "modifiedNs": 1793150180790414961,
+      "mode": 493,
+      "writable": true,
+      "revision": "r1.KEw23l9fkFscbrCbNCR_LwQflQe2MIi5_Iddssy7Bqw",
+      "subtreeGeneration": 7,
+      "availability": "local",
+      "package": true
+    },
+    {
       "id": "itm_hF6RgxMZ6JxNZWvbgMJ4rA",
       "folderID": "Documents",
       "parentID": "itm_wG3IzBclHqTA5RCcjR2j2g",

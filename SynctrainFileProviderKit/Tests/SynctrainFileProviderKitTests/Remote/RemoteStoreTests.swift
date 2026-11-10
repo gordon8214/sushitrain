@@ -39,7 +39,7 @@ import Testing
 		let snapshot: SnapshotPage = try fixture("snapshot-page.json")
 		try store.beginRemoteSnapshot(folderID: "docs")
 		let first = try store.applyRemoteSnapshotPage(snapshot, folderID: "docs", requestedPage: nil)
-		#expect(first.stored && first.changed == 2)
+		#expect(first.stored && first.changed == 3)
 		#expect(try store.remoteSyncState(folderID: "docs").cursor == nil, "no cursor until the snapshot completes")
 
 		// The last page, then the changes after the snapshot's start
@@ -60,6 +60,7 @@ import Testing
 		#expect(try store.remoteItem(itemID: report.id)?.revision.rawValue.hasPrefix("r1.wxfG") == true)
 		#expect(try store.remoteItem(itemID: folder.rootItemID)?.gatewayID == testRootGatewayID)
 		#expect(try store.item(folderID: "docs", path: "Taxes/old.txt") == nil)
+		#expect(try store.item(folderID: "docs", path: "Logo.icon")?.isPackage == true && !taxes.isPackage)
 
 		let (all, _) = try store.allChanges(since: start)
 		#expect(Set(all.updated.map(\.path)).isSuperset(of: ["Taxes", "Taxes/report.pdf"]))

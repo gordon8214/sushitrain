@@ -185,14 +185,14 @@ final class RemoteProjector {
 		let values: [any SQLBindable] = [
 			folderID, item.parentID, item.path, item.name, item.kind.rawValue, item.revision.rawValue,
 			item.contentID?.rawValue, item.size ?? 0, item.modifiedNs, item.mode ?? 0, item.writable ?? false,
-			item.subtreeGeneration, item.availability?.rawValue, item.isDeleted, now,
+			item.subtreeGeneration, item.availability?.rawValue, item.isPackage ?? false, item.isDeleted, now,
 		]
 		if previous != nil {
 			try connection.run(
 				"""
 				UPDATE remote_items SET folder_id = ?, parent_gateway_id = ?, path = ?, name = ?, kind = ?, revision = ?,
 					content_id = ?, size = ?, modified_ns = ?, mode = ?, writable = ?, subtree_generation = ?,
-					availability = ?, deleted = ?, updated_at = ?, seen_mark = COALESCE(?, seen_mark)
+					availability = ?, package = ?, deleted = ?, updated_at = ?, seen_mark = COALESCE(?, seen_mark)
 				WHERE gateway_id = ?
 				""", values + [seenMark, item.id])
 		}
@@ -200,15 +200,17 @@ final class RemoteProjector {
 			try connection.run(
 				"""
 				INSERT INTO remote_items (folder_id, parent_gateway_id, path, name, kind, revision, content_id, size,
-					modified_ns, mode, writable, subtree_generation, availability, deleted, updated_at, seen_mark,
-					gateway_id, placed)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+					modified_ns, mode, writable, subtree_generation, availability, package, deleted, updated_at,
+					seen_mark, gateway_id, placed)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 				""", values + [seenMark ?? 0, item.id])
 		}
 		if item.isRoot {
 			try connection.run(
 				"UPDATE remote_bindings SET root_gateway_id = ? WHERE folder_id = ?", [item.id, folderID])
 		}
+		// A changed package mark alone reports no change: the system never changes the type of an item it has (iOS
+		// 27.2), so it only counts for items the system learns of later, such as after a rebuild
 		let writableChanged = previous.map { $0.writable != (item.writable ?? false) } ?? false
 		try place(item.id, mayDisplace: true, forceChange: writableChanged)
 		if let previous, previous.folderID != folderID, !item.isDeleted, item.kind == .directory {

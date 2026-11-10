@@ -119,6 +119,7 @@ extension IndexStore {
 				writable INTEGER NOT NULL DEFAULT 0,
 				subtree_generation INTEGER,
 				availability TEXT,
+				package INTEGER NOT NULL DEFAULT 0,
 				deleted INTEGER NOT NULL DEFAULT 0,
 				placed INTEGER NOT NULL DEFAULT 0,
 				seen_mark INTEGER NOT NULL DEFAULT 0,

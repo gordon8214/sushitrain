@@ -73,6 +73,7 @@ import Testing
 			case "snapshot-page.json":
 				let page = try decoder.decode(SnapshotPage.self, from: data)
 				#expect(page.items.first?.isRoot == true && page.next != nil)
+				#expect(page.items.filter { $0.isPackage == true }.map(\.name) == ["Logo.icon"])
 			case "upload-created.json":
 				let upload = try decoder.decode(UploadInfo.self, from: data)
 				#expect(upload.token.hasPrefix("stu_"))

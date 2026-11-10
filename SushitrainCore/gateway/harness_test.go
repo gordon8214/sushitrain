@@ -190,18 +190,22 @@ type testService struct {
 	home   string
 }
 
-func newTestService(t *testing.T, e *testEngine, home string) *testService {
+func newTestService(t *testing.T, e *testEngine, home string, configure ...func(*Config)) *testService {
 	t.Helper()
 	if home == "" {
 		home = t.TempDir()
 	}
-	s, err := New(Config{
+	cfg := Config{
 		Home:          home,
 		ListenAddress: "127.0.0.1:0",
 		ServiceName:   "gateway.test",
 		Logger:        slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
 		SpoolQuota:    64 << 20,
-	}, e.backend)
+	}
+	for _, f := range configure {
+		f(&cfg)
+	}
+	s, err := New(cfg, e.backend)
 	if err != nil {
 		t.Fatal(err)
 	}

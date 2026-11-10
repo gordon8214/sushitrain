@@ -64,6 +64,8 @@ type Config struct {
 	TrashAvailable bool
 	// Renders thumbnails; nil disables them
 	Thumbnails ThumbnailRenderer
+	// Tells which directories are packages; nil on hosts without package types, which mark none
+	Packages PackageTypes
 	// Bytes of prepared content kept for reading
 	SpoolQuota int64
 	// Bytes of staged uploads per client
@@ -94,6 +96,7 @@ type Service struct {
 	exportsChanged chan struct{}
 	clientRequests clientRequests
 	thumbnailSlot  chan struct{}
+	packages       *packageCache
 	// Set once a cursor beyond the change log started a new authority generation since the service started
 	restoreDetected atomic.Bool
 	// Held for reading by folder loop callbacks that change files (beginPublish), and briefly for writing by Close
@@ -176,6 +179,7 @@ func New(cfg Config, backend RemoteFileBackend) (*Service, error) {
 		publicSlots:    make(chan struct{}, maxPublicRequests),
 		exportsChanged: make(chan struct{}, 1),
 		thumbnailSlot:  make(chan struct{}, 1),
+		packages:       newPackageCache(cfg.Packages),
 	}
 	if s.content, err = newContentManager(s, filepath.Join(cfg.CacheDir, "content")); err != nil {
 		st.close()

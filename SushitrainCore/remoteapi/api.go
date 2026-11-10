@@ -105,7 +105,10 @@ type Item struct {
 	ContentID         string  `json:"contentID,omitempty"`
 	SubtreeGeneration int64   `json:"subtreeGeneration,omitempty"`
 	Availability      string  `json:"availability,omitempty"`
-	Deleted           bool    `json:"deleted,omitempty"`
+	// On a directory the gateway's host counts as one document (a package or bundle, like an Xcode project) rather
+	// than a folder to browse. Only hosts with package types (macOS) say so.
+	Package bool `json:"package,omitempty"`
+	Deleted bool `json:"deleted,omitempty"`
 	// On a tombstone in the change log of a folder the item left for another folder of this service: that folder.
 	// The item keeps its ID there.
 	MovedToFolderID string `json:"movedToFolderID,omitempty"`

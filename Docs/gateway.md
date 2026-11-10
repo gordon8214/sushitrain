@@ -49,7 +49,9 @@ that reaches the Mac from elsewhere, with a port when the router forwards anothe
 keep the address they were given; change it on each one, on the gateway's page under Settings › Gateways, rather than
 pairing again. The Mac must stay awake and Synctrain running (it can start at login without a window); while the
 service runs, Synctrain keeps macOS from napping it. Sleep is an ordinary outage. Thumbnails are rendered
-with Quick Look. A Mac in [Files in Finder mode](macos.md#two-modes) runs no engine, so it can't be a gateway.
+with Quick Look. Directories whose name has the extension of a package type the Mac declares (Apple's, and those of
+every installed app; a new app's within a minute) are marked as such, so phones show them as one document too. A Mac in [Files in Finder mode](macos.md#two-modes) runs no engine,
+so it can't be a gateway.
 
 ## Linux (`synctrain-gateway`)
 

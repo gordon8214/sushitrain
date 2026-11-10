@@ -201,7 +201,7 @@ func (s *Service) handleSnapshot(w http.ResponseWriter, r *http.Request, p princ
 		}
 	}
 	for _, row := range rows {
-		page.Items = append(page.Items, row.toItem(access.write))
+		page.Items = append(page.Items, s.itemOf(row, access.write))
 	}
 	return writeJSON(w, http.StatusOK, page)
 }
@@ -261,7 +261,7 @@ func (s *Service) handleChanges(w http.ResponseWriter, r *http.Request, p princi
 		}
 		next := from
 		for _, row := range rows {
-			item := row.toItem(access.write)
+			item := s.itemOf(row, access.write)
 			item.MovedToFolderID = row.movedTo
 			page.Changes = append(page.Changes, item)
 			next.sequence = row.changeSeq
@@ -363,7 +363,7 @@ func (s *Service) handleItem(w http.ResponseWriter, r *http.Request, p principal
 	if err != nil {
 		return err
 	}
-	item := row.toItem(access.write)
+	item := s.itemOf(row, access.write)
 	if !row.deleted && row.path != "" {
 		item.Availability = s.availability(row)
 	}

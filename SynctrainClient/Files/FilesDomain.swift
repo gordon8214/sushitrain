@@ -16,6 +16,8 @@ import SynctrainFileProviderKit
 	private(set) var isEnabled: Bool? = nil
 	private(set) var lastError: String? = nil
 	private(set) var isRebuilding = false
+	/// While a rebuild lists the folders again from their gateways
+	private(set) var isRelisting = false
 	/// Counts the changes of the index, so that views listing the index can follow them
 	private(set) var indexRevision = 0
 
@@ -187,9 +189,32 @@ import SynctrainFileProviderKit
 			Log.warn("Could not rebuild the Files index: \(error.localizedDescription)")
 			lastError = error.localizedDescription
 		}
+		#if os(iOS)
+			// iOS reads each directory's type (folder or package) only now, when it learns of the items again: list
+			// the folders again first, for the package marks gateways on Macs give today
+			isRelisting = true
+			var relisted = true
+			if let environment = RemoteEnvironment.shared {
+				relisted = await RemoteWork.relistForRebuild(environment: environment, deadline: Self.relistDeadline)
+			}
+			isRelisting = false
+		#endif
 		// Whatever happened to the index, the location has to come back
 		await register()
+		#if os(iOS)
+			// After registering, which clears the last error when it succeeds
+			if !relisted, lastError == nil {
+				Log.warn("Not every folder was listed again before the Files location came back")
+				lastError = String(
+					localized:
+						"Some gateways did not answer in time, so packages in their folders may show as folders. Rebuild again when they can be reached."
+				)
+			}
+		#endif
 	}
+
+	/// How long a rebuild waits for the gateways to list the folders again
+	static let relistDeadline: Duration = .seconds(60)
 
 	static var unresolvedEditsMessage: String {
 		String(

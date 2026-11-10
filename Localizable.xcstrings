@@ -26125,6 +26125,52 @@
         }
       }
     },
+    "Fetching folders from gateways…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordner werden von den Gateways abgerufen…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obteniendo carpetas de las puertas de enlace…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recupero delle cartelle dai gateway…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲートウェイからフォルダを取得中…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappen ophalen van gateways…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отримання папок зі шлюзів…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在从网关获取文件夹…"
+          }
+        }
+      }
+    },
     "File" : {
       "localizations" : {
         "de" : {
@@ -61981,6 +62027,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "部分文件夹无法移动"
+          }
+        }
+      }
+    },
+    "Some gateways did not answer in time, so packages in their folders may show as folders. Rebuild again when they can be reached." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Gateways haben nicht rechtzeitig geantwortet. Pakete in ihren Ordnern werden daher möglicherweise als Ordner angezeigt. Bauen Sie den Speicherort erneut auf, sobald sie erreichbar sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunas puertas de enlace no respondieron a tiempo, así que los paquetes de sus carpetas pueden mostrarse como carpetas. Vuelve a reconstruir cuando se pueda acceder a ellas."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alcuni gateway non hanno risposto in tempo, quindi i pacchetti nelle loro cartelle potrebbero apparire come cartelle. Ricrea di nuovo la posizione quando sono raggiungibili."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部のゲートウェイが時間内に応答しなかったため、それらのフォルダ内のパッケージがフォルダとして表示されることがあります。接続できるようになったら、もう一度再構築してください。"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sommige gateways antwoordden niet op tijd, dus pakketten in hun mappen kunnen als mappen worden getoond. Bouw opnieuw op zodra ze bereikbaar zijn."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Деякі шлюзи не відповіли вчасно, тому пакети в їхніх папках можуть показуватися як папки. Перебудуйте ще раз, коли вони стануть доступні."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分网关未及时响应，因此其文件夹中的包可能会显示为文件夹。待可以连接时，请再次重建。"
           }
         }
       }

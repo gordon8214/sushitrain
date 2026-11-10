@@ -195,7 +195,7 @@ func (s *Service) currentItem(folder, p string) *Item {
 	if err != nil || !ok {
 		return nil
 	}
-	item := row.toItem(true)
+	item := s.itemOf(row, true)
 	return &item
 }
 
@@ -574,7 +574,7 @@ func (s *Service) publishFile(ctx context.Context, op *operationRecord, h syncth
 			if live && current != nil {
 				fresh := itemRow{id: current.ID, folder: op.folder, path: target}
 				fresh.setFromFileInfo(global, info.IgnorePerms)
-				item := fresh.toItem(true)
+				item := s.itemOf(fresh, true)
 				current = &item
 			}
 			if op.req.OnConflict == onConflictReject {
@@ -807,7 +807,7 @@ func (s *Service) fileResult(op *operationRecord, target string) (Operation, err
 	if !ok {
 		return Operation{}, fmt.Errorf("published item %q is not in the change log", op.data.Target)
 	}
-	item := row.toItem(true)
+	item := s.itemOf(row, true)
 	result := Operation{ID: op.clientOp, Operation: op.id, Kind: op.kind, State: stateResultCommitted, Item: &item,
 		ContentID: row.contentID, AuthorityGeneration: op.generation}
 	if op.data.Conflict {
@@ -1048,7 +1048,7 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 	if row.path == "" {
 		return Operation{}, newAPIError(http.StatusForbidden, codeForbidden, "a folder's root cannot be deleted")
 	}
-	current := row.toItem(true)
+	current := s.itemOf(row, true)
 	// A run that stopped while removing items finishes removing them; the preconditions held when it started
 	resuming := op.journal == journalPublishing
 	if !resuming && row.kind == protocol.FileInfoTypeDirectory &&
@@ -1083,7 +1083,7 @@ func (s *Service) executeDelete(ctx context.Context, op *operationRecord) (Opera
 		if !resuming && revisionOf(global) != op.req.BaseRevision {
 			fresh := row
 			fresh.setFromFileInfo(global, info.IgnorePerms)
-			item := fresh.toItem(true)
+			item := s.itemOf(fresh, true)
 			return revisionMismatch(&item)
 		}
 		entries, err := s.collectSubtree(ctx, h, root, row, &current, op.data.DeleteSequence)
@@ -1160,7 +1160,7 @@ func (s *Service) deleteRecordHolds(op *operationRecord) (bool, error) {
 }
 
 func (s *Service) deleteResult(op *operationRecord, row itemRow) (Operation, error) {
-	item := row.toItem(true)
+	item := s.itemOf(row, true)
 	return Operation{ID: op.clientOp, Operation: op.id, Kind: op.kind, State: stateResultCommitted, Item: &item,
 		AuthorityGeneration: op.generation}, nil
 }
@@ -1233,7 +1233,7 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 			// The rename didn't happen: start over, checking the preconditions again
 			op.journal = journalIntent
 		default:
-			current := row.toItem(true)
+			current := s.itemOf(row, true)
 			return Operation{}, revisionMismatch(&current)
 		}
 	}
@@ -1243,7 +1243,7 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 		}
 		return Operation{}, newAPIError(http.StatusConflict, codeInvalidRequest, "a directory cannot move into itself")
 	}
-	current := row.toItem(true)
+	current := s.itemOf(row, true)
 	if op.journal == journalIntent && row.kind == protocol.FileInfoTypeDirectory &&
 		(op.req.SubtreeGeneration != nil && *op.req.SubtreeGeneration != row.subtreeGen) {
 		return Operation{}, revisionMismatch(&current)
@@ -1355,7 +1355,7 @@ func (s *Service) executeMove(ctx context.Context, op *operationRecord) (Operati
 				if live {
 					fresh := row
 					fresh.setFromFileInfo(global, info.IgnorePerms)
-					item := fresh.toItem(true)
+					item := s.itemOf(fresh, true)
 					return revisionMismatch(&item)
 				}
 				return revisionMismatch(&current)
@@ -1488,7 +1488,7 @@ func (s *Service) moveRow(tx *sql.Tx, from, row itemRow) error {
 }
 
 func (s *Service) moveResult(op *operationRecord, row itemRow) (Operation, error) {
-	item := row.toItem(true)
+	item := s.itemOf(row, true)
 	return Operation{ID: op.clientOp, Operation: op.id, Kind: op.kind, State: stateResultCommitted, Item: &item,
 		ContentID: row.contentID, AuthorityGeneration: op.generation}, nil
 }
