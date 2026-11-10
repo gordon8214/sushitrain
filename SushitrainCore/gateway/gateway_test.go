@@ -138,10 +138,10 @@ func TestPairing(t *testing.T) {
 	}
 	ts.json("GET", "/v1/pairing/"+pending.Request, pending.PollToken, nil, http.StatusOK, &result)
 	credential := result.Credential
-	// Collected once
-	resp, _ = ts.do("GET", "/v1/pairing/"+pending.Request, pending.PollToken, nil)
-	if resp.StatusCode != http.StatusGone {
-		t.Fatalf("second collection: %d", resp.StatusCode)
+	// Collection is retryable when the approval response is lost.
+	ts.json("GET", "/v1/pairing/"+pending.Request, pending.PollToken, nil, http.StatusOK, &result)
+	if result.Credential != credential {
+		t.Fatal("second collection changed the credential")
 	}
 
 	var caps Capabilities

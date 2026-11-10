@@ -669,7 +669,10 @@ paths:
     get:
       tags: [pairing]
       summary: Poll a pairing request.
-      description: Returns the credential once, when approved. Later polls answer `410`.
+      description: >
+        Returns the credential when approved. Repeated polls with the same poll token return the same credential
+        until the request expires, so a lost response can be retried. Recovery ends if the client is revoked or
+        pairs again; retries never rotate credentials or reapply permissions.
       operationId: getPairing
       security:
         - pairingPollToken: []

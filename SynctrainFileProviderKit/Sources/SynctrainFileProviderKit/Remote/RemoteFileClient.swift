@@ -691,7 +691,8 @@ public final class RemoteFileClient: Sendable {
 		return try await json(PairingPending.self, request)
 	}
 
-	/// Polls a pairing request with its poll token: the credential is returned once, when approved. A denial is
+	/// Polls a pairing request with its poll token: retries recover the approved credential until expiry or revocation
+	/// (including replacement by re-pairing). A denial is
 	/// `.forbidden("pairing_denied")`, an expired request `.server(410, "pairing_expired")`.
 	public func pollPairing(requestID: String, pollToken: String, wait: Int? = nil) async throws(RemoteError)
 		-> PairingResult

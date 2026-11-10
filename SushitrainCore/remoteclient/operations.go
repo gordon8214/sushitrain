@@ -49,7 +49,8 @@ func (c *Client) RequestPairing(ctx context.Context, req remoteapi.PairingReques
 }
 
 // PollPairing asks whether a pairing request was approved, waiting up to wait for an answer. The credential comes
-// back once, when it was; a denial is KindForbidden (pairing_denied), an expired request a 410 (pairing_expired).
+// back when it was; retries recover the same credential until expiry, revocation or re-pairing. A denial is
+// KindForbidden (pairing_denied), an expired request a 410 (pairing_expired).
 func (c *Client) PollPairing(ctx context.Context, requestID, pollToken string, wait time.Duration) (
 	remoteapi.PairingResult, error) {
 	query := url.Values{}

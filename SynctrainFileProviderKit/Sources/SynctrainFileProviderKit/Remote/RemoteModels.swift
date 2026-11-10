@@ -813,7 +813,7 @@ public struct PairingPending: Codable, Hashable, Sendable {
 
 public struct PairingResult: Codable, Hashable, Sendable {
 	public var state: PairingState
-	/// The client credential, returned once when approved
+	/// The approved client credential; retries recover the same value while the request and credential remain valid
 	public var credential: String?
 	public var clientID: String?
 	public var serviceID: String?

@@ -134,8 +134,7 @@ func TestHistoryListKeepsSurvivingVersionsDuringCleanup(t *testing.T) {
 	stamp := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	e.archiveVersion("file.txt", "older", stamp, stamp)
 	e.archiveVersion("file.txt", "newer", stamp.Add(time.Hour), stamp.Add(time.Hour))
-	ts := newTestService(t, e, "")
-	ts.backend = disappearingHistoryBackend{ts.backend, stamp}
+	ts := newTestServiceWithBackend(t, e, "", disappearingHistoryBackend{e.backend, stamp})
 	ts.export(false)
 	token := ts.pair(map[string]string{"docs": "read"})
 	var list PathVersionList

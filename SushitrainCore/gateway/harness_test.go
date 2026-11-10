@@ -192,6 +192,12 @@ type testService struct {
 
 func newTestService(t *testing.T, e *testEngine, home string, configure ...func(*Config)) *testService {
 	t.Helper()
+	return newTestServiceWithBackend(t, e, home, e.backend, configure...)
+}
+
+func newTestServiceWithBackend(t *testing.T, e *testEngine, home string, backend RemoteFileBackend,
+	configure ...func(*Config)) *testService {
+	t.Helper()
 	if home == "" {
 		home = t.TempDir()
 	}
@@ -205,7 +211,7 @@ func newTestService(t *testing.T, e *testEngine, home string, configure ...func(
 	for _, f := range configure {
 		f(&cfg)
 	}
-	s, err := New(cfg, e.backend)
+	s, err := New(cfg, backend)
 	if err != nil {
 		t.Fatal(err)
 	}

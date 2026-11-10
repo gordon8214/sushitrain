@@ -26,7 +26,8 @@ import (
 
 // Pairing: the host starts a session, which yields a single-use secret shown as a QR code. A client submits the
 // secret with its stable identity and name; the host approves the request (granting folders) or denies it; the
-// client then collects its credential once. Credentials are created only when collected, so none is stored.
+// client then collects its credential. Retrying collection returns the same credential until the request expires,
+// unless the client was revoked or paired again. Credentials are derived only when collected, so none is stored.
 
 const (
 	pairingSessionLifetime = 10 * time.Minute
@@ -286,15 +287,21 @@ func (s *Service) handlePairingPoll(w http.ResponseWriter, r *http.Request, p pr
 	}
 }
 
-// collectPairing returns the state of a request, creating and returning the credential the first time an approved
-// request is polled
+// collectPairing issues a credential the first time an approved request is polled. Later polls can recover the same
+// credential if the response was lost, without rotating it or reapplying permissions.
 func (s *Service) collectPairing(ctx context.Context, requestID string) (PairingResult, int, error) {
 	serviceID, err := s.store.serviceID()
 	if err != nil {
 		return PairingResult{}, 0, err
 	}
+	// Keep only the hash in the database, but make delivery retryable across connections and service restarts.
+	credential, err := deriveToken(s.store, prefixCredential, requestID)
+	if err != nil {
+		return PairingResult{}, 0, err
+	}
 	var result PairingResult
 	status := http.StatusAccepted
+	issued := false
 	err = s.store.tx(ctx, func(tx *sql.Tx) error {
 		var state, clientID, name, platform, grants string
 		var expires int64
@@ -309,14 +316,28 @@ func (s *Service) collectPairing(ctx context.Context, requestID string) (Pairing
 		switch {
 		case state == pairingStateDenied:
 			return newAPIError(http.StatusForbidden, codePairingDenied, "pairing was denied on the host")
-		case state == pairingStateDelivered || expires <= s.store.now().Unix():
-			return newAPIError(http.StatusGone, codePairingExpired, "the pairing request has expired or was collected")
+		case expires <= s.store.now().Unix():
+			return newAPIError(http.StatusGone, codePairingExpired, "the pairing request has expired")
 		case state == pairingStatePending:
 			result = PairingResult{State: pairingPending, ServiceID: serviceID}
 			return nil
+		case state == pairingStateDelivered:
+			// Never revive a revoked or superseded credential using an old poll token. Requests delivered by an
+			// older gateway with a random credential also fail this check and need a new pairing code.
+			var active int
+			err := tx.QueryRow(`SELECT 1 FROM clients WHERE client_id = ? AND credential_hash = ? AND revoked_at IS NULL`,
+				clientID, secretHash(credential)).Scan(&active)
+			if errors.Is(err, sql.ErrNoRows) {
+				return newAPIError(http.StatusGone, codePairingExpired, "the pairing credential is no longer current")
+			}
+			if err != nil {
+				return err
+			}
+			result = PairingResult{State: pairingApproved, Credential: credential, ClientID: clientID, ServiceID: serviceID}
+			status = http.StatusOK
+			return nil
 		}
 
-		credential := newToken(prefixCredential)
 		now := s.store.now().Unix()
 		// Scoped tokens that came with an earlier credential of the same identity stop working
 		if _, err := tx.Exec(`DELETE FROM leases WHERE client_id = ?`, clientID); err != nil {
@@ -353,9 +374,10 @@ func (s *Service) collectPairing(ctx context.Context, requestID string) (Pairing
 		}
 		result = PairingResult{State: pairingApproved, Credential: credential, ClientID: clientID, ServiceID: serviceID}
 		status = http.StatusOK
+		issued = true
 		return nil
 	})
-	if err == nil && status == http.StatusOK {
+	if err == nil && issued {
 		s.audit(result.ClientID, "pair", "", "", "ok")
 	}
 	return result, status, err
