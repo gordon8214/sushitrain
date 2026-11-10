@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"slices"
 
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/events"
@@ -34,10 +35,11 @@ var (
 
 // LoadConfig loads the configuration as Syncthing does at startup, and reports whether it created a new one.
 //
-// Only a missing file leads to a new configuration, with free ports probed when probePorts is set and adjustNew (when
-// not nil) applied before it is first saved. Otherwise the file is never replaced: an error wraps ErrConfiguration,
-// ErrNewerConfiguration or ErrUnreadableConfiguration, or comes from archiving an older configuration. A configuration
-// from an older Syncthing is first archived as <path>.v<version>, then migrated and saved.
+// Only a missing file leads to a new configuration, with free ports probed when probePorts is set, newConfigIgnoreLines
+// as its default ignore patterns, and adjustNew (when not nil) applied before it is first saved. Otherwise the file is
+// never replaced: an error wraps ErrConfiguration, ErrNewerConfiguration or ErrUnreadableConfiguration, or comes from
+// archiving an older configuration. A configuration from an older Syncthing is first archived as <path>.v<version>,
+// then migrated and saved.
 func LoadConfig(path string, cert tls.Certificate, evLogger events.Logger, probePorts bool,
 	adjustNew func(*config.Configuration)) (config.Wrapper, bool, error) {
 	myID := protocol.NewDeviceID(cert.Certificate[0])
@@ -73,6 +75,11 @@ func LoadConfig(path string, cert tls.Certificate, evLogger events.Logger, probe
 	return cfg, false, nil
 }
 
+// newConfigIgnoreLines are the default ignore patterns of a new configuration, which new folders start with. Finder
+// saves a .DS_Store with the view settings of each directory it opens, which matters to that Mac alone and changes
+// whenever a window is resized. (?d) lets a directory that still holds one be removed when it is deleted elsewhere.
+var newConfigIgnoreLines = []string{"(?d).DS_Store"}
+
 // newConfig creates and saves a default configuration
 func newConfig(path string, myID protocol.DeviceID, evLogger events.Logger, probePorts bool,
 	adjust func(*config.Configuration)) (config.Wrapper, error) {
@@ -80,11 +87,12 @@ func newConfig(path string, myID protocol.DeviceID, evLogger events.Logger, prob
 	if err != nil {
 		return nil, fmt.Errorf("creating a configuration: %w", err)
 	}
+	raw := cfg.RawCopy()
+	raw.Defaults.Ignores.Lines = slices.Clone(newConfigIgnoreLines)
 	if adjust != nil {
-		raw := cfg.RawCopy()
 		adjust(&raw)
-		cfg = config.Wrap(path, raw, myID, evLogger)
 	}
+	cfg = config.Wrap(path, raw, myID, evLogger)
 	if err := cfg.Save(); err != nil {
 		return nil, fmt.Errorf("saving a new configuration: %w", err)
 	}

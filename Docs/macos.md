@@ -322,7 +322,9 @@ accepting folders from an untrusted device.
   a versions path, which all new folders would share. Folders in a file system of the app's own don't take default
   versioning. A new folder gets the default patterns in its `.stignore` before the engine sees it, so that its first scan
   keeps to them. A `.stignore` that is already there stays, which the add folder screen says, as what it lists isn't
-  synchronized. Receive-encrypted folders have none.
+  synchronized. Receive-encrypted folders have none. A new configuration, on every platform and the gateway, starts
+  with `(?d).DS_Store` as its default pattern, as Finder's view settings are each Mac's own; a configuration taken over
+  from Syncthing keeps its own.
 
 ## Folder status and failed items
 

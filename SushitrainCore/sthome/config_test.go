@@ -12,12 +12,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/events"
+	"github.com/syncthing/syncthing/lib/fs"
+	"github.com/syncthing/syncthing/lib/ignore"
 	"github.com/syncthing/syncthing/lib/protocol"
 )
 
@@ -59,6 +62,50 @@ func TestLoadConfigCreatesAMissingConfigurationOnce(t *testing.T) {
 	must(t, err)
 	if !strings.Contains(string(saved), `<gui enabled="false"`) {
 		t.Fatal("the new configuration was first saved without the adjustment")
+	}
+}
+
+// A new configuration has new folders ignore Finder's .DS_Store files, at any depth, and allows deleting them so that
+// a directory holding one can be removed. An existing configuration keeps its own default patterns.
+func TestLoadConfigIgnoresDSStoreInNewConfigurationsOnly(t *testing.T) {
+	cert := testCertificate(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.xml")
+	cfg, created, err := LoadConfig(path, cert, events.NoopLogger, false, nil)
+	if err != nil || !created {
+		t.Fatalf("created %v, %v", created, err)
+	}
+	lines := cfg.DefaultIgnores().Lines
+	if !slices.Equal(lines, []string{"(?d).DS_Store"}) {
+		t.Fatalf("default ignore patterns %q", lines)
+	}
+	saved, err := os.ReadFile(path)
+	must(t, err)
+	if !strings.Contains(string(saved), "<line>(?d).DS_Store</line>") {
+		t.Fatalf("the patterns were not saved:\n%s", saved)
+	}
+
+	matcher := ignore.New(fs.NewFilesystem(fs.FilesystemTypeBasic, dir))
+	must(t, matcher.Parse(strings.NewReader(strings.Join(lines, "\n")), ".stignore"))
+	for _, name := range []string{".DS_Store", "Photos/2026/.DS_Store"} {
+		if result := matcher.Match(name); !result.IsIgnored() || !result.IsDeletable() {
+			t.Errorf("%s: ignored %v, deletable %v", name, result.IsIgnored(), result.IsDeletable())
+		}
+	}
+	for _, name := range []string{"notes.txt", "DS_Store", "Photos/x.DS_Store", ".DS_Store.txt"} {
+		if matcher.Match(name).IsIgnored() {
+			t.Errorf("%s is ignored", name)
+		}
+	}
+
+	existing := filepath.Join(t.TempDir(), "config.xml")
+	writeConfig(t, existing, cert, config.CurrentVersion)
+	cfg, created, err = LoadConfig(existing, cert, events.NoopLogger, false, nil)
+	if err != nil || created {
+		t.Fatalf("created %v, %v", created, err)
+	}
+	if lines := cfg.DefaultIgnores().Lines; len(lines) != 0 {
+		t.Fatalf("an existing configuration got default ignore patterns %q", lines)
 	}
 }
 
