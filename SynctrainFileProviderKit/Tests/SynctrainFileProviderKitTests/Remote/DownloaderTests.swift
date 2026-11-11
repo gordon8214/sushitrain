@@ -129,6 +129,23 @@ import Testing
 		#expect(gateway.state.value.leaseRequests >= 3)
 	}
 
+	/// A new lease reports the content as being prepared, with advice to ask again later, even when it is ready at once:
+	/// the download asks again sooner than advised
+	@Test func asksSoonWhileTheGatewayPrepares() async throws {
+		let gateway = ContentGateway(size: 4 * 128 * 1024)
+		gateway.state.update {
+			$0.preparation = [0]
+			$0.preparationAdvice = 30
+		}
+		let downloader = try makeDownloader(gateway)
+		let clock = ContinuousClock()
+		let started = clock.now
+		let url = try await downloader.download(gateway.request)
+		#expect(clock.now - started < .seconds(10), "not the 30 seconds the gateway advised")
+		#expect(try Data(contentsOf: url) == gateway.content)
+		#expect(gateway.state.value.leaseRequests >= 2, "asked again")
+	}
+
 	@Test func emptyFile() async throws {
 		let gateway = ContentGateway(size: 0)
 		let downloader = try makeDownloader(gateway)

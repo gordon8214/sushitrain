@@ -997,22 +997,45 @@ actor LeaseTracker {
 		try check(try await client.createReadLease(itemID: request.gatewayID, revision: request.revision))
 	}
 
-	/// Waits until the gateway has prepared the content up to the offset, asking for progress as it advises
+	/// How soon the gateway is first asked again while it prepares the content
+	static let firstPoll: TimeInterval = 0.05
+
+	/// How long the next wait for the gateway's preparation lasts: short at first, then twice as long each time, up to
+	/// the gateway's advice. Shared by every waiter of the transfer, so that it doesn't start over for every range.
+	private var pollDelay = LeaseTracker.firstPoll
+
+	/// Waits until the gateway has prepared the content up to the offset, asking for progress soon and then as it
+	/// advises. A new lease always reports content as being prepared, with a second's advice, but content on the
+	/// gateway's disk is ready within milliseconds: waiting the second would add it to every file opened.
 	func ensureReady(through end: Int64) async throws(RemoteError) -> ReadLease {
-		guard var current = lease else {
-			return try await start()
+		var current: ReadLease
+		if let lease {
+			current = lease
 		}
-		while current.preparation.state != .ready && current.preparation.readyBytes < end {
-			let delay = Double(current.preparation.retryAfter ?? 1)
+		else {
+			current = try await start()
+		}
+		while !Self.covers(current, through: end) {
+			let advised = min(max(Double(current.preparation.retryAfter ?? 1), Self.firstPoll), 30)
+			let delay = min(pollDelay, advised)
+			pollDelay = min(pollDelay * 2, advised)
 			do {
-				try await Task.sleep(for: .seconds(min(max(delay, 0.05), 30)))
+				try await Task.sleep(for: .seconds(delay))
 			}
 			catch {
 				throw .canceled
 			}
+			// Another waiter may have asked meanwhile
+			if let lease, Self.covers(lease, through: end) {
+				return lease
+			}
 			current = try await renew()
 		}
 		return current
+	}
+
+	private static func covers(_ lease: ReadLease, through end: Int64) -> Bool {
+		lease.preparation.state == .ready || lease.preparation.readyBytes >= end
 	}
 }
 

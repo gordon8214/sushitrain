@@ -67,6 +67,15 @@ type cache struct {
 	touched map[string]int64
 	wake    chan struct{}
 	stopped chan struct{}
+	// readRange asks a gateway for bytes of a lease's content: gatewayReadRange, or a test's stand-in, which is set
+	// before the first transfer starts and never changed after
+	readRange func(ctx context.Context, client *remoteclient.Client, leaseID string, start, end int64,
+		ifRange string) (*remoteclient.Range, error)
+}
+
+func gatewayReadRange(ctx context.Context, client *remoteclient.Client, leaseID string, start, end int64,
+	ifRange string) (*remoteclient.Range, error) {
+	return client.ReadRange(ctx, leaseID, "", start, end, ifRange)
 }
 
 func openCache(s *Service) (*cache, error) {
@@ -74,7 +83,7 @@ func openCache(s *Service) (*cache, error) {
 		transfersDir: filepath.Join(s.cfg.CacheDir, "Transfers"), pinned: map[string]int{},
 		transfers: map[string]*transfer{}, slots: make(chan struct{}, maxTransfers),
 		keepSlots: make(chan struct{}, maxKeepTransfers), touched: map[string]int64{}, wake: make(chan struct{}, 1),
-		stopped: make(chan struct{})}
+		stopped: make(chan struct{}), readRange: gatewayReadRange}
 	for _, dir := range []string{c.contentDir, c.transfersDir} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, err
@@ -373,6 +382,8 @@ type transfer struct {
 	file     *os.File
 	blocks   []remoteclient.Block
 	verified []bool
+	// Blocks of the ranges asked for and not read yet, which the next range leaves out
+	fetching []bool
 	count    int
 	wanted   []int
 	refs     int
@@ -488,6 +499,7 @@ func (t *transfer) resume() error {
 	}
 	t.blocks = blocks
 	t.verified = make([]bool, len(blocks))
+	t.fetching = make([]bool, len(blocks))
 	for i := range blocks {
 		if i/8 < len(verified) && verified[i/8]&(1<<(i%8)) != 0 {
 			t.verified[i] = true
@@ -694,7 +706,10 @@ func (t *transfer) lease(ctx context.Context) (remoteapi.ReadLease, *remoteclien
 	return lease, client, nil
 }
 
-// fetch fetches the blocks that aren't verified yet, those reads wait for first
+// fetch fetches the blocks that aren't verified yet, those reads wait for first. The next range is asked for as soon as
+// the current one's response starts, so that the gateway sends it while this one is read, verified and synced: the
+// link doesn't stand idle for a request's round trip and a disk sync between ranges. A seek doesn't wait for that next
+// range: its own is read first.
 func (t *transfer) fetch(ctx context.Context) error {
 	t.mutex.Lock()
 	complete := t.blocks != nil && t.count == len(t.blocks)
@@ -726,28 +741,49 @@ func (t *transfer) fetch(ctx context.Context) error {
 			return err
 		}
 		t.mutex.Lock()
-		t.blocks, t.verified, t.count = blocks, make([]bool, len(blocks)), 0
+		t.blocks, t.verified, t.fetching, t.count = blocks, make([]bool, len(blocks)), make([]bool, len(blocks)), 0
 		t.notify()
 		t.mutex.Unlock()
 	}
 	etag := `"` + t.contentID + `"`
 	buffer := make([]byte, 0, remoteclient.MaxBlockSize)
 	leases := 0
-	for {
-		first, last, ok := t.nextRange()
-		if !ok {
-			return nil
+	// The ranges asked for, in the order they are read: the one being read, and at most one more
+	var queue []*pendingRange
+	defer func() {
+		// Ranges still asked for are dropped, and their blocks can be asked for again
+		for _, p := range queue {
+			t.closeRange(p)
 		}
-		start := t.blocks[first].Offset
-		end := t.blocks[last].Offset + int64(t.blocks[last].Size) - 1
-		r, err := client.ReadRange(ctx, lease.Lease, "", start, end, etag)
+	}()
+	ask := func() *pendingRange { return t.request(ctx, client, lease, etag) }
+	if p := ask(); p != nil {
+		queue = append(queue, p)
+	}
+	for len(queue) > 0 {
+		// A read that waits for a block no range brings (a seek) goes first: its range is asked for now and read
+		// before the one asked for next, which waits at its flow-control window meanwhile
+		if t.waitsForUnclaimed() {
+			if p := ask(); p != nil {
+				queue = append([]*pendingRange{p}, queue...)
+			}
+		}
+		current := queue[0]
+		r, err := current.response()
 		if errors.Is(err, remoteclient.ErrLeaseExpired) && leases < 3 {
 			// Expired, or the gateway no longer has the leased content prepared: lease again (the content must be the
 			// same) and go on with the blocks verified so far. Leases that keep expiring at once wait, as other
 			// errors do.
 			leases++
+			for _, p := range queue {
+				t.closeRange(p)
+			}
+			queue = nil
 			if lease, client, err = t.lease(ctx); err != nil {
 				return err
+			}
+			if p := ask(); p != nil {
+				queue = append(queue, p)
 			}
 			continue
 		}
@@ -756,24 +792,25 @@ func (t *transfer) fetch(ctx context.Context) error {
 		}
 		leases = 0
 		if r.ETag != etag {
-			r.Body.Close()
 			return remoteclient.ErrProtocolViolation
 		}
-		for i := first; i <= last; i++ {
+		if len(queue) == 1 {
+			if p := ask(); p != nil {
+				queue = append(queue, p)
+			}
+		}
+		for i := current.first; i <= current.last; i++ {
 			b := t.blocks[i]
 			data := buffer[:b.Size]
 			n, readErr := io.ReadFull(r.Body, data)
 			t.c.downloadedBytes.Add(int64(n))
 			if err := readErr; err != nil {
-				r.Body.Close()
 				return &remoteclient.Error{Kind: remoteclient.KindUnreachable, Message: "the content stopped", Err: err}
 			}
 			if err := remoteclient.VerifyBlock(b, data); err != nil {
-				r.Body.Close()
 				return err
 			}
 			if _, err := t.file.WriteAt(data, b.Offset); err != nil {
-				r.Body.Close()
 				return err
 			}
 			// Readers may have it at once; the record of it waits until it is on disk
@@ -786,7 +823,8 @@ func (t *transfer) fetch(ctx context.Context) error {
 			t.notify()
 			t.mutex.Unlock()
 		}
-		r.Body.Close()
+		t.closeRange(current)
+		queue = queue[1:]
 		if err := t.file.Sync(); err != nil {
 			return err
 		}
@@ -802,25 +840,96 @@ func (t *transfer) fetch(ctx context.Context) error {
 			return err
 		}
 	}
+	return nil
 }
 
-// nextRange picks the blocks to ask for next: the first block a read waits for, or else the first missing one, and
-// the missing blocks after it, up to a range's size
+// waitsForUnclaimed reports whether a read waits for a block that no range asked for brings
+func (t *transfer) waitsForUnclaimed() bool {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	for _, w := range t.wanted {
+		if !t.verified[w] && !t.fetching[w] {
+			return true
+		}
+	}
+	return false
+}
+
+// pendingRange is a range of blocks asked for, whose response may still be on its way. Its blocks stay claimed (in
+// fetching) until it is closed.
+type pendingRange struct {
+	first, last int
+	cancel      context.CancelFunc
+	done        chan struct{}
+	r           *remoteclient.Range
+	err         error
+}
+
+// response waits for the start of the range's response
+func (p *pendingRange) response() (*remoteclient.Range, error) {
+	<-p.done
+	return p.r, p.err
+}
+
+// request asks for the next range without waiting for the response; nil when every missing block is asked for already
+func (t *transfer) request(ctx context.Context, client *remoteclient.Client, lease remoteapi.ReadLease,
+	etag string) *pendingRange {
+	first, last, ok := t.nextRange()
+	if !ok {
+		return nil
+	}
+	start := t.blocks[first].Offset
+	end := t.blocks[last].Offset + int64(t.blocks[last].Size) - 1
+	rctx, cancel := context.WithCancel(ctx)
+	p := &pendingRange{first: first, last: last, cancel: cancel, done: make(chan struct{})}
+	go func() {
+		defer close(p.done)
+		p.r, p.err = t.c.readRange(rctx, client, lease.Lease, start, end, etag)
+	}()
+	return p
+}
+
+// closeRange ends a range asked for, read or not: its request or response stops, and its blocks that aren't verified
+// can be asked for again
+func (t *transfer) closeRange(p *pendingRange) {
+	if p == nil {
+		return
+	}
+	p.cancel()
+	<-p.done
+	if p.r != nil {
+		p.r.Body.Close()
+	}
+	t.mutex.Lock()
+	for i := p.first; i <= p.last; i++ {
+		t.fetching[i] = false
+	}
+	t.mutex.Unlock()
+}
+
+// nextRange picks the blocks to ask for next, and claims them: the first block a read waits for, or else the first
+// missing one, and the missing blocks after it, up to a range's size. Blocks asked for already are left out.
 func (t *transfer) nextRange() (first, last int, ok bool) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
+	missing := func(i int) bool { return !t.verified[i] && !t.fetching[i] }
 	first = -1
 	limit := int64(rangeBytes)
-	for len(t.wanted) > 0 {
-		if w := t.wanted[0]; !t.verified[w] {
-			first, limit = w, urgentRangeBytes
-			break
+	// Blocks on their way stay wanted, in case their range fails
+	wanted := t.wanted[:0]
+	for _, w := range t.wanted {
+		if t.verified[w] {
+			continue
 		}
-		t.wanted = t.wanted[1:]
+		wanted = append(wanted, w)
+		if first < 0 && !t.fetching[w] {
+			first, limit = w, urgentRangeBytes
+		}
 	}
+	t.wanted = wanted
 	if first < 0 {
-		for i, v := range t.verified {
-			if !v {
+		for i := range t.verified {
+			if missing(i) {
 				first = i
 				break
 			}
@@ -831,9 +940,12 @@ func (t *transfer) nextRange() (first, last int, ok bool) {
 	}
 	last = first
 	total := int64(t.blocks[first].Size)
-	for last+1 < len(t.blocks) && !t.verified[last+1] && total+int64(t.blocks[last+1].Size) <= limit {
+	for last+1 < len(t.blocks) && missing(last+1) && total+int64(t.blocks[last+1].Size) <= limit {
 		last++
 		total += int64(t.blocks[last].Size)
+	}
+	for i := first; i <= last; i++ {
+		t.fetching[i] = true
 	}
 	return first, last, true
 }
@@ -923,7 +1035,7 @@ func (t *transfer) wait(ctx context.Context, off int64, n int) error {
 			ready := true
 			for i := first; i < len(t.blocks) && t.blocks[i].Offset < off+int64(n); i++ {
 				if !t.verified[i] {
-					if ready {
+					if ready && (len(t.wanted) == 0 || t.wanted[0] != i) {
 						// The first missing block goes to the front of the queue
 						t.wanted = append([]int{i}, t.wanted...)
 					}

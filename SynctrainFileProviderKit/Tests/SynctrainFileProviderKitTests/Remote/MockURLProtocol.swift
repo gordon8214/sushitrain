@@ -16,6 +16,10 @@ struct MockResponse: Sendable {
 	var body = Data()
 	/// The URL the response claims to come from (the request's by default)
 	var url: URL?
+	/// Bytes per chunk of the body (all at once by default)
+	var chunkSize: Int?
+	/// After how many bytes of the body the connection drops (never by default)
+	var failAfter: Int?
 
 	static func json<T: Encodable>(_ value: T, status: Int = 200) -> MockResponse {
 		MockResponse(
@@ -104,10 +108,27 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
 			return
 		}
 		client?.urlProtocol(self, didReceive: http, cacheStoragePolicy: .notAllowed)
-		if !response.body.isEmpty {
-			client?.urlProtocol(self, didLoad: response.body)
+		let sent = response.failAfter.map { response.body.prefix($0) } ?? response.body
+		var offset = sent.startIndex
+		while offset < sent.endIndex {
+			let next = min(offset + max(response.chunkSize ?? sent.count, 1), sent.endIndex)
+			client?.urlProtocol(self, didLoad: sent[offset..<next])
+			offset = next
+		}
+		if response.failAfter != nil {
+			// A moment later, as a connection drops after the bytes it delivered: failing at once can discard them.
+			// On the loading thread, as the client expects.
+			let thread = Thread.current
+			DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { [self] in
+				perform(#selector(dropConnection), on: thread, with: nil, waitUntilDone: false)
+			}
+			return
 		}
 		client?.urlProtocolDidFinishLoading(self)
+	}
+
+	@objc private func dropConnection() {
+		client?.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost))
 	}
 
 	override func stopLoading() {}
@@ -169,6 +190,8 @@ final class ContentGateway: Sendable {
 		var forgedManifest = false
 		/// Bytes reported ready by successive lease requests (then ready)
 		var preparation: [Int64] = []
+		/// Seconds the gateway advises waiting before asking again while it prepares
+		var preparationAdvice = 0
 		var rangeRequests = 0
 		var leaseRequests = 0
 	}
@@ -211,9 +234,9 @@ final class ContentGateway: Sendable {
 		state.update { $0.requests.append(request) }
 		let path = request.path
 		if request.method == "POST", path == "/v1/items/\(itemID)/read-leases" {
-			let ready = state.update { state -> Int64? in
+			let (ready, advice) = state.update { state -> (Int64?, Int) in
 				state.leaseRequests += 1
-				return state.preparation.isEmpty ? nil : state.preparation.removeFirst()
+				return (state.preparation.isEmpty ? nil : state.preparation.removeFirst(), state.preparationAdvice)
 			}
 			let lease = ReadLease(
 				lease: leaseID, token: "stl_token", itemID: itemID, revision: revision, contentID: contentID,
@@ -221,7 +244,7 @@ final class ContentGateway: Sendable {
 				expires: Date().addingTimeInterval(86400),
 				preparation: ReadLease.Preparation(
 					state: ready == nil ? .ready : .preparing, readyBytes: ready ?? Int64(content.count),
-					retryAfter: ready == nil ? nil : 0))
+					retryAfter: ready == nil ? nil : advice))
 			return .json(lease, status: 201)
 		}
 		if request.method == "GET", path == "/v1/content/\(leaseID)/manifest" {

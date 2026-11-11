@@ -30,8 +30,14 @@ struct MediaPlayerView: UIViewControllerRepresentable {
 
 	func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {}
 
-	static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: ()) {
+	/// The loader of a file played from the gateway, to stop its reads when the player goes away
+	func makeCoordinator() -> GatewayMediaLoader? {
+		playback.loader
+	}
+
+	static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: GatewayMediaLoader?) {
 		controller.player?.pause()
+		coordinator?.close()
 		try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 	}
 }

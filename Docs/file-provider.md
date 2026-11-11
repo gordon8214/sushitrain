@@ -159,8 +159,12 @@ atomic rename. As files there are immutable and named after their contents, the 
 without coordinating; `remote_transfers` keeps them from downloading the same file twice.
 
 `AVPlayer` can't send the credential or apply the gateway's pinned key, and credentials never go into URLs, so streamed
-media reaches the player through an `AVAssetResourceLoader`, reading through the gateway client up to 1 MiB at a time
-(`RemoteContentStream`). Streamed bytes aren't verified block by block, so they are never stored in the cache.
+media reaches the player through an `AVAssetResourceLoader`, which streams each span the player asks for through the
+gateway client, handing bytes over as they arrive (`RemoteContentStream`). A request covers up to 8 MiB, so that it gives
+its transfer slot back now and then. While the gateway is still preparing the content, a request waits until at least
+1 MiB past its offset is prepared, and covers only what is. When the player closes, reads still open stop, rather than
+waiting for the player to cancel them. Streamed bytes aren't verified block by block, so they are never stored in the
+cache.
 
 ## Debugging
 

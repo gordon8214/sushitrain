@@ -436,6 +436,63 @@ public final class RemoteFileClient: Sendable {
 		return (data, response.value(forHTTPHeaderField: "ETag"))
 	}
 
+	/// Streams a byte range of the lease's content: `receive` gets the bytes in order from the range's start, chunk by
+	/// chunk as they arrive, and returns whether to go on (false cancels the request, which throws `.canceled`). It runs
+	/// on the session's delegate queue, which every request of this client shares, so it must return quickly. The
+	/// request carries the content's entity tag, and nothing is handed over from a response for anything but that range
+	/// of that content: an error, another origin, the whole content or another range, or another validator
+	/// (`.revisionMismatch`). A response that stops early throws, or returns, after what arrived was handed over; the
+	/// caller counts it and asks for the rest.
+	public func streamContent(
+		leaseID: String, range: ClosedRange<Int64>, entityTag: String, receive: @escaping @Sendable (Data) -> Bool
+	) async throws(RemoteError) {
+		// Chunks are handed over in order only because the delegate queue runs one callback at a time
+		assert(session.delegateQueue.maxConcurrentOperationCount == 1)
+		let request = try contentRequest(leaseID: leaseID, range: range, ifRange: entityTag, token: nil)
+		let endpoint = endpoint
+		let delegate = BoundedBodyDelegate(
+			trust: RemoteTrustDelegate(endpoint: endpoint), limit: maxControlBodyBytes,
+			length: range.upperBound - range.lowerBound + 1, receive: receive
+		) { response in
+			guard let http = response as? HTTPURLResponse, endpoint.hasOrigin(of: http.url) else {
+				return .refuse(.protocolViolation("a response came from another origin"))
+			}
+			guard http.statusCode < 300 else {
+				// An error (or a redirect), reported once its body is in
+				return .collect
+			}
+			// A gateway answers a range of other content (`If-Range` failed) with all of that content
+			guard let tag = http.value(forHTTPHeaderField: "ETag"), !tag.hasPrefix("W/") else {
+				return .refuse(.protocolViolation("the content has no strong validator"))
+			}
+			guard tag == entityTag else {
+				return .refuse(.revisionMismatch(current: nil))
+			}
+			guard http.statusCode == 206 else {
+				return .refuse(.protocolViolation("the gateway answered a range request with status \(http.statusCode)"))
+			}
+			guard
+				http.value(forHTTPHeaderField: "Content-Range").flatMap(Self.parseContentRange)?.start
+					== range.lowerBound
+			else {
+				return .refuse(.protocolViolation("the gateway answered with another range"))
+			}
+			return .stream
+		}
+		let collected: Data
+		let response: URLResponse
+		do {
+			(collected, response) = try await delegate.load(request, in: session)
+		}
+		catch {
+			throw Self.map(error, delegate: delegate.trust)
+		}
+		let http = try checked(response)
+		if http.statusCode >= 400 {
+			throw Self.error(status: http.statusCode, body: collected, response: http, gone: .leaseExpired)
+		}
+	}
+
 	/// The thumbnail of an exact content revision, as a JPEG file
 	public func thumbnail(itemID: String, revision: RemoteRevision, size: Int = 256, to destination: URL)
 		async throws(RemoteError)
@@ -709,35 +766,76 @@ public final class RemoteFileClient: Sendable {
 	}
 }
 
-/// Loads a response body of at most `limit` bytes as a data task's own delegate: chunk by chunk as it arrives, and
-/// never more than the limit (the task is canceled once a body would exceed it), with the endpoint's trust and
-/// redirect rules
+/// A data task's own delegate, with the endpoint's trust and redirect rules, that keeps a response body of at most
+/// `limit` bytes (the task is canceled once a body would exceed it), or hands one over chunk by chunk as it arrives when
+/// `inspect` says so (never more than `length` bytes), or refuses the response.
 final class BoundedBodyDelegate: NSObject, URLSessionDataDelegate, Sendable {
+	enum Disposition: Sendable {
+		/// Hand the body over as it arrives
+		case stream
+		/// Keep the body (up to the limit) for the caller
+		case collect
+		/// End the task with the error
+		case refuse(RemoteError)
+	}
+
 	let trust: RemoteTrustDelegate
 	let limit: Int
+	private let length: Int64
+	/// Takes a chunk of a streamed body; false stops the task
+	private let receive: @Sendable (Data) -> Bool
+	private let inspect: @Sendable (URLResponse) -> Disposition
 
 	private struct State: Sendable {
-		var body = Data()
 		var response: URLResponse?
-		var tooLarge = false
+		var disposition = Disposition.collect
+		var collected = Data()
+		var delivered: Int64 = 0
+		var failure: RemoteError?
 		var continuation: CheckedContinuation<(Data, URLResponse), any Error>?
+		/// The outcome of a task that ended before `load` was waiting for it (canceled before it started)
+		var result: Result<(Data, URLResponse), any Error>?
 	}
 
 	private let state = OSAllocatedUnfairLock(initialState: State())
 
-	init(trust: RemoteTrustDelegate, limit: Int) {
-		self.trust = trust
-		self.limit = limit
+	/// Keeps the body
+	convenience init(trust: RemoteTrustDelegate, limit: Int) {
+		self.init(trust: trust, limit: limit, length: 0, receive: { _ in false }, inspect: { _ in .collect })
 	}
 
-	/// Runs a data task for the request (canceled with the current task) and returns its body and response
+	init(
+		trust: RemoteTrustDelegate, limit: Int, length: Int64, receive: @escaping @Sendable (Data) -> Bool,
+		inspect: @escaping @Sendable (URLResponse) -> Disposition
+	) {
+		self.trust = trust
+		self.limit = limit
+		self.length = length
+		self.receive = receive
+		self.inspect = inspect
+	}
+
+	/// Runs a data task for the request (canceled with the current task); returns the response and the body it kept
 	func load(_ request: URLRequest, in session: URLSession) async throws -> (Data, URLResponse) {
+		try Task.checkCancellation()
 		let task = session.dataTask(with: request)
 		task.delegate = self
 		return try await withTaskCancellationHandler {
 			try await withCheckedThrowingContinuation { continuation in
-				state.withLock { $0.continuation = continuation }
-				task.resume()
+				// A task canceled before it was resumed can end before this runs: its outcome waits in the state
+				let ended = state.withLock { state -> Result<(Data, URLResponse), any Error>? in
+					if let result = state.result {
+						return result
+					}
+					state.continuation = continuation
+					return nil
+				}
+				if let ended {
+					continuation.resume(with: ended)
+				}
+				else {
+					task.resume()
+				}
 			}
 		} onCancel: {
 			task.cancel()
@@ -748,28 +846,61 @@ final class BoundedBodyDelegate: NSObject, URLSessionDataDelegate, Sendable {
 		_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
 		completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
 	) {
-		let allowed = response.expectedContentLength <= Int64(limit)
-		state.withLock { state in
-			state.response = response
-			state.tooLarge = !allowed
+		var inspected = inspect(response)
+		if case .collect = inspected, response.expectedContentLength > Int64(limit) {
+			inspected = .refuse(.protocolViolation("the response is larger than allowed"))
 		}
-		completionHandler(allowed ? .allow : .cancel)
+		let disposition = inspected
+		let refused = state.withLock { state -> Bool in
+			state.response = response
+			state.disposition = disposition
+			if case .refuse(let error) = disposition {
+				state.failure = error
+				return true
+			}
+			return false
+		}
+		completionHandler(refused ? .cancel : .allow)
 	}
 
 	func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-		let exceeded = state.withLock { state -> Bool in
-			guard !state.tooLarge else {
-				return false
+		let (chunk, overlong) = state.withLock { state -> (Data?, Bool) in
+			guard state.failure == nil else {
+				return (nil, false)
 			}
-			guard state.body.count + data.count <= limit else {
-				state.tooLarge = true
-				state.body = Data()
-				return true
+			switch state.disposition {
+			case .stream:
+				let room = length - state.delivered
+				guard Int64(data.count) <= room else {
+					state.failure = .protocolViolation("the response is longer than the range")
+					state.delivered = length
+					return (room > 0 ? data.prefix(Int(room)) : nil, true)
+				}
+				state.delivered += Int64(data.count)
+				return (data, false)
+			case .collect:
+				guard state.collected.count + data.count <= limit else {
+					state.failure = .protocolViolation("the response is larger than allowed")
+					state.collected = Data()
+					return (nil, true)
+				}
+				state.collected.append(data)
+				return (nil, false)
+			case .refuse:
+				return (nil, false)
 			}
-			state.body.append(data)
-			return false
 		}
-		if exceeded {
+		// Outside the lock: the delegate queue is serial, so chunks still arrive in order
+		var stop = overlong
+		if let chunk, !chunk.isEmpty, !receive(chunk) {
+			state.withLock { state in
+				if state.failure == nil {
+					state.failure = .canceled
+				}
+			}
+			stop = true
+		}
+		if stop {
 			dataTask.cancel()
 		}
 	}
@@ -777,20 +908,26 @@ final class BoundedBodyDelegate: NSObject, URLSessionDataDelegate, Sendable {
 	func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
 		let (continuation, result) = state.withLock {
 			state -> (CheckedContinuation<(Data, URLResponse), any Error>?, Result<(Data, URLResponse), any Error>) in
-			defer {
-				state.continuation = nil
-				state.body = Data()
+			let result: Result<(Data, URLResponse), any Error>
+			if let failure = state.failure {
+				result = .failure(failure)
 			}
-			if state.tooLarge {
-				return (state.continuation, .failure(RemoteError.protocolViolation("the response is larger than allowed")))
+			else if let error {
+				result = .failure(error)
 			}
-			if let error {
-				return (state.continuation, .failure(error))
+			else if let response = state.response {
+				result = .success((state.collected, response))
 			}
-			guard let response = state.response else {
-				return (state.continuation, .failure(URLError(.badServerResponse)))
+			else {
+				result = .failure(URLError(.badServerResponse))
 			}
-			return (state.continuation, .success((state.body, response)))
+			let continuation = state.continuation
+			if continuation == nil {
+				state.result = result
+			}
+			state.continuation = nil
+			state.collected = Data()
+			return (continuation, result)
 		}
 		continuation?.resume(with: result)
 	}
